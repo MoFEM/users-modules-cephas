@@ -100,7 +100,7 @@ MoFEMErrorCode OpPlasticHeatProduction::doWork(int side, EntityType type,
     auto t_base = data.getFTensor0N();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
-      const double beta = alpha *
+      const double beta = (alpha * fraction_of_dissipation) *
                           (t_D(i, j, k, l) * t_plastic_strain_dot(k, l)) *
                           t_plastic_strain_dot(i, j);
 
@@ -160,7 +160,7 @@ MoFEMErrorCode OpPlasticHeatProduction_dEP::doWork(int row_side, int col_side,
     const double ts_a = getTSa();
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-      double alpha = getMeasure() * t_w;
+      double alpha = getMeasure() * t_w * fraction_of_dissipation * ts_a * 2;
 
       auto mat_ptr = locMat.data().begin();
 
@@ -172,7 +172,7 @@ MoFEMErrorCode OpPlasticHeatProduction_dEP::doWork(int row_side, int col_side,
       FTensor::Tensor1<double, size_symm> t_D_ep_dot;
       t_D_ep_dot(L) =
           ((t_D(i, j, k, l) * t_plastic_strain_dot(k, l)) * t_L(i, j, L)) *
-          (alpha * ts_a * 2);
+          (alpha);
 
       size_t rr = 0;
       for (; rr != nb_row_dofs; ++rr) {

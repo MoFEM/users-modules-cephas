@@ -126,12 +126,17 @@ double cn = 1;
 double Qinf = 0;//265;
 double b_iso = 16.93;
 double heat_conductivity =
-    45 * 1e-3; // Force / (time temerature )  or Power / (length temperature)
-double heat_capacity = 400; // length^2/(time^2 temerature)
-double omega_0 = 5e-4;
-double omega_h = 5e-2;
+    16.2; // Force / (time temerature )  or Power /
+          // (length temperature) // Time unit is hour. force unit kN
+double heat_capacity =
+    5961.6; // length^2/(time^2 temerature) // length is millimeter time is hour
+double omega_0 = 2e-3;
+double omega_h = 2e-3;
 double omega_inf = 0;
+double fraction_of_dissipation = 0.5;
 int order = 2;
+
+int number_of_cylese_in_one_hour = 6;
 
 inline long double hardening(long double tau, double temp) {
   return H * tau * (1 - omega_h * temp) +
@@ -231,7 +236,7 @@ MoFEMErrorCode Example::setupProblem() {
   const auto flux_space = (SPACE_DIM == 2) ? HCURL : HDIV;
   CHKERR simple->addDomainField("T", L2, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addDomainField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
-  // CHKERR simple->addBoundaryField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
+  CHKERR simple->addBoundaryField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
@@ -275,6 +280,10 @@ MoFEMErrorCode Example::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-omega_inf", &omega_inf,
                                  PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-fraction_of_dissipation",
+                                 &fraction_of_dissipation, PETSC_NULL);
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-number_of_cylese_in_one_hour",
+                              &number_of_cylese_in_one_hour, PETSC_NULL);
 
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
@@ -284,6 +293,8 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
+    MOFEM_LOG("EXAMPLE", Sev::inform)
+        << "fraction_of_dissipation " << fraction_of_dissipation;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
@@ -686,7 +697,8 @@ MoFEMErrorCode Example::OPs() {
     auto time_scaled = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return -sin(2 * (fe_domain_rhs->ts_t / 2) * M_PI);
+      return -2 * sin(2 * (fe_domain_rhs->ts_t * number_of_cylese_in_one_hour) *
+                      M_PI);
     };
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
