@@ -47,7 +47,7 @@ template <> struct ElementsAndOps<3> {
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
-using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;;
+using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
@@ -93,16 +93,59 @@ private:
   };
   boost::shared_ptr<CommonData> commonDataPtr;
 
-  struct OpError : public DomainEleOp {
-    boost::shared_ptr<CommonData> commonDataPtr;
-    OpError(boost::shared_ptr<CommonData> &common_data_ptr)
-        : DomainEleOp(FIELD_NAME, OPROW), commonDataPtr(common_data_ptr) {}
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };
+  template <int FIELD_DIM> struct OpError;
 };
 
 ApproxFieldFunction<FIELD_DIM> Example::approxFunction =
     ApproxFieldFunction<FIELD_DIM>();
+
+template <> struct Example::OpError<1> : public DomainEleOp {
+  boost::shared_ptr<CommonData> commonDataPtr;
+  OpError(boost::shared_ptr<CommonData> &common_data_ptr)
+      : DomainEleOp(FIELD_NAME, OPROW), commonDataPtr(common_data_ptr) {}
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    if (const size_t nb_dofs = data.getIndices().size()) {
+
+      const int nb_integration_pts = getGaussPts().size2();
+      auto t_w = getFTensor0IntegrationWeight();
+      auto t_val = getFTensor0FromVec(*(commonDataPtr->approxVals));
+      auto t_coords = getFTensor1CoordsAtGaussPts();
+
+      VectorDouble nf(nb_dofs, false);
+      nf.clear();
+
+      FTensor::Index<'i', 3> i;
+      const double volume = getMeasure();
+
+      auto t_row_base = data.getFTensor0N();
+      double error = 0;
+      for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+        const double alpha = t_w * volume;
+        double diff = t_val - Example::approxFunction(t_coords(0), t_coords(1),
+                                                      t_coords(2));
+        error += alpha * pow(diff, 2);
+
+        for (size_t r = 0; r != nb_dofs; ++r) {
+          nf[r] += alpha * t_row_base * diff;
+          ++t_row_base;
+        }
+
+        ++t_w;
+        ++t_val;
+        ++t_coords;
+      }
+
+      const int index = 0;
+      CHKERR VecSetValue(commonDataPtr->L2Vec, index, error, ADD_VALUES);
+      CHKERR VecSetValues(commonDataPtr->resVec, data, &nf[0], ADD_VALUES);
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+};
 
 //! [Run programme]
 MoFEMErrorCode Example::runProblem() {
@@ -231,7 +274,8 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues(FIELD_NAME, commonDataPtr->approxVals));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpError(commonDataPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpError<FIELD_DIM>(commonDataPtr));
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR VecAssemblyBegin(commonDataPtr->L2Vec);
   CHKERR VecAssemblyEnd(commonDataPtr->L2Vec);
@@ -284,48 +328,4 @@ int main(int argc, char *argv[]) {
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
-}
-
-MoFEMErrorCode Example::OpError::doWork(int side, EntityType type,
-                                        EntData &data) {
-  MoFEMFunctionBegin;
-
-  if (const size_t nb_dofs = data.getIndices().size()) {
-
-    const int nb_integration_pts = getGaussPts().size2();
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_val = getFTensor0FromVec(*(commonDataPtr->approxVals));
-    auto t_coords = getFTensor1CoordsAtGaussPts();
-
-    VectorDouble nf(nb_dofs, false);
-    nf.clear();
-
-    FTensor::Index<'i', 3> i;
-    const double volume = getMeasure();
-
-    auto t_row_base = data.getFTensor0N();
-    double error = 0;
-    for (int gg = 0; gg != nb_integration_pts; ++gg) {
-
-      const double alpha = t_w * volume;
-      double diff = t_val - Example::approxFunction(t_coords(0), t_coords(1),
-                                                    t_coords(2));
-      error += alpha * pow(diff, 2);
-
-      for (size_t r = 0; r != nb_dofs; ++r) {
-        nf[r] += alpha * t_row_base * diff;
-        ++t_row_base;
-      }
-
-      ++t_w;
-      ++t_val;
-      ++t_coords;
-    }
-
-    const int index = 0;
-    CHKERR VecSetValue(commonDataPtr->L2Vec, index, error, ADD_VALUES);
-    CHKERR VecSetValues(commonDataPtr->resVec, data, &nf[0], ADD_VALUES);
-  }
-
-  MoFEMFunctionReturn(0);
 }
