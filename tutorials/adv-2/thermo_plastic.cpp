@@ -95,20 +95,56 @@ using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
 //! [Essential boundary conditions]
 using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 
+// Thermal operators
+/**
+ * @brief Integrate Lhs base of flux (1/k) base of flux (FLUX x FLUX)
+ * 
+ */
 using OpHdivHdiv = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<3, 3>;
+
+/**
+ * @brief Integrate Lhs div of base of flux time base of temperature (FLUX x T)
+ * and transpose of it, i.e. (T x FLAX)
+ *
+ */
 using OpHdivT = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMixDivTimesScalar<SPACE_DIM>;
 
+/**
+ * @brief Integrate Lhs base of temerature times (heat capacity) times base of
+ * temperature (T x T)
+ *
+ */
 using OpCapacity = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<1, 1>;
+
+/**
+ * @brief Integrating Rhs flux base (1/k) flux  (FLUX)
+ */
 using OpHdivFlux = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesVector<3, 3, 1>;
+
+/**
+ * @brief  Integrate Rhs div flux base times temperature (T)
+ * 
+ */
 using OpHDivTemp = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpMixDivTimesU<3, 1, 2>;
+
+/**
+ * @brief Integrate Rhs base of temerature time heat capacity times heat rate (T)
+ * 
+ */
 using OpBaseDotT = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesScalarField<1>;
+
+/**
+ * @brief Integrate Rhs base of temerature times divergenc of flux (T)
+ * 
+ */
 using OpBaseDivFlux = OpBaseDotT;
+
 using OpHeatSource = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, 1>;
 using OpTemperatureBC = FormsIntegrators<BoundaryEleOp>::Assembly<

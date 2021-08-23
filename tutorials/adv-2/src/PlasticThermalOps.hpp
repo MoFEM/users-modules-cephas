@@ -100,6 +100,8 @@ MoFEMErrorCode OpPlasticHeatProduction::doWork(int side, EntityType type,
     auto t_base = data.getFTensor0N();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
+
+      // dot(Eps^p): D : dot(Eps^p) * fraction_of_dissipation
       const double beta = (alpha * fraction_of_dissipation) *
                           (t_D(i, j, k, l) * t_plastic_strain_dot(k, l)) *
                           t_plastic_strain_dot(i, j);
