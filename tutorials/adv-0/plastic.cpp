@@ -399,7 +399,7 @@ MoFEMErrorCode Example::OPs() {
   feAxiatorLhs = boost::make_shared<DomainEle>(mField);
   feAxiatorRhs = boost::make_shared<DomainEle>(mField);
   auto integration_rule_axiator = [](int, int, int approx_order) {
-    return 1;
+    return 2 * (approx_order - 1);
   };
   feAxiatorLhs->getRuleHook = integration_rule_axiator;
   feAxiatorRhs->getRuleHook = integration_rule_axiator;
