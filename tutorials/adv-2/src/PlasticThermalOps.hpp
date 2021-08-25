@@ -37,48 +37,44 @@ struct CommonData : public PlasticOps::CommonData {
 };
 //! [Common data]
 
-struct OpPlasticHeatProduction : public DomainEleOp {
+struct OpPlasticHeatProduction : public AssemblyDomainEleOp {
   OpPlasticHeatProduction(const std::string field_name,
                           boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data);
 
 protected:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpPlasticHeatProduction_dEP : public DomainEleOp {
+struct OpPlasticHeatProduction_dEP : public AssemblyDomainEleOp {
   OpPlasticHeatProduction_dEP(const std::string row_field_name,
                              const std::string col_field_name,
                              boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
 };
 
-struct OpCalculateContrainsLhs_dT : public DomainEleOp {
+struct OpCalculateContrainsLhs_dT : public AssemblyDomainEleOp {
   OpCalculateContrainsLhs_dT(const std::string row_field_name,
                              const std::string col_field_name,
                              boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
 };
 
 OpPlasticHeatProduction::OpPlasticHeatProduction(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : DomainEleOp(field_name, DomainEleOp::OPROW),
+    : AssemblyDomainEleOp(field_name, field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
-MoFEMErrorCode OpPlasticHeatProduction::doWork(int side, EntityType type,
-                                               EntData &data) {
+MoFEMErrorCode
+OpPlasticHeatProduction::iNtegrate(DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
   const size_t nb_dofs = data.getIndices().size();
@@ -93,9 +89,7 @@ MoFEMErrorCode OpPlasticHeatProduction::doWork(int side, EntityType type,
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
 
     auto t_w = getFTensor0IntegrationWeight();
-
-    std::array<double, MAX_DOFS_ON_ENTITY> nf;
-    std::fill(&nf[0], &nf[nb_dofs], 0);
+    auto &nf = AssemblyDomainEleOp::locF;
 
     auto t_base = data.getFTensor0N();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
@@ -118,8 +112,6 @@ MoFEMErrorCode OpPlasticHeatProduction::doWork(int side, EntityType type,
       ++t_plastic_strain_dot;
     }
 
-    CHKERR VecSetValues<EssentialBcStorage>(getTSf(), data, nf.data(),
-                                            ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -128,25 +120,22 @@ MoFEMErrorCode OpPlasticHeatProduction::doWork(int side, EntityType type,
 OpPlasticHeatProduction_dEP::OpPlasticHeatProduction_dEP(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
+    : AssemblyDomainEleOp(row_field_name, col_field_name,
+                          DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
 
-MoFEMErrorCode OpPlasticHeatProduction_dEP::doWork(int row_side, int col_side,
-                                                   EntityType row_type,
-                                                   EntityType col_type,
-                                                   EntData &row_data,
-                                                   EntData &col_data) {
+MoFEMErrorCode OpPlasticHeatProduction_dEP::iNtegrate(
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
   if (nb_row_dofs && nb_col_dofs) {
 
-
-    locMat.resize(nb_row_dofs, nb_col_dofs, false);
-    locMat.clear();
+    auto &locMat = AssemblyDomainEleOp::locMat;
 
     const size_t nb_integration_pts = row_data.getN().size1();
     const size_t nb_row_base_functions = row_data.getN().size2();
@@ -197,8 +186,6 @@ MoFEMErrorCode OpPlasticHeatProduction_dEP::doWork(int row_side, int col_side,
       ++t_plastic_strain_dot;
     }
 
-    CHKERR MatSetValues<EssentialBcStorage>(
-        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -207,24 +194,21 @@ MoFEMErrorCode OpPlasticHeatProduction_dEP::doWork(int row_side, int col_side,
 OpCalculateContrainsLhs_dT::OpCalculateContrainsLhs_dT(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
+    : AssemblyDomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculateContrainsLhs_dT::doWork(int row_side, int col_side,
-                                                  EntityType row_type,
-                                                  EntityType col_type,
-                                                  EntData &row_data,
-                                                  EntData &col_data) {
+MoFEMErrorCode OpCalculateContrainsLhs_dT::iNtegrate(
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
   if (nb_row_dofs && nb_col_dofs) {
 
-    locMat.resize(nb_row_dofs, nb_col_dofs, false);
-    locMat.clear();
+    auto &locMat = AssemblyDomainEleOp::locMat;
 
     const size_t nb_integration_pts = row_data.getN().size1();
     const size_t nb_row_base_functions = row_data.getN().size2();
@@ -272,8 +256,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dT::doWork(int row_side, int col_side,
       ++t_tau_dot;
     }
 
-    CHKERR MatSetValues<EssentialBcStorage>(
-        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
