@@ -59,6 +59,9 @@ using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
+using AssemblyDomainEleOp =
+    FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
+
 //! [Body force]
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, SPACE_DIM>;
