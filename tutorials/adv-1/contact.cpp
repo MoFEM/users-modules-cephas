@@ -65,6 +65,11 @@ using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+
+using AssemblyDomainEleOp =
+    FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
+using AssemblyBoundaryEleOp =
+    FormsIntegrators<BoundaryEleOp>::Assembly<PETSC>::OpBase;
 using OpSetPiolaTransformOnBoundary =
     ElementsAndOps<SPACE_DIM>::OpSetPiolaTransformOnBoundary;
 constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
