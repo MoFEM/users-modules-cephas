@@ -581,28 +581,28 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_stress_ops = [&](auto &pipeline, auto mat_D_ptr) {
+  auto add_domain_stress_ops = [&](auto &pipeline, auto m_D_ptr) {
     MoFEMFunctionBegin;
 
     pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
     pipeline.push_back(
-        new OpPlasticStress("U", commonPlasticDataPtr, mat_D_ptr, 1));
+        new OpPlasticStress("U", commonPlasticDataPtr, m_D_ptr, 1));
 
-    if (mat_D_ptr != commonPlasticDataPtr->mDPtr_Axiator)
+    if (m_D_ptr != commonPlasticDataPtr->mDPtr_Axiator)
       pipeline.push_back(
           new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
 
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_lhs_mechanical = [&](auto &pipeline, auto mat_D_ptr) {
+  auto add_domain_ops_lhs_mechanical = [&](auto &pipeline, auto m_D_ptr) {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    pipeline.push_back(new OpKCauchy("U", "U", mat_D_ptr));
+    pipeline.push_back(new OpKCauchy("U", "U", m_D_ptr));
     pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
-        "U", "EP", commonPlasticDataPtr, mat_D_ptr));
+        "U", "EP", commonPlasticDataPtr, m_D_ptr));
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -651,21 +651,21 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_lhs_constrain = [&](auto &pipeline) {
+  auto add_domain_ops_lhs_constrain = [&](auto &pipeline, auto m_D_ptr) {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    pipeline.push_back(
-        new OpCalculatePlasticFlowLhs_dU("EP", "U", commonPlasticDataPtr));
-    pipeline.push_back(
-        new OpCalculateContrainsLhs_dU("TAU", "U", commonPlasticDataPtr));
+    pipeline.push_back(new OpCalculatePlasticFlowLhs_dU(
+        "EP", "U", commonPlasticDataPtr, m_D_ptr));
+    pipeline.push_back(new OpCalculateContrainsLhs_dU(
+        "TAU", "U", commonPlasticDataPtr, m_D_ptr));
 
-    pipeline.push_back(
-        new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonPlasticDataPtr));
+    pipeline.push_back(new OpCalculatePlasticFlowLhs_dEP(
+        "EP", "EP", commonPlasticDataPtr, m_D_ptr));
     pipeline.push_back(
         new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonPlasticDataPtr));
-    pipeline.push_back(
-        new OpCalculateContrainsLhs_dEP("TAU", "EP", commonPlasticDataPtr));
+    pipeline.push_back(new OpCalculateContrainsLhs_dEP(
+        "TAU", "EP", commonPlasticDataPtr, m_D_ptr));
     pipeline.push_back(
         new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
 
@@ -871,7 +871,8 @@ MoFEMErrorCode Example::OPs() {
                                commonPlasticDataPtr->mDPtr_Deviator);
   CHKERR add_domain_ops_lhs_mechanical(pipeline_mng->getOpDomainLhsPipeline(),
                                        commonPlasticDataPtr->mDPtr_Deviator);
-  CHKERR add_domain_ops_lhs_constrain(pipeline_mng->getOpDomainLhsPipeline());
+  CHKERR add_domain_ops_lhs_constrain(pipeline_mng->getOpDomainLhsPipeline(),
+                                      commonPlasticDataPtr->mDPtr_Deviator);
   CHKERR add_boundary_ops_lhs_mechanical(
       pipeline_mng->getOpBoundaryLhsPipeline());
 

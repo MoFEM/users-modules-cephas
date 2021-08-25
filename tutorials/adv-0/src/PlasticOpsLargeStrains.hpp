@@ -21,10 +21,11 @@ namespace PlasticOps {
 OpCalculatePlasticFlowLhs_LogStrain_dU::OpCalculatePlasticFlowLhs_LogStrain_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr)
+    boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
+    boost::shared_ptr<MatrixDouble> m_D_ptr)
     : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr),
-      commonHenckyDataPtr(comman_henky_data_ptr) {
+      commonHenckyDataPtr(comman_henky_data_ptr), mDPtr(m_D_ptr) {
   sYmm = false;
 }
 
@@ -54,8 +55,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
-    auto t_D_Deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
-        *commonDataPtr->mDPtr_Deviator);
+    // t_D_Op is D_deviator set by user in constructor
+    auto t_D_Op = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mDPtr);
 
     auto t_grad =
         getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
@@ -76,7 +77,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(
       dC_dF(i, j, k, l) = (t_kd(i, l) * t_F(k, j)) + (t_kd(j, l) * t_F(k, i));
 
       auto t_diff_plastic_flow_dstrain = diff_plastic_flow_dstrain(
-          t_D_Deviator,
+          t_D_Op,
           diff_plastic_flow_dstress(t_f, t_flow, diff_deviator(diff_tensor())));
       FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_flow_stress_dlogC;
       t_flow_stress_dlogC(i, j, k, l) =
@@ -150,10 +151,11 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(
 OpCalculateContrainsLhs_LogStrain_dU::OpCalculateContrainsLhs_LogStrain_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr)
+    boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
+    boost::shared_ptr<MatrixDouble> m_D_ptr)
     : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr),
-      commonHenckyDataPtr(comman_henky_data_ptr) {
+      commonHenckyDataPtr(comman_henky_data_ptr), mDPtr(m_D_ptr) {
   sYmm = false;
 }
 
@@ -178,9 +180,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
 
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
-    if(commonDataPtr->tempVal.size()!=nb_integration_pts) {
+    if (commonDataPtr->tempVal.size() != nb_integration_pts) {
       commonDataPtr->tempVal.resize(nb_integration_pts, 0);
-      commonDataPtr->tempVal.clear(); 
+      commonDataPtr->tempVal.clear();
     }
     auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
@@ -190,8 +192,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
         getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->mStressPtr));
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
-    auto t_D_Deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
-        *commonDataPtr->mDPtr_Deviator);
+    // Operator set in constructor, i.e. D_deviator
+    auto t_D_Op = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mDPtr);
 
     auto t_grad =
         getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
@@ -208,7 +210,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
       dC_dF(i, j, k, l) = (t_kd(i, l) * t_F(k, j)) + (t_kd(j, l) * t_F(k, i));
 
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
-          t_D_Deviator,
+          t_D_Op,
           diff_constrain_dstress(
               diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
               t_flow));

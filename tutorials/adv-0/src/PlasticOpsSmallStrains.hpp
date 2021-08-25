@@ -20,12 +20,12 @@ namespace PlasticOps {
 
 OpCalculatePlasticFlowLhs_dU::OpCalculatePlasticFlowLhs_dU(
     const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> common_data_ptr)
+    boost::shared_ptr<CommonData> common_data_ptr,
+    boost::shared_ptr<MatrixDouble> m_D_ptr)
     : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {
+      commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
   sYmm = false;
 }
-
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
                                                     EntityType row_type,
@@ -53,8 +53,9 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
-    auto t_D_Deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
-        *commonDataPtr->mDPtr_Deviator);
+    // This is D set by user in operator, i.e. D_deviator
+    auto t_D_Op = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+        *mDPtr);
 
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
     constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
@@ -67,7 +68,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
 
       double alpha = getMeasure() * t_w;
       auto t_diff_plastic_flow_dstrain = diff_plastic_flow_dstrain(
-          t_D_Deviator,
+          t_D_Op,
           diff_plastic_flow_dstress(t_f, t_flow, diff_deviator(diff_tensor())));
       FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_flow_stress_dstrain;
       t_flow_stress_dstrain(i, j, k, l) =
@@ -114,12 +115,12 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
   MoFEMFunctionReturn(0);
 }
 
-
 OpCalculateContrainsLhs_dU::OpCalculateContrainsLhs_dU(
     const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> common_data_ptr)
+    boost::shared_ptr<CommonData> common_data_ptr,
+    boost::shared_ptr<MatrixDouble> m_D_ptr)
     : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {
+      commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
   sYmm = false;
 }
 
@@ -155,8 +156,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
-    auto t_D_Deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
-        *commonDataPtr->mDPtr_Deviator);
+    // This is operator stet by user, i.e. D_deviator
+    auto t_D_Op = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mDPtr);
 
     // constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
     // FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
@@ -169,7 +170,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
       double alpha = getMeasure() * t_w;
 
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
-          t_D_Deviator,
+          t_D_Op,
           diff_constrain_dstress(
               diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
               t_flow));

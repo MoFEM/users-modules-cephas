@@ -115,12 +115,12 @@ protected:
 struct OpPlasticStress : public DomainEleOp {
   OpPlasticStress(const std::string field_name,
                   boost::shared_ptr<CommonData> common_data_ptr,
-                  boost::shared_ptr<MatrixDouble> matDPtr,
+                  boost::shared_ptr<MatrixDouble> mDPtr,
                   const double scale = 1);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
-  boost::shared_ptr<MatrixDouble> matDPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
   const double scaleStress;
   boost::shared_ptr<CommonData> commonDataPtr;
 };
@@ -147,7 +147,7 @@ struct OpCalculatePlasticInternalForceLhs_dEP : public DomainEleOp {
   OpCalculatePlasticInternalForceLhs_dEP(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<MatrixDouble> mat_D_ptr);
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
@@ -163,7 +163,7 @@ struct OpCalculatePlasticInternalForceLhs_LogStrain_dEP : public DomainEleOp {
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<HenckyOps::CommonData> common_henky_data_ptr,
-      boost::shared_ptr<MatrixDouble> mat_D_ptr);
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
@@ -171,14 +171,15 @@ struct OpCalculatePlasticInternalForceLhs_LogStrain_dEP : public DomainEleOp {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
-  boost::shared_ptr<MatrixDouble> matDPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
   MatrixDouble locMat;
 };
 
 struct OpCalculatePlasticFlowLhs_dU : public DomainEleOp {
   OpCalculatePlasticFlowLhs_dU(const std::string row_field_name,
                                const std::string col_field_name,
-                               boost::shared_ptr<CommonData> common_data_ptr);
+                               boost::shared_ptr<CommonData> common_data_ptr,
+                               boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
@@ -186,13 +187,15 @@ struct OpCalculatePlasticFlowLhs_dU : public DomainEleOp {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
 struct OpCalculatePlasticFlowLhs_LogStrain_dU : public DomainEleOp {
   OpCalculatePlasticFlowLhs_LogStrain_dU(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr);
+      boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
@@ -201,12 +204,14 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
 struct OpCalculatePlasticFlowLhs_dEP : public DomainEleOp {
   OpCalculatePlasticFlowLhs_dEP(const std::string row_field_name,
                                 const std::string col_field_name,
-                                boost::shared_ptr<CommonData> common_data_ptr);
+                                boost::shared_ptr<CommonData> common_data_ptr,
+                                boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
@@ -214,6 +219,7 @@ struct OpCalculatePlasticFlowLhs_dEP : public DomainEleOp {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
 struct OpCalculatePlasticFlowLhs_dTAU : public DomainEleOp {
@@ -232,7 +238,8 @@ private:
 struct OpCalculateContrainsLhs_dU : public DomainEleOp {
   OpCalculateContrainsLhs_dU(const std::string row_field_name,
                              const std::string col_field_name,
-                             boost::shared_ptr<CommonData> common_data_ptr);
+                             boost::shared_ptr<CommonData> common_data_ptr,
+                             boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
@@ -240,13 +247,15 @@ struct OpCalculateContrainsLhs_dU : public DomainEleOp {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
 struct OpCalculateContrainsLhs_LogStrain_dU : public DomainEleOp {
   OpCalculateContrainsLhs_LogStrain_dU(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr);
+      boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
@@ -255,12 +264,14 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
 struct OpCalculateContrainsLhs_dEP : public DomainEleOp {
   OpCalculateContrainsLhs_dEP(const std::string row_field_name,
                               const std::string col_field_name,
-                              boost::shared_ptr<CommonData> common_data_ptr);
+                              boost::shared_ptr<CommonData> common_data_ptr,
+                              boost::shared_ptr<MatrixDouble> mat_D_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
@@ -268,6 +279,7 @@ struct OpCalculateContrainsLhs_dEP : public DomainEleOp {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
 struct OpCalculateContrainsLhs_dTAU : public DomainEleOp {
