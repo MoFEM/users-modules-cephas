@@ -22,24 +22,22 @@ OpCalculatePlasticFlowLhs_dU::OpCalculatePlasticFlowLhs_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr,
     boost::shared_ptr<MatrixDouble> m_D_ptr)
-    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
+    : AssemblyDomainEleOp(row_field_name, col_field_name,
+                          DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
-                                                    EntityType row_type,
-                                                    EntityType col_type,
-                                                    EntData &row_data,
-                                                    EntData &col_data) {
+MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::iNtegrate(
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
   if (nb_row_dofs && nb_col_dofs) {
 
-    locMat.resize(nb_row_dofs, nb_col_dofs, false);
-    locMat.clear();
+    auto &locMat = AssemblyDomainEleOp::locMat;
 
     const size_t nb_integration_pts = row_data.getN().size1();
     const size_t nb_row_base_functions = row_data.getN().size2();
@@ -108,8 +106,6 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
       ++t_tau_dot;
     }
 
-    CHKERR MatSetValues<EssentialBcStorage>(
-        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -119,24 +115,22 @@ OpCalculateContrainsLhs_dU::OpCalculateContrainsLhs_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr,
     boost::shared_ptr<MatrixDouble> m_D_ptr)
-    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
+    : AssemblyDomainEleOp(row_field_name, col_field_name,
+                          DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
-                                                  EntityType row_type,
-                                                  EntityType col_type,
-                                                  EntData &row_data,
-                                                  EntData &col_data) {
+MoFEMErrorCode OpCalculateContrainsLhs_dU::iNtegrate(
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
   if (nb_row_dofs && nb_col_dofs) {
 
-    locMat.resize(nb_row_dofs, nb_col_dofs, false);
-    locMat.clear();
+    auto &locMat = AssemblyDomainEleOp::locMat;
 
     const size_t nb_integration_pts = row_data.getN().size1();
     const size_t nb_row_base_functions = row_data.getN().size2();
@@ -205,12 +199,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
       ++t_w;
     }
 
-    CHKERR MatSetValues<EssentialBcStorage>(
-        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
 }
-
-
 };
