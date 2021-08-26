@@ -16,7 +16,6 @@ cmake_minimum_required (VERSION 3.1.3)
 project(MoFEM-UserModules 
   VERSION 0.12.2
   DESCRIPTION "Finite element framework" 
-  HOMEPAGE_URL "http://mofem.eng.gla.ac.uk" 
   LANGUAGES C CXX)
 
 # Set fallback version. Fallback version is version of users moudles which is used
