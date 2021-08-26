@@ -1003,7 +1003,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
     switch (nb_coefficients) {
     case 1:
       my_side_fe->getOpPtrVector().push_back(
-          new OpCalculateHdivVectorField<3>(field_name, mat_ptr));
+          new OpCalculateHVecVectorField<3>(field_name, mat_ptr));
       break;
     case 3:
       my_side_fe->getOpPtrVector().push_back(

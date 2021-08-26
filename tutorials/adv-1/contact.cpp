@@ -65,6 +65,11 @@ using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+
+using AssemblyDomainEleOp =
+    FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
+using AssemblyBoundaryEleOp =
+    FormsIntegrators<BoundaryEleOp>::Assembly<PETSC>::OpBase;
 using OpSetPiolaTransformOnBoundary =
     ElementsAndOps<SPACE_DIM>::OpSetPiolaTransformOnBoundary;
 constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
@@ -458,7 +463,8 @@ MoFEMErrorCode Example::OPs() {
             "SIGMA", commonDataPtr->contactStressDivergencePtr));
 
     pipeline.push_back(
-        new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr, 1));
+        new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr,
+                         [](double, double, double) { return 1; }));
     pipeline.push_back(
         new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
 

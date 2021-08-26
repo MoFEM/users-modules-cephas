@@ -315,9 +315,10 @@ template <int DIM> struct OpCalculateHenckyPlasticStress : public DomainEleOp {
 
   OpCalculateHenckyPlasticStress(const std::string field_name,
                                  boost::shared_ptr<CommonData> common_data,
+                                 boost::shared_ptr<MatrixDouble> mat_D_ptr,
                                  const double scale = 1)
       : DomainEleOp(field_name, DomainEleOp::OPROW), commonDataPtr(common_data),
-        scaleStress(scale) {
+        scaleStress(scale), matDPtr(mat_D_ptr) {
     std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 
     matLogCPlastic = commonDataPtr->matLogCPlastic;
@@ -335,7 +336,7 @@ template <int DIM> struct OpCalculateHenckyPlasticStress : public DomainEleOp {
 
     // const size_t nb_gauss_pts = matGradPtr->size2();
     const size_t nb_gauss_pts = getGaussPts().size2();
-    auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*commonDataPtr->matDPtr);
+    auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*matDPtr);
     auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
     auto t_logCPlastic = getFTensor2SymmetricFromMat<DIM>(*matLogCPlastic);
     constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
@@ -356,6 +357,7 @@ template <int DIM> struct OpCalculateHenckyPlasticStress : public DomainEleOp {
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> matDPtr;
   boost::shared_ptr<MatrixDouble> matLogCPlastic;
   const double scaleStress;
 };
@@ -417,10 +419,15 @@ private:
 
 template <int DIM> struct OpHenckyTangent : public DomainEleOp {
   OpHenckyTangent(const std::string field_name,
-                  boost::shared_ptr<CommonData> common_data)
+                  boost::shared_ptr<CommonData> common_data,
+                  boost::shared_ptr<MatrixDouble> mat_D_ptr = nullptr)
       : DomainEleOp(field_name, DomainEleOp::OPROW),
         commonDataPtr(common_data) {
     std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+    if (mat_D_ptr)
+      matDPtr = mat_D_ptr;
+    else 
+      matDPtr = commonDataPtr->matDPtr;
   }
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
@@ -443,7 +450,7 @@ template <int DIM> struct OpHenckyTangent : public DomainEleOp {
     auto dP_dF =
         getFTensor4FromMat<DIM, DIM, DIM, DIM, 1>(commonDataPtr->matTangent);
 
-    auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*commonDataPtr->matDPtr);
+    auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*matDPtr);
     auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
     auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
     auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
@@ -499,6 +506,7 @@ template <int DIM> struct OpHenckyTangent : public DomainEleOp {
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> matDPtr;
 };
 
 template <int DIM> struct OpPostProcHencky : public DomainEleOp {

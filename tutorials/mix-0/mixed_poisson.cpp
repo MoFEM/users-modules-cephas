@@ -394,7 +394,7 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
       new OpCalculateScalarFieldGradient<2>("U",
                                             commonDataPtr->approxValsGrad));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateHdivVectorField<3>("FLUX", commonDataPtr->approxFlux));
+      new OpCalculateHVecVectorField<3>("FLUX", commonDataPtr->approxFlux));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpError(commonDataPtr, mField));
 

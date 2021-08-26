@@ -1,0 +1,16 @@
+/*! \page tutorial_thermo_plastic ADV-2: Thermo-plastic example
+
+\note Prerequisites of this tutorial include \ref tutorial_elastic_problem
+
+<br>
+
+\note Intended learning outcome:
+- multi-physics
+- multi-field problem 
+
+\tableofcontents
+
+\include thermo_plastic.cpp
+\include PlasticThermalOps.hpp
+
+*/
