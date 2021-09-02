@@ -17,11 +17,6 @@
 
 #ifndef __PCMGSETUP_VIA_APPROX_ORDERS_HPP__
 #define __PCMGSETUP_VIA_APPROX_ORDERS_HPP__
-
-static const int DMMGVIAAPPROXORDERSCTX_INTERFACE = 1 << 2;
-static const MOFEMuuid IDD_DMMGVIAAPPROXORDERSCTX =
-    MOFEMuuid(BitIntefaceId(DMMGVIAAPPROXORDERSCTX_INTERFACE));
-
 struct PCMGSubMatrixCtx {
   Mat A;
   Vec X, F;
@@ -37,7 +32,7 @@ struct PCMGSubMatrixCtx {
  */
 struct DMMGViaApproxOrdersCtx : public MoFEM::DMCtx {
 
-  MoFEMErrorCode query_interface(const MOFEMuuid &uuid,
+  MoFEMErrorCode query_interface(boost::typeindex::type_index type_index,
                                  MoFEM::UnknownInterface **iface) const;
 
   DMMGViaApproxOrdersCtx();
