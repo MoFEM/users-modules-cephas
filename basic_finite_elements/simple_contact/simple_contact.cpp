@@ -52,7 +52,9 @@ int main(int argc, char *argv[]) {
                                  "-my_r_value 1. \n"
                                  "-my_alm_flag 0 \n"
                                  "-my_error_check 0 \n"
-                                 "-my_contact_pressure_error 0. \n";
+                                 "-my_contact_pressure_error 0. \n"
+                                 "-my_contact_error_r_inner 0. \n"
+                                 "-my_contact_error_r_outer 0. \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -110,6 +112,8 @@ int main(int argc, char *argv[]) {
     PetscReal wave_ampl = 0.01;
     PetscReal mesh_height = 1.0;
     PetscReal contact_pressure_error = 0.;
+    PetscReal contact_error_r_inner = 0.;
+    PetscReal contact_error_r_outer = 0.;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -175,7 +179,12 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsReal("-my_contact_pressure_error",
                             "contact pressure value for testing ", "", contact_pressure_error,
                             &contact_pressure_error, PETSC_NULL);
-
+    CHKERR PetscOptionsReal(
+        "-my_contact_error_r_inner", "inner radius for sphere-in-sphere testing ", "",
+        contact_error_r_inner, &contact_error_r_inner, PETSC_NULL);
+    CHKERR PetscOptionsReal(
+        "-my_contact_error_r_outer", "outer radius for sphere-in-sphere testing ", "",
+        contact_error_r_outer, &contact_error_r_outer, PETSC_NULL);
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
 
@@ -384,12 +393,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
                              MB_TAG_SPARSE, MF_ZERO);
 
-    if (error_check) {
-      CHKERR m_field.add_field("ERROR", L2, AINSWORTH_LEGENDRE_BASE, 1,
-                               MB_TAG_SPARSE, MF_ZERO);
-      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "ERROR");
-      CHKERR m_field.set_field_order(0, MBTRI, "ERROR", 0);
-    }
+
 
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
     CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
@@ -408,6 +412,55 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
     CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
     CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+
+    if (error_check) {
+      CHKERR m_field.add_field("ERROR", L2, AINSWORTH_LEGENDRE_BASE, 1,
+                               MB_TAG_SPARSE, MF_ZERO);
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "ERROR");
+      CHKERR m_field.set_field_order(0, MBTRI, "ERROR", 0);
+
+      auto get_ents_on_mesh_skin = [&]() {
+        Range boundary_faces;
+        for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+          std::string entity_name = it->getName();
+          if (entity_name.compare(0, 9, "SPRING_BC") == 0) {
+            CHKERR it->getMeshsetIdEntitiesByDimension(m_field.get_moab(), 2,
+                                                       boundary_faces, true);
+          }
+        }
+        Range boundary_edges;
+        CHKERR moab.get_adjacencies(boundary_faces, 1, false, boundary_edges,
+                                    moab::Interface::UNION);
+        return boundary_edges;
+      };
+
+      auto setting_second_order_geometry = [&m_field,
+                                            &get_ents_on_mesh_skin, &moab, &bit_levels]() {
+        MoFEMFunctionBegin;
+        // Setting geometry order everywhere
+        Range edges = get_ents_on_mesh_skin();
+        cerr << "\n\n %%%%% CHECKING "<<edges.size()  << " %%%%% \n\n\n ";
+
+        EntityHandle edges_ent_handle;
+        CHKERR moab.create_meshset(MESHSET_SET, edges_ent_handle);
+
+        CHKERR
+        moab.add_entities(edges_ent_handle, edges);
+
+        CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+            edges_ent_handle, 3, bit_levels.back());
+
+        CHKERR moab.write_mesh("edges_check.vtk",
+                               &edges_ent_handle, 1);
+        CHKERR m_field.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
+        // CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS",
+        // 1);
+
+        MoFEMFunctionReturn(0);
+      };
+
+      CHKERR setting_second_order_geometry();
+    }
 
     if (order_contact > order) {
       CHKERR set_contact_order(contact_prisms, order_contact, nb_ho_levels);
@@ -944,7 +997,19 @@ int main(int argc, char *argv[]) {
       boost::shared_ptr<VectorDouble> lagmult_values_at_integration_ptr =
           boost::make_shared<VectorDouble>();
 
-      auto target_pressure = [=](const double, const double, const double) { return contact_pressure_error; };
+      auto target_pressure = [=](const double x, const double y, const double z) { 
+        //contact_error_r_outer
+        double current_rad = sqrt(x * x + y * y + z * z);
+        
+        double inner_rad_cube =  contact_error_r_inner * contact_error_r_inner * contact_error_r_inner;
+        double outer_rad_cube =  contact_error_r_outer * contact_error_r_outer * contact_error_r_outer;
+        double mid_rad_cube = current_rad * current_rad * current_rad;
+        double first_ratio = inner_rad_cube /(outer_rad_cube - inner_rad_cube) ;
+        double second_ratio = (outer_rad_cube - mid_rad_cube) / mid_rad_cube;
+        double result = first_ratio * second_ratio * contact_pressure_error;
+        
+        return  result; 
+        };
 
       boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_error_evaluator(
           new FaceElementForcesAndSourcesCore(m_field));
