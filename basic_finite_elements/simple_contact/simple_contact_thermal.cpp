@@ -1099,9 +1099,10 @@ int main(int argc, char *argv[]) {
 
         CHKERR moab.delete_entities(ents_to_delete);
       }
-
-      PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", output_mesh_name);
-      CHKERR moab.write_file(output_mesh_name, "MOAB");
+      if (flg_file_out) {
+        PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", output_mesh_name);
+        CHKERR moab.write_file(output_mesh_name, "MOAB");
+      }
 
       auto get_tag_handle = [&](auto name, auto size) {
         Tag th;

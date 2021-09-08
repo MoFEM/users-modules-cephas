@@ -2269,12 +2269,18 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
   auto t_position_slave = getFTensor1FromMat<3>(
       *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
 
+  auto get_ftensor_coords_at_gauss_pts_slave = [&](auto &coords_at_gauss_pts) {
+    auto ptr = &*coords_at_gauss_pts.data().begin();
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>(&ptr[0], &ptr[1],
+                                                              &ptr[2]);
+  };
+  auto t_coords_at_gauss_pts_slave =
+      get_ftensor_coords_at_gauss_pts_slave(getCoordsAtGaussPtsSlave());
+  auto t_coords_at_gauss_pts_master =
+      get_ftensor_coords_at_gauss_pts_slave(getCoordsAtGaussPtsMaster());
+
   auto t_state_ptr =
       getFTensor0FromVec(*commonDataSimpleContact->gaussPtsStatePtr);
-
-  std::array<double, 3> pos_vec;
-
-  int count_active_pts = 0;
 
   auto set_float_precision = [](const double x) {
     if (std::abs(x) < std::numeric_limits<float>::epsilon())
@@ -2283,9 +2289,19 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
       return x;
   };
 
+  std::array<double, 3> pos_vec;
+
+  auto get_vec_ptr = [&](auto t) {
+    for (int dd = 0; dd != 3; ++dd)
+      pos_vec[dd] = set_float_precision(t(dd));
+    return pos_vec.data();
+  };
+
+  int count_active_pts = 0;
+
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    const double *slave_coords_ptr = &(getCoordsAtGaussPtsSlave()(gg, 0));
-    CHKERR moabOut.create_vertex(slave_coords_ptr, new_vertex);
+    CHKERR moabOut.create_vertex(get_vec_ptr(t_coords_at_gauss_pts_slave),
+                                 new_vertex);
 
     double gap_vtk = set_float_precision(t_gap_ptr);
     CHKERR moabOut.tag_set_data(th_gap, &new_vertex, 1, &gap_vtk);
@@ -2305,25 +2321,21 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
     }
     CHKERR moabOut.tag_set_data(th_state, &new_vertex, 1, &state);
 
-    auto get_vec_ptr = [&](auto t) {
-      for (int dd = 0; dd != 3; ++dd)
-        pos_vec[dd] = set_float_precision(t(dd));
-      return pos_vec.data();
-    };
-
     CHKERR moabOut.tag_set_data(th_pos_master, &new_vertex, 1,
                                 get_vec_ptr(t_position_master));
     CHKERR moabOut.tag_set_data(th_pos_slave, &new_vertex, 1,
                                 get_vec_ptr(t_position_slave));
-    const double *master_coords_ptr = &(getCoordsAtGaussPtsMaster()(gg, 0));
+                                
     CHKERR moabOut.tag_set_data(th_master_coords, &new_vertex, 1,
-                                master_coords_ptr);
+                                get_vec_ptr(t_coords_at_gauss_pts_master));
 
     ++t_gap_ptr;
     ++t_lagrange_slave;
     ++t_lag_gap_prod_slave;
     ++t_position_master;
     ++t_position_slave;
+    ++t_coords_at_gauss_pts_slave;
+    ++t_coords_at_gauss_pts_master;
     ++t_state_ptr;
   }
 
