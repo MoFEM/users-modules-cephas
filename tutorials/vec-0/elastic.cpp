@@ -372,14 +372,6 @@ MoFEMErrorCode Example::assembleSystem() {
     return marker_ptr;
   };
 
-  // std::string boundary_pressure_1 = "FIX_P_1";
-  // std::string boundary_pressure_2 = "FIX_P_2";
-  // std::string boundary_flux_1 = "FIX_Q_1";
-  // std::string boundary_flux_2 = "FIX_Q_2";
-
-  // if (name_1.compare(name_2)) {
-  //   cerr << "This will never print\n";
-  // }
 
   auto get_ents_on_flux_boundary =
       [&](std::string block_name) {
@@ -474,22 +466,6 @@ auto beta_flux_2 = [=](const double, const double, const double) {
 };
 auto beta_1 = [](const double, const double, const double) { return 1.; };
 
-//  auto set_boundary =
-//      [&]() {
-//        MoFEMFunctionBegin;
-//  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-//      new OpSetBc("P", false, boundaryMarker));
-//  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-//      new OpBoundaryMass("P", "P", beta_1));
-//  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-//      new OpUnSetBc("P"));
-
-//  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-//      new OpSetBc("P", false, boundaryMarker));
-//  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-//      new OpBoundarySource("P", beta));
-//  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-//      new OpUnSetBc("P"));
 
 // std::string boundary_flux_1 = "FIX_Q_1";
 // std::string boundary_flux_2 = "FIX_Q_2";
@@ -538,12 +514,6 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(new OpUnSetBc("P"));
 // CHKERR remove_dofs_from_problem(
 //     get_ents_on_flux_boundary(boundary_pressure_2));
 
-// pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-//     new OpSetBc("P", true, boundaryMarker));
-// pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-//     new OpBoundarySource("P", beta));
-// pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-//     new OpUnSetBc("P"));
 auto integration_rule = [](int, int, int approx_order) {
   return 2 * (approx_order);
 };
