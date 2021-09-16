@@ -175,7 +175,7 @@ double omega_inf = 0;
 double fraction_of_dissipation = 0.9;
 int order = 2;
 
-int number_of_cycles_in_one_hour = 6;
+int number_of_cycles_in_total_time = 6;
 
 inline long double hardening(long double tau, double temp) {
   return H * tau * (1 - omega_h * temp) +
@@ -321,8 +321,8 @@ MoFEMErrorCode Example::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-fraction_of_dissipation",
                                  &fraction_of_dissipation, PETSC_NULL);
-    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-number_of_cycles_in_one_hour",
-                              &number_of_cycles_in_one_hour, PETSC_NULL);
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-number_of_cycles_in_total_time",
+                              &number_of_cycles_in_total_time, PETSC_NULL);
 
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
@@ -736,8 +736,8 @@ MoFEMErrorCode Example::OPs() {
     auto time_scaled = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      if(number_of_cycles_in_one_hour != 0){
-        return -1 * sin(2 * (fe_domain_rhs->ts_t * number_of_cycles_in_one_hour) *
+      if(number_of_cycles_in_total_time != 0){
+        return -1 * sin(2 * (fe_domain_rhs->ts_t * number_of_cycles_in_total_time) *
                        M_PI);
       }
       else{
