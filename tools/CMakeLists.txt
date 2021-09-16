@@ -159,6 +159,18 @@ target_link_libraries(get_skin
 )
 install(TARGETS get_skin DESTINATION bin)
 
+add_executable(resolve_douplicated_entities ${CMAKE_CURRENT_SOURCE_DIR}/resolve_douplicated_entities.cpp)
+target_link_libraries(resolve_douplicated_entities
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS resolve_douplicated_entities DESTINATION bin)
+
 cm_export_file("convert.py" export_tools)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/convert.py
   DESTINATION bin
