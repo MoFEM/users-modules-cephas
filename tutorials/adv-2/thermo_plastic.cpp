@@ -736,9 +736,6 @@ MoFEMErrorCode Example::OPs() {
     auto time_scaled = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-    auto time_scaled = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
       if(number_of_cycles_in_one_hour != 0){
         return -1 * sin(2 * (fe_domain_rhs->ts_t * number_of_cycles_in_one_hour) *
                        M_PI);
