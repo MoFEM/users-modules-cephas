@@ -172,7 +172,7 @@ double heat_capacity =
 double omega_0 = 2e-3;
 double omega_h = 2e-3;
 double omega_inf = 0;
-double fraction_of_dissipation = 0.5;
+double fraction_of_dissipation = 0.9;
 int order = 2;
 
 int number_of_cycles_in_one_hour = 6;
