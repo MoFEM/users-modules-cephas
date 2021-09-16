@@ -744,7 +744,6 @@ MoFEMErrorCode Example::OPs() {
         return -1*fe_domain_rhs->ts_t;
       }
     };
-    };
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
