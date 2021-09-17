@@ -87,8 +87,6 @@ int main(int argc, char *argv[]) {
 
     MOFEM_LOG("WORLD", Sev::verbose) << "Skin:\n" << skin;
 
-    PetscPrintf(PETSC_COMM_WORLD, "Saving file out.h5m... \n");
-
     Range check_vol;
     CHKERR moab.get_entities_by_type(0, MBTET, check_vol);
 
@@ -113,7 +111,7 @@ int main(int argc, char *argv[]) {
     edges = subtract(edges, cut_surface_edges);
 
     CHKERR moab.delete_entities(edges);
-
+    
     CHKERR moab.write_file(mesh_out_file);
   }
   CATCH_ERRORS;
