@@ -176,6 +176,9 @@ double fraction_of_dissipation = 0.9;
 int order = 2;
 
 int number_of_cycles_in_total_time = 6;
+double amplitude_cycle = 0.5;
+double amplitude_shift = 0.5;
+double phase_shift = 0.8;
 
 inline long double hardening(long double tau, double temp) {
   return H * tau * (1 - omega_h * temp) +
@@ -323,7 +326,12 @@ MoFEMErrorCode Example::createCommonData() {
                                  &fraction_of_dissipation, PETSC_NULL);
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-number_of_cycles_in_total_time",
                               &number_of_cycles_in_total_time, PETSC_NULL);
-
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-amplitude_cycle",
+                              &amplitude_cycle, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-phase_shift",
+                              &phase_shift, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-amplitude_shift",
+                              &amplitude_shift, PETSC_NULL);                                                     
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " << sigmaY;
@@ -737,11 +745,11 @@ MoFEMErrorCode Example::OPs() {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
       if(number_of_cycles_in_total_time != 0){
-        return -1 * sin(2 * (fe_domain_rhs->ts_t * number_of_cycles_in_total_time) *
-                       M_PI);
+        return amplitude_cycle * sin((2 * fe_domain_rhs->ts_t - phase_shift)* number_of_cycles_in_total_time *
+                       M_PI) + amplitude_shift;
       }
       else{
-        return -1*fe_domain_rhs->ts_t;
+        return fe_domain_rhs->ts_t;
       }
     };
 

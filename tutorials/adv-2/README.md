@@ -2,7 +2,15 @@ To perform an analysis with thermo-plasticity use the following command line
 
 -omega_0 2e-3 -omega_h 2e-3 -omega_inf 2e-3 are the parameters, which regulate the sensibility of yield stress, linear hardening and saturation stress to temperature. If they are 0.0 no effect from temperature is considered and the model is coupled only in a single direction.
 
--number_of_cycles_in_total_time 0 this parameter allows user to create a monotonic load case, when equal to 0. If is larger than zero, it indicates the number of full cycle over the -ts_max_time imposed. The unit used need to be reflected in the units for all physical quantities.
+-number_of_cycles_in_total_time 0 this parameter allows the user to create a monotonic load case, when equal to 0. If it is larger than zero, it indicates the number of full-cycle over the -ts_max_time imposed (period or inverse of frequency). The unit used needs to reflect the units adopted for all other physical quantities.
+
+The sinusoid function is implemented as follows:
+
+y = amplitude_cycle*sin(2*pi*time-phase_shift)*number_of_cycles+amplitude_shift
+
+-amplitude_cycle 0.5 regulates the amplitude of the sinusoid function
+-amplitude_shift 0.5 regulates the shift in amplitude respect the horizontal axis
+-phase_shift 0.8 regulates the phase of the sinusoid function
 
 -fraction_of_dissipation 0.3 this parameter regulates how much plastic dissipation energy is converted into heat, default value is 0.9 from plasticity theory.
 
