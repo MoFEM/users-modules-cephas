@@ -146,7 +146,7 @@ MoFEMErrorCode CsMatSetValues(Mat mat, PetscInt m, const PetscInt idxm[],
   MoFEMFunctionReturn(0);
 }
 
-struct OpConstrainBoundaryRhs : public BoundaryEleOp {
+struct OpConstrainBoundaryRhs : public AssemblyBoundaryEleOp {
   OpConstrainBoundaryRhs(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data);

@@ -103,13 +103,23 @@ struct DirichletDisplacementBc : public MoFEM::FEMethod {
    * @brief Get the Rotation Bc From Block object
    *  Use ROTATION blockset name
    *  with 7 atributes:
-   *  1 - is the rotation angle
-   *  2,3,4 are x,y,z coords of the center of rotation
-   *  5,6,7 are x,y,z coords of the normal of rotation
+   *  1,2,3 are x,y,z coords of the center of rotation
+   *  4,5,6 are are angular velocities in x,y,z
    * @param bc_data 
    * @return MoFEMErrorCode 
    */
   MoFEMErrorCode getRotationBcFromBlock(std::vector<DataFromBc> &bc_data);
+
+  /**
+   * @brief Calculate displacements from rotation for particular dof
+   * @param dof
+   * @param bc_data
+   * @return MoFEMErrorCode
+   */
+  MoFEMErrorCode
+  calculateRotationForDof(EntityHandle ent,
+                          DataFromBc &bc_data);
+
   boost::ptr_vector<MethodForForceScaling> methodsOp;
 };
 
