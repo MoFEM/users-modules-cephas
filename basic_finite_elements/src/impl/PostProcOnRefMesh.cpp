@@ -173,7 +173,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
     break;
   case HDIV:
     // FIXME: fieldMap not set
-    if (type == MBTRI && side == 0) {
+    if (moab::CN::Dimension(type) == 2 && side == 0) {
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         CHKERR postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1, def_VAL);
       }
