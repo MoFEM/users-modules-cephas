@@ -34,10 +34,10 @@ set_target_properties(
   plot_base_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
 # Add 3d when is tested
-#tutorials_build_and_install(
-#  plot_base_3d ${CMAKE_CURRENT_SOURCE_DIR}/plot_base.cpp)
-#set_target_properties(
-#  plot_base_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3") 
+tutorials_build_and_install(
+ plot_base_3d ${CMAKE_CURRENT_SOURCE_DIR}/plot_base.cpp)
+set_target_properties(
+ plot_base_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3") 
 
 add_test(
     plot_base_2d_h1_ainsworth
