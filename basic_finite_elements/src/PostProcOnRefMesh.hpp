@@ -310,9 +310,8 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
       auto create_reference_element = [&moab_ref]() {
         MoFEMFunctionBegin;
-        constexpr double base_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 1,
-                                          1, 0, 0, 1, 0, 0, 0, 1, 1, 0,
-                                          1, 0, 1, 1, 1, 1, 1, 0, 1, 1};
+        constexpr double base_coords[] = {0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0,
+                                          0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
         EntityHandle nodes[8];
         for (int nn = 0; nn < 8; nn++)
           CHKERR moab_ref.create_vertex(&base_coords[3 * nn], nodes[nn]);
@@ -399,7 +398,8 @@ struct PostProcTemplateVolumeOnRefinedMesh
       levelShapeFunctionsHexes.resize(1);
 
       CHKERR create_reference_element();
-      CHKERR add_ho_nodes();
+      if (tenNodesPostProcTets)
+        CHKERR add_ho_nodes();
       std::map<EntityHandle, int> little_map;
       CHKERR set_gauss_pts(little_map);
       CHKERR set_ref_hexes(little_map);
@@ -601,7 +601,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
                                             &(T::nInTheLoop));
 
       EntityHandle fe_ent = T::numeredEntFiniteElementPtr->getEnt();
-      T::coords.resize(12, false);
+      T::coords.resize(CN::VerticesPerEntity(type), false);
       {
         const EntityHandle *conn;
         int num_nodes;
@@ -621,7 +621,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
         FTensor::Tensor1<FTensor::PackPtr<const double *, 3>, 3> t_ele_coords(
             t_coords_ele_x, t_coords_ele_y, t_coords_ele_z);
         t_coords(i) = 0;
-        for (int nn = 0; nn != 4; ++nn) {
+        for (int nn = 0; nn != CN::VerticesPerEntity(type); ++nn) {
           t_coords(i) += t_n * t_ele_coords(i);
           ++t_ele_coords;
           ++t_n;

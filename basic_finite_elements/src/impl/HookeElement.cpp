@@ -730,8 +730,9 @@ MoFEMErrorCode HookeElement::calculateEnergy(
 
   auto fe_ptr =
       boost::make_shared<VolumeElementForcesAndSourcesCore>(*m_field_ptr);
-  if(m_field_ptr->check_field("MESH_NODE_POSITIONS"))
-    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *fe_ptr, true, false, false, false);
+  if (m_field_ptr->check_field("MESH_NODE_POSITIONS"))
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *fe_ptr, true, false, false,
+                       false);
 
   struct PrismFE : public FatPrismElementForcesAndSourcesCore {
 

@@ -92,7 +92,7 @@ using VolUserDataOperator = VolumeElementForcesAndSourcesCore::UserDataOperator;
 
 /// Set integration rule
 struct VolRule {
-  int operator()(int, int, int order) const { return 2 * (order - 1); }
+  int operator()(int, int, int order) const { return 2 * order; }
 };
 
 struct PrismFE : public FatPrismElementForcesAndSourcesCore {
@@ -150,8 +150,9 @@ int main(int argc, char *argv[]) {
     PetscBool is_post_proc_volume = PETSC_TRUE;
 
     // Select base
-    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
-    const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
+    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, DEMKOWICZ, LASBASETOP };
+    const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier",
+                                "demkowicz"};
     PetscInt choice_base_value = LOBATTO;
 
     // Read options from command line
@@ -242,12 +243,14 @@ int main(int argc, char *argv[]) {
     bool mesh_has_tets = false;
     bool mesh_has_prisms = false;
     int nb_tets = 0;
+    int nb_hexs = 0;
     int nb_prisms = 0;
 
     CHKERR moab.get_number_entities_by_type(0, MBTET, nb_tets, true);
+    CHKERR moab.get_number_entities_by_type(0, MBHEX, nb_hexs, true);
     CHKERR moab.get_number_entities_by_type(0, MBPRISM, nb_prisms, true);
 
-    mesh_has_tets = nb_tets > 0;
+    mesh_has_tets = (nb_tets + nb_hexs) > 0;
     mesh_has_prisms = nb_prisms > 0;
 
     // Set bit refinement level to all entities (we do not refine mesh in
@@ -280,6 +283,9 @@ int main(int argc, char *argv[]) {
     case BERNSTEIN_BEZIER:
       base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
       break;
+    case DEMKOWICZ:
+      base = DEMKOWICZ_JACOBI_BASE;
+      break;
     default:
       SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED, "Base not implemented");
     };
@@ -287,8 +293,8 @@ int main(int argc, char *argv[]) {
                              MF_ZERO);
 
     // We can use higher oder geometry to define body
-    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
-                             3, MB_TAG_DENSE, MF_ZERO);
+    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, base, 3, MB_TAG_DENSE,
+                             MF_ZERO);
 
     // Declare problem
 
@@ -327,11 +333,11 @@ int main(int argc, char *argv[]) {
     // Meshes.
     CHKERR m_field.set_field_order(0, MBPRISM, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
+    CHKERR m_field.set_field_order(0, MBHEX, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
-    // CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
+    CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(edges_to_set_order, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
-    CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
 
     if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", order);
@@ -661,7 +667,6 @@ int main(int argc, char *argv[]) {
                                  MB_TAG_SPARSE, MF_ZERO);
 
         CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "TEMP");
-
         CHKERR m_field.set_field_order(0, MBVERTEX, "TEMP", 1);
       }
     }
