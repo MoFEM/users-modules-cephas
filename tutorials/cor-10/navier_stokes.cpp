@@ -438,6 +438,26 @@ MoFEMErrorCode NavierStokesExample::setupElementInstances() {
         feRhsPtr, feLhsPtr, "VELOCITY", "PRESSURE", commonData);
   }
 
+  auto external_force =
+      [](FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
+        FTensor::Tensor1<double, 3> t_force;
+
+        double x = t_coords(0);
+        double y = t_coords(1);
+        double z = t_coords(2);
+
+        t_force(0) = -36. * M_PI * M_PI * cos(2. * M_PI * x) *
+                     sin(2. * M_PI * y) * sin(2. * M_PI * z);
+        t_force(1) = 0.;
+        t_force(2) = 0.;
+
+        return t_force;
+      };
+
+  CHKERR NavierStokesElement::setExternalForceOperator(
+        feRhsPtr, "VELOCITY", external_force, commonData);
+
+
   NavierStokesElement::setCalcDragOperators(feDragPtr, feDragSidePtr,
                                             "NAVIER_STOKES", "VELOCITY",
                                             "PRESSURE", commonData);
