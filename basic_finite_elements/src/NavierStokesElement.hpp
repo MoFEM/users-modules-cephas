@@ -32,8 +32,8 @@
 using namespace boost::numeric;
 
 /**
-   * @brief Element for simulating viscous fluid flow
-*/
+ * @brief Element for simulating viscous fluid flow
+ */
 struct NavierStokesElement {
 
   using UserDataOperator =
@@ -91,7 +91,8 @@ struct NavierStokesElement {
       else
         vec_size = 0;
 
-      pressureDragForceVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
+      pressureDragForceVec =
+          createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
       shearDragForceVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
       totalDragForceVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
 
@@ -136,12 +137,11 @@ struct NavierStokesElement {
    * @return                            Error code
    */
   static MoFEMErrorCode addElement(MoFEM::Interface &m_field,
-                                               const string element_name,
-                                               const string velocity_field_name,
-                                               const string pressure_field_name,
-                                               const string mesh_field_name,
-                                               const int dim = 3,
-                                               Range *ents = nullptr) {
+                                   const string element_name,
+                                   const string velocity_field_name,
+                                   const string pressure_field_name,
+                                   const string mesh_field_name,
+                                   const int dim = 3, Range *ents = nullptr) {
     MoFEMFunctionBegin;
 
     CHKERR m_field.add_finite_element(element_name);
@@ -175,7 +175,7 @@ struct NavierStokesElement {
 
   /**
    * @brief Setting up operators for solving Navier-Stokes equations
-   * 
+   *
    * Pushes operators for solving Navier-Stokes equations to pipelines of RHS
    * and LHS element instances
    *
@@ -212,6 +212,34 @@ struct NavierStokesElement {
       boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs,
       const std::string velocity_field, const std::string pressure_field,
       boost::shared_ptr<CommonData> common_data, const EntityType type = MBTET);
+
+  typedef boost::function<
+
+    FTensor::Tensor1<double, 3> (
+
+        FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords
+
+        )
+
+    >
+    ExternalForceFunction;
+
+  /**
+   * @brief Setting up operator for the external force
+   *
+   * Pushes operator for external force to the pipelines of RHS element
+   * instance
+   *
+   * @param  feRhs                      pointer to RHS element instance
+   * @param  velocity_field             name of the velocity field
+   * @param  common_data                pointer to common data object
+   * @return                            Error code
+   */
+  static MoFEMErrorCode setExternalForceOperator(
+      boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
+      const std::string velocity_field,
+      ExternalForceFunction external_force_function,
+      boost::shared_ptr<CommonData> common_data);
 
   /**
    * @brief Setting up operators for calculating drag force on the solid surface
@@ -321,7 +349,7 @@ struct NavierStokesElement {
   };
 
   /**
-   * @brief Assemble off-diagonal block of the LHS 
+   * @brief Assemble off-diagonal block of the LHS
    * Operator for assembling off-diagonal block of the LHS
    */
   struct OpAssembleLhsOffDiag : public OpAssembleLhs {
@@ -415,7 +443,7 @@ struct NavierStokesElement {
    * @brief Assemble linear part of the velocity component of the RHS vector
    *
    * Operator for assembling linear part of the velocity component of the RHS
-   * vector: 
+   * vector:
    * \f[ \mathbf{R}^{\textrm{S}}_{\mathbf{u}} =
    * C_\text{V}\int\limits_{\Omega}\nabla\mathbf{u}\mathbin{:}\nabla\mathbf{v}\,
    * d\Omega
@@ -443,12 +471,12 @@ struct NavierStokesElement {
    * @brief Assemble non-linear part of the velocity component of the RHS vector
    *
    * Operator for assembling non-linear part of the velocity component of the
-   * RHS vector: 
+   * RHS vector:
    * \f[
    * \mathbf{R}^{\textrm{NS}}_{\mathbf{u}} =
    * C_\text{I}\int\limits_\Omega \left(\mathbf{u}\cdot\nabla\right)\mathbf{u}
-   * \cdot\mathbf{v} \,d\Omega, 
-   * \f] 
+   * \cdot\mathbf{v} \,d\Omega,
+   * \f]
    * where \f$C_\text{I}\f$ is the inertia
    * coefficient: \f$C_\text{V}=\rho\f$ in the dimensional case and
    * \f$C_\text{V}=\mathcal{R}\f$ in the non-dimensional case.
@@ -465,7 +493,7 @@ struct NavierStokesElement {
 
   /**
    * @brief Assemble the pressure component of the RHS vector
-   * 
+   *
    * Operator for assembling pressure component of the RHS vector:
    * \f[
    * \mathbf{R}^{\textrm{S}}_{p} = -\int\limits_{\Omega}p\,
@@ -483,6 +511,23 @@ struct NavierStokesElement {
      * \brief Integrate local constrains vector
      */
     MoFEMErrorCode iNtegrate(EntData &data);
+  };
+
+  /**
+   * @brief Assemble of the external force to the RHS vector
+   *
+   */
+  struct OpAssembleRhsExternalForce : public OpAssembleRhs {
+
+    OpAssembleRhsExternalForce(const string field_name,
+                               ExternalForceFunction external_force_function,
+                               boost::shared_ptr<CommonData> common_data,
+                               BlockData &block_data)
+        : OpAssembleRhs(field_name, common_data, block_data),
+          externalForceFunction(external_force_function){};
+
+    MoFEMErrorCode iNtegrate(EntData &data);
+    ExternalForceFunction externalForceFunction;
   };
 
   /**
@@ -524,7 +569,7 @@ struct NavierStokesElement {
    * Operator fo calculating drag traction on the fluid-solid interface
    * \f[
    * \mathbf{t} = -p\mathbf{I} +
-   * \mu\left(\nabla\mathbf{u}+\mathbf{u}^{\intercal}\right) 
+   * \mu\left(\nabla\mathbf{u}+\mathbf{u}^{\intercal}\right)
    * \f]
    */
   struct OpCalcDragTraction : public FaceUserDataOperator {
@@ -617,7 +662,7 @@ struct NavierStokesElement {
    * @brief calculating volumetric flux
    *
    */
-    struct OpCalcVolumeFlux : public UserDataOperator {
+  struct OpCalcVolumeFlux : public UserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
     BlockData &blockData;

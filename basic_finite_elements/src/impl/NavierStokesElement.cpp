@@ -131,6 +131,21 @@ MoFEMErrorCode NavierStokesElement::setStokesOperators(
   MoFEMFunctionReturn(0);
 };
 
+MoFEMErrorCode NavierStokesElement::setExternalForceOperator(
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_rhs_ptr,
+    const std::string velocity_field,
+    ExternalForceFunction external_force_function,
+    boost::shared_ptr<CommonData> common_data) {
+  MoFEMFunctionBegin;
+
+  for (auto &sit : common_data->setOfBlocksData) {
+    fe_rhs_ptr->getOpPtrVector().push_back(new OpAssembleRhsExternalForce(
+        velocity_field, external_force_function, common_data, sit.second));
+  }
+
+  MoFEMFunctionReturn(0);
+};
+
 MoFEMErrorCode NavierStokesElement::setCalcVolumeFluxOperators(
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_flux_ptr,
     const std::string velocity_field, boost::shared_ptr<CommonData> common_data,
@@ -684,6 +699,69 @@ NavierStokesElement::OpAssembleRhsPressure::iNtegrate(EntData &data) {
     }
 
     ++t_u_grad;
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+NavierStokesElement::OpAssembleRhsExternalForce::iNtegrate(EntData &data) {
+  MoFEMFunctionBegin;
+
+  auto get_tensor1 = [](VectorDouble &v, const int r) {
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>(
+        &v(r + 0), &v(r + 1), &v(r + 2));
+  };
+
+  // set size of local vector
+  locVec.resize(nbRows, false);
+  // clear local entity vector
+  locVec.clear();
+
+  // get base functions on entity
+  auto t_v = data.getFTensor0N();
+
+  int nb_base_functions = data.getN().size2();
+
+  auto get_coords = [&]() {
+    if (getHoCoordsAtGaussPts().size1() == nbIntegrationPts)
+      return getFTensor1HoCoordsAtGaussPts();
+    else
+      return getFTensor1CoordsAtGaussPts();
+  };
+  auto t_coords = get_coords();
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  // loop over all integration points
+  for (int gg = 0; gg != nbIntegrationPts; gg++) {
+
+    double w = getVolume() * getGaussPts()(3, gg);
+
+    auto t_external_force = externalForceFunction(t_coords);
+
+    if (getHoGaussPtsDetJac().size() > 0) {
+      w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+    }
+
+    auto t_a = get_tensor1(locVec, 0);
+    int rr = 0;
+
+    // loop over base functions
+    for (; rr != nbRows / 3; rr++) {
+      // add to local vector source term
+
+      t_a(i) -= w * t_v * t_external_force(i);
+
+      ++t_a; // move to next element of local vector
+      ++t_v; // move to next base function
+    }
+
+    for (; rr != nb_base_functions; rr++) {
+      ++t_v;
+    }
+
+    ++t_coords;
   }
   MoFEMFunctionReturn(0);
 }
