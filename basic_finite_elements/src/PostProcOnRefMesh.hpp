@@ -327,7 +327,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
         EntityHandle meshset;
         CHKERR moab_ref.create_meshset(MESHSET_SET, meshset);
         CHKERR moab_ref.add_entities(meshset, hexes);
-        CHKERR moab_ref.convert_entities(meshset, true, false, false);
+        CHKERR moab_ref.convert_entities(meshset, true, true, true);
         CHKERR moab_ref.delete_entities(&meshset, 1);
         MoFEMFunctionReturn(0);
       };
