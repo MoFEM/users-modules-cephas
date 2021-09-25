@@ -248,13 +248,13 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->generateReferenceElementMesh();
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
-  MatrixDouble inv_jac(2, 2), jac(2, 2);
   if (SPACE_DIM == 2) {
     if (space == HCURL) {
-      post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac));
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac_ptr));
       post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       post_proc_fe->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformOnFace2D(jac));
+          new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
     }
   }
 
@@ -345,7 +345,9 @@ int main(int argc, char *argv[]) {
   }
   CATCH_ERRORS;
 
-  CHKERR MoFEM::Core::Finalize();
+  MoFEM::Core::Finalize();
+
+  return 0;
 }
 
 MoFEMErrorCode MyPostProc::generateReferenceElementMesh() {
@@ -496,16 +498,18 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   EntityHandle *conn;
 
   if (SPACE_DIM == 2)
-    CHKERR iface->get_element_connect(num_el, 3, MBTRI, 0, starte, conn);
+    CHKERR iface->get_element_connect(num_el, num_nodes_on_ele, MBTRI, 0,
+                                      starte, conn);
   else if (SPACE_DIM == 3)
-    CHKERR iface->get_element_connect(num_el, 4, MBTET, 0, starte, conn);
+    CHKERR iface->get_element_connect(num_el, num_nodes_on_ele, MBTET, 0,
+                                      starte, conn);
   else
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
             "Dimension not implemented");
 
   for (unsigned int tt = 0; tt != refEleMap.size1(); ++tt) {
-    for (int nn = 0; nn != 4; ++nn)
-      conn[4 * tt + nn] = mapGaussPts[refEleMap(tt, nn)];
+    for (int nn = 0; nn != num_nodes_on_ele; ++nn)
+      conn[num_nodes_on_ele * tt + nn] = mapGaussPts[refEleMap(tt, nn)];
   }
   CHKERR iface->update_adjacencies(starte, num_el, num_nodes_on_ele, conn);
   auto physical_elements = Range(starte, starte + num_el - 1);
