@@ -51,9 +51,6 @@ private:
   MoFEM::Interface &mField;
   Simple *simpleInterface;
 
-  MatrixDouble invJac;
-  MatrixDouble jAC;
-
   Range domainEntities;
   double errorIndicatorIntegral;
   int totalElementNumber;
@@ -251,17 +248,18 @@ MoFEMErrorCode MixedPoisson::assembleSystem() {
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainLhsPipeline().clear();
 
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateJacForFace(jAC));
+      new OpCalculateJacForFace(jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
+      new OpCalculateInvJacForFace(inv_jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMakeHdivFromHcurl());
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpSetContravariantPiolaTransformOnFace2D(jAC));
+      new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpSetInvJacHcurlFace(invJac));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpSetHOWeigthsOnFace());
+      new OpSetInvJacHcurlFace(inv_jac_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeigthsOnFace());
 
   auto beta = [](const double, const double, const double) { return 1; };
   pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -374,19 +372,21 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getOpDomainRhsPipeline().clear();
 
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateJacForFace(jAC));
+      new OpCalculateJacForFace(jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
+      new OpCalculateInvJacForFace(inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetContravariantPiolaTransformOnFace2D(jAC));
+      new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetInvJacHcurlFace(invJac));
+      new OpSetInvJacHcurlFace(inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetInvJacL2ForFace(invJac));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetHOWeigthsOnFace());
+      new OpSetInvJacL2ForFace(inv_jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeigthsOnFace());
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", commonDataPtr->approxVals));
@@ -437,7 +437,7 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   CHKERR getTagHandle(mField, "ERROR_INDICATOR", MB_TYPE_DOUBLE,
                       tag_handles[2]);
   CHKERR getTagHandle(mField, "ORDER", MB_TYPE_INTEGER, tag_handles[3]);
-  
+
   ParallelComm *pcomm =
       ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   if (pcomm == NULL)
@@ -462,13 +462,17 @@ MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
       boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
   post_proc_fe->generateReferenceElementMesh();
 
-  post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAC));
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+  post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateInvJacForFace(invJac));
+      new OpCalculateInvJacForFace(inv_jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
   post_proc_fe->getOpPtrVector().push_back(
-      new OpSetContravariantPiolaTransformOnFace2D(jAC));
-  post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
+      new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpSetInvJacHcurlFace(inv_jac_ptr));
 
   post_proc_fe->addFieldValuesPostProc("FLUX");
   post_proc_fe->addFieldValuesPostProc("U");

@@ -46,12 +46,12 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
 // Use forms iterators for Grad-Grad term
-using OpGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 3>;
+using OpGradGrad = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpGradGrad<1, 1, 3>;
 
 // Use forms for Mass term
-using OpMass = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpMass<1, 1>;
 
 struct Example {
 
@@ -64,7 +64,6 @@ private:
   Simple *simpleInterface;
 
   Range pinchNodes;
-  MatrixDouble invJac;
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
@@ -76,7 +75,6 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  
   /**
    * Use problem specific implementation for second stage of heat methid
    */
@@ -90,7 +88,6 @@ private:
   protected:
     boost::shared_ptr<MatrixDouble> uGradPtr;
   };
-
 };
 
 //! [Run programme]
@@ -129,7 +126,7 @@ MoFEMErrorCode Example::readMesh() {
   CHKERR mField.get_moab().get_adjacencies(pinchNodes, 1, false, edges,
                                            moab::Interface::UNION);
   double l2;
-  for(auto e : edges) {
+  for (auto e : edges) {
     Range nodes;
     CHKERR mField.get_moab().get_connectivity(Range(e, e), nodes, false);
     MatrixDouble coords(nodes.size(), 3);
@@ -138,9 +135,9 @@ MoFEMErrorCode Example::readMesh() {
     for (int j = 0; j != 3; ++j) {
       l2e += pow(coords(0, j) - coords(1, j), 2);
     }
-    l2 = std::max(l2, l2e);    
+    l2 = std::max(l2, l2e);
   }
-  
+
   dt *= sqrt(l2);
 
   MoFEMFunctionReturn(0);
@@ -150,7 +147,7 @@ MoFEMErrorCode Example::readMesh() {
 //! [Set up problem]
 MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
-  
+
   // Only one field
   CHKERR simpleInterface->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
   constexpr int order = 1;
@@ -201,10 +198,13 @@ MoFEMErrorCode Example::assembleSystem() {
   // This will store gradients at integration points on element
   auto grad_u_ptr = boost::make_shared<MatrixDouble>();
 
-  // Push element from reference configuration to current configuration in 3d space
+  // Push element from reference configuration to current configuration in 3d
+  // space
   auto set_domain_general = [&](auto &pipeline) {
-    pipeline.push_back(new OpCalculateInvJacForFaceEmbeddedIn3DSpace(invJac));
-    pipeline.push_back(new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(invJac));
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(
+        new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac_ptr));
+    pipeline.push_back(new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(inv_jac_ptr));
   };
 
   // Operators for assembling matrix for first stage
@@ -220,7 +220,8 @@ MoFEMErrorCode Example::assembleSystem() {
   // nodes.
   auto set_domain_rhs_first = [&](auto &pipeline) {};
 
-  // Operators for assembly of left hand side. This time only Grad-Grad operator.
+  // Operators for assembly of left hand side. This time only Grad-Grad
+  // operator.
   auto set_domain_lhs_second = [&](auto &pipeline) {
     auto one = [](double, double, double) { return 1.; };
     pipeline.push_back(new OpGradGrad("U", "U", one));
@@ -279,7 +280,6 @@ MoFEMErrorCode Example::assembleSystem() {
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U",
                                          pinchNodes, 0, 1);
 
-
     auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
     auto solver = pipeline_mng->createKSP();
@@ -301,17 +301,18 @@ MoFEMErrorCode Example::assembleSystem() {
   auto post_proc = [&](const std::string out_name) {
     PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
     MoFEMFunctionBegin;
-    auto tmp_lhs_fe =  pipeline_mng->getDomainLhsFE();
-    auto tmp_rhs_fe =  pipeline_mng->getDomainRhsFE();
+    auto tmp_lhs_fe = pipeline_mng->getDomainLhsFE();
+    auto tmp_rhs_fe = pipeline_mng->getDomainRhsFE();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline_mng->getDomainLhsFE().reset();
     pipeline_mng->getDomainRhsFE().reset();
     auto post_proc_fe =
         boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
     post_proc_fe->generateReferenceElementMesh();
     post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFaceEmbeddedIn3DSpace(invJac));
+        new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(invJac));
+        new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(inv_jac_ptr));
     post_proc_fe->addFieldValuesPostProc("U");
     post_proc_fe->addFieldValuesGradientPostProc("U");
     pipeline_mng->getDomainRhsFE() = post_proc_fe;
@@ -434,7 +435,7 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
 
       const auto l2 = t_grad(i) * t_grad(i);
       FTensor::Tensor1<double, 3> t_one;
-      if(l2 > std::numeric_limits<double>::epsilon())
+      if (l2 > std::numeric_limits<double>::epsilon())
         t_one(i) = t_grad(i) / sqrt(l2);
       else
         t_one(i) = 0;
@@ -458,6 +459,3 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
 
   MoFEMFunctionReturn(0);
 }
-
-
-

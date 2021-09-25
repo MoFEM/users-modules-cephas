@@ -91,7 +91,6 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  MatrixDouble invJac;
   boost::shared_ptr<MatrixDouble> matGradPtr;
   boost::shared_ptr<MatrixDouble> matStrainPtr;
   boost::shared_ptr<MatrixDouble> matStressPtr;
@@ -195,8 +194,8 @@ MoFEMErrorCode Example::boundaryCondition() {
                                            "U", 1, 1);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
                                            "U", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "FIX_ALL", "U", 0, 3);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
+                                           "U", 0, 3);
 
   MoFEMFunctionReturn(0);
 }
@@ -209,14 +208,15 @@ MoFEMErrorCode Example::assembleSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   if (SPACE_DIM == 2) {
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
   }
 
   // Get pointer to U_tt shift in domain element
@@ -347,9 +347,11 @@ MoFEMErrorCode Example::solveSystem() {
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
   if (SPACE_DIM == 2) {
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
   }
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",

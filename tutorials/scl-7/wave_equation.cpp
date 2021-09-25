@@ -104,7 +104,6 @@ private:
   std::string domainFieldV;
   int uOrder;
   int vOrder;
-  MatrixDouble invJac;
 
   // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
@@ -303,15 +302,17 @@ MoFEMErrorCode WaveEquation::boundaryCondition() {
 MoFEMErrorCode WaveEquation::assembleSystem() {
   MoFEMFunctionBegin;
 
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
   { // Push operators to the Pipeline that is responsible for calculating the
     // Tangent matrix (LHS)
 
     // Add default operators to calculate inverse of Jacobian (needed for
     // implementation of 2D problem but not 3D ones)
     domainTangentLhsMatrixPipeline->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
     domainTangentLhsMatrixPipeline->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
 
     // Push operators for Jacobian of function (RHS) of the stiff part
     domainTangentLhsMatrixPipeline->getOpPtrVector().push_back(
@@ -331,9 +332,9 @@ MoFEMErrorCode WaveEquation::assembleSystem() {
     // Add default operators to calculate inverse of Jacobian (needed for
     // implementation of 2D problem but not 3D ones)
     domainResidualRhsVectorPipeline->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
     domainResidualRhsVectorPipeline->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
 
     // FIELD U
     // Add default operator to calculate field values at integration points
