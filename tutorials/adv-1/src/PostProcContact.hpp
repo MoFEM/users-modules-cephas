@@ -35,7 +35,7 @@ OpPostProcVertex::OpPostProcVertex(
       commonDataPtr(common_data_ptr), moabVertex(moab_vertex) {
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
   doEntities[boundary_ent] = true;
-  if(boundary_ent == MBTRI)
+  if (boundary_ent == MBTRI)
     doEntities[MBQUAD] = true;
   pComm = ParallelComm::get_pcomm(moabVertex, MYPCOMM_INDEX);
   if (pComm == NULL) {
@@ -250,14 +250,31 @@ struct Monitor : public FEMethod {
     if (SPACE_DIM == 2) {
       auto jac_ptr = boost::make_shared<MatrixDouble>();
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateJacForFace(jac_ptr));
       postProcFe->getOpPtrVector().push_back(
           new OpCalculateInvJacForFace(inv_jac_ptr));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetInvJacH1ForFace(inv_jac_ptr));
       postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       postProcFe->getOpPtrVector().push_back(
           new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetInvJacHcurlFace(inv_jac_ptr));
+    } else {
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateHOJacVolume(jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
     }
 
     postProcFe->getOpPtrVector().push_back(

@@ -203,9 +203,14 @@ MoFEMErrorCode Example::setupProblem() {
   switch (choice_base_value) {
   case AINSWORTH:
     base = AINSWORTH_LEGENDRE_BASE;
+    MOFEM_LOG("EXAMPLE", Sev::inform)
+        << "Set AINSWORTH_LEGENDRE_BASE for displacements";
     break;
   case DEMKOWICZ:
     base = DEMKOWICZ_JACOBI_BASE;
+    MOFEM_LOG("EXAMPLE", Sev::inform)
+        << "Set DEMKOWICZ_JACOBI_BASE for displacents";
+    break;
   default:
     base = LASTBASE;
     break;
@@ -361,13 +366,16 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
     } else {
       auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       auto det_ptr = boost::make_shared<VectorDouble>();
-      pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpCalculateHOJacVolume(jac_ptr));
-      pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpInvertMatrix<3>(jac_ptr, det_ptr, nullptr));
-      pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpSetHOWeights(det_ptr));
+      pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
+      pipeline.push_back(
+          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+      pipeline.push_back(
+          new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
+      pipeline.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
+      pipeline.push_back(new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
+      pipeline.push_back(new OpSetHOWeights(det_ptr));
     }
   };
 
@@ -498,13 +506,13 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
-    if (SPACE_DIM == 3)
-      pipeline.push_back(new OpSetHOWeigthsOnFace());
     pipeline.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
+    pipeline.push_back(new OpSetHOWeigthsOnFace());
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
         "SIGMA", commonDataPtr->contactTractionPtr));
+
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {

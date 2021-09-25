@@ -601,11 +601,11 @@ struct PostProcTemplateVolumeOnRefinedMesh
                                             &(T::nInTheLoop));
 
       EntityHandle fe_ent = T::numeredEntFiniteElementPtr->getEnt();
-      T::coords.resize(CN::VerticesPerEntity(type), false);
       {
         const EntityHandle *conn;
         int num_nodes;
         T::mField.get_moab().get_connectivity(fe_ent, conn, num_nodes, true);
+        T::coords.resize(3 * num_nodes, false);
         CHKERR T::mField.get_moab().get_coords(conn, num_nodes, &T::coords[0]);
       }
 
