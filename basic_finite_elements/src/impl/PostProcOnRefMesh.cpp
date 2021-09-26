@@ -237,16 +237,21 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
 
   auto dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
-
-  int tag_length = rank * 3;
+  
   FieldSpace space = dof_ptr->getSpace();
+  int space_dim = spaceDim;
+  if (space == HCURL || space == HDIV)
+    space_dim = 3;
+
+  int tag_length = rank * space_dim;
+  // FieldSpace space = dof_ptr->getSpace();
   switch (space) {
   case L2:
   case H1:
     break;
   case HCURL:
   case HDIV:
-    tag_length *= 3;
+    tag_length *= space_dim;
     break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
@@ -281,7 +286,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
     if (type == MBVERTEX) {
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         CHKERR postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1, def_VAL);
-        (commonData.gradMap[rowFieldName])[gg].resize(rank, 3);
+        (commonData.gradMap[rowFieldName])[gg].resize(rank, space_dim);
         (commonData.gradMap[rowFieldName])[gg].clear();
       }
     }
@@ -289,7 +294,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
                                        tags_ptr);
     for (int gg = 0; gg < nb_gauss_pts; gg++) {
       for (int rr = 0; rr < rank; rr++) {
-        for (int dd = 0; dd < 3; dd++) {
+        for (int dd = 0; dd < space_dim; dd++) {
           for (unsigned int dof = 0; dof < (vAluesPtr->size() / rank); dof++) {
             const double val =
                 data.getDiffN(gg)(dof, dd) * (*vAluesPtr)[rank * dof + rr];
@@ -305,14 +310,14 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
     commonData.gradMap[rowFieldName].resize(nb_gauss_pts);
     for (int gg = 0; gg < nb_gauss_pts; gg++) {
       CHKERR postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1, def_VAL);
-      (commonData.gradMap[rowFieldName])[gg].resize(rank, 3);
+      (commonData.gradMap[rowFieldName])[gg].resize(rank, space_dim);
       (commonData.gradMap[rowFieldName])[gg].clear();
     }
     CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0], mapGaussPts.size(),
                                        tags_ptr);
     for (int gg = 0; gg < nb_gauss_pts; gg++) {
       for (int rr = 0; rr < rank; rr++) {
-        for (int dd = 0; dd < 3; dd++) {
+        for (int dd = 0; dd < space_dim; dd++) {
           for (unsigned int dof = 0; dof < (vAluesPtr->size() / rank); dof++) {
             const double val =
                 data.getDiffN(gg)(dof, dd) * (*vAluesPtr)[rank * dof + rr];

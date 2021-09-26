@@ -98,16 +98,17 @@ struct PostProcCommonOnRefMesh {
     CommonData &commonData;
     const std::string tagName;
     Vec V;
+    int spaceDim;
 
     OpGetFieldGradientValues(moab::Interface &post_proc_mesh,
                              std::vector<EntityHandle> &map_gauss_pts,
                              const std::string field_name,
                              const std::string tag_name,
-                             CommonData &common_data, Vec v = PETSC_NULL)
+                             CommonData &common_data, Vec v = PETSC_NULL, int space_dim = 3)
         : MoFEM::ForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL),
           postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
-          commonData(common_data), tagName(tag_name), V(v) {}
+          commonData(common_data), tagName(tag_name), V(v), spaceDim(space_dim) {}
 
     VectorDouble vAlues;
     VectorDouble *vAluesPtr;
@@ -228,6 +229,26 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
         new PostProcCommonOnRefMesh::OpGetFieldGradientValues(
             postProcMesh, mapGaussPts, field_name, tag_name, getCommonData(),
             v));
+    MoFEMFunctionReturnHot(0);
+  }
+
+  /** \brief Add operator to post-process L2 or H1 field gradient
+
+  \param field_name
+  \param space_dim the dimension of the problem
+  \param v If vector is given, values from vector are used to set tags on mesh
+
+  * \ingroup mofem_fs_post_proc
+
+*/
+  MoFEMErrorCode addFieldValuesGradientPostProc(const std::string field_name,
+                                                int space_dim,
+                                                Vec v = PETSC_NULL) {
+    MoFEMFunctionBeginHot;
+    ELEMENT::getOpPtrVector().push_back(
+        new PostProcCommonOnRefMesh::OpGetFieldGradientValues(
+            postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
+            getCommonData(), v, space_dim));
     MoFEMFunctionReturnHot(0);
   }
 
