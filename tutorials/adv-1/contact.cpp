@@ -38,7 +38,8 @@ template <> struct ElementsAndOps<2> {
   using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
-  using OpSetPiolaTransformOnBoundary = OpSetContravariantPiolaTransformOnEdge2D;
+  using OpSetPiolaTransformOnBoundary =
+      OpSetContravariantPiolaTransformOnEdge2D;
 };
 
 template <> struct ElementsAndOps<3> {
@@ -164,7 +165,6 @@ private:
   MoFEMErrorCode postProcess();
   MoFEMErrorCode checkResults();
 
-  MatrixDouble invJac, jAc;
   boost::shared_ptr<ContactOps::CommonData> commonDataPtr;
   boost::shared_ptr<PostProcEle> postProcFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
@@ -195,9 +195,35 @@ MoFEMErrorCode Example::runProblem() {
 MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
-  // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
+
+  // Select base
+  enum bases { AINSWORTH, DEMKOWICZ, LASBASETOPT };
+  const char *list_bases[LASBASETOPT] = {"ainsworth", "demkowicz"};
+  PetscInt choice_base_value = AINSWORTH;
+  CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-base", list_bases,
+                              LASBASETOPT, &choice_base_value, PETSC_NULL);
+
+  FieldApproximationBase base;
+  switch (choice_base_value) {
+  case AINSWORTH:
+    base = AINSWORTH_LEGENDRE_BASE;
+    MOFEM_LOG("EXAMPLE", Sev::inform)
+        << "Set AINSWORTH_LEGENDRE_BASE for displacements";
+    break;
+  case DEMKOWICZ:
+    base = DEMKOWICZ_JACOBI_BASE;
+    MOFEM_LOG("EXAMPLE", Sev::inform)
+        << "Set DEMKOWICZ_JACOBI_BASE for displacents";
+    break;
+  default:
+    base = LASTBASE;
+    break;
+  }
+
+  // Note: For tets we have only H1 Ainsworth base, for Hex we have only H1
+  // Demkowicz base. We need to implement Demkowicz H1 base on tet.
+  CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
+  CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
 
   CHKERR simple->addDomainField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
                                 SPACE_DIM);
@@ -290,9 +316,6 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mDPtr->resize(size_symm * size_symm, 1);
 
-  jAc.resize(SPACE_DIM, SPACE_DIM, false);
-  invJac.resize(SPACE_DIM, SPACE_DIM, false);
-
   CHKERR set_matrial_stiffness();
   MoFEMFunctionReturn(0);
 }
@@ -352,12 +375,26 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     if (SPACE_DIM == 2) {
-      pipeline.push_back(new OpCalculateJacForFace(jAc));
-      pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-      pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
+      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
       pipeline.push_back(new OpMakeHdivFromHcurl());
-      pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jAc));
-      pipeline.push_back(new OpSetInvJacHcurlFace(invJac));
+      pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
+      pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
+    } else {
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
+      pipeline.push_back(
+          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+      pipeline.push_back(
+          new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
+      pipeline.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
+      pipeline.push_back(new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
+      pipeline.push_back(new OpSetHOWeights(det_ptr));
     }
   };
 
@@ -489,10 +526,13 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
+    if (SPACE_DIM == 3)
+      pipeline.push_back(new OpSetHOWeigthsOnFace());
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
         "SIGMA", commonDataPtr->contactTractionPtr));
+
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
@@ -615,13 +655,16 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
-  auto integration_rule = [](int, int, int approx_order) {
-    return 2 * order + 1;
+  auto integration_rule_vol = [](int, int, int approx_order) {
+    return 3 * order;
   };
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_vol);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_vol);
+  auto integration_rule_boundary = [](int, int, int approx_order) {
+    return 3 * order;
+  };
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
 
   MoFEMFunctionReturn(0);
 }
@@ -860,14 +903,12 @@ MoFEMErrorCode Example::checkResults() { return 0; }
 //! [Check]
 
 template <int DIM> Range Example::getEntsOnMeshSkin() {
-  Range faces;
-  EntityType type = MBTRI;
-  if (DIM == 3)
-    type = MBTET;
-  CHKERR mField.get_moab().get_entities_by_type(0, type, faces);
+  Range body_ents;
+  CHKERR mField.get_moab().get_entities_by_dimension(0, DIM, body_ents);
   Skinner skin(&mField.get_moab());
   Range skin_ents;
-  CHKERR skin.find_skin(0, faces, false, skin_ents);
+  CHKERR skin.find_skin(0, body_ents, false, skin_ents);
+
   return skin_ents;
 };
 

@@ -14,7 +14,7 @@
 
 namespace HenckyOps {
 
-constexpr double eps = std::numeric_limits<double>::epsilon();
+constexpr double eps = std::numeric_limits<float>::epsilon();
 
 auto f = [](double v) { return 0.5 * std::log(static_cast<long double>(v)); };
 auto d_f = [](double v) { return 0.5 / static_cast<long double>(v); };

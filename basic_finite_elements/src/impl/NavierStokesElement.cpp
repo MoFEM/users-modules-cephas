@@ -164,14 +164,16 @@ MoFEMErrorCode NavierStokesElement::setCalcDragOperators(
     const std::string pressure_field,
     boost::shared_ptr<CommonData> common_data) {
   MoFEMFunctionBegin;
+
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
   for (auto &sit : common_data->setOfFacesData) {
     sideDragFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
     dragFe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(common_data->invJac));
-    dragFe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(common_data->invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
+    dragFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
     dragFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         pressure_field, common_data->pressPtr));
 
@@ -192,14 +194,17 @@ MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
     boost::shared_ptr<CommonData> common_data) {
   MoFEMFunctionBegin;
 
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
   for (auto &sit : common_data->setOfFacesData) {
     sideDragFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
+
     postProcDragPtr->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(common_data->invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
     postProcDragPtr->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(common_data->invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
     postProcDragPtr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(velocity_field,
                                             common_data->velPtr));

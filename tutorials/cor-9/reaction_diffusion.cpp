@@ -48,7 +48,6 @@ struct CommonData {
   MatrixDouble grad;    ///< Gradients of field "u" at integration points
   VectorDouble val;     ///< Values of field "u" at integration points
   VectorDouble dot_val; ///< Rate of values of field "u" at integration points
-  MatrixDouble invJac;  ///< Inverse of element jacobian
 
   SmartPetscObj<Mat> M;   ///< Mass matrix
   SmartPetscObj<KSP> ksp; ///< Linear solver
@@ -381,11 +380,12 @@ int main(int argc, char *argv[]) {
     // Add hook to the element to calculate g.
     vol_ele_slow_rhs->postProcessHook = solve_for_g;
 
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     // Add operators to calculate the stiff right-hand side
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(data->invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(data->invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValuesDot("u", dot_val_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
@@ -395,9 +395,9 @@ int main(int argc, char *argv[]) {
 
     // Add operators to calculate the stiff left-hand side
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(data->invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(data->invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpAssembleStiffLhs<2>(data));
 

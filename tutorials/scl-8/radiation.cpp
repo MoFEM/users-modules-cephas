@@ -71,7 +71,6 @@ private:
   MoFEMErrorCode postProcess();
   MoFEMErrorCode checkResults();
 
-  MatrixDouble invJac;
   boost::shared_ptr<VectorDouble> approxVals;
   boost::shared_ptr<MatrixDouble> approxGradVals;
 
@@ -196,18 +195,20 @@ MoFEMErrorCode Example::OPs() {
     return heat_conductivity * (2 * M_PI * r);
   };
 
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
+      new OpCalculateInvJacForFace(inv_jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpSetInvJacH1ForFace(invJac));
+      new OpSetInvJacH1ForFace(inv_jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpDomainGradGrad("T", "T", beta));
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integrationRule);
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
+      new OpCalculateInvJacForFace(inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetInvJacH1ForFace(invJac));
+      new OpSetInvJacH1ForFace(inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldGradient<2>("T", approxGradVals));
   pipeline_mng->getOpDomainRhsPipeline().push_back(

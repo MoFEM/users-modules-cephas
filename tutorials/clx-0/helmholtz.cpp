@@ -61,7 +61,6 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  MatrixDouble invJac;
 };
 
 //! [run problem]
@@ -175,10 +174,11 @@ MoFEMErrorCode Example::assembleSystem() {
 
   auto set_domain = [&]() {
     MoFEMFunctionBegin;
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetBc("P_REAL", true, boundaryMarker));

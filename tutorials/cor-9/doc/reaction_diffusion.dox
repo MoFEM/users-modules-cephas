@@ -433,7 +433,6 @@ struct CommonData {
   MatrixDouble grad;    ///< Gradients of field "u" at integration points
   VectorDouble val;     ///< Values of field "u" at integration points
   VectorDouble dot_val; ///< Rate of values of field "u" at integration points
-  MatrixDouble invJac;  ///< Inverse of element jacobian
 
   SmartPetscObj<Mat> M;   ///< Mass matrix
   SmartPetscObj<KSP> ksp; ///< Linear solver
@@ -459,10 +458,11 @@ auto grad_ptr = boost::shared_ptr<MatrixDouble>(data, &data->grad);
 Each of those user data operators are added to finite element, for example to
 \em vol_ele_stiff_rhs we add operators as following
 \code
+auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
-MoFEM::OpCalculateInvJacForFace(data->invJac));
+MoFEM::OpCalculateInvJacForFace(inv_jac_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
-MoFEM::OpSetInvJacH1ForFace(data->invJac));
+MoFEM::OpSetInvJacH1ForFace(inv_jac_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
 MoFEM::OpCalculateScalarFieldValuesDot("u", dot_val_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new

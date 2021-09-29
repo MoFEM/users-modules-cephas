@@ -142,7 +142,6 @@ private:
   MoFEMErrorCode OPs();
   MoFEMErrorCode tsSolve();
 
-  MatrixDouble invJac;
   boost::shared_ptr<PlasticOps::CommonData> commonPlasticDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   boost::shared_ptr<PostProcEle> postProcFe;
@@ -418,8 +417,9 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
 
     if (SPACE_DIM == 2) {
-      pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-      pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
     }
 
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
@@ -725,8 +725,9 @@ MoFEMErrorCode Example::OPs() {
     if (reactionMarker) {
 
       if (SPACE_DIM == 2) {
-        pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-        pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+        auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+        pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+        pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
       }
 
       pipeline.push_back(
@@ -811,9 +812,10 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
     if (SPACE_DIM == 2) {
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       postProcFe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(invJac));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+          new OpCalculateInvJacForFace(inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
     }
 
     postProcFe->getOpPtrVector().push_back(

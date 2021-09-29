@@ -56,8 +56,6 @@ struct NavierStokesElement {
 
   struct CommonData {
 
-    MatrixDouble invJac;
-
     boost::shared_ptr<MatrixDouble> gradVelPtr;
     boost::shared_ptr<MatrixDouble> velPtr;
     boost::shared_ptr<VectorDouble> pressPtr;

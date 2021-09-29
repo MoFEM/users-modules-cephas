@@ -373,11 +373,12 @@ shape functions are pushed to the current configuration.
 <td>
 %Example usage
 \code
-MatrixDouble jac, inv_jac;
+auto jac_ptr = boost::make_shared<MatrixDouble>();
+auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpCalculateJacForFace(inv_jac));
+  new OpCalculateJacForFace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpCalculateInvJacForFace(inv_jac));
+  new OpCalculateInvJacForFace(inv_jac_ptr));
 \endcode
 <tr>
 
@@ -396,11 +397,11 @@ This operator assumes that the face element is on the XY plane.
 <td>
 %Example usage
 \code
-MatrixDouble jac;
+auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpSetInvJacH1ForFace(inv_jac));
+  new OpSetInvJacH1ForFace(inv_jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpSetInvJacH1ForFace(inv_jac));
+  new OpSetInvJacH1ForFace(inv_jac_ptr));
 \endcode
 
 <tr>
@@ -422,27 +423,28 @@ Contravariant Piola transformation
 
 %Example for 2d problem for face in XY space
 \code
-Matrix jac;
+auto jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpCalculateJacForFace(jac));
+    new OpCalculateJacForFace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformOnFace2D(jac))
+    new OpSetContravariantPiolaTransformOnFace2D(jac_ptr))
 \endcode
 
 %Example for face emerged in 3d space. 
 \code
-Matrix jac;
+auto jac_ptr = boost::make_shared<MatrixDouble>();
+auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
- new OpCalculateJacForFaceEmbeddedIn3DSpace(jac));
+ new OpCalculateJacForFaceEmbeddedIn3DSpace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac));
+  new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
   new 
-  OpSetContravariantPiolaTransformOnFace2DEmbeddedIn3DSpace(jac));
+  OpSetContravariantPiolaTransformOnFace2DEmbeddedIn3DSpace(jac_ptr));
 \endcode
 Note, in that case problem is 2d, however surface on which PDE is solved is emerged in 3d space.
 
@@ -462,15 +464,15 @@ Transform local reference derivatives of shape function to global derivatives fo
 
 %Example for 2d problem for face in XY space
 \code
-Matrix jac;
+auto jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpCalculateJacForFace(jac));
+    new OpCalculateJacForFace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformOnFace2D(jac));
+    new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformOnFace2D(jac))    
+    new OpSetContravariantPiolaTransformOnFace2D(jac_ptr))    
 \endcode
 
 <tr>
@@ -493,15 +495,15 @@ Note that applying function twice will transform base from H-curl space and then
 
 %Example for 2d problem for face in XY space
 \code
-Matrix jac;
+auto jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpCalculateJacForFace(jac));
+    new OpCalculateJacForFace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformOnFace2D(jac));
+    new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformOnFace2D(jac))    
+    new OpSetContravariantPiolaTransformOnFace2D(jac_ptr))    
 \endcode
 
 <tr>

@@ -292,13 +292,14 @@ For 2D elements, such as those used in the present tutorial, a pre-processing op
 For this, the operators below have to be pushed.
 
 \code
+auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
 pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
 \endcode
 
-where the first operator evaluates the inverse of the Jacobian at each gauss point and stored in the global variable Example::invJac.
+where the first operator evaluates the inverse of the Jacobian at each gauss point.
 Then, this variable is passed to the second operator and for each gauss point the gradient of the shape function is 
 multiplied with the inverse of the Jacobian so that these gradient correspond to the spatial configuration of the element rather than the parent according to the relationship below
 
