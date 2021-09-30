@@ -37,13 +37,13 @@ tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
-tutorials_build_and_install(
-  contact_2d ${CMAKE_CURRENT_SOURCE_DIR}/contact.cpp)
+# tutorials_build_and_install(
+#   contact_2d ${CMAKE_CURRENT_SOURCE_DIR}/contact.cpp)
 tutorials_build_and_install(
   contact_3d ${CMAKE_CURRENT_SOURCE_DIR}/contact.cpp)
 
-set_target_properties(
-  contact_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
+# set_target_properties(
+#   contact_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 set_target_properties(
   contact_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")  
 

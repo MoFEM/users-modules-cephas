@@ -234,6 +234,10 @@ struct Monitor : public FEMethod {
     vertexPostProc = boost::make_shared<BoundaryEle>(*m_field_ptr);
 
     vertexPostProc->getOpPtrVector().push_back(
+        new OpGetHONormalsOnFace("HO_POSITIONS"));
+    vertexPostProc->getOpPtrVector().push_back(
+        new OpCalculateHOCoords("HO_POSITIONS"));
+    vertexPostProc->getOpPtrVector().push_back(
         new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
     vertexPostProc->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>(
@@ -265,8 +269,10 @@ struct Monitor : public FEMethod {
       auto jac_ptr = boost::make_shared<MatrixDouble>();
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       auto det_ptr = boost::make_shared<VectorDouble>();
+      // postProcFe->getOpPtrVector().push_back(
+      //     new OpCalculateHOJacVolume(jac_ptr));
       postProcFe->getOpPtrVector().push_back(
-          new OpCalculateHOJacVolume(jac_ptr));
+          new OpCalculateVectorFieldGradient<3, 3>("HO_POSITIONS", jac_ptr));
       postProcFe->getOpPtrVector().push_back(
           new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
       postProcFe->getOpPtrVector().push_back(
@@ -302,6 +308,7 @@ struct Monitor : public FEMethod {
         "SIGMA", postProcFe->postProcMesh, postProcFe->mapGaussPts,
         commonDataPtr));
     postProcFe->addFieldValuesPostProc("U", "DISPLACEMENT");
+    postProcFe->addFieldValuesPostProc("HO_POSITIONS", "HO_POSITIONS");
   }
 
   MoFEMErrorCode preProcess() { return 0; }
@@ -350,10 +357,10 @@ struct Monitor : public FEMethod {
     CHKERR post_proc_volume();
     CHKERR post_proc_boundary();
 
-    CHKERR print_max_min(uXScatter, "Ux");
-    CHKERR print_max_min(uYScatter, "Uy");
-    if (SPACE_DIM == 3)
-      CHKERR print_max_min(uZScatter, "Uz");
+    // CHKERR print_max_min(uXScatter, "Ux");
+    // CHKERR print_max_min(uYScatter, "Uy");
+    // if (SPACE_DIM == 3)
+    //   CHKERR print_max_min(uZScatter, "Uz");
 
     MoFEMFunctionReturn(0);
   }

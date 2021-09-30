@@ -128,16 +128,16 @@ using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
-constexpr bool is_quasi_static = true;
+constexpr bool is_quasi_static = false;
 constexpr bool is_large_strains = true;
 
 constexpr int order = 2;
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.25;
-constexpr double rho = 0;
+constexpr double rho = 1;
 constexpr double cn = 0.01;
-constexpr double spring_stiffness = 0.1;
-double gravity = 1.0;
+constexpr double spring_stiffness = 0.0;
+double gravity = 2.0;
 
 PetscBool use_nested_matrix = PETSC_FALSE;
 
@@ -230,8 +230,12 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->addBoundaryField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
                                   SPACE_DIM);
 
+  CHKERR simple->addDataField("HO_POSITIONS", H1, base, SPACE_DIM);
+
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
+  CHKERR simple->setFieldOrder("HO_POSITIONS", 2);
+
 
   auto skin_edges = getEntsOnMeshSkin<SPACE_DIM>();
 
@@ -248,6 +252,15 @@ MoFEMErrorCode Example::setupProblem() {
                                PSTATUS_NOT, -1, &boundary_ents);
 
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
+  Range hexes;
+  CHKERR mField.get_moab().get_entities_by_type(0, MBHEX, hexes, false);
+  Range quads;
+  CHKERR mField.get_moab().get_entities_by_type(0, MBQUAD, quads, false);
+  quads = subtract(quads, boundary_ents);
+  hexes.merge(quads);
+  CHKERR simple->setFieldOrder("U", 1, &hexes);
+  CHKERR simple->setFieldOrder("HO_POSITIONS", 1, &hexes);
+
   // Range adj_edges;
   // CHKERR mField.get_moab().get_adjacencies(boundary_ents, 1, false,
   // adj_edges,
@@ -266,15 +279,15 @@ MoFEMErrorCode Example::createCommonData() {
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "-gravity", &gravity, PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "-use_nested_matrix", &use_nested_matrix, PETSC_NULL);
 
-  char mumps_options[] =
-      "-mat_mumps_icntl_14 800 -mat_mumps_icntl_24 1 -mat_mumps_icntl_13 1 "
-      "-fieldsplit_0_mat_mumps_icntl_14 800 "
-      "-fieldsplit_0_mat_mumps_icntl_24 1 "
-      "-fieldsplit_0_mat_mumps_icntl_13 1 "
-      "-fieldsplit_1_mat_mumps_icntl_14 800 "
-      "-fieldsplit_1_mat_mumps_icntl_24 1 "
-      "-fieldsplit_1_mat_mumps_icntl_13 1";
-  CHKERR PetscOptionsInsertString(NULL, mumps_options);
+  // char mumps_options[] =
+  //     "-mat_mumps_icntl_14 800 -mat_mumps_icntl_24 1 -mat_mumps_icntl_13 1 "
+  //     "-fieldsplit_0_mat_mumps_icntl_14 800 "
+  //     "-fieldsplit_0_mat_mumps_icntl_24 1 "
+  //     "-fieldsplit_0_mat_mumps_icntl_13 1 "
+  //     "-fieldsplit_1_mat_mumps_icntl_14 800 "
+  //     "-fieldsplit_1_mat_mumps_icntl_24 1 "
+  //     "-fieldsplit_1_mat_mumps_icntl_13 1";
+  // CHKERR PetscOptionsInsertString(NULL, mumps_options);
 
   auto set_matrial_stiffness = [&]() {
     MoFEMFunctionBegin;
@@ -354,6 +367,8 @@ MoFEMErrorCode Example::bC() {
   if (bc_map.size()) {
     boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
     for (auto b : bc_map) {
+      cerr << b.first << endl;
+
       if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)")) ||
           std::regex_match(b.first, std::regex("(.*)_ROTATE_(.*)"))) {
         boundaryMarker->resize(b.second->bcMarkers.size(), 0);
@@ -387,7 +402,9 @@ MoFEMErrorCode Example::OPs() {
       auto jac_ptr = boost::make_shared<MatrixDouble>();
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       auto det_ptr = boost::make_shared<VectorDouble>();
-      pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
+      pipeline.push_back(
+          new OpCalculateVectorFieldGradient<3, 3>("HO_POSITIONS", jac_ptr));
+      // pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
       pipeline.push_back(
           new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
       pipeline.push_back(
@@ -456,7 +473,7 @@ MoFEMErrorCode Example::OPs() {
 
       // hardcoded gravity load
       t_source(i) = 0;
-      t_source(1) = gravity * time;
+      t_source(1) = gravity;
       return t_source;
     };
 
@@ -525,9 +542,12 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
-    pipeline.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
-    if (SPACE_DIM == 3)
+    if (SPACE_DIM == 3) {
+      pipeline.push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
+      pipeline.push_back(new OpCalculateHOCoords("HO_POSITIONS"));
       pipeline.push_back(new OpSetHOWeigthsOnFace());
+    }
+    pipeline.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
@@ -674,6 +694,9 @@ MoFEMErrorCode Example::OPs() {
 MoFEMErrorCode Example::tsSolve() {
   MoFEMFunctionBegin;
 
+  Projection10NodeCoordsOnField ent_method_material(mField, "HO_POSITIONS");
+  CHKERR mField.loop_dofs("HO_POSITIONS", ent_method_material);
+
   Simple *simple = mField.getInterface<Simple>();
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   ISManager *is_manager = mField.getInterface<ISManager>();
@@ -718,10 +741,10 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
-  uXScatter = scatter_create(D, 0);
-  uYScatter = scatter_create(D, 1);
-  if (SPACE_DIM == 3)
-    uZScatter = scatter_create(D, 2);
+  // uXScatter = scatter_create(D, 0);
+  // uYScatter = scatter_create(D, 1);
+  // if (SPACE_DIM == 3)
+  //   uZScatter = scatter_create(D, 2);
 
   auto push_dirichlet_methods = [&]() {
     MoFEMFunctionBeginHot;
@@ -780,15 +803,21 @@ MoFEMErrorCode Example::tsSolve() {
       CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
           name_prb, COL, "U", 0, 3, &nested_is_col(1), &bc_ents);
       CHKERR mField.getInterface<ISManager>()->isCreateProblemOrder(
-          name_prb, ROW, 0, order, &is_all_row);
+          name_prb, ROW, 0, order + 1, &is_all_row);
       CHKERR mField.getInterface<ISManager>()->isCreateProblemOrder(
-          name_prb, COL, 0, order, &is_all_col);
+          name_prb, COL, 0, order + 1, &is_all_col);
 
       // CHKERR ISView(nested_is_row(1), PETSC_VIEWER_STDOUT_SELF);
 
+      CHKERR ISSort(is_all_row);
+      CHKERR ISSort(is_all_col);
+      CHKERR ISSort(nested_is_row(1));
+      CHKERR ISSort(nested_is_col(1));
       CHKERR ISDifference(is_all_row, nested_is_row(1), &nested_is_row(0));
       CHKERR ISDifference(is_all_col, nested_is_col(1), &nested_is_col(0));
-      
+      CHKERR ISSort(nested_is_row(0));
+      CHKERR ISSort(nested_is_col(0));
+
       if (use_nested_matrix) {
 
         nest_cont = boost::make_shared<NestedMatrixContainer>();
@@ -847,9 +876,10 @@ MoFEMErrorCode Example::tsSolve() {
       }
 
       CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
-                               nested_is_row(0)); // non-boundary block
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
                                nested_is_row(1)); // boundary block
+      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
+                               nested_is_row(0)); // non-boundary block
+
 
       CHKERR ISDestroy(&is_all_row);
       CHKERR ISDestroy(&is_all_col);
@@ -883,6 +913,7 @@ MoFEMErrorCode Example::tsSolve() {
     CHKERR TS2SetSolution(solver, D, DD);
     CHKERR TSSetFromOptions(solver);
     CHKERR TSSetUp(solver);
+    CHKERR set_fieldsplit_preconditioner(solver);
     CHKERR TSSolve(solver, NULL);
   }
 
