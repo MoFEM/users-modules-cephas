@@ -157,6 +157,13 @@ MoFEMErrorCode OpPostProcContact<DIM>::doWork(int side, EntityType type,
                                               EntData &data) {
   MoFEMFunctionBegin;
 
+  auto set_float_precision = [](const double x) {
+    if (std::abs(x) < std::numeric_limits<float>::epsilon())
+      return 0.;
+    else
+      return x;
+  };
+
   auto get_tag_mat = [&](const std::string name) {
     std::array<double, 9> def;
     std::fill(def.begin(), def.end(), 0);
@@ -183,14 +190,14 @@ MoFEMErrorCode OpPostProcContact<DIM>::doWork(int side, EntityType type,
     mat.clear();
     for (size_t r = 0; r != DIM; ++r)
       for (size_t c = 0; c != DIM; ++c)
-        mat(r, c) = t(r, c);
+        mat(r, c) = set_float_precision(t(r, c));
     return mat;
   };
 
   auto set_vector = [&](auto &t) -> MatrixDouble3by3 & {
     mat.clear();
     for (size_t r = 0; r != DIM; ++r)
-      mat(0, r) = t(r);
+      mat(0, r) = set_float_precision(t(r));
     return mat;
   };
 
