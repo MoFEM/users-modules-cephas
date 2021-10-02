@@ -131,12 +131,12 @@ using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
 constexpr bool is_quasi_static = false;
 constexpr bool is_large_strains = true;
 
-constexpr int order = 2;
+constexpr int order = 3;
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.25;
 constexpr double rho = 1;
 constexpr double cn = 0.01;
-constexpr double spring_stiffness = 0.0;
+constexpr double spring_stiffness = 0.1;
 double gravity = 2.0;
 
 PetscBool use_nested_matrix = PETSC_FALSE;
@@ -251,15 +251,17 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR pcomm->filter_pstatus(skin_edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
                                PSTATUS_NOT, -1, &boundary_ents);
 
-  CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
-  Range hexes;
-  CHKERR mField.get_moab().get_entities_by_type(0, MBHEX, hexes, false);
-  Range quads;
-  CHKERR mField.get_moab().get_entities_by_type(0, MBQUAD, quads, false);
-  quads = subtract(quads, boundary_ents);
-  hexes.merge(quads);
-  CHKERR simple->setFieldOrder("U", 1, &hexes);
-  CHKERR simple->setFieldOrder("HO_POSITIONS", 1, &hexes);
+
+
+  CHKERR simple->setFieldOrder("SIGMA", 1, &boundary_ents);
+  // Range hexes;
+  // CHKERR mField.get_moab().get_entities_by_type(0, MBHEX, hexes, false);
+  // Range quads;
+  // CHKERR mField.get_moab().get_entities_by_type(0, MBQUAD, quads, false);
+  // quads = subtract(quads, boundary_ents);
+  // hexes.merge(quads);
+  // CHKERR simple->setFieldOrder("U", 1, &hexes);
+  // CHKERR simple->setFieldOrder("HO_POSITIONS", 1, &hexes);
 
   // Range adj_edges;
   // CHKERR mField.get_moab().get_adjacencies(boundary_ents, 1, false,
@@ -676,7 +678,7 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule_vol = [](int, int, int approx_order) {
-    return 3 * order;
+    return 4 * order;
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_vol);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_vol);

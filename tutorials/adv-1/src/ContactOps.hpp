@@ -558,7 +558,7 @@ struct OpRotate : BoundaryEleOp {
         auto t_nf = getFTensor1FromArray<SPACE_DIM, SPACE_DIM>(locRes);
         for (int rr = 0; rr != nb_row_dofs / SPACE_DIM; ++rr) {
           t_nf(i) -= a * t_row_val * rot_disp(i);
-          t_nf(1) += a * t_row_val * 0.2 * (1 - exp(beta));
+          t_nf(1) += a * t_row_val * 0.4 * (1 - exp(beta));
           ++ t_row_val;
           ++t_nf;
         }
