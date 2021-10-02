@@ -709,19 +709,16 @@ struct PostProcTemplateVolumeOnRefinedMesh
     Range edges;
     CHKERR T::postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
     CHKERR T::postProcMesh.delete_entities(edges);
-    Range tris;
-    CHKERR T::postProcMesh.get_entities_by_type(0, MBTRI, tris, false);
-    CHKERR T::postProcMesh.delete_entities(tris);
+    Range faces;
+    CHKERR T::postProcMesh.get_entities_by_dimension(0, 2, faces, false);
+    CHKERR T::postProcMesh.delete_entities(faces);
 
-    Range tets;
-    CHKERR T::postProcMesh.get_entities_by_type(0, MBTET, tets, false);
+    Range ents;
+    CHKERR T::postProcMesh.get_entities_by_dimension(0, 3, ents, false);
 
     int rank = T::mField.get_comm_rank();
-    Range::iterator tit = tets.begin();
-    for (; tit != tets.end(); tit++) {
-      CHKERR T::postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(),
-                                          &*tit, 1, &rank);
-    }
+    CHKERR T::postProcMesh.tag_clear_data(pcomm_post_proc_mesh->part_tag(),
+                                          ents, &rank);
 
     CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
 
