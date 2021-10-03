@@ -43,125 +43,37 @@ FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
 FTensor::Index<'l', SPACE_DIM> l;
 
-struct NestedMatrixContainer {
-  AO aO[4]; // row - row - col - col
-  ublas::matrix<SmartPetscObj<Mat>> nested_matrices;
+template <int DIM> struct OpOpConstrainBoundaryBaseImpl;
 
-  NestedMatrixContainer() { nested_matrices.resize(2, 2); }
-  ~NestedMatrixContainer() {
-    cout << "DESTRUCTOR CALLED " << endl;
-    for (int i = 0; i != 4; i++)
-      CHKERR AODestroy(&aO[i]);
+using AssemblyBoundaryEleOp3D =
+    FormsIntegrators<ElementsAndOps<3>::BoundaryEleOp>::Assembly<PETSC>::OpBase;
+using AssemblyBoundaryEleOp2D =
+    FormsIntegrators<ElementsAndOps<2>::BoundaryEleOp>::Assembly<PETSC>::OpBase;
+
+template <>
+struct OpOpConstrainBoundaryBaseImpl<3> : public AssemblyBoundaryEleOp3D {
+  using AssemblyBoundaryEleOp3D::AssemblyBoundaryEleOp3D;
+
+  inline auto getContactFTensor1NormalsAtGaussPts() {
+    return this->getFTensor1NormalsAtGaussPts();
   }
-  static boost::weak_ptr<NestedMatrixContainer> nestContainerPtr;
-};
-
-boost::weak_ptr<NestedMatrixContainer> NestedMatrixContainer::nestContainerPtr;
-
-MoFEMErrorCode CsMatZeroRowsColumns(Mat mat, PetscInt numRows,
-                                    const PetscInt rows[], PetscScalar diag,
-                                    Vec x, Vec b) {
-  MoFEMFunctionBegin;
-
-  if (auto nested_cont = NestedMatrixContainer::nestContainerPtr.lock()) {
-    auto &ao = nested_cont->aO;
-    auto &nested_matrices = nested_cont->nested_matrices;
-    if (numRows > 0) {
-      std::vector<int> row_vec0(rows, rows + numRows);
-      auto row_vec1 = row_vec0;
-
-      CHKERR AOApplicationToPetsc(ao[0], numRows, &*row_vec0.begin());
-      CHKERR AOApplicationToPetsc(ao[1], numRows, &*row_vec1.begin());
-
-      CHKERR MatZeroRowsColumns(nested_matrices(0, 0), numRows,
-                                &*row_vec0.begin(), diag, x, b);
-      CHKERR MatZeroRowsColumns(nested_matrices(0, 1), numRows,
-                                &*row_vec0.begin(), diag, x, b);
-      CHKERR MatZeroRowsColumns(nested_matrices(1, 1), numRows,
-                                &*row_vec1.begin(), diag, x, b);
-    }
-
-  } else
-    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-            "nested container weak pointer problem");
-
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode CsMatMissingDiagonal(Mat mat, PetscBool *missing, PetscInt *dd) {
-  MoFEMFunctionBegin;
-
-  if (auto nested_cont = NestedMatrixContainer::nestContainerPtr.lock()) {
-    auto &ao = nested_cont->aO;
-    auto &nested_matrices = nested_cont->nested_matrices;
-    PetscBool missing0;
-    CHKERR MatMissingDiagonal(nested_matrices(0, 0), &missing0, dd);
-    CHKERR MatMissingDiagonal(nested_matrices(1, 1), missing, dd);
-    *missing = PetscBool(*missing || missing0);
-  } else
-    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-            "nested container weak pointer problem");
-
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode CsMatSetValues(Mat mat, PetscInt m, const PetscInt idxm[],
-                              PetscInt n, const PetscInt idxn[],
-                              const PetscScalar v[], InsertMode addv) {
-  MoFEMFunctionBegin;
-
-  if (auto nested_cont = NestedMatrixContainer::nestContainerPtr.lock()) {
-    auto &ao = nested_cont->aO;
-    auto &nested_matrices = nested_cont->nested_matrices;
-
-    std::vector<int> my_row_indices0(idxm, idxm + m);
-    std::vector<int> my_row_indices1(idxm, idxm + m);
-
-    std::vector<int> my_col_indices0(idxn, idxn + n);
-    std::vector<int> my_col_indices1(idxn, idxn + n);
-
-    CHKERR AOApplicationToPetsc(ao[0], my_row_indices0.size(),
-                                &*my_row_indices0.begin());
-    CHKERR AOApplicationToPetsc(ao[1], my_row_indices1.size(),
-                                &*my_row_indices1.begin());
-    CHKERR AOApplicationToPetsc(ao[2], my_col_indices0.size(),
-                                &*my_col_indices0.begin());
-    CHKERR AOApplicationToPetsc(ao[3], my_col_indices1.size(),
-                                &*my_col_indices1.begin());
-
-    ::MatSetValues(nested_matrices(0, 0), my_row_indices0.size(),
-                   &*my_row_indices0.begin(), my_col_indices0.size(),
-                   &*my_col_indices0.begin(), v, addv);
-    ::MatSetValues(nested_matrices(0, 1), my_row_indices0.size(),
-                   &*my_row_indices0.begin(), my_col_indices1.size(),
-                   &*my_col_indices1.begin(), v, addv);
-
-    return ::MatSetValues(nested_matrices(1, 1), my_row_indices1.size(),
-                          &*my_row_indices1.begin(), my_col_indices1.size(),
-                          &*my_col_indices1.begin(), v, addv);
-  } else
-    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-            "nested container weak pointer problem");
-
-  MoFEMFunctionReturn(0);
-}
-
-struct OpOpConstrainBoundaryBase: public AssemblyBoundaryEleOp {
-  using AssemblyBoundaryEleOp::AssemblyBoundaryEleOp;
-  template <int DIM>
-  FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>
-  getContactFTensor1NormalsAtGaussPts();
-
-private:
-  MatrixDouble matNormals;
 };
 
 template <>
-FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>
-OpOpConstrainBoundaryBase::getContactFTensor1NormalsAtGaussPts<3>() {
-  return this->getFTensor1NormalsAtGaussPts();
-}
+struct OpOpConstrainBoundaryBaseImpl<2> : public AssemblyBoundaryEleOp2D {
+  using AssemblyBoundaryEleOp2D::AssemblyBoundaryEleOp2D;
+  inline auto getContactFTensor1NormalsAtGaussPts() {
+    FTensor::Index<'i', 3> i;
+    tN(i) = this->getFTensor1Normal()(i);
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 0>, 3>{&tN(0), &tN(1),
+                                                              &tN(2)};
+  }
 
+private:
+  FTensor::Tensor1<double, 3> tN;
+};
+
+using OpOpConstrainBoundaryBase = OpOpConstrainBoundaryBaseImpl<SPACE_DIM>;
 struct OpConstrainBoundaryRhs : public OpOpConstrainBoundaryBase {
   OpConstrainBoundaryRhs(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr);
@@ -258,7 +170,7 @@ OpConstrainBoundaryRhs::iNtegrate(DataForcesAndSourcesCore::EntData &data) {
   auto &nf = OpOpConstrainBoundaryBase::locF;
 
   auto t_w = getFTensor0IntegrationWeight();
-  auto t_normal = getContactFTensor1NormalsAtGaussPts<SPACE_DIM>();
+  auto t_normal = getContactFTensor1NormalsAtGaussPts();
   auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
   auto t_traction =
       getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
@@ -343,7 +255,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::iNtegrate(
   auto t_coords = getFTensor1CoordsAtGaussPts();
 
   auto t_w = getFTensor0IntegrationWeight();
-  auto t_normal = getContactFTensor1NormalsAtGaussPts<SPACE_DIM>();
+  auto t_normal = getContactFTensor1NormalsAtGaussPts();
   auto t_row_base = row_data.getFTensor1N<3>();
   size_t nb_face_functions = row_data.getN().size2() / 3;
 
@@ -404,7 +316,7 @@ OpConstrainBoundaryLhs_dTraction::OpConstrainBoundaryLhs_dTraction(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : OpOpConstrainBoundaryBase(row_field_name, col_field_name,
-                            DomainEleOp::OPROWCOL),
+                                DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
@@ -417,7 +329,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
   const size_t nb_gauss_pts = getGaussPts().size2();
   auto &locMat = OpOpConstrainBoundaryBase::locMat;
 
-  auto t_normal = getContactFTensor1NormalsAtGaussPts<SPACE_DIM>();
+  auto t_normal = getContactFTensor1NormalsAtGaussPts();
   auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
   auto t_traction =
       getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
