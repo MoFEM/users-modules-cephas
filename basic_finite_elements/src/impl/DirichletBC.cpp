@@ -161,24 +161,44 @@ MoFEMErrorCode DirichletDisplacementBc::getRotationBcFromBlock(
       std::vector<double> mydata;
       CHKERR bc_data.back().getEntitiesFromBc(mField, &(*it));
       CHKERR it->getAttributes(mydata);
-      if (mydata.size() < 7) {
+      if (mydata.size() < 6) {
         SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                "7 attributes are required for Rotation (angle + 3 center "
-                "coords + 3 normal coords, (+ 3 optional) flags for xyz)");
+                "6 attributes are required for Rotation (3 center coords + 3 "
+                "angles, (+ 3 optional) flags for xyz)");
       }
       for (int ii : {0, 1, 2}) {
         bc_data.back().bc_flags[ii] = 1;
-        bc_data.back().t_centr(ii) = mydata[ii + 1];
-        bc_data.back().t_normal(ii) = mydata[ii + 4];
+        bc_data.back().t_centr(ii) = mydata[ii + 0];
+        bc_data.back().t_normal(ii) = mydata[ii + 3];
       }
-      if (mydata.size() > 9)
+      if (mydata.size() > 8)
         for (int ii : {0, 1, 2})
-          bc_data.back().bc_flags[ii] = mydata[7 + ii];
+          bc_data.back().bc_flags[ii] = mydata[6 + ii];
 
-      bc_data.back().scaled_values[0] = mydata[0];
+      bc_data.back().scaled_values[0] = bc_data.back().t_normal.l2();
       bc_data.back().is_rotation = true;
     }
   }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+DirichletDisplacementBc::calculateRotationForDof(EntityHandle ent,
+                                                 DataFromBc &bc_data) {
+  MoFEMFunctionBegin;
+  auto apply_rotation = [&](auto &ent) {
+    MoFEMFunctionBeginHot;
+    if (bc_data.is_rotation) {
+      double coords[3];
+      CHKERR mField.get_moab().get_coords(&ent, 1, coords);
+      bc_data.scaled_values = get_displacement(coords, bc_data.t_centr,
+                                               bc_data.t_normal, bc_data.theta);
+    }
+    MoFEMFunctionReturnHot(0);
+  };
+
+  CHKERR apply_rotation(ent);
 
   MoFEMFunctionReturn(0);
 }
@@ -197,24 +217,12 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
                                                bc_it.scaled_values);
 
       bc_it.theta = bc_it.scaled_values[0]; // for rotation only
-      auto apply_rotation = [&](auto &dof) {
-        MoFEMFunctionBeginHot;
-        if (bc_it.is_rotation) {
-          double coords[3];
-          auto ent = dof->getEnt();
-          CHKERR mField.get_moab().get_coords(&ent, 1, coords);
-          bc_it.scaled_values = get_displacement(coords, bc_it.t_centr,
-                                                 bc_it.t_normal, bc_it.theta);
-        }
-        MoFEMFunctionReturnHot(0);
-      };
-
       for (int dim = 0; dim < 3; dim++) {
 
         auto for_each_dof = [&](auto &dof) {
           MoFEMFunctionBeginHot;
           if (dof->getEntType() == MBVERTEX) {
-            CHKERR apply_rotation(dof);
+            CHKERR calculateRotationForDof(dof->getEnt(), bc_it);
             if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
               // set boundary values to field data
               mapZeroRows[dof->getPetscGlobalDofIdx()] = bc_it.scaled_values[0];
