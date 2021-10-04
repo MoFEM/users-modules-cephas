@@ -264,6 +264,7 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
       return c * fe_domain_lhs->ts_a;
     };
     pipeline.push_back(new OpDomainMass("U", "U", get_c));
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_domain_rhs_ops = [&](auto &pipeline) {
@@ -316,8 +317,8 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     auto boundary_function = [&](const double x, const double y,
                                  const double z) {
       auto pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_lhs = pipeline_mng->getBoundaryLhsFE();
-      const auto t = fe_domain_lhs->ts_t;
+      auto &fe_rhs = pipeline_mng->getBoundaryRhsFE();
+      const auto t = fe_rhs->ts_t;
       return 0;
       // abs(0.1 * pow(M_E, -M_PI * M_PI * t) * sin(2. * M_PI * x) *
       //     sin(3. * M_PI * y));

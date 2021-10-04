@@ -322,6 +322,7 @@ MoFEMErrorCode MinimalSurfaceEqn::assembleSystem() {
         new OpCalculateScalarFieldGradient<2>("U", grad_u_at_gauss_pts));
     pipeline.push_back(
         new OpDomainTangentMatrix("U", "U", grad_u_at_gauss_pts));
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_domain_rhs_ops = [&](auto &pipeline) {
