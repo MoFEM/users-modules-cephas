@@ -909,47 +909,12 @@ MoFEMErrorCode Example::tsSolve() {
     // Setup fieldsplit (block) solver - optional: yes/no
     if (is_pcfs == PETSC_TRUE) {
 
-      auto get_is = [&](const std::string blck_name, const int lo,
-                        const int hi) {
-
-        const std::string ref_exp_str = "(.*)_" + blck_name + "(.*)";
-
-        Range bc_ents;
-        for (auto bc :
-             mField.getInterface<BcManager>()->getBcMapByBlockName()) {
-          // cerr<< bc.first << " " << ref_exp_str << endl;
-
-          if (std::regex_match(bc.first, std::regex(ref_exp_str))) {
-            bc_ents.merge(*bc.second->getBcEdgesPtr());
-          }
-        }
-        Range nodes;
-        CHKERR mField.get_moab().get_connectivity(bc_ents, nodes, true);
-        bc_ents.merge(nodes);
-        CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
-            bc_ents);
-
-        SmartPetscObj<IS> is_bc;
-        auto name_prb = simple->getProblemName();
-        CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-            name_prb, ROW, "U", lo, hi, is_bc, &bc_ents);
-        CHKERR ISSort(is_bc);
-
-        return is_bc;
-      };
-
-      auto is_all_bc = get_is("FIX_ALL", 0, 3);
-      auto is_x_bc = get_is("FIX_X", 0, 0);
-      auto is_y_bc = get_is("FIX_Y", 1, 1);
-      auto is_z_bc = get_is("FIX_Z", 3, 3);
-
-      IS is_expand;
-      CHKERR ISExpand(is_z_bc, is_y_bc, &is_expand);
-      is_y_bc = SmartPetscObj<IS>(is_expand);
-      CHKERR ISExpand(is_y_bc, is_x_bc, &is_expand);
-      is_z_bc = SmartPetscObj<IS>(is_expand);
-      CHKERR ISExpand(is_x_bc, is_all_bc, &is_expand);
-      is_all_bc = SmartPetscObj<IS>(is_expand);
+      auto bc_mng = mField.getInterface<BcManager>();
+      auto name_prb = simple->getProblemName();
+      auto is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_X", "U", 0, 0);
+      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Y", "U", 1, 1, is_all_bc);
+      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Z", "U", 2, 2, is_all_bc);
+      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_ALL", "U", 0, 2, is_all_bc);
 
       int is_all_bc_size;
       CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
