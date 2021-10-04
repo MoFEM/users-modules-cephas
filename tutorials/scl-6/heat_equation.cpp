@@ -271,7 +271,7 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     auto grad_u_at_gauss_pts = boost::make_shared<MatrixDouble>();
     auto dot_u_at_gauss_pts = boost::make_shared<VectorDouble>();
     pipeline.push_back(
-        new OpCalculateScalarFieldGradient<2>("U", grad_u_at_gauss_pts));
+        new OpCalculateScalarFieldGradient<SPACE_DIM>("U", grad_u_at_gauss_pts));
     pipeline.push_back(
         new OpCalculateScalarFieldValuesDot("U", dot_u_at_gauss_pts));
     pipeline.push_back(new OpDomainGradTimesVec(
