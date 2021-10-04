@@ -398,8 +398,7 @@ MoFEMErrorCode HeatEquation::solveSystem() {
     if (is_pcfs == PETSC_TRUE) {
       auto bc_mng = mField.getInterface<BcManager>();
       auto name_prb = simple->getProblemName();
-      auto is_all_bc =
-          bc_mng->getBlockIS(name_prb, "BOUNDARY_CONDITION", "U", 0, 0);
+      auto is_all_bc = bc_mng->getBlockIS(name_prb, "ESSENTIAL", "U", 0, 0);
       int is_all_bc_size;
       CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
       MOFEM_LOG("EXAMPLE", Sev::inform)
