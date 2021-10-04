@@ -364,6 +364,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpMakeHdivFromHcurl());
       pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
+      // pipeline.push_back(new OpSetHOWeigthsOnFace());
     } else {
       auto jac_ptr = boost::make_shared<MatrixDouble>();
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
