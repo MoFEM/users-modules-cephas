@@ -138,35 +138,20 @@ private:
 
   // Main interfaces
   MoFEM::Interface &mField;
-  Simple *simpleInterface;
-
-  // mpi parallel communicator
-  MPI_Comm mpiComm;
-  // Number of processors
-  const int mpiRank;
-
-  // Discrete Manager and time-stepping solver using SmartPetscObj
-  SmartPetscObj<DM> dM;
-  SmartPetscObj<TS> tsSolver;
-
-  // Field name and approximation order
-  std::string domainField;
-  int oRder;
 
   // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 };
 
-HeatEquation::HeatEquation(MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field), mpiComm(mField.get_comm()),
-      mpiRank(mField.get_comm_rank()) {}
+HeatEquation::HeatEquation(MoFEM::Interface &m_field) : mField(m_field) {}
 
 MoFEMErrorCode HeatEquation::readMesh() {
   MoFEMFunctionBegin;
 
-  CHKERR mField.getInterface(simpleInterface);
-  CHKERR simpleInterface->getOptions();
-  CHKERR simpleInterface->loadFile();
+  auto *simple = mField.getInterface<Simple>();
+  CHKERR mField.getInterface(simple);
+  CHKERR simple->getOptions();
+  CHKERR simple->loadFile();
 
   MoFEMFunctionReturn(0);
 }
@@ -174,16 +159,15 @@ MoFEMErrorCode HeatEquation::readMesh() {
 MoFEMErrorCode HeatEquation::setupProblem() {
   MoFEMFunctionBegin;
 
-  CHKERR simpleInterface->addDomainField(domainField, H1,
-                                         AINSWORTH_LEGENDRE_BASE, 1);
-  CHKERR simpleInterface->addBoundaryField(domainField, H1,
-                                           AINSWORTH_LEGENDRE_BASE, 1);
+  auto *simple = mField.getInterface<Simple>();
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  int oRder = 3;
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
-  CHKERR simpleInterface->setFieldOrder(domainField, oRder);
+  int order = 3;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+  CHKERR simple->setFieldOrder("U", order);
 
-  CHKERR simpleInterface->setUp();
+  CHKERR simple->setUp();
 
   MoFEMFunctionReturn(0);
 }
@@ -219,7 +203,7 @@ MoFEMErrorCode HeatEquation::initialCondition() {
       CHKERR mField.get_moab().get_connectivity(inner_surface,
                                                 inner_surface_verts, false);
       CHKERR mField.getInterface<FieldBlas>()->setField(
-          init_u, MBVERTEX, inner_surface_verts, domainField);
+          init_u, MBVERTEX, inner_surface_verts, "U");
     }
   }
 
