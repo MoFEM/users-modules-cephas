@@ -1,0 +1,11 @@
+Check before run
+================
+
+* Check where is your mesh file
+* Check what version of openmpi (or other MPI library) are you using
+
+Example Static (multimaterial_dynamics)
+==========================
+
+mpirun -np 2 ./multimaterial_dynamics -file_name LShape.h5m -my_order 2
+
