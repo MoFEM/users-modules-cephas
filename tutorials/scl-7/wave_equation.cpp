@@ -37,32 +37,16 @@ static char help[] = "...\n\n";
 
 template <int DIM> struct ElementsAndOps {};
 
-template <> struct ElementsAndOps<2> {
-  using DomainEle = PipelineManager::FaceEle;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = PipelineManager::EdgeEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
-};
-
-template <> struct ElementsAndOps<3> {
-  using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = FaceElementForcesAndSourcesCore;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcVolumeOnRefinedMesh;
-};
-
 //! [Define dimension]
 constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
 //! [Define dimension]
 
 using EntData = DataForcesAndSourcesCore::EntData;
-using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
-using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
-using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
-using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+using DomainEle = PipelineManager::FaceEle;
+using DomainEleOp = DomainEle::UserDataOperator;
+using BoundaryEle = PipelineManager::EdgeEle;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
+using PostProcEle = PostProcFaceOnRefinedMesh;
 
 using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
@@ -92,17 +76,17 @@ constexpr double wave_speed2 = 1;
  */
 struct Monitor : public FEMethod {
 
-  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<PostProcEle> post_proc)
+  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc)
       : dM(dm), postProc(post_proc){};
 
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
 
-  const int save_every_nth_step = 1;
+  static constexpr int saveEveryNthStep = 1;
 
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    if (ts_step % save_every_nth_step == 0) {
+    if (ts_step % saveEveryNthStep == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
       CHKERR postProc->writeFile(
           "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
@@ -115,9 +99,9 @@ private:
   boost::shared_ptr<PostProcEle> postProc;
 };
 
-struct HeatEquation {
+struct WaveEquation {
 public:
-  HeatEquation(MoFEM::Interface &m_field);
+  WaveEquation(MoFEM::Interface &m_field);
 
   // Declaration of the main function to run analysis
   MoFEMErrorCode runProgram();
@@ -140,9 +124,9 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 };
 
-HeatEquation::HeatEquation(MoFEM::Interface &m_field) : mField(m_field) {}
+WaveEquation::WaveEquation(MoFEM::Interface &m_field) : mField(m_field) {}
 
-MoFEMErrorCode HeatEquation::readMesh() {
+MoFEMErrorCode WaveEquation::readMesh() {
   MoFEMFunctionBegin;
 
   auto *simple = mField.getInterface<Simple>();
@@ -153,7 +137,7 @@ MoFEMErrorCode HeatEquation::readMesh() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode HeatEquation::setupProblem() {
+MoFEMErrorCode WaveEquation::setupProblem() {
   MoFEMFunctionBegin;
 
   auto *simple = mField.getInterface<Simple>();
@@ -169,7 +153,7 @@ MoFEMErrorCode HeatEquation::setupProblem() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode HeatEquation::setIntegrationRules() {
+MoFEMErrorCode WaveEquation::setIntegrationRules() {
   MoFEMFunctionBegin;
 
   auto integration_rule = [](int o_row, int o_col, int approx_order) {
@@ -185,12 +169,12 @@ MoFEMErrorCode HeatEquation::setIntegrationRules() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode HeatEquation::initialCondition() {
+MoFEMErrorCode WaveEquation::initialCondition() {
   MoFEMFunctionBegin;
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode HeatEquation::boundaryCondition() {
+MoFEMErrorCode WaveEquation::boundaryCondition() {
   MoFEMFunctionBegin;
 
   auto bc_mng = mField.getInterface<BcManager>();
@@ -212,26 +196,16 @@ MoFEMErrorCode HeatEquation::boundaryCondition() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode HeatEquation::assembleSystem() {
+MoFEMErrorCode WaveEquation::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto add_domain_base_ops = [&](auto &pipeline) {
-    if (SPACE_DIM == 2) {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
-      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetHOWeigthsOnFace());
-    } else {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
-      pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
-      pipeline.push_back(new OpSetHOWeights(det_ptr));
-    }
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
+    pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+    pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+    pipeline.push_back(new OpSetHOWeigthsOnFace());
   };
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {
@@ -251,8 +225,8 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     auto grad_u_at_gauss_pts = boost::make_shared<MatrixDouble>();
     auto dot2_u_at_gauss_pts = boost::make_shared<VectorDouble>();
-    pipeline.push_back(
-        new OpCalculateScalarFieldGradient<SPACE_DIM>("U", grad_u_at_gauss_pts));
+    pipeline.push_back(new OpCalculateScalarFieldGradient<SPACE_DIM>(
+        "U", grad_u_at_gauss_pts));
     pipeline.push_back(
         new OpCalculateScalarFieldValuesDotDot("U", dot2_u_at_gauss_pts));
     pipeline.push_back(new OpDomainGradTimesVec(
@@ -264,18 +238,7 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     pipeline.push_back(new OpUnSetBc("U"));
   };
 
-  auto add_boundary_base_ops = [&](auto &pipeline) {
-    if (SPACE_DIM == 2) {
-      // HO is not implemented for edges
-    } else {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
-      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetHOWeigthsOnFace());
-    }
-  };
+  auto add_boundary_base_ops = [&](auto &pipeline) {};
 
   auto add_lhs_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetBc("U", false, boundaryMarker));
@@ -319,7 +282,7 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode HeatEquation::solveSystem() {
+MoFEMErrorCode WaveEquation::solveSystem() {
   MoFEMFunctionBegin;
 
   auto *simple = mField.getInterface<Simple>();
@@ -328,23 +291,11 @@ MoFEMErrorCode HeatEquation::solveSystem() {
   auto create_post_process_element = [&]() {
     auto post_froc_fe = boost::make_shared<PostProcEle>(mField);
     post_froc_fe->generateReferenceElementMesh();
-    if (SPACE_DIM == 2) {
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      post_froc_fe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(inv_jac_ptr));
-      post_froc_fe->getOpPtrVector().push_back(
-          new OpSetInvJacH1ForFace(inv_jac_ptr));
-    } else {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      post_froc_fe->getOpPtrVector().push_back(
-          new OpCalculateJacForFace(jac_ptr));
-      post_froc_fe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(inv_jac_ptr));
-      post_froc_fe->getOpPtrVector().push_back(
-          new OpSetInvJacH1ForFace(inv_jac_ptr));
-      post_froc_fe->getOpPtrVector().push_back(new OpSetHOWeigthsOnFace());
-    }
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    post_froc_fe->getOpPtrVector().push_back(
+        new OpCalculateInvJacForFace(inv_jac_ptr));
+    post_froc_fe->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
     post_froc_fe->addFieldValuesPostProc("U");
     return post_froc_fe;
   };
@@ -406,7 +357,7 @@ MoFEMErrorCode HeatEquation::solveSystem() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode HeatEquation::outputResults() {
+MoFEMErrorCode WaveEquation::outputResults() {
   MoFEMFunctionBegin;
 
   // Processes to set output results are integrated in solveSystem()
@@ -414,7 +365,7 @@ MoFEMErrorCode HeatEquation::outputResults() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode HeatEquation::runProgram() {
+MoFEMErrorCode WaveEquation::runProgram() {
   MoFEMFunctionBegin;
 
   CHKERR readMesh();
@@ -457,7 +408,7 @@ int main(int argc, char *argv[]) {
     MoFEM::Interface &m_field = core; // finite element interface
 
     // Run the main analysis
-    HeatEquation heat_problem(m_field);
+    WaveEquation heat_problem(m_field);
     CHKERR heat_problem.runProgram();
   }
   CATCH_ERRORS;

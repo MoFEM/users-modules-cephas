@@ -37,32 +37,16 @@ static char help[] = "...\n\n";
 
 template <int DIM> struct ElementsAndOps {};
 
-template <> struct ElementsAndOps<2> {
-  using DomainEle = PipelineManager::FaceEle;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = PipelineManager::EdgeEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
-};
-
-template <> struct ElementsAndOps<3> {
-  using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = FaceElementForcesAndSourcesCore;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcVolumeOnRefinedMesh;
-};
-
 //! [Define dimension]
 constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
 //! [Define dimension]
 
 using EntData = DataForcesAndSourcesCore::EntData;
-using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
-using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
-using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
-using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+using DomainEle = PipelineManager::FaceEle;
+using DomainEleOp = DomainEle::UserDataOperator;
+using BoundaryEle = PipelineManager::EdgeEle;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
+using PostProcEle = PostProcFaceOnRefinedMesh;
 
 using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
@@ -95,17 +79,17 @@ constexpr double init_u = 0.;
  */
 struct Monitor : public FEMethod {
 
-  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<PostProcEle> post_proc)
+  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc)
       : dM(dm), postProc(post_proc){};
 
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
 
-  const int save_every_nth_step = 1;
+  static constexpr int saveEveryNthStep = 1;
 
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    if (ts_step % save_every_nth_step == 0) {
+    if (ts_step % saveEveryNthStep == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
       CHKERR postProc->writeFile(
           "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
@@ -236,22 +220,12 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto add_domain_base_ops = [&](auto &pipeline) {
-    if (SPACE_DIM == 2) {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
-      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetHOWeigthsOnFace());
-    } else {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
-      pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
-      pipeline.push_back(new OpSetHOWeights(det_ptr));
-    }
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
+    pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+    pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+    pipeline.push_back(new OpSetHOWeigthsOnFace());
   };
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {
@@ -271,8 +245,8 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     auto grad_u_at_gauss_pts = boost::make_shared<MatrixDouble>();
     auto dot_u_at_gauss_pts = boost::make_shared<VectorDouble>();
-    pipeline.push_back(
-        new OpCalculateScalarFieldGradient<SPACE_DIM>("U", grad_u_at_gauss_pts));
+    pipeline.push_back(new OpCalculateScalarFieldGradient<SPACE_DIM>(
+        "U", grad_u_at_gauss_pts));
     pipeline.push_back(
         new OpCalculateScalarFieldValuesDot("U", dot_u_at_gauss_pts));
     pipeline.push_back(new OpDomainGradTimesVec(
@@ -354,23 +328,11 @@ MoFEMErrorCode HeatEquation::solveSystem() {
   auto create_post_process_element = [&]() {
     auto post_froc_fe = boost::make_shared<PostProcEle>(mField);
     post_froc_fe->generateReferenceElementMesh();
-    if (SPACE_DIM == 2) {
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      post_froc_fe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(inv_jac_ptr));
-      post_froc_fe->getOpPtrVector().push_back(
-          new OpSetInvJacH1ForFace(inv_jac_ptr));
-    } else {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      post_froc_fe->getOpPtrVector().push_back(
-          new OpCalculateJacForFace(jac_ptr));
-      post_froc_fe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(inv_jac_ptr));
-      post_froc_fe->getOpPtrVector().push_back(
-          new OpSetInvJacH1ForFace(inv_jac_ptr));
-      post_froc_fe->getOpPtrVector().push_back(new OpSetHOWeigthsOnFace());
-    }
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    post_froc_fe->getOpPtrVector().push_back(
+        new OpCalculateInvJacForFace(inv_jac_ptr));
+    post_froc_fe->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
     post_froc_fe->addFieldValuesPostProc("U");
     return post_froc_fe;
   };
