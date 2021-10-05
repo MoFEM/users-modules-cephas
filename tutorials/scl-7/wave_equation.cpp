@@ -51,11 +51,11 @@ using PostProcEle = PostProcFaceOnRefinedMesh;
 using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 2>;
-using OpDomainTimeScalarField = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, SPACE_DIM>;
+using OpDomainTimesScalarField = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1>;
 using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, 2>;
+    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, SPACE_DIM>;
 
 using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
@@ -230,7 +230,7 @@ MoFEMErrorCode WaveEquation::assembleSystem() {
     pipeline.push_back(new OpDomainGradTimesVec(
         "U", grad_u_at_gauss_pts,
         [](double, double, double) -> double { return 1; }));
-    pipeline.push_back(new OpDomainTimeScalarField(
+    pipeline.push_back(new OpDomainTimesScalarField(
         "U", dot2_u_at_gauss_pts,
         [](const double, const double, const double) { return wave_speed2; }));
     pipeline.push_back(new OpUnSetBc("U"));
