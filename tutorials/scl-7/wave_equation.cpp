@@ -56,8 +56,6 @@ using OpDomainTimeScalarField = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1>;
 using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, 2>;
-using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
 using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
