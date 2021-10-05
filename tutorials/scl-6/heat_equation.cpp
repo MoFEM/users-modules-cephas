@@ -266,18 +266,7 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     pipeline.push_back(new OpUnSetBc("U"));
   };
 
-  auto add_boundary_base_ops = [&](auto &pipeline) {
-    if (SPACE_DIM == 2) {
-      // HO is not implemented for edges
-    } else {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
-      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetHOWeigthsOnFace());
-    }
-  };
+  auto add_boundary_base_ops = [&](auto &pipeline) {};
 
   auto add_lhs_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetBc("U", false, boundaryMarker));
