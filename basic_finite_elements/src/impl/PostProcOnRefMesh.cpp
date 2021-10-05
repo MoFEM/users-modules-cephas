@@ -833,14 +833,11 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
         new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
 
-  Range tris;
-  CHKERR postProcMesh.get_entities_by_type(0, MBTRI, tris, false);
+  Range faces;
+  CHKERR postProcMesh.get_entities_by_dimension(0, 2, faces, false);
   int rank = mField.get_comm_rank();
-  Range::iterator pit = tris.begin();
-  for (; pit != tris.end(); pit++) {
-    CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), &*pit, 1,
+  CHKERR postProcMesh.tag_clear_data(pcomm_post_proc_mesh->part_tag(), faces,
                                      &rank);
-  }
   CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
   MoFEMFunctionReturn(0);
 }

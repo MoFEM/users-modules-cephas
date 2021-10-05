@@ -30,12 +30,77 @@ t \in(0, T). \end{aligned}
 #include <stdlib.h>
 #include <cmath>
 #include <BasicFiniteElements.hpp>
-#include <heat_equation.hpp>
 
 using namespace MoFEM;
-using namespace HeatEquationOperators;
 
 static char help[] = "...\n\n";
+
+template <int DIM> struct ElementsAndOps {};
+
+//! [Define dimension]
+constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+//! [Define dimension]
+
+using EntData = DataForcesAndSourcesCore::EntData;
+using DomainEle = PipelineManager::FaceEle;
+using DomainEleOp = DomainEle::UserDataOperator;
+using BoundaryEle = PipelineManager::EdgeEle;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
+using PostProcEle = PostProcFaceOnRefinedMesh;
+
+using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, SPACE_DIM>;
+using OpDomainTimesScalarField = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1>;
+using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, SPACE_DIM>;
+using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
+
+using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+using OpBoundaryTimeScalarField = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1>;
+using OpBoundarySource = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
+
+// Capacity
+constexpr double c = 1;
+constexpr double k = 1;
+constexpr double init_u = 0.;
+
+/**
+ * @brief Monitor solution
+ *
+ * This functions is called by TS solver at the end of each step. It is used
+ * to output results to the hard drive.
+ */
+struct Monitor : public FEMethod {
+
+  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc)
+      : dM(dm), postProc(post_proc){};
+
+  MoFEMErrorCode preProcess() { return 0; }
+  MoFEMErrorCode operator()() { return 0; }
+
+  static constexpr int saveEveryNthStep = 1;
+
+  MoFEMErrorCode postProcess() {
+    MoFEMFunctionBegin;
+    if (ts_step % saveEveryNthStep == 0) {
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
+      CHKERR postProc->writeFile(
+          "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  SmartPetscObj<DM> dM;
+  boost::shared_ptr<PostProcEle> postProc;
+};
 
 struct HeatEquation {
 public:
@@ -55,90 +120,22 @@ private:
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
 
-  // Function to calculate the Source term
-  static double sourceTermFunction(const double x, const double y,
-                                   const double z, const double t) {
-    return 0.1 * pow(M_E, -M_PI * M_PI * t) * sin(1. * M_PI * x) *
-           sin(2. * M_PI * y);
-    // return 0;
-  }
-
-  // Function to calculate the Boundary term
-  static double boundaryFunction(const double x, const double y, const double z,
-                                 const double t) {
-    return abs(0.1 * pow(M_E, -M_PI * M_PI * t) * sin(2. * M_PI * x) *
-               sin(3. * M_PI * y));
-    // return 0;
-  }
-
-  // initial value of u (initial condition)
-  const double initU = 0.1;
-
   // Main interfaces
   MoFEM::Interface &mField;
-  Simple *simpleInterface;
-
-  // mpi parallel communicator
-  MPI_Comm mpiComm;
-  // Number of processors
-  const int mpiRank;
-
-  // Discrete Manager and time-stepping solver using SmartPetscObj
-  SmartPetscObj<DM> dM;
-  SmartPetscObj<TS> tsSolver;
-
-  // Field name and approximation order
-  std::string domainField;
-  int oRder;
 
   // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
-
-  // MoFEM working Pipelines for stiff part function and tangent (Jacobian)
-  boost::shared_ptr<FaceEle> stiffTangentLhsMatrixPipeline;
-  boost::shared_ptr<FaceEle> stiffFunctionRhsVectorPipeline;
-  boost::shared_ptr<EdgeEle> boundaryLhsMatrixPipeline;
-  boost::shared_ptr<EdgeEle> boundaryRhsVectorPipeline;
-
-  // Objects needed for solution updates in Newton's method
-  boost::shared_ptr<DataAtGaussPoints> previousUpdate;
-  boost::shared_ptr<VectorDouble> fieldValuePtr;
-  boost::shared_ptr<MatrixDouble> fieldGradPtr;
-  boost::shared_ptr<VectorDouble> fieldDotPtr;
-
-  // Object needed for postprocessing
-  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFace;
-
-  // Boundary entities marked for fieldsplit (block) solver - optional
-  Range boundaryEntitiesForFieldsplit;
 };
 
-HeatEquation::HeatEquation(MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field), mpiComm(mField.get_comm()),
-      mpiRank(mField.get_comm_rank()) {
-  stiffTangentLhsMatrixPipeline =
-      boost::shared_ptr<FaceEle>(new FaceEle(mField));
-  stiffFunctionRhsVectorPipeline =
-      boost::shared_ptr<FaceEle>(new FaceEle(mField));
-  boundaryLhsMatrixPipeline = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
-  boundaryRhsVectorPipeline = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
-
-  previousUpdate =
-      boost::shared_ptr<DataAtGaussPoints>(new DataAtGaussPoints());
-  fieldValuePtr = boost::shared_ptr<VectorDouble>(previousUpdate,
-                                                  &previousUpdate->fieldValue);
-  fieldGradPtr = boost::shared_ptr<MatrixDouble>(previousUpdate,
-                                                 &previousUpdate->fieldGrad);
-  fieldDotPtr = boost::shared_ptr<VectorDouble>(previousUpdate,
-                                                &previousUpdate->fieldDot);
-}
+HeatEquation::HeatEquation(MoFEM::Interface &m_field) : mField(m_field) {}
 
 MoFEMErrorCode HeatEquation::readMesh() {
   MoFEMFunctionBegin;
 
-  CHKERR mField.getInterface(simpleInterface);
-  CHKERR simpleInterface->getOptions();
-  CHKERR simpleInterface->loadFile();
+  auto *simple = mField.getInterface<Simple>();
+  CHKERR mField.getInterface(simple);
+  CHKERR simple->getOptions();
+  CHKERR simple->loadFile();
 
   MoFEMFunctionReturn(0);
 }
@@ -146,16 +143,15 @@ MoFEMErrorCode HeatEquation::readMesh() {
 MoFEMErrorCode HeatEquation::setupProblem() {
   MoFEMFunctionBegin;
 
-  CHKERR simpleInterface->addDomainField(domainField, H1,
-                                         AINSWORTH_LEGENDRE_BASE, 1);
-  CHKERR simpleInterface->addBoundaryField(domainField, H1,
-                                           AINSWORTH_LEGENDRE_BASE, 1);
+  auto *simple = mField.getInterface<Simple>();
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  int oRder = 3;
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
-  CHKERR simpleInterface->setFieldOrder(domainField, oRder);
+  int order = 3;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+  CHKERR simple->setFieldOrder("U", order);
 
-  CHKERR simpleInterface->setUp();
+  CHKERR simple->setUp();
 
   MoFEMFunctionReturn(0);
 }
@@ -163,15 +159,15 @@ MoFEMErrorCode HeatEquation::setupProblem() {
 MoFEMErrorCode HeatEquation::setIntegrationRules() {
   MoFEMFunctionBegin;
 
-  auto stiff_tangent_rule = [](int, int, int p) -> int { return 2 * p; };
-  auto stiff_function_rule = [](int, int, int p) -> int { return 2 * p; };
-  stiffTangentLhsMatrixPipeline->getRuleHook = stiff_tangent_rule;
-  stiffFunctionRhsVectorPipeline->getRuleHook = stiff_function_rule;
+  auto integration_rule = [](int o_row, int o_col, int approx_order) {
+    return 2 * approx_order;
+  };
 
-  auto boundary_lhs_rule = [](int, int, int p) -> int { return 2 * p; };
-  auto boundary_rhs_rule = [](int, int, int p) -> int { return 2 * p; };
-  boundaryLhsMatrixPipeline->getRuleHook = boundary_lhs_rule;
-  boundaryRhsVectorPipeline->getRuleHook = boundary_rhs_rule;
+  auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
 
   MoFEMFunctionReturn(0);
 }
@@ -191,7 +187,7 @@ MoFEMErrorCode HeatEquation::initialCondition() {
       CHKERR mField.get_moab().get_connectivity(inner_surface,
                                                 inner_surface_verts, false);
       CHKERR mField.getInterface<FieldBlas>()->setField(
-          initU, MBVERTEX, inner_surface_verts, domainField);
+          init_u, MBVERTEX, inner_surface_verts, "U");
     }
   }
 
@@ -201,43 +197,21 @@ MoFEMErrorCode HeatEquation::initialCondition() {
 MoFEMErrorCode HeatEquation::boundaryCondition() {
   MoFEMFunctionBegin;
 
-  auto get_ents_on_mesh_skin = [&]() {
-    Range boundary_entities;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string entity_name = it->getName();
-      if (entity_name.compare(0, 18, "BOUNDARY_CONDITION") == 0) {
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   boundary_entities, true);
+  auto bc_mng = mField.getInterface<BcManager>();
+  auto *simple = mField.getInterface<Simple>();
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "ESSENTIAL",
+                                        "U", 0, 0);
+
+  auto &bc_map = bc_mng->getBcMapByBlockName();
+  boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
+  for (auto b : bc_map) {
+    if (std::regex_match(b.first, std::regex("(.*)ESSENTIAL(.*)"))) {
+      boundaryMarker->resize(b.second->bcMarkers.size(), 0);
+      for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
+        (*boundaryMarker)[i] |= b.second->bcMarkers[i];
       }
     }
-    // Add vertices
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
-    // cerr << boundary_entities;
-    boundaryEntitiesForFieldsplit = boundary_entities;
-
-    // Since Dirichlet b.c. are essential boundary conditions, remove DOFs from
-    // the problem.
-    // CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-    //     simpleInterface->getProblemName(), domainField, boundary_entities);
-
-    return boundary_entities;
-  };
-
-  auto mark_boundary_dofs = [&](Range &&skin_edges) {
-    auto problem_manager = mField.getInterface<ProblemsManager>();
-    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
-    problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
-                              skin_edges, *marker_ptr);
-    return marker_ptr;
-  };
-
-  // Get global local vector of marked DOFs. Is global, since is set for all
-  // DOFs on processor. Is local since only DOFs on processor are in the
-  // vector. To access DOFs use local indices.
-  boundaryMarker = mark_boundary_dofs(get_ents_on_mesh_skin());
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -245,62 +219,102 @@ MoFEMErrorCode HeatEquation::boundaryCondition() {
 MoFEMErrorCode HeatEquation::assembleSystem() {
   MoFEMFunctionBegin;
 
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  auto add_domain_base_ops = [&](auto &pipeline) {
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
+    pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+    pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+    pipeline.push_back(new OpSetHOWeigthsOnFace());
+  };
 
-  { // Push operators to the Pipeline that is responsible for calculating the
-    // Tangent (Jacobian) of function (LHS) of the stiff part
+  auto add_domain_lhs_ops = [&](auto &pipeline) {
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    pipeline.push_back(new OpDomainGradGrad(
+        "U", "U", [](double, double, double) -> double { return k; }));
+    auto get_c = [this](const double, const double, const double) {
+      auto pipeline_mng = mField.getInterface<PipelineManager>();
+      auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+      return c * fe_domain_lhs->ts_a;
+    };
+    pipeline.push_back(new OpDomainMass("U", "U", get_c));
+    pipeline.push_back(new OpUnSetBc("U"));
+  };
 
-    // Add default operators to calculate inverse of Jacobian (needed for
-    // implementation of 2D problem but not 3D ones)
-    stiffTangentLhsMatrixPipeline->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
-    stiffTangentLhsMatrixPipeline->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+  auto add_domain_rhs_ops = [&](auto &pipeline) {
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    auto grad_u_at_gauss_pts = boost::make_shared<MatrixDouble>();
+    auto dot_u_at_gauss_pts = boost::make_shared<VectorDouble>();
+    pipeline.push_back(new OpCalculateScalarFieldGradient<SPACE_DIM>(
+        "U", grad_u_at_gauss_pts));
+    pipeline.push_back(
+        new OpCalculateScalarFieldValuesDot("U", dot_u_at_gauss_pts));
+    pipeline.push_back(new OpDomainGradTimesVec(
+        "U", grad_u_at_gauss_pts,
+        [](double, double, double) -> double { return k; }));
+    pipeline.push_back(new OpDomainTimesScalarField(
+        "U", dot_u_at_gauss_pts,
+        [](const double, const double, const double) { return c; }));
+    auto source_term = [&](const double x, const double y, const double z) {
+      auto pipeline_mng = mField.getInterface<PipelineManager>();
+      auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+      const auto t = fe_domain_lhs->ts_t;
+      return 1e1 * pow(M_E, -M_PI * M_PI * t) * sin(1. * M_PI * x) *
+             sin(2. * M_PI * y);
+    };
+    pipeline.push_back(new OpDomainSource("U", source_term));
+    pipeline.push_back(new OpUnSetBc("U"));
+  };
 
-    // Push operators for Jacobian of function (RHS) of the stiff part
-    stiffTangentLhsMatrixPipeline->getOpPtrVector().push_back(
-        new OpStiffTangentLHS(domainField, domainField, previousUpdate,
-                              boundaryMarker));
-  }
+  auto add_boundary_base_ops = [&](auto &pipeline) {
+    if (SPACE_DIM == 2) {
+      // HO is not implemented for edges
+    } else {
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
+      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+      pipeline.push_back(new OpSetHOWeigthsOnFace());
+    }
+  };
 
-  { // Push operators to the Pipeline that is responsible for calculating the
-    // function (RHS) of the stiff part
+  auto add_lhs_base_ops = [&](auto &pipeline) {
+    pipeline.push_back(new OpSetBc("U", false, boundaryMarker));
+    pipeline.push_back(new OpBoundaryMass(
+        "U", "U", [](const double, const double, const double) { return c; }));
+    pipeline.push_back(new OpUnSetBc("U"));
+  };
+  auto add_rhs_base_ops = [&](auto &pipeline) {
+    pipeline.push_back(new OpSetBc("U", false, boundaryMarker));
+    auto u_at_gauss_pts = boost::make_shared<VectorDouble>();
+    auto boundary_function = [&](const double x, const double y,
+                                 const double z) {
+      auto pipeline_mng = mField.getInterface<PipelineManager>();
+      auto &fe_rhs = pipeline_mng->getBoundaryRhsFE();
+      const auto t = fe_rhs->ts_t;
+      return 0;
+      // abs(0.1 * pow(M_E, -M_PI * M_PI * t) * sin(2. * M_PI * x) *
+      //     sin(3. * M_PI * y));
+    };
+    pipeline.push_back(new OpCalculateScalarFieldValues("U", u_at_gauss_pts));
+    pipeline.push_back(new OpBoundaryTimeScalarField(
+        "U", u_at_gauss_pts,
+        [](const double, const double, const double) { return c; }));
+    pipeline.push_back(new OpBoundarySource("U", boundary_function));
+    pipeline.push_back(new OpUnSetBc("U"));
+  };
 
-    // Add default operators to calculate inverse of Jacobian (needed for
-    // implementation of 2D problem but not 3D ones)
-    stiffFunctionRhsVectorPipeline->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
-    stiffFunctionRhsVectorPipeline->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
+  add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
+  add_domain_lhs_ops(pipeline_mng->getOpDomainLhsPipeline());
+  add_domain_rhs_ops(pipeline_mng->getOpDomainRhsPipeline());
 
-    // Add default operator to calculate field values at integration points
-    stiffFunctionRhsVectorPipeline->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldValues(domainField, fieldValuePtr));
-    // Add default operator to calculate field gradient at integration points
-    stiffFunctionRhsVectorPipeline->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldGradient<2>(domainField, fieldGradPtr));
-    // Add default operator to calculate time derivative of field at
-    // integration points
-    stiffFunctionRhsVectorPipeline->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldValuesDot(domainField, fieldDotPtr));
-
-    stiffFunctionRhsVectorPipeline->getOpPtrVector().push_back(
-        new OpStiffFunctionRhs(domainField, sourceTermFunction, previousUpdate,
-                               boundaryMarker));
-  }
-
-  { // Push operators to the Pipeline that is responsible for calculating the
-    // boundary condition
-
-    boundaryLhsMatrixPipeline->getOpPtrVector().push_back(
-        new OpBoundaryLhs(domainField, domainField));
-
-    // Add default operator to calculate field values at integration points
-    boundaryRhsVectorPipeline->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldValues(domainField, fieldValuePtr));
-    boundaryRhsVectorPipeline->getOpPtrVector().push_back(
-        new OpBoundaryRhs(domainField, boundaryFunction, previousUpdate));
-  }
+  add_boundary_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
+  add_boundary_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
+  add_lhs_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
+  add_rhs_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
 
   MoFEMFunctionReturn(0);
 }
@@ -308,72 +322,72 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
 MoFEMErrorCode HeatEquation::solveSystem() {
   MoFEMFunctionBegin;
 
-  // Create and set Time Stepping solver
-  tsSolver = createTS(mField.get_comm());
-  // Use fully implicit type (backward Euler) for Heat Equation
-  CHKERR TSSetType(tsSolver, TSBEULER);
-  // CHKERR TSSetType(tsSolver, TSARKIMEX);
-  // CHKERR TSARKIMEXSetType(tsSolver, TSARKIMEXA2);
+  auto *simple = mField.getInterface<Simple>();
+  auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  // get Discrete Manager (SmartPetscObj)
-  dM = simpleInterface->getDM();
+  auto create_post_process_element = [&]() {
+    auto post_froc_fe = boost::make_shared<PostProcEle>(mField);
+    post_froc_fe->generateReferenceElementMesh();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    post_froc_fe->getOpPtrVector().push_back(
+        new OpCalculateInvJacForFace(inv_jac_ptr));
+    post_froc_fe->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
+    post_froc_fe->addFieldValuesPostProc("U");
+    return post_froc_fe;
+  };
 
-  boost::shared_ptr<ForcesAndSourcesCore> null;
-
-  // Add element to calculate Jacobian of function dF/du (LHS) of stiff part
-  CHKERR DMMoFEMTSSetIJacobian(dM, simpleInterface->getDomainFEName(),
-                               stiffTangentLhsMatrixPipeline, null, null);
-  // and boundary term (LHS)
-  CHKERR DMMoFEMTSSetIJacobian(dM, simpleInterface->getBoundaryFEName(),
-                               boundaryLhsMatrixPipeline, null, null);
-
-  // Add element to calculate function F (RHS) of stiff part
-  CHKERR DMMoFEMTSSetIFunction(dM, simpleInterface->getDomainFEName(),
-                               stiffFunctionRhsVectorPipeline, null, null);
-  // and boundary term (RHS)
-  CHKERR DMMoFEMTSSetIFunction(dM, simpleInterface->getBoundaryFEName(),
-                               boundaryRhsVectorPipeline, null, null);
-
-  // Add element to calculate function G (RHS) of slow (nonlinear) part
-  // Note: G(t,y) = 0 in the heat equation with fully implicit scheme
-  // CHKERR DMMoFEMTSSetRHSFunction(dM, simpleInterface->getDomainFEName(),
-  //                                vol_ele_slow_rhs, null, null);
-
-  { // Set output of the results
-
-    // Create element for post-processing
-    postProcFace = boost::shared_ptr<PostProcFaceOnRefinedMesh>(
-        new PostProcFaceOnRefinedMesh(mField));
-    // Generate post-processing mesh
-    postProcFace->generateReferenceElementMesh();
-    // Postprocess only field values
-    postProcFace->addFieldValuesPostProc(domainField);
-
-    // Add monitor to time solver
-    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(dM, postProcFace));
-    CHKERR DMMoFEMTSSetMonitor(dM, tsSolver, simpleInterface->getDomainFEName(),
+  auto set_time_monitor = [&](auto dm, auto solver) {
+    MoFEMFunctionBegin;
+    boost::shared_ptr<Monitor> monitor_ptr(
+        new Monitor(dm, create_post_process_element()));
+    boost::shared_ptr<ForcesAndSourcesCore> null;
+    CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
-  }
+    MoFEMFunctionReturn(0);
+  };
 
-  // Create global solution vector
-  SmartPetscObj<Vec> global_solution;
-  CHKERR DMCreateGlobalVector_MoFEM(dM, global_solution);
+  auto set_fieldsplit_preconditioner = [&](auto solver) {
+    MoFEMFunctionBeginHot;
+    SNES snes;
+    CHKERR TSGetSNES(solver, &snes);
+    KSP ksp;
+    CHKERR SNESGetKSP(snes, &ksp);
+    PC pc;
+    CHKERR KSPGetPC(ksp, &pc);
+    PetscBool is_pcfs = PETSC_FALSE;
+    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
 
-  // Scatter result data on the mesh
-  // CHKERR DMoFEMMeshToGlobalVector(dM, global_solution, INSERT_VALUES,
-  //                                 SCATTER_REVERSE);
-  CHKERR DMoFEMMeshToLocalVector(dM, global_solution, INSERT_VALUES,
-                                 SCATTER_FORWARD);
+    if (is_pcfs == PETSC_TRUE) {
+      auto bc_mng = mField.getInterface<BcManager>();
+      auto name_prb = simple->getProblemName();
+      auto is_all_bc = bc_mng->getBlockIS(name_prb, "ESSENTIAL", "U", 0, 0);
+      int is_all_bc_size;
+      CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
+      MOFEM_LOG("EXAMPLE", Sev::inform)
+          << "Field split block size " << is_all_bc_size;
+      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
+                               is_all_bc); // boundary block
+    }
+    MoFEMFunctionReturnHot(0);
+  };
 
-  // Solve problem
-  // double max_time = 1;
-  // double max_steps = 1000;
-  CHKERR TSSetDM(tsSolver, dM);
-  // CHKERR TSSetMaxTime(tsSolver, max_time);
-  // CHKERR TSSetMaxSteps(tsSolver, max_steps);
-  CHKERR TSSetSolution(tsSolver, global_solution);
-  CHKERR TSSetFromOptions(tsSolver);
-  CHKERR TSSolve(tsSolver, global_solution);
+  auto dm = simple->getDM();
+  auto D = smartCreateDMVector(dm);
+  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
+
+  auto solver = pipeline_mng->createTS();
+  CHKERR TSSetSolution(solver, D);
+  CHKERR set_time_monitor(dm, solver);
+  CHKERR TSSetSolution(solver, D);
+  CHKERR TSSetFromOptions(solver);
+  CHKERR set_fieldsplit_preconditioner(solver);
+  CHKERR TSSetUp(solver);
+  CHKERR TSSolve(solver, NULL);
+
+  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
   MoFEMFunctionReturn(0);
 }
@@ -389,14 +403,14 @@ MoFEMErrorCode HeatEquation::outputResults() {
 MoFEMErrorCode HeatEquation::runProgram() {
   MoFEMFunctionBegin;
 
-  readMesh();
-  setupProblem();
-  setIntegrationRules();
-  initialCondition();
-  boundaryCondition();
-  assembleSystem();
-  solveSystem();
-  // outputResults();
+  CHKERR readMesh();
+  CHKERR setupProblem();
+  CHKERR setIntegrationRules();
+  CHKERR initialCondition();
+  CHKERR boundaryCondition();
+  CHKERR assembleSystem();
+  CHKERR solveSystem();
+  CHKERR outputResults();
 
   MoFEMFunctionReturn(0);
 }
@@ -406,6 +420,13 @@ int main(int argc, char *argv[]) {
   // Initialisation of MoFEM/PETSc and MOAB data structures
   const char param_file[] = "param_file.petsc";
   MoFEM::Core::Initialize(&argc, &argv, param_file, help);
+
+  // Add logging channel for example
+  auto core_log = logging::core::get();
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
+  LogManager::setLog("EXAMPLE");
+  MOFEM_LOG_TAG("EXAMPLE", "example")
 
   // Error handling
   try {
