@@ -245,6 +245,12 @@ int main(int argc, char *argv[]) {
       CHKERR moab.write_file("out.vtk", "VTK", "", meshset_ptr->get_ptr(), 1);
     }
 
+    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    if (pcomm == NULL)
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "Communicator should be allocated");
+
+    CHKERR pcomm->assign_global_ids(0, 3, 1, false);
     CHKERR moab.write_file("out.h5m");
   }
   CATCH_ERRORS;

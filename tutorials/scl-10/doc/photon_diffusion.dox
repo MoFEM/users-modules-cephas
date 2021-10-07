@@ -1,0 +1,30 @@
+/*! \page basic_tutorials_photon_diffusion SCL-10: Photon diffusion
+
+\tableofcontents
+
+\note Prerequisite of this tutorial is \ref basic_tutorials_poisson_nonlinear
+
+<br>
+
+\note Intended learning outcome:
+- first time-dependent problem in MoFEM
+- TS solver with implicit scheme
+
+\tableofcontents
+
+\section basic_tutorials_heat_equation_introduction Introduction
+
+\subsection basic_tutorials_heat_equation_introduction Possible extensions
+
+\section basic_tutorials_heat_equation_plain_program Plain program 
+
+The plain program for both the implementation the
+main program (\c *.cpp) are as follows
+
+\subsection basic_tutorials_heat_equation_impl_main Implementation of the main program (*.cpp) 
+
+\include photon_diffusion.cpp
+
+
+
+*/
