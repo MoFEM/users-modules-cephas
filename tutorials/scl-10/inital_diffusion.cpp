@@ -89,6 +89,19 @@ public:
   // Declaration of the main function to run analysis
   MoFEMErrorCode runProgram();
 
+  /**
+   * @brief Pulse is infinitely short.
+   *
+   * \note It is good approximation of pulse in femtosecond scale. To make it
+   * loner one can apply third integral over time.
+   *
+   * \note Note analysis in photon_diffusion is shifted in time by impuls_time.
+   *
+   * @param x
+   * @param y
+   * @param z
+   * @return double
+   */
   static double sourceFunction(const double x, const double y, const double z) {
     const double A = 4 * D * c * impuls_time;
     const double T =
