@@ -22,6 +22,7 @@
 using namespace MoFEM;
 
 static char help[] = "...\n\n";
+constexpr bool debug = false;
 
 int main(int argc, char *argv[]) {
   MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
@@ -170,11 +171,11 @@ int main(int argc, char *argv[]) {
                                               MBEDGE, nb_tris, true);
       MOFEM_LOG("SPLIT", Sev::inform) << "Refine corner edges " << nb_tris;
 
-      CHKERR moab
-          .write_file("out_edges_to_refine.vtk", "VTK", "",
-                      meshset_of_edges_to_refine_ptr->get_ptr(), 1);
+      if (debug)
+        CHKERR moab.write_file("out_edges_to_refine.vtk", "VTK", "",
+                               meshset_of_edges_to_refine_ptr->get_ptr(), 1);
 
-              bit_levels.push_back(BitRefLevel().set(1));
+      bit_levels.push_back(BitRefLevel().set(1));
       CHKERR refine_mng->add_vertices_in_the_middle_of_edges(
           *meshset_of_edges_to_refine_ptr, bit_levels.back());
       CHKERR refine_mng->refine_TET(0, bit_levels.back());
