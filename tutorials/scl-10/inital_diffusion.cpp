@@ -239,6 +239,15 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+  MOFEM_LOG("PHOTON", Sev::inform)
+      << "writing vector in binary to vector.dat ...";
+  PetscViewer viewer;
+  PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat", FILE_MODE_WRITE,
+                        &viewer);
+  VecView(D, viewer);
+  PetscViewerDestroy(&viewer);
+
   MOFEM_LOG("PHOTON", Sev::inform) << "Solver done";
   MoFEMFunctionReturn(0);
 }
@@ -270,8 +279,8 @@ MoFEMErrorCode PhotonDiffusion::outputResults() {
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_approx.h5m");
-  CHKERR mField.get_moab().write_file("out_initial.h5m", "MOAB",
-                                      "PARALLEL=WRITE_PART");
+  // CHKERR mField.get_moab().write_file("out_initial.h5m", "MOAB",
+  //                                     "PARALLEL=WRITE_PART");
   MoFEMFunctionReturn(0);
 }
 

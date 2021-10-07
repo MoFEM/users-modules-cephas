@@ -56,8 +56,8 @@ using OpBoundaryTimeScalarField = FormsIntegrators<BoundaryEleOp>::Assembly<
 using OpBoundarySource = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
-constexpr double c = 30; ///< 0.3 a ray of light travels approximately
-                          ///< 0.3 μm (micrometers) in 1 femtosecond
+constexpr double c = 30; ///< speed of light
+
 constexpr double mu_a = 0.09;
 constexpr double mu_sp = 16.5;
 constexpr double h = 0.5;   ///< convective heat coefficient
@@ -81,7 +81,7 @@ struct Monitor : public FEMethod {
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
 
-  static constexpr int saveEveryNthStep = 4;
+  static constexpr int saveEveryNthStep = 2;
 
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
@@ -195,14 +195,13 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
   auto &bc_map = bc_mng->getBcMapByBlockName();
 
   auto add_domain_base_ops = [&](auto &pipeline) {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
-      pipeline.push_back(
-          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
-      pipeline.push_back(new OpSetHOWeights(det_ptr));
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
+    pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline.push_back(new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
+    pipeline.push_back(new OpSetHOWeights(det_ptr));
   };
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {
@@ -248,10 +247,9 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
         pipeline.push_back(new OpBoundaryMass(
             "U", "U",
 
-            [](const double, const double, const double) {
-          return h; }, 
-          
-          b.second->getBcEdgesPtr()));
+            [](const double, const double, const double) { return h; },
+
+            b.second->getBcEdgesPtr()));
       }
     }
   };
@@ -300,7 +298,6 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
   domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
   boundaryRhsFEPtr = pipeline_mng->getBoundaryRhsFE();
 
-
   MoFEMFunctionReturn(0);
 }
 
@@ -328,41 +325,21 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  auto set_fieldsplit_preconditioner = [&](auto solver) {
-    MoFEMFunctionBeginHot;
-    SNES snes;
-    CHKERR TSGetSNES(solver, &snes);
-    KSP ksp;
-    CHKERR SNESGetKSP(snes, &ksp);
-    PC pc;
-    CHKERR KSPGetPC(ksp, &pc);
-    PetscBool is_pcfs = PETSC_FALSE;
-    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
-
-    if (is_pcfs == PETSC_TRUE) {
-      auto bc_mng = mField.getInterface<BcManager>();
-      auto name_prb = simple->getProblemName();
-      auto is_all_bc = bc_mng->getBlockIS(name_prb, "ESSENTIAL", "U", 0, 0);
-      int is_all_bc_size;
-      CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
-      MOFEM_LOG("EXAMPLE", Sev::inform)
-          << "Field split block size " << is_all_bc_size;
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
-                               is_all_bc); // boundary block
-    }
-    MoFEMFunctionReturnHot(0);
-  };
-
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
+  MOFEM_LOG("PHOTON", Sev::inform)
+      << "reading vector in binary from vector.dat ...";
+  PetscViewer viewer;
+  PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat", FILE_MODE_READ,
+                        &viewer);
+  VecLoad(D, viewer);
+  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
   auto solver = pipeline_mng->createTS();
   CHKERR TSSetSolution(solver, D);
   CHKERR set_time_monitor(dm, solver);
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
-  CHKERR set_fieldsplit_preconditioner(solver);
   CHKERR TSSetUp(solver);
   CHKERR TSSolve(solver, NULL);
 
@@ -405,9 +382,9 @@ int main(int argc, char *argv[]) {
   // Add logging channel for example
   auto core_log = logging::core::get();
   core_log->add_sink(
-      LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
-  LogManager::setLog("EXAMPLE");
-  MOFEM_LOG_TAG("EXAMPLE", "example")
+      LogManager::createSink(LogManager::getStrmWorld(), "PHOTON"));
+  LogManager::setLog("PHOTON");
+  MOFEM_LOG_TAG("PHOTON", "photon")
 
   // Error handling
   try {
