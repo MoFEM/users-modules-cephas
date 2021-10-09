@@ -1,8 +1,8 @@
-/*! \page basic_tutorials_photon_diffusion SCL-10: Photon diffusion
+/*! \page tutorials_photon_diffusion SCL-10: Photon diffusion
 
 \tableofcontents
 
-\note Prerequisite of this tutorial is \ref basic_tutorials_poisson_nonlinear
+\note Prerequisite of this tutorial is \ref basic_tutorials_heat_equation
 
 <br>
 
@@ -12,16 +12,16 @@
 
 \tableofcontents
 
-\section basic_tutorials_heat_equation_introduction Introduction
+\section tutorials_heat_equation_introduction Introduction
 
-\subsection basic_tutorials_heat_equation_introduction Possible extensions
+\subsection tutorials_heat_equation_introduction Possible extensions
 
-\section basic_tutorials_heat_equation_plain_program Plain program 
+\section tutorials_photon_init Inital state plain program
 
-The plain program for both the implementation the
-main program (\c *.cpp) are as follows
+\include inital_diffusion.cpp
 
-\subsection basic_tutorials_heat_equation_impl_main Implementation of the main program (*.cpp) 
+\section tutorials_photon_diffusion_analysis Photon diffusion
+
 
 \include photon_diffusion.cpp
 
