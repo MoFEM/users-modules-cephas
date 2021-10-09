@@ -54,6 +54,8 @@ namespace PlasticOps {
 //! [Common data]
 struct CommonData : public boost::enable_shared_from_this<CommonData> {
   boost::shared_ptr<MatrixDouble> mDPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr_Axiator;
+  boost::shared_ptr<MatrixDouble> mDPtr_Deviator;
   boost::shared_ptr<MatrixDouble> mGradPtr;
   boost::shared_ptr<MatrixDouble> mStrainPtr;
   boost::shared_ptr<MatrixDouble> mStressPtr;
@@ -64,8 +66,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   VectorDouble plasticTauDot;
   MatrixDouble plasticStrain;
   MatrixDouble plasticStrainDot;
-
-  MatrixDouble dualBaseMat;
+  VectorDouble tempVal;
 
   inline auto getPlasticTauPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &plasticTau);
@@ -80,6 +81,10 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(),
                                            &plasticStrainDot);
   }
+  inline auto getTempValPtr() {
+    return boost::shared_ptr<VectorDouble>(shared_from_this(), &tempVal);
+  }
+
 };
 //! [Common data]
 
@@ -110,166 +115,165 @@ protected:
 struct OpPlasticStress : public DomainEleOp {
   OpPlasticStress(const std::string field_name,
                   boost::shared_ptr<CommonData> common_data_ptr,
+                  boost::shared_ptr<MatrixDouble> mDPtr,
                   const double scale = 1);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
+  boost::shared_ptr<MatrixDouble> mDPtr;
   const double scaleStress;
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpCalculatePlasticFlowRhs : public DomainEleOp {
+struct OpCalculatePlasticFlowRhs : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowRhs(const std::string field_name,
                             boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpCalculateContrainsRhs : public DomainEleOp {
+struct OpCalculateContrainsRhs : public AssemblyDomainEleOp {
   OpCalculateContrainsRhs(const std::string field_name,
                           boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpCalculatePlasticInternalForceLhs_dEP : public DomainEleOp {
+struct OpCalculatePlasticInternalForceLhs_dEP : public AssemblyDomainEleOp {
   OpCalculatePlasticInternalForceLhs_dEP(
       const std::string row_field_name, const std::string col_field_name,
-      boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+      boost::shared_ptr<CommonData> common_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculatePlasticInternalForceLhs_LogStrain_dEP : public DomainEleOp {
+struct OpCalculatePlasticInternalForceLhs_LogStrain_dEP
+    : public AssemblyDomainEleOp {
   OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<HenckyOps::CommonData> common_henky_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+      boost::shared_ptr<HenckyOps::CommonData> common_henky_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
   MatrixDouble locMat;
 };
 
-struct OpCalculatePlasticFlowLhs_dU : public DomainEleOp {
+struct OpCalculatePlasticFlowLhs_dU : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowLhs_dU(const std::string row_field_name,
                                const std::string col_field_name,
-                               boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+                               boost::shared_ptr<CommonData> common_data_ptr,
+                               boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculatePlasticFlowLhs_LogStrain_dU : public DomainEleOp {
+struct OpCalculatePlasticFlowLhs_LogStrain_dU : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowLhs_LogStrain_dU(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+      boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
-  MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculatePlasticFlowLhs_dEP : public DomainEleOp {
+struct OpCalculatePlasticFlowLhs_dEP : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowLhs_dEP(const std::string row_field_name,
                                 const std::string col_field_name,
-                                boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+                                boost::shared_ptr<CommonData> common_data_ptr,
+                                boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculatePlasticFlowLhs_dTAU : public DomainEleOp {
+struct OpCalculatePlasticFlowLhs_dTAU : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowLhs_dTAU(const std::string row_field_name,
                                  const std::string col_field_name,
                                  boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
 };
 
-struct OpCalculateContrainsLhs_dU : public DomainEleOp {
+struct OpCalculateContrainsLhs_dU : public AssemblyDomainEleOp {
   OpCalculateContrainsLhs_dU(const std::string row_field_name,
                              const std::string col_field_name,
-                             boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+                             boost::shared_ptr<CommonData> common_data_ptr,
+                             boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculateContrainsLhs_LogStrain_dU : public DomainEleOp {
+struct OpCalculateContrainsLhs_LogStrain_dU : public AssemblyDomainEleOp {
   OpCalculateContrainsLhs_LogStrain_dU(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+      boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
-  MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculateContrainsLhs_dEP : public DomainEleOp {
+struct OpCalculateContrainsLhs_dEP : public AssemblyDomainEleOp {
   OpCalculateContrainsLhs_dEP(const std::string row_field_name,
                               const std::string col_field_name,
-                              boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+                              boost::shared_ptr<CommonData> common_data_ptr,
+                              boost::shared_ptr<MatrixDouble> mat_D_ptr);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculateContrainsLhs_dTAU : public DomainEleOp {
+struct OpCalculateContrainsLhs_dTAU : public AssemblyDomainEleOp {
   OpCalculateContrainsLhs_dTAU(const std::string row_field_name,
                                const std::string col_field_name,
                                boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
-
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
 };
 
 struct OpPostProcPlastic : public DomainEleOp {
@@ -395,14 +399,6 @@ diff_deviator(FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> &&t_diff_stress) {
 
   return t_diff_deviator;
 };
-
-inline long double hardening(long double tau) {
-  return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
-}
-
-inline long double hardening_dtau(long double tau) {
-  return H + Qinf * b_iso * std::exp(-b_iso * tau);
-}
 
 /**
  *

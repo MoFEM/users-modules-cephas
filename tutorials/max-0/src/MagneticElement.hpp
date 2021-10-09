@@ -335,9 +335,21 @@ struct MagneticElement {
     MoFEMFunctionBegin;
 
     VolumeFE vol_fe(mField);
+    auto material_grad_mat = boost::make_shared<MatrixDouble>();
+    auto material_det_vec = boost::make_shared<VectorDouble>();
+    auto material_inv_grad_mat = boost::make_shared<MatrixDouble>();
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", vol_fe, false, true, false, true);
     vol_fe.getOpPtrVector().push_back(new OpCurlCurl(blockData));
     vol_fe.getOpPtrVector().push_back(new OpStab(blockData));
     TriFE tri_fe(mField);
+    tri_fe.meshPositionsFieldName = "none";
+
+    tri_fe.getOpPtrVector().push_back(
+        new OpGetHONormalsOnFace("MESH_NODE_POSITIONS"));
+    tri_fe.getOpPtrVector().push_back(
+        new OpCalculateHOCoords("MESH_NODE_POSITIONS"));
+    tri_fe.getOpPtrVector().push_back(
+        new OpHOSetCovariantPiolaTransformOnFace3D(HCURL));
     tri_fe.getOpPtrVector().push_back(new OpNaturalBC(blockData));
 
     // create matrices and vectors
@@ -411,6 +423,7 @@ struct MagneticElement {
     MoFEMFunctionBegin;
     PostProcVolumeOnRefinedMesh post_proc(mField);
     CHKERR post_proc.generateReferenceElementMesh();
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", post_proc, false, true, false, true);
     CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     CHKERR post_proc.addFieldValuesPostProc(blockData.fieldName);
     post_proc.getOpPtrVector().push_back(new OpPostProcessCurl(
@@ -504,8 +517,6 @@ struct MagneticElement {
 
         // get integration weight scaled by volume
         double w = getGaussPts()(3, gg) * getVolume();
-        // if ho geometry is given
-        w *= getHoGaussPtsDetJac()(gg);
 
         FTensor::Tensor1<double, 3> t_row_curl;
         for (int aa = 0; aa != nb_row_dofs; aa++) {
@@ -618,8 +629,6 @@ struct MagneticElement {
 
         // get integration weight scaled by volume
         double w = getGaussPts()(3, gg) * getVolume();
-        // if ho geometry is given
-        w *= getHoGaussPtsDetJac()(gg);
 
         FTensor::Tensor1<const double *, 3> t_row_base(
             &row_data.getVectorN<3>(gg)(0, HVEC0),
@@ -719,8 +728,8 @@ struct MagneticElement {
 
         // Current is on surface where natural bc are applied. It is set that
         // current is in XY plane, circular, around the coil.
-        const double x = getHoCoordsAtGaussPts()(gg, 0);
-        const double y = getHoCoordsAtGaussPts()(gg, 1);
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
         const double r = sqrt(x * x + y * y);
         FTensor::Tensor1<double, 3> t_j;
         t_j(0) = -y / r;

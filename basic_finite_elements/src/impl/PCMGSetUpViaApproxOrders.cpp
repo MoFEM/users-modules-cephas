@@ -171,29 +171,16 @@ MoFEMErrorCode DMMGViaApproxOrdersCtx::destroyCoarseningIS() {
 }
 
 MoFEMErrorCode
-DMMGViaApproxOrdersCtx::query_interface(const MOFEMuuid &uuid,
+DMMGViaApproxOrdersCtx::query_interface(boost::typeindex::type_index type_index,
                                         MoFEM::UnknownInterface **iface) const {
-  MoFEMFunctionBeginHot;
-  *iface = NULL;
-  if (uuid == IDD_DMMGVIAAPPROXORDERSCTX) {
-    *iface = static_cast<DMMGViaApproxOrdersCtx *>(
-        const_cast<DMMGViaApproxOrdersCtx *>(this));
-    MoFEMFunctionReturnHot(0);
-  } else {
-    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "wrong interference");
-  }
-
-  ierr = DMCtx::query_interface(uuid, iface);
-  CHKERRG(ierr);
-  MoFEMFunctionReturnHot(0);
+  *iface = static_cast<DMMGViaApproxOrdersCtx *>(
+      const_cast<DMMGViaApproxOrdersCtx *>(this));
+  return 0;
 }
 
 #define GET_DM_FIELD(DM)                                                       \
-  MoFEM::UnknownInterface *iface;                                              \
-  CHKERR((DMCtx *)DM->data)                                                    \
-      ->query_interface(IDD_DMMGVIAAPPROXORDERSCTX, &iface);                   \
-  DMMGViaApproxOrdersCtx *dm_field =                                           \
-      static_cast<DMMGViaApproxOrdersCtx *>(iface);                            \
+  auto dm_field =                                                              \
+      static_cast<DMCtx *>(DM->data)->getInterface<DMMGViaApproxOrdersCtx>();  \
   NOT_USED(dm_field)
 
 MoFEMErrorCode DMMGViaApproxOrdersGetCtx(DM dm, DMMGViaApproxOrdersCtx **ctx) {

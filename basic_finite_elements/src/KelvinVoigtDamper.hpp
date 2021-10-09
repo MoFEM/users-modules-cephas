@@ -603,9 +603,6 @@ struct KelvinVoigtDamper {
         const MatrixDouble &stress =
             commonData.dashpotFirstPiolaKirchhoffStress[gg];
         double val = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
         for (int dd = 0; dd < nb_dofs / 3; dd++) {
           for (int rr = 0; rr < 3; rr++) {
             for (int nn = 0; nn < 3; nn++) {
@@ -703,9 +700,6 @@ struct KelvinVoigtDamper {
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         CHKERR get_dStress_dx(col_data, gg);
         double val = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
         // std::cerr << dStress_dx << std::endl;
         dStress_dx *= val;
         const MatrixAdaptor &diffN = row_data.getDiffN(gg, nb_row / 3);
@@ -786,9 +780,6 @@ struct KelvinVoigtDamper {
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         CHKERR get_dStress_dot(col_data, gg);
         double val = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
         // std::cerr << dStress_dot << std::endl;
         dStress_dot *= val;
         const MatrixAdaptor &diffN = row_data.getDiffN(gg, nb_row / 3);

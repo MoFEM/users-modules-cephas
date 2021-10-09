@@ -105,6 +105,22 @@ struct ConvectiveMassElement {
     return feEnergy;
   } ///< get kinetic energy element
 
+  MoFEMErrorCode addHOOpsVol() {
+    MoFEMFunctionBegin;
+    auto add_ops = [&](auto &fe) {
+      return MoFEM::addHOOpsVol("MESH_NODE_POSITIONS", fe, true, false, false,
+                             false);
+    };
+    CHKERR add_ops(feMassRhs);
+    CHKERR add_ops(feMassLhs);
+    CHKERR add_ops(feMassAuxLhs);
+    CHKERR add_ops(feVelRhs);
+    CHKERR add_ops(feTRhs);
+    CHKERR add_ops(feTLhs);
+    CHKERR add_ops(feEnergy);
+    MoFEMFunctionReturn(0);
+  }
+
   MoFEM::Interface &mField;
   short int tAg;
 

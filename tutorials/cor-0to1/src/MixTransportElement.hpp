@@ -221,8 +221,7 @@ struct MixTransportElement {
 
   /// \brief add finite elements
   MoFEMErrorCode addFiniteElements(
-      const std::string &fluxes_name, const std::string &values_name,
-      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS") {
+      const std::string &fluxes_name, const std::string &values_name) {
     MoFEMFunctionBegin;
 
     // Set up volume element operators. Operators are used to calculate
@@ -249,20 +248,6 @@ struct MixTransportElement {
     CHKERR mField.modify_finite_element_add_field_data("MIX_SKELETON",
                                                        fluxes_name);
 
-    // In some cases you like to use HO geometry to describe shape of the bode,
-    // curved edges and faces, for example body is a sphere. HO geometry is
-    // approximated by a field,  which can be hierarchical, so shape of the
-    // edges could be given by polynomial of arbitrary order.
-    //
-    // Check if field "mesh_nodals_positions" is defined, and if it is add that
-    // field to data of finite element. MoFEM will use that that to calculate
-    // Jacobian as result that geometry in nonlinear.
-    if (mField.check_field(mesh_nodals_positions)) {
-      CHKERR mField.modify_finite_element_add_field_data("MIX",
-                                                         mesh_nodals_positions);
-      CHKERR mField.modify_finite_element_add_field_data("MIX_SKELETON",
-                                                         mesh_nodals_positions);
-    }
     // Look for all BLOCKSET which are MAT_THERMALSET, takes entities from those
     // BLOCKSETS and add them to "MIX" finite element. In addition get data form
     // that meshset and set conductivity which is used to calculate fluxes from
@@ -299,10 +284,6 @@ struct MixTransportElement {
                                                        fluxes_name);
     CHKERR mField.modify_finite_element_add_field_data("MIX_BCVALUE",
                                                        values_name);
-    if (mField.check_field(mesh_nodals_positions)) {
-      CHKERR mField.modify_finite_element_add_field_data("MIX_BCVALUE",
-                                                         mesh_nodals_positions);
-    }
 
     // Define element to apply essential boundary conditions.
     CHKERR mField.add_finite_element("MIX_BCFLUX", MF_ZERO);
@@ -314,11 +295,6 @@ struct MixTransportElement {
                                                        fluxes_name);
     CHKERR mField.modify_finite_element_add_field_data("MIX_BCFLUX",
                                                        values_name);
-    if (mField.check_field(mesh_nodals_positions)) {
-      CHKERR mField.modify_finite_element_add_field_data("MIX_BCFLUX",
-                                                         mesh_nodals_positions);
-    }
-
     MoFEMFunctionReturn(0);
   }
 
@@ -520,6 +496,8 @@ struct MixTransportElement {
     // clear operator, just in case if some other operators are left on this
     // element
     feTri.getOpPtrVector().clear();
+    feTri.getOpPtrVector().push_back(
+        new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
     // set operator to calculate essential boundary conditions
     feTri.getOpPtrVector().push_back(new OpEvaluateBcOnFluxes(*this, "FLUXES"));
     CHKERR mField.loop_finite_elements("MIX", "MIX_BCFLUX", feTri);
@@ -541,13 +519,13 @@ struct MixTransportElement {
     feVol.getOpPtrVector().push_back(
         new OpVDivSigma_L2Hdiv(*this, "VALUES", "FLUXES", Aij, F));
     CHKERR mField.loop_finite_elements("MIX", "MIX", feVol);
-    ;
 
     // calculate right hand side for natural boundary conditions
     feTri.getOpPtrVector().clear();
+    feTri.getOpPtrVector().push_back(
+        new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
     feTri.getOpPtrVector().push_back(new OpRhsBcOnValues(*this, "FLUXES", F));
     CHKERR mField.loop_finite_elements("MIX", "MIX_BCVALUE", feTri);
-    ;
 
     // assemble matrices
     CHKERR MatAssemblyBegin(Aij, MAT_FINAL_ASSEMBLY);
@@ -785,11 +763,6 @@ struct MixTransportElement {
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         // get integration weight and multiply by element volume
         double w = getGaussPts()(3, gg) * getVolume();
-        // in case that HO geometry is defined that below take into account that
-        // edges of element are curved
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         const double x = getCoordsAtGaussPts()(gg, 0);
         const double y = getCoordsAtGaussPts()(gg, 1);
         const double z = getCoordsAtGaussPts()(gg, 2);
@@ -857,9 +830,6 @@ struct MixTransportElement {
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         const double x = getCoordsAtGaussPts()(gg, 0);
         const double y = getCoordsAtGaussPts()(gg, 1);
         const double z = getCoordsAtGaussPts()(gg, 2);
@@ -919,9 +889,6 @@ struct MixTransportElement {
       int gg = 0;
       for (; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         for(auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
@@ -999,9 +966,6 @@ struct MixTransportElement {
       int nb_gauss_pts = row_data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
@@ -1033,9 +997,6 @@ struct MixTransportElement {
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         noalias(Nf) += w * data.getN(gg) * cTx.divergenceAtGaussPts[gg];
       }
       CHKERR VecSetValues(F, nb_row, &data.getIndices()[0], &Nf[0], ADD_VALUES);
@@ -1070,22 +1031,11 @@ struct MixTransportElement {
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
-        double x, y, z;
-        if (getHoCoordsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
-        } else {
-          x = getCoordsAtGaussPts()(gg, 0);
-          y = getCoordsAtGaussPts()(gg, 1);
-          z = getCoordsAtGaussPts()(gg, 2);
-        }
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
+        const double z = getCoordsAtGaussPts()(gg, 2);
         double flux = 0;
         CHKERR cTx.getSource(fe_ent, x, y, z, flux);
-        ;
         noalias(Nf) += w * data.getN(gg) * flux;
       }
       CHKERR VecSetValues(F, nb_row, &data.getIndices()[0], &Nf[0], ADD_VALUES);
@@ -1136,16 +1086,10 @@ struct MixTransportElement {
       nF.clear();
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
-        double x, y, z;
-        if (getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
-        } else {
-          x = getCoordsAtGaussPts()(gg, 0);
-          y = getCoordsAtGaussPts()(gg, 1);
-          z = getCoordsAtGaussPts()(gg, 2);
-        }
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
+        const double z = getCoordsAtGaussPts()(gg, 2);
+        
         double value;
         CHKERR cTx.getBcOnValues(fe_ent, gg, x, y, z, value);
         ;
@@ -1231,16 +1175,9 @@ struct MixTransportElement {
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
 
         // get integration point coordinates
-        double x, y, z;
-        if (getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
-        } else {
-          x = getCoordsAtGaussPts()(gg, 0);
-          y = getCoordsAtGaussPts()(gg, 1);
-          z = getCoordsAtGaussPts()(gg, 2);
-        }
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
+        const double z = getCoordsAtGaussPts()(gg, 2);
 
         // get flux on fece for given element handle and coordinates
         double flux;
@@ -1480,19 +1417,9 @@ struct MixTransportElement {
       deltaFlux.resize(3, false);
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
-        double x, y, z;
-        if (getHoCoordsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
-        } else {
-          x = getCoordsAtGaussPts()(gg, 0);
-          y = getCoordsAtGaussPts()(gg, 1);
-          z = getCoordsAtGaussPts()(gg, 2);
-        }
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
+        const double z = getCoordsAtGaussPts()(gg, 2);
         double flux;
         CHKERR cTx.getSource(fe_ent, x, y, z, flux);
         ;
@@ -1611,20 +1538,11 @@ struct MixTransportElement {
                     "wrong number of integration points");
           }
           for (int gg = 0; gg != nb_gauss_pts; gg++) {
-            double x, y, z;
-            if (static_cast<int>(getNormalsAtGaussPts().size1()) ==
-                nb_gauss_pts) {
-              x = getHoCoordsAtGaussPts()(gg, 0);
-              y = getHoCoordsAtGaussPts()(gg, 1);
-              z = getHoCoordsAtGaussPts()(gg, 2);
-            } else {
-              x = getCoordsAtGaussPts()(gg, 0);
-              y = getCoordsAtGaussPts()(gg, 1);
-              z = getCoordsAtGaussPts()(gg, 2);
-            }
+            const double x = getCoordsAtGaussPts()(gg, 0);
+            const double y = getCoordsAtGaussPts()(gg, 1);
+            const double z = getCoordsAtGaussPts()(gg, 2);
             double value;
             CHKERR cTx.getBcOnValues(fe_ent, gg, x, y, z, value);
-            ;
             double w = getGaussPts()(2, gg);
             if (static_cast<int>(getNormalsAtGaussPts().size1()) ==
                 nb_gauss_pts) {

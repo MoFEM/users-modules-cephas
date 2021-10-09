@@ -315,6 +315,30 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 
 <tr>
 
+<td>
+
+Evaluate tenorial field values for vectorial bases (Hdiv and Hcurl)
+\ref MoFEM::OpCalculateHVecVectorField
+
+\f[ 
+u_{j}^h(\pmb\xi^g) = \sum_i^N \phi^i_j(\pmb\xi^g) 
+\overline{u}_i^{jk}
+\f]
+where \f$j\f$ and \f$j\f$ tensor element (coefficient) indices.
+
+<td>
+
+%Example
+\code
+constexpr int BASE_DIM = 3;
+auto vals_integration_pts = boost::make_shared<MatrixDouble>();
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateHVecTensorField<3, 3>(
+            field_name, vals_integration_pts));
+\endcode
+
+<tr>
+
 </table>
 
 \note User data operators are defined in file \ref UserDataOperators.hpp
@@ -349,11 +373,12 @@ shape functions are pushed to the current configuration.
 <td>
 %Example usage
 \code
-MatrixDouble jac, inv_jac;
+auto jac_ptr = boost::make_shared<MatrixDouble>();
+auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpCalculateJacForFace(inv_jac));
+  new OpCalculateJacForFace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpCalculateInvJacForFace(inv_jac));
+  new OpCalculateInvJacForFace(inv_jac_ptr));
 \endcode
 <tr>
 
@@ -372,18 +397,18 @@ This operator assumes that the face element is on the XY plane.
 <td>
 %Example usage
 \code
-MatrixDouble jac;
+auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpSetInvJacH1ForFace(inv_jac));
+  new OpSetInvJacH1ForFace(inv_jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpSetInvJacH1ForFace(inv_jac));
+  new OpSetInvJacH1ForFace(inv_jac_ptr));
 \endcode
 
 <tr>
 
 <td>
 
-Apply contravariant (Piola) transfer to Hdiv space on face \ref MoFEM::OpSetContravariantPiolaTransformFace and \ref MoFEM::OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace
+Apply contravariant (Piola) transfer to Hdiv space on face \ref MoFEM::OpSetContravariantPiolaTransformOnFace2D and \ref MoFEM::OpSetContravariantPiolaTransformOnFace2DEmbeddedIn3DSpace
 
 
 Contravariant Piola transformation
@@ -398,25 +423,28 @@ Contravariant Piola transformation
 
 %Example for 2d problem for face in XY space
 \code
-Matrix jac;
+auto jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpCalculateJacForFace(jac));
+    new OpCalculateJacForFace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFace(jac))
+    new OpSetContravariantPiolaTransformOnFace2D(jac_ptr))
 \endcode
 
 %Example for face emerged in 3d space. 
 \code
-Matrix jac;
+auto jac_ptr = boost::make_shared<MatrixDouble>();
+auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpCalculateJacForFaceEmbeddedIn3DSpace(jac));
+ new OpCalculateJacForFaceEmbeddedIn3DSpace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-     new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac));
-pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
+  new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace(jac));
+  new OpMakeHdivFromHcurl());
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new 
+  OpSetContravariantPiolaTransformOnFace2DEmbeddedIn3DSpace(jac_ptr));
 \endcode
 Note, in that case problem is 2d, however surface on which PDE is solved is emerged in 3d space.
 
@@ -436,15 +464,15 @@ Transform local reference derivatives of shape function to global derivatives fo
 
 %Example for 2d problem for face in XY space
 \code
-Matrix jac;
+auto jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpCalculateJacForFace(jac));
+    new OpCalculateJacForFace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFace(jac));
+    new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFace(jac))    
+    new OpSetContravariantPiolaTransformOnFace2D(jac_ptr))    
 \endcode
 
 <tr>
@@ -467,15 +495,15 @@ Note that applying function twice will transform base from H-curl space and then
 
 %Example for 2d problem for face in XY space
 \code
-Matrix jac;
+auto jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpCalculateJacForFace(jac));
+    new OpCalculateJacForFace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFace(jac));
+    new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFace(jac))    
+    new OpSetContravariantPiolaTransformOnFace2D(jac_ptr))    
 \endcode
 
 <tr>
@@ -483,7 +511,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 <td>
 
 Modify integration weights on face to take in account higher-order
-geometry \ref MoFEM::OpMakeHighOrderGeometryWeightsOnFace
+geometry \ref MoFEM::OpSetHOWeigthsOnFace
 
 Suppose jacobian is not constat on the finite element, then this operator set integration weights to take into account the geometry of the finite element, that is, a case for a non-parallelepiped quad. Also, that is a case for any face element given by higher-order geometry approximation. Note that geometry in %MoFEM can be represented by an arbitrary orde approximation field.
 
@@ -497,7 +525,7 @@ where \f$w^g\f$ is wieght on update configuration, \f$W^g\f$ integration weight 
 Example 
 \code
 pipeline_mng->getOpDomainLhsPipeline().push_back(
-    new OpMakeHighOrderGeometryWeightsOnFace());
+    new OpSetHOWeigthsOnFace());
 \endcode
 
 <tr>
@@ -546,7 +574,7 @@ pipeline_mng->getOpDomainLhsPipeline().push_back(
 
 <td>
 
-Integrate force term for scalar and vectorial fields
+Integrat source term for scalar and vectorial fields
 \ref MoFEM::OpSourceImpl
 
 \f[
@@ -601,6 +629,91 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 
 <tr>
 
+<td>
+
+Integrate term for discrete scalar fields
+\ref MoFEM::OpBaseTimesScalarFieldImpl
+
+\code
+using OpBaseTimesV = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesScalarField<BASE_DIM>;
+\endcode
+
+<td>
+
+%Example
+\code
+using OpBaseTimesV = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesScalarField<1>;
+auto vec_at_gauss_pts = boost::make_shared<VectorDouble>();
+// Push operator which sets vec_at_gauss_pts
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpBaseTimesV("U", vec_ptr_at_gauss_pts));
+\endcode
+
+<tr>
+
+<td>
+
+Integrate term for discrete vector fields
+\ref MoFEM::OpBaseTimesScalarFieldImpl
+
+\code
+using OpBaseTimesM = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVector<BASE_DIM, FIELD_DIM, S>;
+\endcode
+
+<td>
+
+%Example for scalar base  and field vector field (e.g. body forces)
+\code
+using OpBaseFlux = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVector<1, 3, 0>;
+auto body_force = boost::make_shared<MatrixDouble>();
+auto t_body_force = getFTensor1FromMat<3, 0>(*body_force);
+t_body_force(0) = 0;
+t_body_force(1) = 0;
+t_body_force(2) = -9.81;
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpBaseFlux("U", body_force));
+\endcode
+
+%Example for base in Hdiv space and field in Hdiv space
+\code
+using OpBaseFlux = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVector<3, 3, 1>;
+auto flux_at_gauss_pts = boost::make_shared<MatrixDouble>();
+// Push operator which sets flux at integration points
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpBaseFlux("U", flux_at_gauss_pts));
+\endcode
+
+<tr>
+
+<td>
+
+Integrate natural boundary condidition
+\code
+MoFEM::OpNormalMixVecTimesScalarImpl
+\endcode
+
+\code
+using OpMixNaturalBC = FormsIntegrators<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVector<3>;
+\endcode
+
+<td>
+
+%Example
+\code
+using OpTemperatureBC = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpNormalMixVecTimesScalar<SPACE_DIM>;
+pipeline.push_back(
+   new OpTemperatureBC("FLUX", [](double,double.double) { return 1;},
+                      boost::make_shared<Range>(skin_edges)));
+\endcode
+%Example usage thermo_plastic.cpp
+
 </table>
 
 \note Linear froms are defined in file LinearFormsIntegrators.hpp
@@ -639,8 +752,61 @@ using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
 pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpDomainGradGrad("U", "U", beta));
 \endcode
+%Example usage: helmholtz.cpp
 <tr>
 
+<td>
+Integrate mass \ref MoFEM::OpMassImpl
+\code 
+using OpMass = 
+  FormsIntegrators<OP>::Assembly<
+  ASSEMBLY_TYPE>::
+  BiLinearForm<INTEGRATION_TYPE>::
+  OpMass<BASE_DIM, FIELD_DIM>;
+\endcode
+%Example usage: helmholtz.cp
+
+<td>
+
+%Example for scalar base and scalar field
+\code
+auto volume_specific_heat_capacity = [](double x, double y , double z) {
+  return 1;
+};
+using OpCapacity = 
+  FormsIntegrators<OP>::Assembly< PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpCapacity("T", "T", volume_specific_heat_capacity));
+\endcode
+%Example usage: helmholtz.cpp
+
+<tr>
+
+<td>
+
+Integrate base divergence times base \ref MoFEM::OpMixDivTimesScalarImpl
+\code 
+using OpHcurlHcurl = 
+  FormsIntegrators<OP>::Assembly<
+  ASSEMBLY_TYPE>::
+  BiLinearForm<INTEGRATION_TYPE>::
+  OpMixDivTimesScalarImpl<SPACE_DIM>;
+\endcode
+%Example usage: mixed_poisson.cpp
+
+<td>
+
+%Example
+\code
+using OpHdivU = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpMixDivTimesScalar<2>;
+auto unity = []() { return 1; };
+pipeline_mng->getOpDomainLhsPipeline().push_back(
+    new OpHdivU("FLUX", "U", unity, true));
+\endcode
+%Example usage: mixed_poisson.cpp
+
+<tr>
 
 </table>
 

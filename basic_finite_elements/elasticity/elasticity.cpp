@@ -92,7 +92,7 @@ using VolUserDataOperator = VolumeElementForcesAndSourcesCore::UserDataOperator;
 
 /// Set integration rule
 struct VolRule {
-  int operator()(int, int, int order) const { return 2 * (order - 1); }
+  int operator()(int, int, int order) const { return 2 * order; }
 };
 
 struct PrismFE : public FatPrismElementForcesAndSourcesCore {
@@ -105,6 +105,8 @@ struct PrismFE : public FatPrismElementForcesAndSourcesCore {
 
 int PrismFE::getRuleTrianglesOnly(int order) { return 2 * order; };
 int PrismFE::getRuleThroughThickness(int order) { return 2 * order; };
+
+using EdgeEle = MoFEM::EdgeElementForcesAndSourcesCore;
 
 int main(int argc, char *argv[]) {
 
@@ -148,8 +150,9 @@ int main(int argc, char *argv[]) {
     PetscBool is_post_proc_volume = PETSC_TRUE;
 
     // Select base
-    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
-    const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
+    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, DEMKOWICZ, LASBASETOP };
+    const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier",
+                                "demkowicz"};
     PetscInt choice_base_value = LOBATTO;
 
     // Read options from command line
@@ -240,12 +243,14 @@ int main(int argc, char *argv[]) {
     bool mesh_has_tets = false;
     bool mesh_has_prisms = false;
     int nb_tets = 0;
+    int nb_hexs = 0;
     int nb_prisms = 0;
 
     CHKERR moab.get_number_entities_by_type(0, MBTET, nb_tets, true);
+    CHKERR moab.get_number_entities_by_type(0, MBHEX, nb_hexs, true);
     CHKERR moab.get_number_entities_by_type(0, MBPRISM, nb_prisms, true);
 
-    mesh_has_tets = nb_tets > 0;
+    mesh_has_tets = (nb_tets + nb_hexs) > 0;
     mesh_has_prisms = nb_prisms > 0;
 
     // Set bit refinement level to all entities (we do not refine mesh in
@@ -278,6 +283,9 @@ int main(int argc, char *argv[]) {
     case BERNSTEIN_BEZIER:
       base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
       break;
+    case DEMKOWICZ:
+      base = DEMKOWICZ_JACOBI_BASE;
+      break;
     default:
       SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED, "Base not implemented");
     };
@@ -285,8 +293,8 @@ int main(int argc, char *argv[]) {
                              MF_ZERO);
 
     // We can use higher oder geometry to define body
-    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
-                             3, MB_TAG_DENSE, MF_ZERO);
+    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, base, 3, MB_TAG_DENSE,
+                             MF_ZERO);
 
     // Declare problem
 
@@ -325,11 +333,11 @@ int main(int argc, char *argv[]) {
     // Meshes.
     CHKERR m_field.set_field_order(0, MBPRISM, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
+    CHKERR m_field.set_field_order(0, MBHEX, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
-    // CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
+    CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(edges_to_set_order, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
-    CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
 
     if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", order);
@@ -481,12 +489,17 @@ int main(int argc, char *argv[]) {
         boost::make_shared<std::map<int, MassBlockData>>();
     CHKERR ConvectiveMassElement::setBlocks(m_field, mass_block_sets_ptr);
 
-    boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr(
-        new VolumeElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr(
-        new VolumeElementForcesAndSourcesCore(m_field));
+    auto fe_lhs_ptr =
+        boost::make_shared<VolumeElementForcesAndSourcesCore>(m_field);
+    auto fe_rhs_ptr =
+        boost::make_shared<VolumeElementForcesAndSourcesCore>(m_field);
     fe_lhs_ptr->getRuleHook = VolRule();
     fe_rhs_ptr->getRuleHook = VolRule();
+
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *fe_lhs_ptr, true, false, false,
+                    false);
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *fe_rhs_ptr, true, false, false,
+                    false);
 
     boost::shared_ptr<ForcesAndSourcesCore> prism_fe_lhs_ptr(
         new PrismFE(m_field));
@@ -596,11 +609,10 @@ int main(int argc, char *argv[]) {
 
     // Implementation of Simple Rod element
     // Create new instances of edge elements for Simple Rod
-    boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_lhs_ptr(
-        new EdgeElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_rhs_ptr(
-        new EdgeElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<EdgeEle> fe_simple_rod_lhs_ptr(new EdgeEle(m_field));
+    boost::shared_ptr<EdgeEle> fe_simple_rod_rhs_ptr(new EdgeEle(m_field));
 
+    
     CHKERR MetaSimpleRodElement::setSimpleRodOperators(
         m_field, fe_simple_rod_lhs_ptr, fe_simple_rod_rhs_ptr, "DISPLACEMENT",
         "MESH_NODE_POSITIONS");
@@ -655,7 +667,6 @@ int main(int argc, char *argv[]) {
                                  MB_TAG_SPARSE, MF_ZERO);
 
         CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "TEMP");
-
         CHKERR m_field.set_field_order(0, MBVERTEX, "TEMP", 1);
       }
     }
@@ -854,11 +865,10 @@ int main(int argc, char *argv[]) {
     CHKERR MetaEdgeForces::setOperators(m_field, edge_forces, F,
                                         "DISPLACEMENT");
     {
-      boost::ptr_map<std::string, EdgeForce>::iterator fit =
-          edge_forces.begin();
+      auto fit = edge_forces.begin();
       for (; fit != edge_forces.end(); fit++) {
-        CHKERR DMoFEMLoopFiniteElements(dm, fit->first.c_str(),
-                                        &fit->second->getLoopFe());
+        auto &fe = fit->second->getLoopFe();
+        CHKERR DMoFEMLoopFiniteElements(dm, fit->first.c_str(), &fe);
       }
     }
     // Assemble body forces, implemented in BodyForceConstantField
@@ -871,6 +881,8 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMLoopFiniteElements(dm, "BODY_FORCE",
                                     &body_forces_methods.getLoopFe());
     // Assemble fluid pressure forces
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", fluid_pressure_fe.getLoopFe(),
+                          false, false);
     CHKERR fluid_pressure_fe.setNeumannFluidPressureFiniteElementOperators(
         "DISPLACEMENT", F, false, true);
 
@@ -933,12 +945,15 @@ int main(int argc, char *argv[]) {
 
     auto set_post_proc_skin = [&](auto &post_proc_skin) {
       MoFEMFunctionBegin;
+      CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", post_proc_skin, false,
+                            false);
       CHKERR post_proc_skin.generateReferenceElementMesh();
       CHKERR post_proc_skin.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR post_proc_skin.addFieldValuesPostProc("MESH_NODE_POSITIONS");
       CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
           "DISPLACEMENT", "ELASTIC", data_at_pts->hMat, true);
-      CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
+    CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
+
           "MESH_NODE_POSITIONS", "ELASTIC", data_at_pts->HMat, false);
       post_proc_skin.getOpPtrVector().push_back(
           new HookeElement::OpPostProcHookeElement<
@@ -953,6 +968,8 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionBegin;
       // Add operators to the elements, starting with some generic operators
       CHKERR post_proc.generateReferenceElementMesh();
+      CHKERR addHOOpsVol("MESH_NODE_POSITIONS", post_proc, true, false, false,
+                      false);
       CHKERR post_proc.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
       CHKERR post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");

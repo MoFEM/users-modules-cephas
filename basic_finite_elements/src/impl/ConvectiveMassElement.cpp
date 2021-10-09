@@ -398,9 +398,6 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
           }
         }
         double val = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
         res *= val;
       } else {
         commonData.jacMassRowPtr[gg].resize(3);
@@ -417,9 +414,6 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
                   "ADOL-C function evaluation with error");
         }
         double val = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
         commonData.jacMass[gg] *= val;
       }
     }
@@ -797,9 +791,6 @@ MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
 
     for (unsigned int gg = 0; gg < row_data.getN().size1(); gg++) {
       double val = getVolume() * getGaussPts()(3, gg);
-      if (getHoGaussPtsDetJac().size() > 0) {
-        val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-      }
       double rho0 = dAta.rho0;
       double rho;
       if (lInear) {
@@ -1012,9 +1003,6 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityJacobian::doWork(
           }
         }
         double val = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
         res *= val;
       } else {
         commonData.jacVelRowPtr[gg].resize(3);
@@ -1030,9 +1018,6 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityJacobian::doWork(
                   "ADOL-C function evaluation with error");
         }
         double val = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
         commonData.jacVel[gg] *= val;
         // std::cerr << gg << " : " << commonData.jacVel[gg] << std::endl;
       }
@@ -1442,9 +1427,6 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumJacobian::doWork(
           }
         }
         double val = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
         res *= val;
       } else {
         commonData.jacTRowPtr[gg].resize(3);
@@ -1460,9 +1442,6 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumJacobian::doWork(
                   "ADOL-C function evaluation with error");
         }
         double val = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
         commonData.jacT[gg] *= val;
       }
     }

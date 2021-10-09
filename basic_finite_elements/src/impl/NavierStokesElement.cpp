@@ -164,14 +164,16 @@ MoFEMErrorCode NavierStokesElement::setCalcDragOperators(
     const std::string pressure_field,
     boost::shared_ptr<CommonData> common_data) {
   MoFEMFunctionBegin;
+
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
   for (auto &sit : common_data->setOfFacesData) {
     sideDragFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
     dragFe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(common_data->invJac));
-    dragFe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(common_data->invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
+    dragFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
     dragFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         pressure_field, common_data->pressPtr));
 
@@ -192,14 +194,17 @@ MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
     boost::shared_ptr<CommonData> common_data) {
   MoFEMFunctionBegin;
 
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
   for (auto &sit : common_data->setOfFacesData) {
     sideDragFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
+
     postProcDragPtr->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(common_data->invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
     postProcDragPtr->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(common_data->invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
     postProcDragPtr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(velocity_field,
                                             common_data->velPtr));
@@ -293,9 +298,6 @@ NavierStokesElement::OpAssembleLhsOffDiag::iNtegrate(EntData &row_data,
 
     // Get volume and integration weight
     double w = getVolume() * getGaussPts()(3, gg);
-    if (getHoGaussPtsDetJac().size() > 0) {
-      w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
 
     int row_bb = 0;
     for (; row_bb != row_nb_dofs / 3; row_bb++) {
@@ -346,10 +348,6 @@ NavierStokesElement::OpAssembleLhsDiagLin::iNtegrate(EntData &row_data,
 
     // Get volume and integration weight
     double w = getVolume() * getGaussPts()(3, gg);
-    if (getHoGaussPtsDetJac().size() > 0) {
-      w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
-
     double const alpha = w * blockData.viscousCoef;
 
     int row_bb = 0;
@@ -428,10 +426,6 @@ NavierStokesElement::OpAssembleLhsDiagNonLin::iNtegrate(EntData &row_data,
 
     // Get volume and integration weight
     double w = getVolume() * getGaussPts()(3, gg);
-    if (getHoGaussPtsDetJac().size() > 0) {
-      w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
-
     double const beta = w * blockData.inertiaCoef;
 
     int row_bb = 0;
@@ -542,10 +536,6 @@ NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
 
     double w = getVolume() * getGaussPts()(3, gg);
 
-    if (getHoGaussPtsDetJac().size() > 0) {
-      w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
-
     // evaluate constant term
     const double alpha = w * blockData.viscousCoef;
 
@@ -605,11 +595,6 @@ NavierStokesElement::OpAssembleRhsVelocityNonLin::iNtegrate(EntData &data) {
   for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
     double w = getVolume() * getGaussPts()(3, gg);
-
-    if (getHoGaussPtsDetJac().size() > 0) {
-      w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
-
     // evaluate constant term
     const double beta = w * blockData.inertiaCoef;
 
@@ -662,9 +647,6 @@ NavierStokesElement::OpAssembleRhsPressure::iNtegrate(EntData &data) {
     // weight
 
     double w = getVolume() * getGaussPts()(3, gg);
-    if (getHoGaussPtsDetJac().size() > 0) {
-      w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
 
     // get element of vector
     FTensor::Tensor0<FTensor::PackPtr<double *, 1>> t_a(&*locVec.begin());
@@ -715,10 +697,6 @@ MoFEMErrorCode NavierStokesElement::OpCalcVolumeFlux::doWork(int side,
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
     double vol = getVolume();
-    if (getHoGaussPtsDetJac().size() > 0) {
-      vol *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
-
     t_flux(i) += t_w * vol * t_u(i);
 
     ++t_w;

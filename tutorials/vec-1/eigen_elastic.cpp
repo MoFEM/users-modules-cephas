@@ -83,7 +83,6 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  MatrixDouble invJac;
   boost::shared_ptr<MatrixDouble> matGradPtr;
   boost::shared_ptr<MatrixDouble> matStrainPtr;
   boost::shared_ptr<MatrixDouble> matStressPtr;
@@ -271,10 +270,11 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline_mng->getDomainLhsFE().reset();
 
     if (SPACE_DIM == 2) {
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpCalculateInvJacForFace(invJac));
+          new OpCalculateInvJacForFace(inv_jac_ptr));
       pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpSetInvJacH1ForFace(invJac));
+          new OpSetInvJacH1ForFace(inv_jac_ptr));
     }
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -410,9 +410,10 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->generateReferenceElementMesh();
 
   if (SPACE_DIM == 2) {
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
   }
 
   post_proc_fe->getOpPtrVector().push_back(

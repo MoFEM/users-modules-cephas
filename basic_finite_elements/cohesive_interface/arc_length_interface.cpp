@@ -648,10 +648,15 @@ int main(int argc, char *argv[]) {
       elastic.setOfBlocks[id].PoissonRatio = poisson_ratio;
       elastic.setOfBlocks[id].materialDoublePtr = hooke_double_ptr;
       elastic.setOfBlocks[id].materialAdoublePtr = hooke_adouble_ptr;
-      rval = m_field.get_moab().get_entities_by_type(
+      CHKERR m_field.get_moab().get_entities_by_type(
           m_field.get_finite_element_meshset("ELASTIC"), MBTET,
           elastic.setOfBlocks[id].tEts, true);
-      CHKERRG(rval);
+      CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true,
+                      false, false, false);
+      CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true,
+                      false, false, false);
+      CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeEnergy(), true,
+                      false, false, false);
       CHKERR elastic.setOperators("DISPLACEMENT", "MESH_NODE_POSITIONS", false,
                                   true);
     }
@@ -691,6 +696,9 @@ int main(int argc, char *argv[]) {
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
     string fe_name_str = "FORCE_FE";
     neumann_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
+                          neumann_forces.at(fe_name_str).getLoopFe(), false,
+                          false);
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
                                                     it)) {
       CHKERR neumann_forces.at(fe_name_str)
@@ -698,6 +706,9 @@ int main(int argc, char *argv[]) {
     }
     fe_name_str = "PRESSURE_FE";
     neumann_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
+                          neumann_forces.at(fe_name_str).getLoopFe(), false,
+                          false);
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              m_field, SIDESET | PRESSURESET, it)) {
       CHKERR neumann_forces.at(fe_name_str)

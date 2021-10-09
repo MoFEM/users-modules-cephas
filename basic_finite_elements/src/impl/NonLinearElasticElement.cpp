@@ -668,9 +668,6 @@ MoFEMErrorCode NonlinearElasticElement::OpRhsPiolaKirchhoff::doWork(
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     double val = getVolume() * getGaussPts()(3, gg);
-    if ((!aLe) && getHoGaussPtsDetJac().size() > 0) {
-      val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
     MatrixDouble3by3 &stress = commonData.sTress[gg];
     FTensor::Tensor2<double *, 3, 3> t3(
         &stress(0, 0), &stress(0, 1), &stress(0, 2), &stress(1, 0),
@@ -730,10 +727,6 @@ MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
 
   for (unsigned int gg = 0; gg != row_data.getN().size1(); ++gg) {
     double val = getVolume() * getGaussPts()(3, gg);
-    if (getHoGaussPtsDetJac().size() > 0) {
-      val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
-
     noalias(dAta.materialDoublePtr->F) = F[gg];
     if (fieldDisp) {
       for (int dd = 0; dd < 3; dd++) {
@@ -973,9 +966,6 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::doWork(
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     CHKERR getJac(col_data, gg);
     double val = getVolume() * getGaussPts()(3, gg);
-    if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
-      val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
     FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1(
         &jac(3 * 0 + 0, 0), &jac(3 * 0 + 0, 1), &jac(3 * 0 + 0, 2),
         &jac(3 * 0 + 1, 0), &jac(3 * 0 + 1, 1), &jac(3 * 0 + 1, 2),

@@ -48,7 +48,6 @@ private:
   std::string domainField;   // displacement field
   std::string boundaryField; // Lagrange multiplier field
   int oRder;
-  MatrixDouble invJac;
 
   // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
@@ -134,13 +133,14 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // domain elements
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateInvJacForFace(inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsK(domainField, domainField, boundaryMarker));

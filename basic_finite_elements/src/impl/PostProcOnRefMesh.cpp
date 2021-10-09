@@ -173,7 +173,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
     break;
   case HDIV:
     // FIXME: fieldMap not set
-    if (type == MBTRI && side == 0) {
+    if (moab::CN::Dimension(type) == 2 && side == 0) {
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         CHKERR postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1, def_VAL);
       }
@@ -833,14 +833,11 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
         new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
 
-  Range tris;
-  CHKERR postProcMesh.get_entities_by_type(0, MBTRI, tris, false);
+  Range faces;
+  CHKERR postProcMesh.get_entities_by_dimension(0, 2, faces, false);
   int rank = mField.get_comm_rank();
-  Range::iterator pit = tris.begin();
-  for (; pit != tris.end(); pit++) {
-    CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), &*pit, 1,
+  CHKERR postProcMesh.tag_clear_data(pcomm_post_proc_mesh->part_tag(), faces,
                                      &rank);
-  }
   CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
   MoFEMFunctionReturn(0);
 }
@@ -927,6 +924,10 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
 
+  if (!mField.check_field("MESH_NODE_POSITIONS"))
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *my_side_fe, true, false, false,
+                    false);
+
   // check number of coefficients
   auto field_ptr = mField.get_field_structure(field_name);
   const int nb_coefficients = field_ptr->getNbOfCoeffs();
@@ -1004,7 +1005,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
     switch (nb_coefficients) {
     case 1:
       my_side_fe->getOpPtrVector().push_back(
-          new OpCalculateHdivVectorField<3>(field_name, mat_ptr));
+          new OpCalculateHVecVectorField<3>(field_name, mat_ptr));
       break;
     case 3:
       my_side_fe->getOpPtrVector().push_back(
@@ -1030,9 +1031,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
 
 
 MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
-  return OpSwitch<
-      FaceElementForcesAndSourcesCore::NO_CONTRAVARIANT_TRANSFORM_HDIV |
-      FaceElementForcesAndSourcesCore::NO_COVARIANT_TRANSFORM_HCURL>();
+  return opSwitch<0>();
 }
 
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::generateReferenceElementMesh() {

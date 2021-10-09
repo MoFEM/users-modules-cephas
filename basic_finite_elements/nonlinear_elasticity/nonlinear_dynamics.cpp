@@ -101,6 +101,9 @@ struct MonitorPostProc : public FEMethod {
 
     if (!iNit) {
       CHKERR postProc.generateReferenceElementMesh();
+      if(mField.check_field("MESH_NODE_POSITIONS"))
+        CHKERR addHOOpsVol("MESH_NODE_POSITIONS", postProc, true, false, false,
+                        false);
       CHKERR postProc.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR postProc.addFieldValuesPostProc("VELOCITY");
       CHKERR postProc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
@@ -400,6 +403,8 @@ int main(int argc, char *argv[]) {
     // Add fluid pressure finite elements
     FluidPressure fluid_pressure_fe(m_field);
     fluid_pressure_fe.addNeumannFluidPressureBCElements("DISPLACEMENT");
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", fluid_pressure_fe.getLoopFe(),
+                          false, false);
     fluid_pressure_fe.setNeumannFluidPressureFiniteElementOperators(
         "DISPLACEMENT", PETSC_NULL, false, true);
 
@@ -448,6 +453,12 @@ int main(int argc, char *argv[]) {
     // st_venant_kirchhoff_material_double;  CHKERR
     // elastic.setBlocks(&st_venant_kirchhoff_material_double,&st_venant_kirchhoff_material_adouble);
     CHKERR elastic.addElement("ELASTIC", "DISPLACEMENT");
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true, false,
+                    false, false);
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeLhs(), true, false,
+                    false, false);
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeEnergy(), true,
+                    false, false, false);
     CHKERR elastic.setOperators("DISPLACEMENT", "MESH_NODE_POSITIONS", false,
                                 true);
 
@@ -457,6 +468,7 @@ int main(int argc, char *argv[]) {
     CHKERR elastic_materials.setBlocks(inertia.setOfBlocks);
     CHKERR inertia.addConvectiveMassElement("MASS_ELEMENT", "VELOCITY",
                                             "DISPLACEMENT");
+    CHKERR inertia.addHOOpsVol();
     CHKERR inertia.addVelocityElement("VELOCITY_ELEMENT", "VELOCITY",
                                       "DISPLACEMENT");
 
@@ -665,6 +677,9 @@ int main(int argc, char *argv[]) {
     {
       string fe_name_str = "FORCE_FE";
       surface_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
+      CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
+                            surface_forces.at(fe_name_str).getLoopFe(), false,
+                            false);
       for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                       NODESET | FORCESET, it)) {
         CHKERR surface_forces.at(fe_name_str)
@@ -678,6 +693,9 @@ int main(int argc, char *argv[]) {
     {
       string fe_name_str = "PRESSURE_FE";
       surface_pressure.insert(fe_name_str, new NeumannForcesSurface(m_field));
+      CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
+                            surface_pressure.at(fe_name_str).getLoopFe(), false,
+                            false);
       for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
                m_field, SIDESET | PRESSURESET, it)) {
         CHKERR surface_pressure.at(fe_name_str)

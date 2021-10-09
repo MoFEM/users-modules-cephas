@@ -35,6 +35,8 @@ OpPostProcVertex::OpPostProcVertex(
       commonDataPtr(common_data_ptr), moabVertex(moab_vertex) {
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
   doEntities[boundary_ent] = true;
+  if (boundary_ent == MBTRI)
+    doEntities[MBQUAD] = true;
   pComm = ParallelComm::get_pcomm(moabVertex, MYPCOMM_INDEX);
   if (pComm == NULL) {
     moabCommWrap = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
@@ -146,7 +148,7 @@ OpPostProcContact<DIM>::OpPostProcContact(
     : DomainEleOp(field_name, DomainEleOp::OPROW), postProcMesh(post_proc_mesh),
       mapGaussPts(map_gauss_pts), commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
-  std::fill(&doEntities[boundary_ent], &doEntities[MBMAXTYPE], false);
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 //! [Postprocessing]
@@ -154,6 +156,13 @@ template <int DIM>
 MoFEMErrorCode OpPostProcContact<DIM>::doWork(int side, EntityType type,
                                               EntData &data) {
   MoFEMFunctionBegin;
+
+  auto set_float_precision = [](const double x) {
+    if (std::abs(x) < std::numeric_limits<float>::epsilon())
+      return 0.;
+    else
+      return x;
+  };
 
   auto get_tag_mat = [&](const std::string name) {
     std::array<double, 9> def;
@@ -181,14 +190,14 @@ MoFEMErrorCode OpPostProcContact<DIM>::doWork(int side, EntityType type,
     mat.clear();
     for (size_t r = 0; r != DIM; ++r)
       for (size_t c = 0; c != DIM; ++c)
-        mat(r, c) = t(r, c);
+        mat(r, c) = set_float_precision(t(r, c));
     return mat;
   };
 
   auto set_vector = [&](auto &t) -> MatrixDouble3by3 & {
     mat.clear();
     for (size_t r = 0; r != DIM; ++r)
-      mat(0, r) = t(r);
+      mat(0, r) = set_float_precision(t(r));
     return mat;
   };
 
@@ -231,10 +240,8 @@ struct Monitor : public FEMethod {
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
     vertexPostProc = boost::make_shared<BoundaryEle>(*m_field_ptr);
 
-    if (SPACE_DIM == 2)
-      vertexPostProc->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformOnEdge());
-
+    vertexPostProc->getOpPtrVector().push_back(
+        new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
     vertexPostProc->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>(
             "U", commonDataPtr->contactDispPtr));
@@ -246,17 +253,35 @@ struct Monitor : public FEMethod {
 
     postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
     postProcFe->generateReferenceElementMesh();
+
     if (SPACE_DIM == 2) {
-      jAC.resize(2, 2, false);
-      invJac.resize(2, 2, false);
-      postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAC));
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       postProcFe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(invJac));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+          new OpCalculateJacForFace(jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFace(inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetInvJacH1ForFace(inv_jac_ptr));
       postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       postProcFe->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformFace(jAC));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
+          new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetInvJacHcurlFace(inv_jac_ptr));
+    } else {
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateHOJacVolume(jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
     }
 
     postProcFe->getOpPtrVector().push_back(
@@ -351,9 +376,6 @@ private:
   boost::shared_ptr<BoundaryEle> vertexPostProc;
   moab::Core mbVertexPostproc;
   moab::Interface &moabVertex;
-
-  MatrixDouble invJac;
-  MatrixDouble jAC;
 
   double lastTime;
   double deltaTime;
