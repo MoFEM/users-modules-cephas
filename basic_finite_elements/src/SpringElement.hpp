@@ -27,8 +27,8 @@ using FaceDataOperator =
 /** \brief Set of functions declaring elements and setting operators
  * to apply spring boundary condition
  */
-struct MetaSpringBC {
 
+struct MetaSpringBC {
   struct BlockOptionDataSprings {
     int iD;
 
@@ -64,6 +64,7 @@ struct MetaSpringBC {
 
     double springStiffnessNormal;
     double springStiffnessTangent;
+    double scaleStiffness;
 
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
@@ -72,8 +73,8 @@ struct MetaSpringBC {
 
     std::map<int, BlockOptionDataSprings> mapSpring;
     //   ~DataAtIntegrationPtsSprings() {}
-    DataAtIntegrationPtsSprings(MoFEM::Interface &m_field)
-        : mField(m_field), faceRowData(nullptr) {
+    DataAtIntegrationPtsSprings(MoFEM::Interface &m_field, double scale_stiffness = 1.)
+        : mField(m_field), faceRowData(nullptr), scaleStiffness(scale_stiffness) {
 
       ierr = setBlocks();
       CHKERRABORT(PETSC_COMM_WORLD, ierr);
@@ -91,8 +92,8 @@ struct MetaSpringBC {
     MoFEMErrorCode getBlockData(BlockOptionDataSprings &data) {
       MoFEMFunctionBegin;
 
-      springStiffnessNormal = data.springStiffnessNormal;
-      springStiffnessTangent = data.springStiffnessTangent;
+      springStiffnessNormal = data.springStiffnessNormal * scaleStiffness;
+      springStiffnessTangent = data.springStiffnessTangent * scaleStiffness;
 
       MoFEMFunctionReturn(0);
     }
@@ -980,7 +981,8 @@ struct MetaSpringBC {
       boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr,
       boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
       const std::string field_name,
-      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
+      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS",
+      double stiffness_scale = 1.);
 
   /**
    * \brief Implementation of spring element. Set operators to calculate LHS and
