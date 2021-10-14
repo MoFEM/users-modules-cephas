@@ -222,7 +222,7 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
         auto for_each_dof = [&](auto &dof) {
           MoFEMFunctionBeginHot;
           if (dof->getEntType() == MBVERTEX) {
-            CHKERR calculateRotationForDof(dof->getEnt(), bc_it);
+            CHKERR this->calculateRotationForDof(dof->getEnt(), bc_it);
             if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
               // set boundary values to field data
               mapZeroRows[dof->getPetscGlobalDofIdx()] = bc_it.scaled_values[0];

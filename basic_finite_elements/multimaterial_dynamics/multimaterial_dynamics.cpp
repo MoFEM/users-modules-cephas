@@ -29,6 +29,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = FaceElementForcesAndSourcesCore;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcVolumeOnRefinedMesh;
+using PostProcSkinEle = PostProcFaceOnRefinedMesh;
 
 constexpr size_t SPACE_DIM = 3;
 
@@ -108,14 +109,15 @@ int main(int argc, char *argv[]) {
     Simple *simple = m_field.getInterface<Simple>();
     CHKERR simple->getOptions();
     CHKERR simple->loadFile("");
+    simple->getProblemName() = "Multimaterial dynamics";
 
-    MDynamics ex(m_field);
-    CHKERR ex.setupProblem();
-    CHKERR ex.createCommonData();
-    CHKERR ex.bC();
-    CHKERR ex.OPs();
-    CHKERR ex.tsSolve();
-    CHKERR ex.postProcess();
+    MDynamics md(m_field);
+    CHKERR md.setupProblem();
+    CHKERR md.createCommonData();
+    CHKERR md.bC();
+    // CHKERR md.OPs();
+    CHKERR md.tsSolve();
+
   }
   CATCH_ERRORS;
 

@@ -88,6 +88,7 @@ struct DirichletDisplacementBc : public MoFEM::FEMethod {
   virtual MoFEMErrorCode iNitalize();
 
   MoFEMErrorCode preProcess();
+  MoFEMErrorCode operator()() { return 0; }
   MoFEMErrorCode postProcess();
   /**
    * @brief Get the Bc Data From Sets And Blocks object
