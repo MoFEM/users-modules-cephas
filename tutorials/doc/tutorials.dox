@@ -163,6 +163,13 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
+  <tr valign="top">
+       <td>\ref tutorials_photon_diffusion</td>
+       <td> Photon diffusion equation
+       <br/> *Keywords:*  Inital boundary conditions and parabolic equation
+       </td>
+  </tr>
+
 </table>
 
 \section tutorials_complex_field_problems Problems with complex variable fields
