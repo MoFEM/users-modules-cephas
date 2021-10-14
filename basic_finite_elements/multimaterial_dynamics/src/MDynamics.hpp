@@ -237,13 +237,13 @@ MoFEMErrorCode MDynamics::bC() {
         auto get_scale_body = [&](double, double, double) {
           auto *pipeline_mng = mField.getInterface<PipelineManager>();
           FTensor::Index<'i', 3> i;
-
+          auto acc_c = acc;
           auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
           if (method)
             CHKERR MethodForForceScaling::applyScale(fe_domain_rhs.get(),
-                                                     method, acc);
+                                                     method, acc_c);
 
-          FTensor::Tensor1<double, 3> t_source(acc(0), acc(1), acc(2));
+          FTensor::Tensor1<double, 3> t_source(acc_c(0), acc_c(1), acc_c(2));
           t_source(i) *= rho(0);
           return t_source;
         };
