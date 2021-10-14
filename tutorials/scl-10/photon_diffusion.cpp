@@ -56,13 +56,13 @@ using OpBoundaryTimeScalarField = FormsIntegrators<BoundaryEleOp>::Assembly<
 using OpBoundarySource = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
-constexpr double c = 30; ///< speed of light
+constexpr double c = 30.; ///< speed of light
 
 constexpr double mu_a = 0.09;
 constexpr double mu_sp = 16.5;
 constexpr double h = 0.5;   ///< convective heat coefficient
-constexpr double flux = 50; ///< 0.5 mW mm^-2
-constexpr double duration = 120;
+constexpr double flux = 1e3; ///< 0.5 mW mm^-2
+constexpr double duration = 0.05;
 
 constexpr double D = 1. / (3. * (mu_a + mu_sp));
 constexpr double inv_c = 1. / c;
@@ -258,11 +258,11 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
         pipeline.push_back(new OpBoundaryMass(
             "U", "U",
 
-            [](const double, const double, const double) {
+            [&](const double, const double, const double) {
               if (boundaryRhsFEPtr->ts_t > duration)
                 return h;
               else
-                return 0;
+                return 0.;
             },
 
             b.second->getBcEdgesPtr()));
@@ -288,11 +288,11 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
         pipeline.push_back(new OpBoundaryTimeScalarField(
             "U", u_at_gauss_pts,
 
-            [](const double, const double, const double) {
+            [&](const double, const double, const double) {
               if (boundaryRhsFEPtr->ts_t > duration)
                 return h;
               else
-                return 0;
+                return 0.;
             },
 
             b.second->getBcEdgesPtr()));
@@ -359,13 +359,15 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
-  MOFEM_LOG("PHOTON", Sev::inform)
-      << "reading vector in binary from vector.dat ...";
-  PetscViewer viewer;
-  PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat", FILE_MODE_READ,
-                        &viewer);
-  VecLoad(D, viewer);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+  // MOFEM_LOG("PHOTON", Sev::inform)
+  //     << "reading vector in binary from vector.dat ...";
+  // PetscViewer viewer;
+  // PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat", FILE_MODE_READ,
+  //                       &viewer);
+  // VecLoad(D, viewer);
+
+  // CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
   auto solver = pipeline_mng->createTS();
   CHKERR TSSetSolution(solver, D);
