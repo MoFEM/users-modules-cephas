@@ -123,6 +123,7 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
   boost::shared_ptr<FEMethod> domianLhsFEPtr;
+  boost::shared_ptr<FEMethod> boundaryLhsFEPtr;
   boost::shared_ptr<FEMethod> boundaryRhsFEPtr;
 };
 
@@ -252,6 +253,21 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
             b.second->getBcEdgesPtr()));
       }
     }
+    for (auto b : bc_map) {
+      if (std::regex_match(b.first, std::regex("(.*)SPOT(.*)"))) {
+        pipeline.push_back(new OpBoundaryMass(
+            "U", "U",
+
+            [](const double, const double, const double) {
+              if (boundaryRhsFEPtr->ts_t > duration)
+                return h;
+              else
+                return 0;
+            },
+
+            b.second->getBcEdgesPtr()));
+      }
+    }
   };
 
   auto add_rhs_base_ops = [&](auto &pipeline) {
@@ -263,6 +279,21 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
             "U", u_at_gauss_pts,
 
             [](const double, const double, const double) { return h; },
+
+            b.second->getBcEdgesPtr()));
+      }
+    }
+    for (auto b : bc_map) {
+      if (std::regex_match(b.first, std::regex("(.*)SPOT(.*)"))) {
+        pipeline.push_back(new OpBoundaryTimeScalarField(
+            "U", u_at_gauss_pts,
+
+            [](const double, const double, const double) {
+              if (boundaryRhsFEPtr->ts_t > duration)
+                return h;
+              else
+                return 0;
+            },
 
             b.second->getBcEdgesPtr()));
       }
@@ -296,6 +327,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
   add_rhs_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
 
   domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
+  boundaryLhsFEPtr = pipeline_mng->getBoundaryLhsFE();
   boundaryRhsFEPtr = pipeline_mng->getBoundaryRhsFE();
 
   MoFEMFunctionReturn(0);
