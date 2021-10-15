@@ -1805,14 +1805,14 @@ for(int ll = 0;ll!=nb_levels;ll++) {
   // get intersection of all edges to refine and edges of previous level
   edges = intersect(edges,refined_edges);
   // refine edges by creation of node in middle of edge, if node was previously created use that node, and set BitRefLevel to that node
-  CHKERR refine_ptr->add_vertices_in_the_middle_of_edges(edges,BitRefLevel().set(ll+1)); 
+  CHKERR refine_ptr->addVerticesInTheMiddleOfEdges(edges,BitRefLevel().set(ll+1)); 
   //  get all tetrahderals for current refined level
   Range tets;
   CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
     BitRefLevel().set(ll),BitRefLevel().set(),MBTET,tets
   ); 
   // refine those tetrahedrals using nodes in middle of refined edges
-  CHKERR refine_ptr->refine_TET(tets,BitRefLevel().set(ll+1)); 
+  CHKERR refine_ptr->refineTets(tets,BitRefLevel().set(ll+1)); 
   // update meshsets with boundary conditons, etc.
   CHKERR updateMeshsetsFieldsAndElements(ll+1); 
 }

@@ -176,9 +176,9 @@ int main(int argc, char *argv[]) {
                                meshset_of_edges_to_refine_ptr->get_ptr(), 1);
 
       bit_levels.push_back(BitRefLevel().set(1));
-      CHKERR refine_mng->add_vertices_in_the_middle_of_edges(
+      CHKERR refine_mng->addVerticesInTheMiddleOfEdges(
           *meshset_of_edges_to_refine_ptr, bit_levels.back());
-      CHKERR refine_mng->refine_TET(0, bit_levels.back());
+      CHKERR refine_mng->refineTets(0, bit_levels.back());
       CHKERR update_meshsets();
     }
 
