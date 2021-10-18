@@ -43,8 +43,8 @@ struct MDynamics {
 
   MDynamics(MoFEM::Interface &m_field) : mField(m_field) {}
 
+  MoFEMErrorCode getParams();
   MoFEMErrorCode setupProblem();
-  MoFEMErrorCode createCommonData();
   MoFEMErrorCode bC();
   MoFEMErrorCode OPs();
   MoFEMErrorCode postProcessSetup();
@@ -140,7 +140,7 @@ MoFEMErrorCode MDynamics::setupProblem() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode MDynamics::createCommonData() {
+MoFEMErrorCode MDynamics::getParams() {
   MoFEMFunctionBegin;
   isQuasiStatic = PETSC_FALSE;
   order = 2;

@@ -112,8 +112,8 @@ int main(int argc, char *argv[]) {
     simple->getProblemName() = "Multimaterial dynamics";
 
     MDynamics md(m_field);
+    CHKERR md.getParams();
     CHKERR md.setupProblem();
-    CHKERR md.createCommonData();
     CHKERR md.bC();
     // CHKERR md.OPs();
     CHKERR md.tsSolve();
