@@ -332,18 +332,7 @@ MoFEMErrorCode Example::bC() {
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
                                         "U", 0, 3);
 
-  auto &bc_map = bc_mng->getBcMapByBlockName();
-  if (bc_map.size()) {
-    boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
-    for (auto b : bc_map) {
-      if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)"))) {
-        boundaryMarker->resize(b.second->bcMarkers.size(), 0);
-        for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
-          (*boundaryMarker)[i] |= b.second->bcMarkers[i];
-        }
-      }
-    }
-  }
+  boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_"});
 
   MoFEMFunctionReturn(0);
 }
@@ -353,6 +342,7 @@ MoFEMErrorCode Example::bC() {
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto bc_mng = mField.getInterface<BcManager>();
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     if (SPACE_DIM == 2) {
@@ -385,8 +375,7 @@ MoFEMErrorCode Example::OPs() {
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    if (boundaryMarker)
-      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     if (is_large_strains) {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -424,8 +413,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpMixDivULhs("SIGMA", "U", 1, true));
     pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", 1, true));
 
-    if (boundaryMarker)
-      pipeline.push_back(new OpUnSetBc("U"));
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -442,8 +430,7 @@ MoFEMErrorCode Example::OPs() {
       return t_source;
     };
 
-    if (boundaryMarker)
-      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(new OpBodyForce("U", get_body_force));
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -502,8 +489,7 @@ MoFEMErrorCode Example::OPs() {
           "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
 
-    if (boundaryMarker)
-      pipeline.push_back(new OpUnSetBc("U"));
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -514,27 +500,25 @@ MoFEMErrorCode Example::OPs() {
         "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
         "SIGMA", commonDataPtr->contactTractionPtr));
-
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
+    auto &bc_map = bc_mng->getBcMapByBlockName();
     for (auto bc : bc_map) {
-      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+      if (bc_mng->checkBlock(bc, "FIX_")) {
         MOFEM_LOG("EXAMPLE", Sev::inform)
             << "Set boundary matrix for " << bc.first;
         pipeline.push_back(
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         pipeline.push_back(new OpBoundaryMass(
             "U", "U", [](double, double, double) { return 1.; },
-            bc.second->getBcEdgesPtr()));
+            bc.second->getBcEntsPtr()));
         pipeline.push_back(new OpUnSetBc("U"));
       }
     }
 
-    if (boundaryMarker)
-      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
@@ -559,7 +543,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     MoFEMFunctionBegin;
     for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
-      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+      if (bc_mng->checkBlock(bc, "FIX_")) {
         MOFEM_LOG("EXAMPLE", Sev::inform)
             << "Set boundary residual for " << bc.first;
         pipeline.push_back(
@@ -576,24 +560,22 @@ MoFEMErrorCode Example::OPs() {
                   attr_vec->data().begin());
 
         pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
-                                             bc.second->getBcEdgesPtr()));
+                                             bc.second->getBcEntsPtr()));
         pipeline.push_back(new OpBoundaryInternal(
             "U", commonDataPtr->contactDispPtr,
             [](double, double, double) { return 1.; },
-            bc.second->getBcEdgesPtr()));
+            bc.second->getBcEntsPtr()));
 
         pipeline.push_back(new OpUnSetBc("U"));
       }
     }
 
-    if (boundaryMarker)
-      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs(
         "U", commonDataPtr->contactDispPtr,
         [this](double, double, double) { return spring_stiffness; }));
-    if (boundaryMarker)
-      pipeline.push_back(new OpUnSetBc("U"));
+    pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
