@@ -451,6 +451,7 @@ MoFEMErrorCode MDynamics::postProcessSetup() {
                        false);
   CHKERR postProc->addFieldValuesPostProc("U");
   CHKERR postProc->addFieldValuesGradientPostProc("U");
+  CHKERR postProc->addFieldValuesPostProc("MESH_NODE_POSITIONS");
 
   auto sit = elasticElementPtr->setOfBlocks.begin();
   for (; sit != elasticElementPtr->setOfBlocks.end(); sit++) {
