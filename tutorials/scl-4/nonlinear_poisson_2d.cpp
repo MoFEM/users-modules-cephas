@@ -196,6 +196,8 @@ MoFEMErrorCode NonlinearPoisson::boundaryCondition() {
 MoFEMErrorCode NonlinearPoisson::assembleSystem() {
   MoFEMFunctionBegin;
 
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
   { // Push operators to the Pipeline that is responsible for calculating the
@@ -203,8 +205,11 @@ MoFEMErrorCode NonlinearPoisson::assembleSystem() {
 
     // Add default operators to calculate inverse of Jacobian (needed for
     // implementation of 2D problem but not 3D ones)
+
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+        new OpCalculateHOJacForFace(jac_ptr));
+    domainTangentMatrixPipeline->getOpPtrVector().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
 
@@ -227,7 +232,9 @@ MoFEMErrorCode NonlinearPoisson::assembleSystem() {
     // Add default operators to calculate inverse of Jacobian (needed for
     // implementation of 2D problem but not 3D ones)
     domainResidualVectorPipeline->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+        new OpCalculateHOJacForFace(jac_ptr));
+    domainResidualVectorPipeline->getOpPtrVector().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     domainResidualVectorPipeline->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
 

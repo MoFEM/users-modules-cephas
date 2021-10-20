@@ -182,7 +182,7 @@ Another function of the main program Example::assembleSystem() is responsible fo
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Push operators to pipeline
 
-In case of linear elasticity, after pushing boundary and source term operators (gravity load), we only have to define UDOs for LHS pipeline of the domain. In case of 2D problem we push operators (MoFEM::OpCalculateInvJacForFace and MoFEM::OpSetInvJacH1ForFace) that calculate and set the inverse of Jacobian for 2D elements. 
+In case of linear elasticity, after pushing boundary and source term operators (gravity load), we only have to define UDOs for LHS pipeline of the domain. In case of 2D problem we push operators (MoFEM::OpCalculateHOJacForFace) that calculate and set the inverse of Jacobian for 2D elements. 
 
 The last operator `OpK` integrates the bilinear form: 
 
@@ -228,7 +228,7 @@ In the next two lines we create a postprocessig element (object) and use its fun
 \endcode 
 
 Next, a series of operators is pushed:
-- `OpCalculateInvJacForFace` and `OpSetInvJacH1ForFace` computes and sets the Jacobian in case of 2D elements
+- `OpCalculateHOJacForFace` computes and sets the Jacobian in case of 2D elements
 - `OpCalculateVectorFieldGradient` computes the gradient of the obtained displacement field \f$ \nabla \mathbf u^{h}=\sum_{m=0}^{N-1} \nabla \phi_m \bar{\mathbf u}_m \f$
 - `OpSymmetrizeTensor` symmetrises the previously computed gradient to compute small strain tensor \f$ \boldsymbol \varepsilon = \frac{1}{2} (\nabla \mathbf u^\text{T} + \nabla \mathbf u)  \f$
 - `OpTensorTimesSymmetricTensor` is another form integrator that computes Cauchy stress:  \f$ \boldsymbol \sigma = \mathbb D : \boldsymbol \varepsilon \f$

@@ -251,7 +251,8 @@ MoFEMErrorCode Example::outputResults() {
   if (SPACE_DIM == 2) {
     if (space == HCURL) {
       auto jac_ptr = boost::make_shared<MatrixDouble>();
-      post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac_ptr));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateHOJacForFace(jac_ptr));
       post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       post_proc_fe->getOpPtrVector().push_back(
           new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));

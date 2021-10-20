@@ -248,12 +248,13 @@ MoFEMErrorCode MixedPoisson::assembleSystem() {
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainLhsPipeline().clear();
 
+  auto det_ptr = boost::make_shared<VectorDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateJacForFace(jac_ptr));
+      new OpCalculateHOJacForFace(jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateInvJacForFace(inv_jac_ptr));
+      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMakeHdivFromHcurl());
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
@@ -372,13 +373,12 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getOpDomainRhsPipeline().clear();
 
+  auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateJacForFace(jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateInvJacForFace(inv_jac_ptr));
+  pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+  pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
@@ -462,12 +462,14 @@ MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
       boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
   post_proc_fe->generateReferenceElementMesh();
 
+  auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-  post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac_ptr));
+  
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateInvJacForFace(inv_jac_ptr));
+      new OpCalculateHOJacForFace(jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
   post_proc_fe->getOpPtrVector().push_back(
       new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));

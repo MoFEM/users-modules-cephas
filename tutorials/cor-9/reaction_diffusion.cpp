@@ -380,10 +380,14 @@ int main(int argc, char *argv[]) {
     // Add hook to the element to calculate g.
     vol_ele_slow_rhs->postProcessHook = solve_for_g;
 
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     // Add operators to calculate the stiff right-hand side
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+        new OpCalculateHOJacForFace(jac_ptr));
+    vol_ele_stiff_rhs->getOpPtrVector().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
@@ -395,7 +399,9 @@ int main(int argc, char *argv[]) {
 
     // Add operators to calculate the stiff left-hand side
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+        new OpCalculateHOJacForFace(jac_ptr));
+    vol_ele_stiff_lhs->getOpPtrVector().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(

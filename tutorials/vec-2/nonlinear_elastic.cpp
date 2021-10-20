@@ -248,8 +248,11 @@ MoFEMErrorCode Example::assembleSystem() {
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
     if (SPACE_DIM == 2) {
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+      pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
       pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
     }
 
@@ -343,9 +346,11 @@ MoFEMErrorCode Example::solveSystem() {
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
   if (SPACE_DIM == 2) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
   }

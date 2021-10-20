@@ -358,7 +358,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 <td>
 Calualte jacobian inverse jacobian on face. See
 \ref MoFEM::OpCalculateJacForFace and
-\ref MoFEM::OpCalculateInvJacForFace
+\ref MoFEM::OpInvertMatrix
 
 For 2d element on plane XY, jacobian is given by,
 \f[
@@ -368,17 +368,18 @@ J_{ij} = \frac{\partial X_i}{\partial \xi_j},\quad i,j=0,1
 \note That for 3d volume element, the operator is not implemented explicitly. In current implementation, jacobian is calculated implicitly, and derivatives of
 shape functions are pushed to the current configuration.
 
-\note For face element is uncertainty what developer do, whether it calculates problem in 2d, or do integration on the adjacent face of 3d element, or face element is embedded in 3d, i.e. solve 2 and 1/2 dimension problem. See also \ref MoFEM::OpCalculateInvJacForFaceEmbeddedIn3DSpace
+\note For face element is uncertainty what developer do, whether it calculates problem in 2d, or do integration on the adjacent face of 3d element, or face element is embedded in 3d, i.e. solve 2 and 1/2 dimension problem. See also \ref MoFEM::OpCalculateJacForFaceEmbeddedIn3DSpace
 
 <td>
 %Example usage
 \code
+auto det_ptr = boost::make_shared<VectorDouble>();
 auto jac_ptr = boost::make_shared<MatrixDouble>();
 auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpCalculateJacForFace(jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpCalculateInvJacForFace(inv_jac_ptr));
+  new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
 \endcode
 <tr>
 
@@ -434,12 +435,12 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 
 %Example for face emerged in 3d space. 
 \code
+auto det_ptr = boost::make_shared<VectorDouble>();
 auto jac_ptr = boost::make_shared<MatrixDouble>();
 auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
- new OpCalculateJacForFaceEmbeddedIn3DSpace(jac_ptr));
-pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac_ptr));
+  new OpCalculateJacForFaceEmbeddedIn3DSpace(jac_ptr));
+pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
