@@ -596,7 +596,7 @@ MoFEMErrorCode Example::OPs() {
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         pipeline.push_back(new OpBoundaryMass(
             "U", "U", [](double, double, double) { return 1.; },
-            bc.second->getBcEdgesPtr()));
+            bc.second->getBcEntsPtr()));
         pipeline.push_back(new OpUnSetBc("U"));
       }
     }
@@ -674,10 +674,10 @@ MoFEMErrorCode Example::OPs() {
                   attr_vec->data().begin());
 
         pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
-                                             bc.second->getBcEdgesPtr()));
+                                             bc.second->getBcEntsPtr()));
         pipeline.push_back(new OpBoundaryInternal(
             "U", u_mat_ptr, [](double, double, double) { return 1.; },
-            bc.second->getBcEdgesPtr()));
+            bc.second->getBcEntsPtr()));
 
         pipeline.push_back(new OpUnSetBc("U"));
       }

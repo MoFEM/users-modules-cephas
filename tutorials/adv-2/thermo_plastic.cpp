@@ -565,7 +565,6 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
       pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
       pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-      pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
       pipeline.push_back(new OpMakeHdivFromHcurl());
       pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
@@ -716,7 +715,7 @@ MoFEMErrorCode Example::OPs() {
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         pipeline.push_back(new OpBoundaryMass(
             "U", "U", [](double, double, double) { return 1.; },
-            bc.second->getBcEdgesPtr()));
+            bc.second->getBcEntsPtr()));
         pipeline.push_back(new OpUnSetBc("U"));
       }
     }
@@ -800,10 +799,10 @@ MoFEMErrorCode Example::OPs() {
                   attr_vec->data().begin());
 
         pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
-                                             bc.second->getBcEdgesPtr()));
+                                             bc.second->getBcEntsPtr()));
         pipeline.push_back(new OpBoundaryInternal(
             "U", u_mat_ptr, [](double, double, double) { return 1.; },
-            bc.second->getBcEdgesPtr()));
+            bc.second->getBcEntsPtr()));
 
         pipeline.push_back(new OpUnSetBc("U"));
       }

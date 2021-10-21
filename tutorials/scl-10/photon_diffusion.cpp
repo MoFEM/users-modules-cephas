@@ -249,7 +249,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
 
             [](const double, const double, const double) { return h; },
 
-            b.second->getBcEdgesPtr()));
+            b.second->getBcEntsPtr()));
       }
     }
   };
@@ -264,7 +264,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
 
             [](const double, const double, const double) { return h; },
 
-            b.second->getBcEdgesPtr()));
+            b.second->getBcEntsPtr()));
       }
     }
     for (auto b : bc_map) {
@@ -279,7 +279,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
                 return 0.;
             },
 
-            b.second->getBcEdgesPtr()));
+            b.second->getBcEntsPtr()));
       }
     }
   };

@@ -377,8 +377,10 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
-  pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
-  pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateHOJacForFace(jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
