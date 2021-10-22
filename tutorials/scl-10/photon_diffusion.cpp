@@ -56,16 +56,20 @@ using OpBoundaryTimeScalarField = FormsIntegrators<BoundaryEleOp>::Assembly<
 using OpBoundarySource = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
-constexpr double c = 30.; ///< speed of light
+double n = 1.44; ///< refractive index of diffusive medium 
+double c = 30.; ///< speed of light (cm/ns)
+double v = c / n; ///< phase velocity of light in medium (cm/ns)
+double mu_a = 0.09; ///< absorption coefficient (cm^-1)
+double mu_sp = 16.5; ///< scattering coefficient (cm^-1)
+double flux = 1e3; ///< impulse magnitude 
+double duration = 0.05; ///< impulse duration (ns)
 
-constexpr double mu_a = 0.09;
-constexpr double mu_sp = 16.5;
-constexpr double h = 0.5;   ///< convective heat coefficient
-constexpr double flux = 1e3; ///< 0.5 mW mm^-2
-constexpr double duration = 0.05;
+int order = 3;
+int saveEveryNthStep = 1;
 
-constexpr double D = 1. / (3. * (mu_a + mu_sp));
-constexpr double inv_c = 1. / c;
+double h = 0.5;   ///< convective heat coefficient
+double D = 1. / (3. * (mu_a + mu_sp));
+double inv_v = 1. / v;
 
 /**
  * @brief Monitor solution
@@ -81,7 +85,7 @@ struct Monitor : public FEMethod {
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
 
-  static constexpr int saveEveryNthStep = 2;
+  
 
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
@@ -147,10 +151,32 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  int order = 3;
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-  CHKERR simple->setFieldOrder("U", order);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-flux", &flux, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-duration", &duration,
+                               PETSC_NULL);
 
+  MOFEM_LOG("PHOTON DIFFUSION", Sev::inform) << "Refractive index: " << n;
+  MOFEM_LOG("PHOTON DIFFUSION", Sev::inform) << "Speed of light (cm/ns): " << c;
+  MOFEM_LOG("PHOTON DIFFUSION", Sev::inform)
+      << "Phase velocity in medium (cm/ns): " << v;
+  MOFEM_LOG("PHOTON DIFFUSION", Sev::inform)
+      << "Absorption coefficient (cm^-1): " << mu_a;
+  MOFEM_LOG("PHOTON DIFFUSION", Sev::inform)
+      << "Scattering coefficient (cm^-1): " << mu_sp;
+  MOFEM_LOG("PHOTON DIFFUSION", Sev::inform) << "Impulse magnitude: " << flux;
+  MOFEM_LOG("PHOTON DIFFUSION", Sev::inform)
+      << "Impulse duration (ns): " << duration;
+
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_step", &saveEveryNthStep, PETSC_NULL);
+
+  MOFEM_LOG("PHOTON DIFFUSION", Sev::inform)
+      << "Approximation order: " << order;
+  MOFEM_LOG("PHOTON DIFFUSION", Sev::inform)
+      << "Save step: " << saveEveryNthStep;
+
+
+  CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
 
   MoFEMFunctionReturn(0);
@@ -209,7 +235,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
     pipeline.push_back(new OpDomainGradGrad(
         "U", "U", [](double, double, double) -> double { return D; }));
     auto get_mass_coefficient = [&](const double, const double, const double) {
-      return inv_c * domianLhsFEPtr->ts_a + mu_a;
+      return inv_v * domianLhsFEPtr->ts_a + mu_a;
     };
     pipeline.push_back(new OpDomainMass("U", "U", get_mass_coefficient));
   };
@@ -228,7 +254,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
         [](double, double, double) -> double { return D; }));
     pipeline.push_back(new OpDomainTimesScalarField(
         "U", dot_u_at_gauss_pts,
-        [](const double, const double, const double) { return inv_c; }));
+        [](const double, const double, const double) { return inv_v; }));
     pipeline.push_back(new OpDomainTimesScalarField(
         "U", u_at_gauss_pts,
         [](const double, const double, const double) { return mu_a; }));
@@ -416,9 +442,9 @@ int main(int argc, char *argv[]) {
   // Add logging channel for example
   auto core_log = logging::core::get();
   core_log->add_sink(
-      LogManager::createSink(LogManager::getStrmWorld(), "PHOTON"));
-  LogManager::setLog("PHOTON");
-  MOFEM_LOG_TAG("PHOTON", "photon")
+      LogManager::createSink(LogManager::getStrmWorld(), "PHOTON DIFFUSION"));
+  LogManager::setLog("PHOTON DIFFUSION");
+  MOFEM_LOG_TAG("PHOTON DIFFUSION", "photon diffusion")
 
   // Error handling
   try {
