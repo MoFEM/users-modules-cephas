@@ -1,9 +1,11 @@
 /**
- * \file dynamic_elastic.cpp
- * \example dynamic_elastic.cpp
+ * \file shallow_wave.cpp
+ * \example shallow_wave.cpp
  *
- * Plane stress elastic dynamic problem
- *
+ * Solving shallow wave equation on manifold
+ * 
+ * The inital conditions are set following this paper \cite scott2016test. 
+ * 
  */
 
 /* This file is part of MoFEM.
@@ -74,7 +76,7 @@ using OpConvectiveH_dGradH = FormsIntegrators<DomainEleOp>::Assembly<
 
 constexpr double omega = 7.292 * 1e-5;
 constexpr double g = 9.80616;
-constexpr double mu = 1;
+constexpr double mu = 1e4;
 constexpr double h0 = 1e4;
 
 constexpr double h_hat = 120;
@@ -413,7 +415,7 @@ MoFEMErrorCode Example::setupProblem() {
   int order = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
-  CHKERR simple->setFieldOrder("H", order - 1);
+  CHKERR simple->setFieldOrder("H", order);
   CHKERR simple->setFieldOrder("HO_POSITIONS", 4);
 
   CHKERR simple->setUp();
@@ -541,6 +543,9 @@ MoFEMErrorCode Example::boundaryCondition() {
 
     auto solver = pipeline_mng->createKSP();
     CHKERR KSPSetFromOptions(solver);
+    PC pc;
+    CHKERR KSPGetPC(solver, &pc);
+    CHKERR PCSetType(pc, PCLU);
     CHKERR KSPSetUp(solver);
 
     auto dm = simple->getDM();
@@ -647,7 +652,7 @@ MoFEMErrorCode Example::assembleSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order + 1;
+    return 2 * approx_order + 4;
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
@@ -726,6 +731,27 @@ MoFEMErrorCode Example::solveSystem() {
     return post_proc_fe;
   };
 
+  auto set_fieldsplit_preconditioner = [&](auto solver) {
+    MoFEMFunctionBeginHot;
+    SNES snes;
+    CHKERR TSGetSNES(solver, &snes);
+    KSP ksp;
+    CHKERR SNESGetKSP(snes, &ksp);
+    PC pc;
+    CHKERR KSPGetPC(ksp, &pc);
+    PetscBool is_pcfs = PETSC_FALSE;
+    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+    if (is_pcfs == PETSC_TRUE) {
+      auto bc_mng = mField.getInterface<BcManager>();
+      auto name_prb = simple->getProblemName();
+      SmartPetscObj<IS> is_u;
+      CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+          name_prb, ROW, "U", 0, 3, is_u);
+      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
+    }
+    MoFEMFunctionReturnHot(0);
+  };
+
   // Add monitor to time solver
   boost::shared_ptr<FEMethod> null_fe;
   auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
@@ -741,6 +767,8 @@ MoFEMErrorCode Example::solveSystem() {
                                  SCATTER_FORWARD);
   CHKERR TSSetSolution(ts, T);
   CHKERR TSSetFromOptions(ts);
+  CHKERR set_fieldsplit_preconditioner(ts);
+  CHKERR TSSetUp(ts);
 
   CHKERR TSSolve(ts, NULL);
   CHKERR TSGetTime(ts, &ftime);

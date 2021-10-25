@@ -1,10 +1,7 @@
 /**
- * \file ApproxSphere_z_approx.cpp
- * \ApproxSphere ApproxSphere_z_approx.cpp
+ * \file approx_sphere.cpp
+ * \example approx_sphere.cpp
  *
- * Using PipelineManager interface calculate the divergence of base functions,
- * and integral of flux on the boundary. Since the h-div space is used, volume
- * integral and boundary integral should give the same result.
  */
 
 /* This file is part of MoFEM.
