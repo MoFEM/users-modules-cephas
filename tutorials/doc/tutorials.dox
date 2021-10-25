@@ -217,6 +217,13 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
+  <tr valign="top">
+       <td width="350px">\ref shallow_wave_doc</td>
+       <td> Shallow wave equation on mainfold (atmospheric processes)
+       <br/> *Keywords:* Alpha method, initail conditions, hyperbolic equation, sphere approximation
+       </td>
+  </tr>
+
 </table>
 
 
