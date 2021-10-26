@@ -3,12 +3,15 @@
 
 ```
 ./approx_sphere -file_name sphere.cub \
--snes_stol 0 -ksp_monitor  \
+-snes_stol 0 \
+-ksp_monitor  \
 -snes_linesearch_type l2 \
 -ts_type beuler -ts_dt 1 \
--snes_rtol 1e-12 -snes_atol 1e-12 \
+-snes_rtol 1e-12 \
+-snes_atol 1e-12 \
 -order 4 \
--ksp_type gmres -pc_type lu \
+-ksp_type gmres \
+-pc_type lu \
 -pc_factor_mat_solver_type mumps
 ```
 
@@ -23,13 +26,7 @@
 
 ```
 mpirun -np 6 ./shallow_wave \
--file_name ab.h5m \
--ts_dt 1e2 \
--ts_max_time 100000000000000 \
--ts_max_steps 5000 \
--snes_atol 1e-3 -snes_rtol 1e-10 \ -snes_linesearch_type bt \
--snes_rtol 1e-8 -snes_atol 1e-12 -order 4 \
--ts_type alpha -ts_alpha_radius 0.5
+-file_name ab.h5m 
 ```
 
 

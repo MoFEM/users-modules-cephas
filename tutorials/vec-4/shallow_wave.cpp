@@ -31,7 +31,7 @@ using namespace boost::math::quadrature;
 template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
-  using DomainEle = FaceElementForcesAndSourcesCoreBase;
+  using DomainEle = FaceElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 };
@@ -368,6 +368,7 @@ private:
   MoFEMErrorCode checkResults();
 
   boost::shared_ptr<FEMethod> domianLhsFEPtr;
+  boost::shared_ptr<FEMethod> domianRhsFEPtr;
 };
 
 //! [Create common data]
@@ -545,7 +546,18 @@ MoFEMErrorCode Example::boundaryCondition() {
     CHKERR KSPSetFromOptions(solver);
     PC pc;
     CHKERR KSPGetPC(solver, &pc);
-    CHKERR PCSetType(pc, PCLU);
+    PetscBool is_pcfs = PETSC_FALSE;
+    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+    if (is_pcfs == PETSC_TRUE) {
+      auto bc_mng = mField.getInterface<BcManager>();
+      auto name_prb = simple->getProblemName();
+      SmartPetscObj<IS> is_u;
+      CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+          name_prb, ROW, "U", 0, 3, is_u);
+      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
+      CHKERR PCFieldSplitSetType(pc, PC_COMPOSITE_ADDITIVE);
+    }
+
     CHKERR KSPSetUp(solver);
 
     auto dm = simple->getDM();
@@ -644,10 +656,10 @@ MoFEMErrorCode Example::assembleSystem() {
     }));
     pipeline.push_back(new OpBaseDivU(
         "H", "U", []() { return h0; }, false, false));
-    pipeline.push_back(new OpConvectiveH_dU(
-        "H", "U", grad_h_ptr, []() { return 1; }));
-    pipeline.push_back(new OpConvectiveH_dGradH(
-        "H", "H", u_ptr, []() { return 1; }));
+    pipeline.push_back(
+        new OpConvectiveH_dU("H", "U", grad_h_ptr, []() { return 1; }));
+    pipeline.push_back(
+        new OpConvectiveH_dGradH("H", "H", u_ptr, []() { return 1; }));
     pipeline.push_back(new OpULhs_dU("U", "U", u_ptr, grad_u_ptr));
     pipeline.push_back(new OpULhs_dH("U", "H"));
   };
@@ -667,6 +679,7 @@ MoFEMErrorCode Example::assembleSystem() {
   set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline());
 
   domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
+  domianRhsFEPtr = pipeline_mng->getDomainRhsFE();
 
   MoFEMFunctionReturn(0);
 }
@@ -704,8 +717,23 @@ MoFEMErrorCode Example::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto dm = simple->getDM();
-  MoFEM::SmartPetscObj<TS> ts;
-  ts = pipeline_mng->createTS();
+
+  auto set_fieldsplit_preconditioner_ksp = [&](auto ksp) {
+    MoFEMFunctionBeginHot;
+    PC pc;
+    CHKERR KSPGetPC(ksp, &pc);
+    PetscBool is_pcfs = PETSC_FALSE;
+    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+    if (is_pcfs == PETSC_TRUE) {
+      auto bc_mng = mField.getInterface<BcManager>();
+      auto name_prb = simple->getProblemName();
+      SmartPetscObj<IS> is_u;
+      CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+          name_prb, ROW, "U", 0, 3, is_u);
+      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
+    }
+    MoFEMFunctionReturnHot(0);
+  };
 
   // Setup postprocessing
   auto get_fe_post_proc = [&]() {
@@ -734,33 +762,25 @@ MoFEMErrorCode Example::solveSystem() {
     return post_proc_fe;
   };
 
-  auto set_fieldsplit_preconditioner = [&](auto solver) {
+  auto set_fieldsplit_preconditioner_ts = [&](auto solver) {
     MoFEMFunctionBeginHot;
     SNES snes;
     CHKERR TSGetSNES(solver, &snes);
     KSP ksp;
     CHKERR SNESGetKSP(snes, &ksp);
-    PC pc;
-    CHKERR KSPGetPC(ksp, &pc);
-    PetscBool is_pcfs = PETSC_FALSE;
-    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
-    if (is_pcfs == PETSC_TRUE) {
-      auto bc_mng = mField.getInterface<BcManager>();
-      auto name_prb = simple->getProblemName();
-      SmartPetscObj<IS> is_u;
-      CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-          name_prb, ROW, "U", 0, 3, is_u);
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
-    }
+    CHKERR set_fieldsplit_preconditioner_ksp(ksp);
     MoFEMFunctionReturnHot(0);
   };
 
-  // Add monitor to time solver
+  MoFEM::SmartPetscObj<TS> ts;
+  ts = pipeline_mng->createTSIM();
+
   boost::shared_ptr<FEMethod> null_fe;
   auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
   CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                              null_fe, monitor_ptr);
 
+  // Add monitor to time solver
   double ftime = 1;
   // CHKERR TSSetMaxTime(ts, ftime);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
@@ -770,7 +790,7 @@ MoFEMErrorCode Example::solveSystem() {
                                  SCATTER_FORWARD);
   CHKERR TSSetSolution(ts, T);
   CHKERR TSSetFromOptions(ts);
-  CHKERR set_fieldsplit_preconditioner(ts);
+  CHKERR set_fieldsplit_preconditioner_ts(ts);
   CHKERR TSSetUp(ts);
 
   CHKERR TSSolve(ts, NULL);
