@@ -11,13 +11,22 @@ H1 spaces are scalar bases. Thus BASE_DIM is 1. Typically H-div and H-curl
 bases are vectorial bases and BASE_DIM 3. For some special case could be
 exceptions.
 
-- <b>FIELD_DIM</b> is dimension of the field. We can have scalar filed, vectorial field. For example, the scalar file for scalar base function has one coefficient for base function and \em FIELD_DIM = 1. Vectorial field with scalar based in 3d has three coefficients for each base function and \em FIELD_DIM = 3. On the other hand, a vectorial field with a vectorial base has one coefficient for each base function and \em FIELD_DIM = 3, and tensorial field of rank two in 3d on vectorial base has three coefficients for each base function and \em FIELD_DIM = 9.
+- <b>FIELD_DIM</b> is dimension of the field. We can have scalar field,
+  vectorial field. For example, the scalar field for scalar base function has
+  one coefficient for base function and \em FIELD_DIM = 1. Vectorial field with
+  scalar base in 3D has three coefficients for each base function and \em
+  FIELD_DIM = 3. On the other hand, a vectorial field with a vectorial base has
+  one coefficient for each base function and \em FIELD_DIM = 3, and tensorial
+  field of rank two in 3D on vectorial base has three coefficients for each base
+  function and \em FIELD_DIM = 9.
 
-- <b>SPACE_DIM</b> is dismension of space. Typically used to indicate how many 
-elements have a gradient of base function or field.
+- <b>SPACE_DIM</b> is dismension of space. Typically, it is used to indicate how
+  many elements have a gradient of base function or field. 
 
-- <b>ASSEMBLE_TYPE</b> by this template assembly method is indicated. For example, if the assembly is to CST compressed matrix assembly type is PETSC. For some other cases, for example, integration to nested matrices, or other matrices
-formats could be added and implemented.
+- <b>ASSEMBLE_TYPE</b> by this template assembly method is indicated. For
+  example, if the assembly is to CST compressed matrix assembly type is PETSc.
+  For some other cases, for example, integration to nested matrices, or other
+  matrices formats could be added and implemented.
 
 - <b>INTEGRATION_TYPE</b> indicate method used to assembly elements. If standard numerical integration is used, then the integration type is GAUSS. Some other more sophisticated integration methods can be implemented to exploit some base functions for fast integration.
 
@@ -29,7 +38,7 @@ formats could be added and implemented.
 <caption id="user_data_ops_table">Table of user data operators</caption>
 
 <tr style="width:100%">
-<th style="width:50%">Oparator 
+<th style="width:50%">Operator 
 <th style="width:50%">\hiderefs Usage 
 <tr>
 
@@ -39,19 +48,19 @@ formats could be added and implemented.
 
 <td>
 
-Evaulate scalar field at integration points. 
+Evaluate scalar field at integration points. 
 \ref MoFEM::OpCalculateScalarFieldValues 
 
 \f[ u^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g) \overline{u}_i 
 \f] 
 
-where \f$u^(\pmb\xi^g)\f$ is value at integration point \f$g\f$,
+where \f$u^h(\pmb\xi^g)\f$ is the field value at integration point \f$g\f$,
 \f$\phi^i(\pmb\xi^g)\f$ is value of base function \f$i\f$ at integtation point
 coordinate \f$\pmb\xi^g\f$, and \f$\overline{u}_i\f$ is \f$i\f$-th degree of
 freedom.
 
 
-This function has a similar variant to calculate time derivative, when a time solver is used, see \ref MoFEM::OpCalculateScalarFieldValuesDot
+This function has a similar variant that is used to calculate time derivative, when a time solver is used, see \ref MoFEM::OpCalculateScalarFieldValuesDot
 
 \f[ 
 \frac{\partial u^h}{\partial t}
@@ -60,7 +69,12 @@ This function has a similar variant to calculate time derivative, when a time so
 \frac{\partial \overline{u}}{\partial t}
 \f]
 
-where \f$\dot{u}^(\pmb\xi^g)\f$ is rate value at integration point \f$g\f$ and \f$\dot{\overline{u}}_i\f$ is rate of \f$i\f$-th degree of freedom. \emph Note that funtio will work only with TS solver. The numerical schem used to calulate time derivatibe depends on time solver method.
+where \f$ \frac{\partial u^h}{\partial t} (\pmb\xi^g) \f$ (or \f$\dot{u}^h(\pmb\xi^g)\f$ in short) is the rate value at
+integration point \f$g\f$ and \f$ \frac{\partial \overline{u}}{\partial t} \f$
+(or \f$\dot{\overline{u}}_i\f$ in short) is the rate of \f$i\f$-th degree of
+freedom. Note that this funtion will work only with TS solver which is the
+numerical scheme used to calculate time derivative depends on time solver
+method. 
 
 <td> 
 
@@ -71,15 +85,14 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpCalculateScalarFieldValues("U", vals_U_at_integration_pts));
 \endcode
 
-Operatutor for given field calulate valuse of scalar field at integration
-points. Values are stored in for example in \em
-vals_U_at_integration_pts. Then value can be accessad also
-follows
+Operator for a given field calulates values of a scalar field at integration
+points. Values are stored in, for example, \em
+vals_U_at_integration_pts. Then value can be accessed as follows
 \code 
-auto nb_integtation_pts = vals_U_at_integration_pts->size();
-auto t_val = getFTensor0FromVec((vals_U_at_integration_pts);
-for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
-  // do somthing
+auto nb_integration_pts = vals_U_at_integration_pts->size();
+auto t_val = getFTensor0FromVec(vals_U_at_integration_pts);
+for(auto gg = 0;gg!=nb_integration_pts;++gg) {
+  // do something here
   ++t_val;
 }
 \endcode
@@ -88,7 +101,7 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 
 <td>
 
-Evalute scalar field gradinet
+Evaluate scalar field gradient
 
 \ref MoFEM::OpCalculateScalarFieldGradient
 
@@ -104,10 +117,12 @@ where
 \phi^i_{,j} = \left. \frac{\partial \phi^i}{\partial \xi_j} \right|_{\pmb\xi^g}
 \f]
 
-Depending on code context, derivatives are calculated in reference element on the current physical element. For most cases, the gradient is calculated on the current physical element. Then derivative of base function is interpreted as
+Depending on code context, derivatives are calculated in reference element or on
+the current physical element. For most cases, the gradient is calculated on the
+current physical element. Then derivative of base function is interpreted as
 
 \f[
-\phi^i_{,j} = \left. \frac{\partial \phi^i}{\partial \xi_j} \frac{\partial \xi_k}{\partial x_j} \right|_{\mathbf{x}(\pmb\xi^g)}
+\phi^i_{,j} = \left. \frac{\partial \phi^i}{\partial \xi_ks} \frac{\partial \xi_k}{\partial x_j} \right|_{\mathbf{x}(\pmb\xi^g)}
 \f]
 
 <td>
@@ -121,15 +136,15 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 \endcode
 
 
-Operatutor for given field calulate valuse of scalar field gradient at integration points. Values are stored in for example in \em
-grad_U_at_integration_pts. Then value can be accessad also
+Operator for a given field calculate values of scalar field gradient at integration points. Values are stored in, for example, \em
+grad_U_at_integration_pts. Then value can be accessed as
 follows
 \code 
 constexpr int FIELD_DIM = 3;
 FTensor::Index<'i', FIELD_DIM> i; 
-auto nb_integtation_pts = grad_U_at_integration_pts->size2();
+auto nb_integration_pts = grad_U_at_integration_pts->size2();
 auto t_grad = getFTensor1FromMat<FIELD_DIM>((grad_U_at_integration_pts);
-for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
+for(auto gg = 0;gg!=nb_integration_pts;++gg) {
   auto dot = t_grad(i)*t_grad(i);
   ++t_grad;
 }
@@ -151,7 +166,13 @@ u_j^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g)
 \f]
 where \f$j\f$ is vector element index.
 
-This function has a similar variant to calculate rates when a time solver is used; see \ref MoFEM::OpCalculateVectorFieldValuesDot, which can be used with a time solver (TS). Also is a variant to calculate accelerations, \ref MoFEM::OpCalculateVectorFieldValuesDotDot, which can be used with a second-order time solver (TS2). PETSc has currently implemented the alpha method for second-order
+This function has a similar variant to calculate rates when a time solver is
+used; see \ref MoFEM::OpCalculateVectorFieldValuesDot, which can be used with a
+time solver (TS). Also is a variant to calculate accelerations (second
+derivatives with respect to time), \ref
+MoFEM::OpCalculateVectorFieldValuesDotDot, which can be used with a second-order
+time solver (TS2). PETSc has currently implemented the alpha method for
+second-order
 time differential equations.
 
 <td>
@@ -164,16 +185,16 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpCalculateVectorFieldValues<FIELD_DIM>("U", vals_U_at_integration_pts));
 \endcode
 
-Operatutor for given field calulate valuse of vector field at integration
-points. Values are stored in for example in \em
-vals_U_at_integration_pts. Then value can be accessad also
+Operator for a given field calulates values of vector field at integration
+points. Values are stored in, for example, \em
+vals_U_at_integration_pts. Then value can be accessed as
 follows
 \code 
 constexpr int FIELD_DIM = 3;
 FTensor::Index<'i', FIELD_DIM> i; 
-auto nb_integtation_pts = vals_U_at_integration_pts->size2();
+auto nb_integration_pts = vals_U_at_integration_pts->size2();
 auto t_val = getFTensor1FromMat<FIELD_DIM>((vals_U_at_integration_pts);
-for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
+for(auto gg = 0;gg!=nb_integration_pts;++gg) {
   auto dot = t_val(i)*t_val(i);
   ++t_val;
 }
@@ -206,9 +227,9 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpCalculateVectorFieldGradient<FIELD_DIM, SPACE_DIM>("U", grad_U_at_integration_pts));
 \endcode
 
-Operatotor for given field calulate gradien of vector field at integration
+Operator for a given field calulates gradient of a vector field at integration
 points. Values are stored in for example in \em
-grad_U_at_integration_pts. Then value can be accessad also
+grad_U_at_integration_pts. Then value can be accessed as
 follows
 \code 
 constexpr int FIELD_DIM = 3;
@@ -216,9 +237,9 @@ constexpr int SPACE_DIM = 3;
 FTensor::Index<'i', FIELD_DIM> i; 
 FTensor::Index<'j', SPACE_DIM> j; 
 constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
-auto nb_integtation_pts = vals_U_at_integration_pts->size2();
+auto nb_integration_pts = vals_U_at_integration_pts->size2();
 auto t_grad = getFTensor2FromMat<FIELD_DIM, SPACE_DIM>((grad_U_at_integration_pts);
-for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
+for(auto gg = 0;gg!=nb_integration_pts;++gg) {
   auto trace = t_grad(i,j)*t_kd(i,j);
   ++t_grad;
 }
@@ -238,10 +259,10 @@ Evaluate tensor field at integration points
 u_{jk}^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g) 
 \overline{u}_i^{jk}
 \f]
-where \f$j\f$ and \f$j\f$ tensor element (coefficient) indices.
+where \f$j\f$ and \f$k\f$ are tensor element (coefficient) indices.
 
-This function has a similar variant to calculate rates, when a time solver is used,
-see \ref MoFEM::OpCalculateTensor2FieldValuesDot, which can be used with 
+This function has a similar variant to calculate rates, when a time solver is
+used, see \ref MoFEM::OpCalculateTensor2FieldValuesDot, which can be used with 
 time solver (TS). 
 
 <td>
@@ -254,17 +275,17 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpCalculateTensor2FieldValues<FIELD_DIM, FIELD_DIM>("U", vals_U_at_integration_pts));
 \endcode
 
-Operatutor for given field calulate valuse of tensor field at integration
-points. Values are stored in for example in \em
-vals_U_at_integration_pts. Then value can be accessad also
+Operator for a given field calulates values of tensor field at integration
+points. Values are stored in, for example, \em
+vals_U_at_integration_pts. Then value can be accessed as
 follows
 \code 
 constexpr int FIELD_DIM = 3;
 FTensor::Index<'i', FIELD_DIM> i; 
 FTensor::Index<'j', FIELD_DIM> j; 
-auto nb_integtation_pts = vals_U_at_integration_pts->size2();
+auto nb_integration_pts = vals_U_at_integration_pts->size2();
 auto t_val = getFTensor2FromMat<FIELD_DIM, FIELD_DIM>((vals_U_at_integration_pts);
-for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
+for(auto gg = 0;gg!=nb_integration_pts;++gg) {
   auto norm = sqrt(t_val(i,j)*t_val(i,j));
   ++t_val;
 }
@@ -280,9 +301,9 @@ Evaluate \em symmetric tensor field at integration points
 u_{jk}^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g) 
 \overline{u}_i^{jk}
 \f]
-where \f$j\f$ and \f$j\f$ tensor element (coefficient) indices.
+where \f$j\f$ and \f$k\f$ are tensor element (coefficient) indices.
 
-Note that field degree of freedom represents only symmetric coefficients, so for each base function, we have a number of DOFs given by formula (FIELD_DIM * (FIELD_DIM + 1)) / 2. For example, for 3d case, six DOFs for each base function.  
+Note that field degree of freedom represents only symmetric coefficients, so for each base function, we have a number of DOFs given by formula (FIELD_DIM * (FIELD_DIM + 1)) / 2. For example, for 3D case, six DOFs for each base function.  
 
 This function has a similar variant to calculate rates, when a time solver is used,
 see \ref MoFEM::OpCalculateTensor2SymmetricFieldValuesDot, which can be used with a time solver (TS). 
@@ -297,17 +318,17 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpCalculateTensor2SymmetricFieldValues<FIELD_DIM>("U", vals_U_at_integration_pts));
 \endcode
 
-Operatutor for given field calulate valuse of tensor field at integration
-points. Values are stored in for example in \em
-vals_U_at_integration_pts. Then value can be accessad also
+Operator for a given field calulates values of tensor field at integration
+points. Values are stored in, for example, \em
+vals_U_at_integration_pts. Then value can be accessed as
 follows
 \code 
 constexpr int FIELD_DIM = 3;
 FTensor::Index<'i', FIELD_DIM> i; 
 FTensor::Index<'j', FIELD_DIM> j; 
-auto nb_integtation_pts = vals_U_at_integration_pts->size2();
+auto nb_integration_pts = vals_U_at_integration_pts->size2();
 auto t_val = getFTensor2SymmetricFromMat<FIELD_DIM>((vals_U_at_integration_pts);
-for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
+for(auto gg = 0;gg!=nb_integration_pts;++gg) {
   auto norm = sqrt(t_val(i,j)*t_val(i,j));
   ++t_val;
 }
@@ -317,14 +338,14 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 
 <td>
 
-Evaluate tenorial field values for vectorial bases (Hdiv and Hcurl)
+Evaluate tesorial field values for vectorial bases (Hdiv and Hcurl)
 \ref MoFEM::OpCalculateHVecVectorField
 
 \f[ 
 u_{j}^h(\pmb\xi^g) = \sum_i^N \phi^i_j(\pmb\xi^g) 
 \overline{u}_i^{jk}
 \f]
-where \f$j\f$ and \f$j\f$ tensor element (coefficient) indices.
+where \f$j\f$ and \f$k\f$ tensor element (coefficient) indices.
 
 <td>
 
@@ -349,26 +370,26 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 <caption id="user_other_ops_table">Table of other operators</caption>
 
 <tr style="width:100%">
-<th style="width:50%">Oparator 
+<th style="width:50%">Operator 
 <th style="width:50%">\hiderefs Usage 
 <tr>
 
 <td colspan="2"> <b>Face operators</b> <tr>
 
 <td>
-Calualte jacobian inverse jacobian on face. See
+Calculate Jacobian and inverse Jacobian on face. See
 \ref MoFEM::OpCalculateJacForFace and
 \ref MoFEM::OpInvertMatrix
 
-For 2d element on plane XY, jacobian is given by,
+For 2D element on plane XY, Jacobian is given by,
 \f[
 J_{ij} = \frac{\partial X_i}{\partial \xi_j},\quad i,j=0,1
 \f]
 
-\note That for 3d volume element, the operator is not implemented explicitly. In current implementation, jacobian is calculated implicitly, and derivatives of
+\note For 3D volume element, the operator is not implemented explicitly. In current implementation, Jacobian is calculated implicitly, and derivatives of
 shape functions are pushed to the current configuration.
 
-\note For face element is uncertainty what developer do, whether it calculates problem in 2d, or do integration on the adjacent face of 3d element, or face element is embedded in 3d, i.e. solve 2 and 1/2 dimension problem. See also \ref MoFEM::OpCalculateJacForFaceEmbeddedIn3DSpace
+\note For face element, it is uncertain what developer do, whether it calculates problem in 2D, or do integration on the adjacent face of 3D element, or face element is embedded in 3D, i.e. solve 2 and 1/2 dimension problem. See also \ref MoFEM::OpCalculateInvJacForFaceEmbeddedIn3DSpace
 
 <td>
 %Example usage
@@ -393,14 +414,12 @@ This operator assumes that the face element is on the XY plane.
 \frac{\partial \phi}{\partial X_i} = \frac{\partial \phi}{\partial \xi_j} J^{-1}_{ij} 
 \f]
 
-\note For face element is uncertainty what developer do, whether it calculates problem in 2d, or do integration on the adjacent face of 3d element, or face element is embedded in 3d, i.e. solve 2 and 1/2 dimension problem. See also \ref MoFEM::OpSetInvJacH1ForFaceEmbeddedIn3DSpace
+\note For face element, it is uncertain what developer do, whether it calculates problem in 2D, or do integration on the adjacent face of 3D element, or face element is embedded in 3D, i.e. solve 2 and 1/2 dimension problem. See also \ref MoFEM::OpSetInvJacH1ForFaceEmbeddedIn3DSpace
 
 <td>
 %Example usage
 \code
 auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpSetInvJacH1ForFace(inv_jac_ptr));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpSetInvJacH1ForFace(inv_jac_ptr));
 \endcode
@@ -422,7 +441,7 @@ Contravariant Piola transformation
 
 <td>
 
-%Example for 2d problem for face in XY space
+%Example for 2D problem for face in XY space
 \code
 auto jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -433,7 +452,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpSetContravariantPiolaTransformOnFace2D(jac_ptr))
 \endcode
 
-%Example for face emerged in 3d space. 
+%Example for face emerged in 3D space
 \code
 auto det_ptr = boost::make_shared<VectorDouble>();
 auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -447,7 +466,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
   new 
   OpSetContravariantPiolaTransformOnFace2DEmbeddedIn3DSpace(jac_ptr));
 \endcode
-Note, in that case problem is 2d, however surface on which PDE is solved is emerged in 3d space.
+Note, in this case problem is 2D, however surface on which PDE is solved is emerged in 3D space.
 
 <tr>
 
@@ -463,7 +482,7 @@ Transform local reference derivatives of shape function to global derivatives fo
 
 <td>
 
-%Example for 2d problem for face in XY space
+%Example for 2D problem for face in XY space
 \code
 auto jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -480,7 +499,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 
 <td>
 
-Make Hdiv space from Hcurl space in 2d \ref MoFEM::OpMakeHdivFromHcurl
+Make H-div space from H-curl space in 2D \ref MoFEM::OpMakeHdivFromHcurl
 
 \f[
 \pmb \psi^\textrm{Hdiv} = 
@@ -494,7 +513,7 @@ Note that applying function twice will transform base from H-curl space and then
 
 <td>
 
-%Example for 2d problem for face in XY space
+%Example for 2D problem for face in XY space
 \code
 auto jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -514,16 +533,16 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 Modify integration weights on face to take in account higher-order
 geometry \ref MoFEM::OpSetHOWeigthsOnFace
 
-Suppose jacobian is not constat on the finite element, then this operator set integration weights to take into account the geometry of the finite element, that is, a case for a non-parallelepiped quad. Also, that is a case for any face element given by higher-order geometry approximation. Note that geometry in %MoFEM can be represented by an arbitrary orde approximation field.
+Suppose Jacobian is not constant on the finite element, then this operator sets integration weights to take into account the geometry of the finite element, that is, a case for a non-parallelepiped quad. Also, that is a case for any face element given by higher-order geometry approximation. Note that geometry in MoFEM can be represented by an arbitrary order approximation field.
 
 \f[
 w^g = \left(\frac{\|J(\pmb\xi^g)\|}{A}\right) W^g
 \f]
-where \f$w^g\f$ is wieght on update configuration, \f$W^g\f$ integration weight at intergration point \f$g\f$, at reference point \f$\pmb\xi^g\f$. \f$\|J(\pmb\xi^g)\|\f$ is determinant of the jacobian, and \f$A\f$ is area of face element.
+where \f$w^g\f$ is weight on update configuration, \f$W^g\f$ integration weight at intergration point \f$g\f$, at reference point \f$\pmb\xi^g\f$. \f$\|J(\pmb\xi^g)\|\f$ is determinant of the Jacobian, and \f$A\f$ is area of face element.
 
 <td>
 
-Example 
+%Example 
 \code
 pipeline_mng->getOpDomainLhsPipeline().push_back(
     new OpSetHOWeigthsOnFace());
@@ -544,13 +563,13 @@ Scale base
 \f[
 \overline{\phi}^m  = \frac{1}{\mu(\Omega^e)} \phi^m
 \f]
-where \f$\mu(\Omega^e)\f$ is length, area or volume, depending on dimension of the finite elemen entitiy. Note that function scales also base function direvatives.
+where \f$\mu(\Omega^e)\f$ is length, area or volume, depending on dimension of the finite elemen entitiy. Note that function scales also base function derivatives.
 
 <td>
 
-Call that functions at front of the operators, before you evaluate field on givne space, i.e. L2 space.
+Call that functions at front of the operators, before you evaluate field on given space, i.e. L2 space.
 
-Example:
+%Example:
 \code
 using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -569,13 +588,13 @@ pipeline_mng->getOpDomainLhsPipeline().push_back(
 <caption id="user_linear_forms_ops_table">Table of linear from operators</caption>
 
 <tr style="width:100%">
-<th style="width:50%">Oparator 
+<th style="width:50%">Operator 
 <th style="width:50%">\hiderefs Usage 
 <tr>
 
 <td>
 
-Integrat source term for scalar and vectorial fields
+Integrate source term for scalar and vectorial fields
 \ref MoFEM::OpSourceImpl
 
 \f[
@@ -600,7 +619,7 @@ using OpSource =
 using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 auto fun = [](double x, double y, double z) {
-  return sin(x/L)*siz(y/L)*siz(z/L);
+  return sin(x/L)*sin(y/L)*sin(z/L);
 };
 pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpDomainSource("U", fun));
@@ -725,7 +744,7 @@ pipeline.push_back(
 <caption id="user_bilinear_forms_ops_table">Table of bilinear from operators</caption>
 
 <tr style="width:100%">
-<th style="width:50%">Oparator 
+<th style="width:50%">Operator 
 <th style="width:50%">\hiderefs Usage 
 <tr>
 
@@ -735,15 +754,14 @@ Integrate Grad Grad operator
 
 \code
 using OpDomainGradGrad = 
-  FormsIntegrators<OP>::Assembly<
-  ASSEMBLY_TYPE>::
+  FormsIntegrators<OP>::Assembly<ASSEMBLY_TYPE>::
   BiLinearForm<INTEGRATION_TYPE>::
   OpGradGrad<BASE_DIM, FIELD_DIM, SPACE_DIM>;
 \endcode
 
 <td>
 
-%Example for scalar base, scalar field and 3d problem
+%Example for scalar base, scalar field and 3D problem
 \code
 auto beta = [](double x, double y , double z) {
   return 1;
@@ -760,12 +778,11 @@ pipeline_mng->getOpDomainLhsPipeline().push_back(
 Integrate mass \ref MoFEM::OpMassImpl
 \code 
 using OpMass = 
-  FormsIntegrators<OP>::Assembly<
-  ASSEMBLY_TYPE>::
+  FormsIntegrators<OP>::Assembly<ASSEMBLY_TYPE>::
   BiLinearForm<INTEGRATION_TYPE>::
   OpMass<BASE_DIM, FIELD_DIM>;
 \endcode
-%Example usage: helmholtz.cp
+%Example usage: \ref helmholtz.cpp
 
 <td>
 
