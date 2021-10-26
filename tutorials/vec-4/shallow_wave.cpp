@@ -3,9 +3,9 @@
  * \example shallow_wave.cpp
  *
  * Solving shallow wave equation on manifold
- * 
- * The inital conditions are set following this paper \cite scott2016test. 
- * 
+ *
+ * The inital conditions are set following this paper \cite scott2016test.
+ *
  */
 
 /* This file is part of MoFEM.
@@ -161,7 +161,7 @@ struct OpURhs : public AssemblyDomainEleOp {
         ++t_row_diff_base;
       }
 
-      ++t_w; 
+      ++t_w;
       ++t_u;
       ++t_dot_u;
       ++t_grad_u;
@@ -264,7 +264,7 @@ struct OpULhs_dU : public AssemblyDomainEleOp {
         ++t_row_diff_base;
       }
 
-      ++t_w; 
+      ++t_w;
       ++t_coords;
       ++t_normal;
       ++t_u;
@@ -338,9 +338,9 @@ struct OpULhs_dH : public AssemblyDomainEleOp {
         ++t_row_base;
       }
 
-      for (; rr < nbRowBaseFunctions; ++rr) 
+      for (; rr < nbRowBaseFunctions; ++rr)
         ++t_row_base;
-      
+
       ++t_w;
       ++t_normal;
     }
@@ -642,9 +642,12 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline.push_back(new OpMassHH("H", "H", [&](double, double, double) {
       return domianLhsFEPtr->ts_a;
     }));
-    pipeline.push_back(new OpBaseDivU("H", "U", h0, false, false));
-    pipeline.push_back(new OpConvectiveH_dU("H", "U", grad_h_ptr, 1));
-    pipeline.push_back(new OpConvectiveH_dGradH("H", "H", u_ptr, 1));
+    pipeline.push_back(new OpBaseDivU(
+        "H", "U", []() { return h0; }, false, false));
+    pipeline.push_back(new OpConvectiveH_dU(
+        "H", "U", grad_h_ptr, []() { return 1; }));
+    pipeline.push_back(new OpConvectiveH_dGradH(
+        "H", "H", u_ptr, []() { return 1; }));
     pipeline.push_back(new OpULhs_dU("U", "U", u_ptr, grad_u_ptr));
     pipeline.push_back(new OpULhs_dH("U", "H"));
   };
