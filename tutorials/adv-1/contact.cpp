@@ -418,8 +418,9 @@ MoFEMErrorCode Example::OPs() {
           new OpMass("U", "U", get_rho));
     }
 
-    pipeline.push_back(new OpMixDivULhs("SIGMA", "U", 1, true));
-    pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", 1, true));
+    auto unity = []() { return 1; };
+    pipeline.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
+    pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
 
     if (boundaryMarker)
       pipeline.push_back(new OpUnSetBc("U"));
