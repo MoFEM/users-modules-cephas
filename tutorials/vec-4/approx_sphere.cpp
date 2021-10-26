@@ -386,7 +386,7 @@ MoFEMErrorCode ApproxSphere::solveSystem() {
 
   auto dm = simple->getDM();
   MoFEM::SmartPetscObj<TS> ts;
-  ts = pipeline_mng->createTS();
+  ts = pipeline_mng->createTSIM();
 
   double ftime = 1;
   CHKERR TSSetMaxSteps(ts, 1);
