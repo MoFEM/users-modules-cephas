@@ -345,9 +345,9 @@ MoFEMErrorCode Example::solveSystem() {
   auto dm = simple->getDM();
   MoFEM::SmartPetscObj<TS> ts;
   if (is_quasi_static)
-    ts = pipeline_mng->createTS();
+    ts = pipeline_mng->createTSIM();
   else
-    ts = pipeline_mng->createTS2();
+    ts = pipeline_mng->createTSIM2();
 
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);

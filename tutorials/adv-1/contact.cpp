@@ -674,7 +674,7 @@ MoFEMErrorCode Example::tsSolve() {
     uZScatter = scatter_create(D, 2);
 
   if (is_quasi_static) {
-    auto solver = pipeline_mng->createTS();
+    auto solver = pipeline_mng->createTSIM();
     auto D = smartCreateDMVector(dm);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
@@ -683,7 +683,7 @@ MoFEMErrorCode Example::tsSolve() {
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
   } else {
-    auto solver = pipeline_mng->createTS2();
+    auto solver = pipeline_mng->createTSIM2();
     auto dm = simple->getDM();
     auto D = smartCreateDMVector(dm);
     auto DD = smartVectorDuplicate(D);

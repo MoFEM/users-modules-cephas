@@ -340,7 +340,7 @@ MoFEMErrorCode Example::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto dm = simple->getDM();
-  auto ts = pipeline_mng->createTS();
+  auto ts = pipeline_mng->createTSIM();
 
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);

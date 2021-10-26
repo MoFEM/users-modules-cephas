@@ -240,7 +240,7 @@ MoFEMErrorCode Example::kspSolve() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
-  auto ts = pipeline_mng->createTS();
+  auto ts = pipeline_mng->createTSIM();
 
   double ftime = 1;
   CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);

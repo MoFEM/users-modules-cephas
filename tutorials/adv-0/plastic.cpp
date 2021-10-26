@@ -954,7 +954,7 @@ MoFEMErrorCode Example::tsSolve() {
   if (SPACE_DIM == 3)
     uZScatter = scatter_create(D, 2);
 
-  auto solver = pipeline_mng->createTS();
+  auto solver = pipeline_mng->createTSIM();
 
   CHKERR TSSetSolution(solver, D);
   CHKERR set_section_monitor(solver);

@@ -342,7 +342,7 @@ MoFEMErrorCode WaveEquation::solveSystem() {
   auto D = smartCreateDMVector(dm);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
 
-  auto ts = pipeline_mng->createTS2();
+  auto ts = pipeline_mng->createTSIM2();
 
   CHKERR TSSetSolution(ts, D);
   auto DD = smartVectorDuplicate(D);

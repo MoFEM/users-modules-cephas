@@ -335,7 +335,7 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   VecLoad(D, viewer);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
-  auto solver = pipeline_mng->createTS();
+  auto solver = pipeline_mng->createTSIM();
   CHKERR TSSetSolution(solver, D);
   CHKERR set_time_monitor(dm, solver);
   CHKERR TSSetSolution(solver, D);

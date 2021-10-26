@@ -370,7 +370,7 @@ MoFEMErrorCode HeatEquation::solveSystem() {
   auto D = smartCreateDMVector(dm);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
 
-  auto solver = pipeline_mng->createTS();
+  auto solver = pipeline_mng->createTSIM();
   CHKERR TSSetSolution(solver, D);
   CHKERR set_time_monitor(dm, solver);
   CHKERR TSSetSolution(solver, D);
