@@ -853,11 +853,8 @@ MoFEMErrorCode Example::solveSystem() {
                                  SCATTER_REVERSE);
         CHKERR VecAssemblyBegin(domianRhsFEPtr->ts_F);
         CHKERR VecAssemblyEnd(domianRhsFEPtr->ts_F);
-        double nrm;
-        CHKERR VecNorm(domianRhsFEPtr->ts_F,NORM_2, &nrm);
-        CHKERR VecScale(domianRhsFEPtr->ts_F, 1. / nrm);
         CHKERR KSPSolve(ksp, domianRhsFEPtr->ts_F, domianRhsFEPtr->ts_F);
-        CHKERR VecScale(domianRhsFEPtr->ts_F, -nrm);
+        CHKERR VecScale(domianRhsFEPtr->ts_F, -1);
         *domianRhsFEPtr->vecAssembleSwitch = false;
       }
       MoFEMFunctionReturn(0);
