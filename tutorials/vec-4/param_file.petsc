@@ -20,8 +20,10 @@
 #-ts_theta_theta 1
 #-ts_theta_initial_guess_extrapolate 1
 
--ts_type alpha
--ts_alpha_radius 0.5
+#-ts_type alpha
+#-ts_alpha_radius 0.5
+
+-ts_type rk
 
 -ts_exact_final_time matchstep
 -ts_max_time 1728000
@@ -41,8 +43,9 @@
 #-ksp_monitor
 
 -pc_type fieldsplit 
--pc_fieldsplit_type schur
--pc_fieldsplit_schur_precondition selfp
+#-pc_fieldsplit_type schur
+#-pc_fieldsplit_schur_precondition selfp
+-pc_fieldsplit_type multiplicative
 
 -fieldsplit_0_ksp_type preonly
 #-fieldsplit_0_pc_type lu
@@ -50,7 +53,7 @@
 -fieldsplit_0_pc_type gamg
 -fieldsplit_0_pc_mg_smoothup 1
 -fieldsplit_0_pc_mg_smoothdown 1
--fieldsplit_0_pc_gamg_reuse_interpolation 1
+#-fieldsplit_0_pc_gamg_reuse_interpolation 1
 
 -fieldsplit_1_ksp_type preonly
 #-fieldsplit_1_pc_type lu
@@ -58,4 +61,4 @@
 -fieldsplit_1_pc_type gamg
 -fieldsplit_1_pc_mg_smoothup 1
 -fieldsplit_1_pc_mg_smoothdown 1
--fieldsplit_1_pc_gamg_reuse_interpolation 1
+#-fieldsplit_1_pc_gamg_reuse_interpolation 1

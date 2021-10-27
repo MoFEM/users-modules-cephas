@@ -89,6 +89,8 @@ constexpr double beta = 1. / 15.;
 
 constexpr double penalty = 1;
 
+constexpr bool is_implicit_solver = false;
+
 FTensor::Index<'i', 3> i;
 FTensor::Index<'j', 3> j;
 FTensor::Index<'l', 3> l;
@@ -111,6 +113,10 @@ struct OpURhs : public AssemblyDomainEleOp {
     auto t_w = getFTensor0IntegrationWeight();
     auto t_row_base = row_data.getFTensor0N();
     auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+    if(!is_implicit_solver) {
+      uDotPtr->resize(3, nbIntegrationPts, false);
+      uDotPtr->clear();
+    }
     auto t_dot_u = getFTensor1FromMat<3>(*uDotPtr);
     auto t_u = getFTensor1FromMat<3>(*uPtr);
     auto t_grad_u = getFTensor2FromMat<3, 3>(*uGradPtr);
@@ -622,8 +628,11 @@ MoFEMErrorCode Example::assembleSystem() {
     auto dot_h_ptr = boost::make_shared<VectorDouble>();
     auto grad_h_ptr = boost::make_shared<MatrixDouble>();
 
-    pipeline.push_back(new OpCalculateVectorFieldValuesDot<3>("U", dot_u_ptr));
-    pipeline.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
+    if (is_implicit_solver) {
+      pipeline.push_back(
+          new OpCalculateVectorFieldValuesDot<3>("U", dot_u_ptr));
+      pipeline.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
+    }
 
     pipeline.push_back(new OpCalculateVectorFieldValues<3>("U", u_ptr));
     pipeline.push_back(
@@ -632,8 +641,9 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpCalculateDivergenceVectorFieldValues<3>("U", div_u_ptr));
     pipeline.push_back(new OpCalculateScalarFieldGradient<3>("H", grad_h_ptr));
 
-    pipeline.push_back(new OpBaseTimesDotH(
-        "H", dot_h_ptr, [](double, double, double) { return 1.; }));
+    if (is_implicit_solver)
+      pipeline.push_back(new OpBaseTimesDotH(
+          "H", dot_h_ptr, [](double, double, double) { return 1.; }));
     pipeline.push_back(new OpBaseTimesDivU(
         "H", div_u_ptr, [](double, double, double) { return h0; }));
     pipeline.push_back(new OpConvectiveH("H", u_ptr, grad_h_ptr));
@@ -656,10 +666,10 @@ MoFEMErrorCode Example::assembleSystem() {
     }));
     pipeline.push_back(new OpBaseDivU(
         "H", "U", []() { return h0; }, false, false));
-    pipeline.push_back(
-        new OpConvectiveH_dU("H", "U", grad_h_ptr, []() { return 1; }));
-    pipeline.push_back(
-        new OpConvectiveH_dGradH("H", "H", u_ptr, []() { return 1; }));
+    pipeline.push_back(new OpConvectiveH_dU(
+        "H", "U", grad_h_ptr, []() { return 1; }));
+    pipeline.push_back(new OpConvectiveH_dGradH(
+        "H", "H", u_ptr, []() { return 1; }));
     pipeline.push_back(new OpULhs_dU("U", "U", u_ptr, grad_u_ptr));
     pipeline.push_back(new OpULhs_dH("U", "H"));
   };
@@ -718,6 +728,24 @@ MoFEMErrorCode Example::solveSystem() {
 
   auto dm = simple->getDM();
 
+  auto assemble_mass_mat = [&](auto M) {
+    MoFEMFunctionBegin;
+    auto fe = boost::make_shared<DomainEle>(mField);
+    CHKERR MatZeroEntries(M);
+    fe->getOpPtrVector().push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
+    fe->getOpPtrVector().push_back(new OpCalculateHOCoords("HO_POSITIONS"));
+    fe->getOpPtrVector().push_back(new OpSetHOWeigthsOnFace());
+    fe->getOpPtrVector().push_back(
+        new OpMassUU("U", "U", [&](double, double, double) { return 1; }));
+    fe->getOpPtrVector().push_back(
+        new OpMassHH("H", "H", [&](double, double, double) { return 1; }));
+    fe->B = M;
+    CHKERR DMoFEMLoopFiniteElements(dm, "dFE", fe);
+    CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
+    MoFEMFunctionReturn(0);
+  };
+
   auto set_fieldsplit_preconditioner_ksp = [&](auto ksp) {
     MoFEMFunctionBeginHot;
     PC pc;
@@ -735,7 +763,16 @@ MoFEMErrorCode Example::solveSystem() {
     MoFEMFunctionReturnHot(0);
   };
 
-  // Setup postprocessing
+  auto set_mass_ksp = [&](auto ksp, auto M) {
+    MoFEMFunctionBegin;
+    CHKERR KSPSetOperators(ksp, M, M);
+    CHKERR KSPSetFromOptions(ksp);
+    CHKERR set_fieldsplit_preconditioner_ksp(ksp);
+    CHKERR KSPSetUp(ksp);
+    MoFEMFunctionReturn(0);
+  };
+
+  // Setup postprocessing 
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
     post_proc_fe->generateReferenceElementMesh();
@@ -762,39 +799,97 @@ MoFEMErrorCode Example::solveSystem() {
     return post_proc_fe;
   };
 
-  auto set_fieldsplit_preconditioner_ts = [&](auto solver) {
-    MoFEMFunctionBeginHot;
-    SNES snes;
-    CHKERR TSGetSNES(solver, &snes);
-    KSP ksp;
-    CHKERR SNESGetKSP(snes, &ksp);
-    CHKERR set_fieldsplit_preconditioner_ksp(ksp);
-    MoFEMFunctionReturnHot(0);
-  };
 
-  MoFEM::SmartPetscObj<TS> ts;
-  ts = pipeline_mng->createTSIM();
+  if (is_implicit_solver) {
 
-  boost::shared_ptr<FEMethod> null_fe;
-  auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
-  CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
-                             null_fe, monitor_ptr);
+    auto set_fieldsplit_preconditioner_ts = [&](auto solver) {
+      MoFEMFunctionBeginHot;
+      SNES snes;
+      CHKERR TSGetSNES(solver, &snes);
+      KSP ksp;
+      CHKERR SNESGetKSP(snes, &ksp);
+      CHKERR set_fieldsplit_preconditioner_ksp(ksp);
+      MoFEMFunctionReturnHot(0);
+    };
 
-  // Add monitor to time solver
-  double ftime = 1;
-  // CHKERR TSSetMaxTime(ts, ftime);
-  CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
+    MoFEM::SmartPetscObj<TS> ts;
+    ts = pipeline_mng->createTSIM();
 
-  auto T = smartCreateDMVector(simple->getDM());
-  CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
-                                 SCATTER_FORWARD);
-  CHKERR TSSetSolution(ts, T);
-  CHKERR TSSetFromOptions(ts);
-  CHKERR set_fieldsplit_preconditioner_ts(ts);
-  CHKERR TSSetUp(ts);
+    boost::shared_ptr<FEMethod> null_fe;
+    auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
+    CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
+                               null_fe, monitor_ptr);
 
-  CHKERR TSSolve(ts, NULL);
-  CHKERR TSGetTime(ts, &ftime);
+    // Add monitor to time solver
+    double ftime = 1;
+    // CHKERR TSSetMaxTime(ts, ftime);
+    CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
+
+    auto T = smartCreateDMVector(simple->getDM());
+    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
+                                   SCATTER_FORWARD);
+    CHKERR TSSetSolution(ts, T);
+    CHKERR TSSetFromOptions(ts);
+    CHKERR set_fieldsplit_preconditioner_ts(ts);
+    CHKERR TSSetUp(ts);
+
+    CHKERR TSSolve(ts, NULL);
+    CHKERR TSGetTime(ts, &ftime);
+  } else {
+
+    auto M = smartCreateDMMatrix(dm);
+    auto ksp = createKSP(mField.get_comm());
+
+    CHKERR assemble_mass_mat(M);
+    CHKERR set_mass_ksp(ksp, M);
+
+    auto solve_rhs = [&]() {
+
+      MoFEMFunctionBegin;
+      if (domianRhsFEPtr->vecAssembleSwitch) {
+        CHKERR VecGhostUpdateBegin(domianRhsFEPtr->ts_F, ADD_VALUES,
+                                   SCATTER_REVERSE);
+        CHKERR VecGhostUpdateEnd(domianRhsFEPtr->ts_F, ADD_VALUES,
+                                 SCATTER_REVERSE);
+        CHKERR VecAssemblyBegin(domianRhsFEPtr->ts_F);
+        CHKERR VecAssemblyEnd(domianRhsFEPtr->ts_F);
+        double nrm;
+        CHKERR VecNorm(domianRhsFEPtr->ts_F,NORM_2, &nrm);
+        CHKERR VecScale(domianRhsFEPtr->ts_F, 1. / nrm);
+        CHKERR KSPSolve(ksp, domianRhsFEPtr->ts_F, domianRhsFEPtr->ts_F);
+        CHKERR VecScale(domianRhsFEPtr->ts_F, -nrm);
+        *domianRhsFEPtr->vecAssembleSwitch = false;
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    domianRhsFEPtr->postProcessHook = solve_rhs;
+
+    MoFEM::SmartPetscObj<TS> ts;
+    ts = pipeline_mng->createTSEX();
+
+    boost::shared_ptr<FEMethod> null_fe;
+    auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
+    CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
+                               null_fe, monitor_ptr);
+
+    // Add monitor to time solver
+    double ftime = 1;
+    // CHKERR TSSetMaxTime(ts, ftime);
+    CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
+
+    auto T = smartCreateDMVector(simple->getDM());
+    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
+                                   SCATTER_FORWARD);
+
+    CHKERR TSSetSolution(ts, T);
+    CHKERR TSSetFromOptions(ts);
+    CHKERR TSSetUp(ts);
+
+    CHKERR TSSolve(ts, NULL);
+    CHKERR TSGetTime(ts, &ftime);
+
+  }
 
   MoFEMFunctionReturn(0);
 }
