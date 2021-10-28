@@ -166,7 +166,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td>\ref tutorials_photon_diffusion</td>
        <td> Photon diffusion equation
-       <br/> *Keywords:*  Inital boundary conditions and parabolic equation
+       <br/> *Keywords:*  Inital boundary conditions, parabolic equation, adding user element, postprocessing on skin
        </td>
   </tr>
 
@@ -220,7 +220,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref shallow_wave_doc</td>
        <td> Shallow wave equation on mainfold (atmospheric processes)
-       <br/> *Keywords:* Alpha method, initail conditions, hyperbolic equation, sphere approximation
+       <br/> *Keywords:* Alpha method, initail conditions, hyperbolic equation, sphere approximation, explicit/implicit time integration
        </td>
   </tr>
 
