@@ -75,8 +75,9 @@ constexpr double inv_c = 1. / c;
  */
 struct Monitor : public FEMethod {
 
-  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc)
-      : dM(dm), postProc(post_proc){};
+  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc,
+          boost::shared_ptr<PostProcFaceOnRefinedMesh> skin_post_proc)
+      : dM(dm), postProc(post_proc), skinPostProc(skin_post_proc){};
 
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
@@ -89,6 +90,12 @@ struct Monitor : public FEMethod {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
       CHKERR postProc->writeFile(
           "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      if (skinPostProc) {
+        CHKERR DMoFEMLoopFiniteElements(dM, "CAMERA_FE", skinPostProc);
+        CHKERR skinPostProc->writeFile(
+            "out_skin_level_" + boost::lexical_cast<std::string>(ts_step) +
+            ".h5m");
+      }
     }
     MoFEMFunctionReturn(0);
   }
@@ -96,6 +103,7 @@ struct Monitor : public FEMethod {
 private:
   SmartPetscObj<DM> dM;
   boost::shared_ptr<PostProcEle> postProc;
+  boost::shared_ptr<PostProcFaceOnRefinedMesh> skinPostProc;
 };
 
 struct PhotonDiffusion {
@@ -124,6 +132,7 @@ private:
 
   boost::shared_ptr<FEMethod> domianLhsFEPtr;
   boost::shared_ptr<FEMethod> boundaryRhsFEPtr;
+
 };
 
 PhotonDiffusion::PhotonDiffusion(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -150,7 +159,53 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
 
-  CHKERR simple->setUp();
+  auto set_camera_skin_fe = [&]() {
+    MoFEMFunctionBegin;
+    auto meshset_mng = mField.getInterface<MeshsetsManager>();
+
+    Range camera_surface;
+    const std::string block_name = "CAM";
+    bool add_fe = false;
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, block_name.size(), block_name) == 0) {
+        MOFEM_LOG("PHOTON", Sev::inform) << "Found CAM block";
+        CHKERR mField.get_moab().get_entities_by_dimension(
+            bit->getMeshset(), 2, camera_surface, true);
+        add_fe = true;
+      }
+    }
+
+    MOFEM_LOG("PHOTON", Sev::noisy) << "CAM block entities:\n"
+                                    << camera_surface;
+
+    if (add_fe) {
+      CHKERR mField.add_finite_element("CAMERA_FE");
+      CHKERR mField.modify_finite_element_add_field_data("CAMERA_FE", "U");
+      CHKERR mField.add_ents_to_finite_element_by_dim(camera_surface, 2,
+                                                      "CAMERA_FE");
+    }
+    MoFEMFunctionReturn(0);
+  };
+
+  auto my_simple_set_up = [&]() {
+    MoFEMFunctionBegin;
+    CHKERR simple->defineFiniteElements();
+    CHKERR simple->defineProblem(PETSC_TRUE);
+    CHKERR simple->buildFields();
+    CHKERR simple->buildFiniteElements();
+
+    if(mField.check_finite_element("CAMERA_FE")) {
+      CHKERR mField.build_finite_elements("CAMERA_FE");
+      CHKERR DMMoFEMAddElement(simple->getDM(), "CAMERA_FE");
+    }
+
+    CHKERR simple->buildProblem();
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR set_camera_skin_fe();
+  CHKERR my_simple_set_up();
 
   MoFEMFunctionReturn(0);
 }
@@ -315,10 +370,25 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
     return post_froc_fe;
   };
 
+  auto create_post_process_camera_element = [&]() {
+    if (mField.check_finite_element("CAMERA_FE")) {
+      auto post_proc_skin =
+          boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+      post_proc_skin->generateReferenceElementMesh();
+      CHKERR post_proc_skin->addFieldValuesPostProc("U");
+      CHKERR post_proc_skin->addFieldValuesGradientPostProcOnSkin(
+          "U", simple->getDomainFEName());
+      return post_proc_skin;
+    } else {
+      return boost::shared_ptr<PostProcFaceOnRefinedMesh>();
+    }
+  };
+
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
     boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, create_post_process_element()));
+        new Monitor(dm, create_post_process_element(),
+                    create_post_process_camera_element()));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
@@ -327,13 +397,15 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
-  MOFEM_LOG("PHOTON", Sev::inform)
-      << "reading vector in binary from vector.dat ...";
-  PetscViewer viewer;
-  PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat", FILE_MODE_READ,
-                        &viewer);
-  VecLoad(D, viewer);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+  if (!mField.getInterface<MeshsetsManager>()->checkMeshset("SPOT")) {
+    MOFEM_LOG("PHOTON", Sev::inform)
+        << "reading vector in binary from vector.dat ...";
+    PetscViewer viewer;
+    PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat",
+                          FILE_MODE_READ, &viewer);
+    VecLoad(D, viewer);
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+  }
 
   auto solver = pipeline_mng->createTSIM();
   CHKERR TSSetSolution(solver, D);
