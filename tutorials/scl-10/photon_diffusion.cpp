@@ -457,15 +457,15 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
-  if (!mField.getInterface<MeshsetsManager>()->checkMeshset("SPOT")) {
-    MOFEM_LOG("PHOTON", Sev::inform)
-        << "reading vector in binary from vector.dat ...";
-    PetscViewer viewer;
-    PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat",
-                          FILE_MODE_READ, &viewer);
-    VecLoad(D, viewer);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-  }
+  // if (!mField.getInterface<MeshsetsManager>()->checkMeshset("SPOT")) {
+  //   MOFEM_LOG("PHOTON", Sev::inform)
+  //       << "reading vector in binary from vector.dat ...";
+  //   PetscViewer viewer;
+  //   PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat",
+  //                         FILE_MODE_READ, &viewer);
+  //   VecLoad(D, viewer);
+  //   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+  // }
 
   if (from_initial) {
 

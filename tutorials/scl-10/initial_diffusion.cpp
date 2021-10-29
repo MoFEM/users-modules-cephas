@@ -54,9 +54,9 @@ double mu_a = 0.09; ///< absorption coefficient (cm^-1)
 double mu_sp = 16.5; ///< scattering coefficient (cm^-1)
 double flux = 1e3; ///< impulse magnitude 
 
-double slab_thickness = 5.0;
-constexpr double R = 2.5; //< spot radius
-constexpr double time_shift = 10.0;
+double thickness = 5.0;
+double radius = 2.5; //< spot radius
+double initial_time = 0.1;
 
 double D = 1. / (3. * (mu_a + mu_sp));
 
@@ -95,7 +95,7 @@ public:
    * \note It is good approximation of pulse in femtosecond scale. To make it
    * longer one can apply third integral over time.
    *
-   * \note Note analysis in photon_diffusion is shifted in time by time_shift.
+   * \note Note analysis in photon_diffusion is shifted in time by initial_time.
    *
    * @param x
    * @param y
@@ -103,16 +103,16 @@ public:
    * @return double
    */
   static double sourceFunction(const double x, const double y, const double z) {
-    const double A = 4 * D * v * time_shift;
+    const double A = 4 * D * v * initial_time;
     const double T =
-        (v / pow(M_PI * A, 3. / 2.)) * exp(-mu_a * v * time_shift);
+        (v / pow(M_PI * A, 3. / 2.)) * exp(-mu_a * v * initial_time);
 
     auto phi_pulse = [&](const double r_s, const double phi_s) {
       const double xs = r_s * cos(phi_s);
       const double ys = r_s * sin(phi_s);
       const double xp = x - xs;
       const double yp = y - ys;
-      const double zp = z + slab_thickness / 2. - 1. / mu_sp;
+      const double zp = z + thickness / 2. - 1. / mu_sp;
       const double rp2 = xp * xp + yp * yp + zp * zp;
       return exp(-rp2 / A) * r_s;
     };
@@ -124,7 +124,7 @@ public:
     };
 
     return T * flux * gauss_kronrod<double, 32>::integrate(
-                   f, 0, R, 0, std::numeric_limits<float>::epsilon());
+                   f, 0, radius, 0, std::numeric_limits<float>::epsilon());
   };
 
 private:
@@ -166,6 +166,12 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   auto *simple = mField.getInterface<Simple>();
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
+
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-thickness", &thickness,
+                               PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-radius", &radius, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-initial_time", &initial_time,
+                               PETSC_NULL);
 
   int order = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
