@@ -38,7 +38,7 @@ tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
 tutorials_build_and_install(
   inital_diffusion 
-  ${CMAKE_CURRENT_SOURCE_DIR}/inital_diffusion.cpp)
+  ${CMAKE_CURRENT_SOURCE_DIR}/initial_diffusion.cpp)
   
 tutorials_build_and_install(
   photon_diffusion 

@@ -64,6 +64,8 @@ double mu_sp = 16.5; ///< scattering coefficient (cm^-1)
 double flux = 1e3; ///< impulse magnitude 
 double duration = 0.05; ///< impulse duration (ns)
 
+PetscBool from_initial = PETSC_FALSE;
+
 int order = 3;
 int saveEveryNthStep = 1;
 
@@ -154,6 +156,8 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-flux", &flux, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-duration", &duration,
                                PETSC_NULL);
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-from_initial", &from_initial,
+                               PETSC_NULL);                             
 
   MOFEM_LOG("PHOTON DIFFUSION", Sev::inform) << "Refractive index: " << n;
   MOFEM_LOG("PHOTON DIFFUSION", Sev::inform) << "Speed of light (cm/ns): " << c;
@@ -285,7 +289,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
             "U", "U",
 
             [&](const double, const double, const double) {
-              if (boundaryRhsFEPtr->ts_t > duration)
+              if (from_initial || boundaryRhsFEPtr->ts_t > duration)
                 return h;
               else
                 return 0.;
@@ -315,7 +319,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
             "U", u_at_gauss_pts,
 
             [&](const double, const double, const double) {
-              if (boundaryRhsFEPtr->ts_t > duration)
+              if (from_initial || boundaryRhsFEPtr->ts_t > duration)
                 return h;
               else
                 return 0.;
@@ -330,7 +334,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
             "U",
 
             [&](const double, const double, const double) {
-              if (boundaryRhsFEPtr->ts_t < duration)
+              if (!from_initial && boundaryRhsFEPtr->ts_t < duration)
                 return -flux;
               else
                 return 0.;
@@ -386,14 +390,18 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
 
-  // MOFEM_LOG("PHOTON", Sev::inform)
-  //     << "reading vector in binary from vector.dat ...";
-  // PetscViewer viewer;
-  // PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat", FILE_MODE_READ,
-  //                       &viewer);
-  // VecLoad(D, viewer);
+  if (from_initial) {
 
-  // CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    MOFEM_LOG("PHOTON", Sev::inform)
+        << "reading vector in binary from vector.dat ...";
+    PetscViewer viewer;
+    PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat", FILE_MODE_READ,
+                          &viewer);
+    VecLoad(D, viewer);
+
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+  }
 
   auto solver = pipeline_mng->createTS();
   CHKERR TSSetSolution(solver, D);

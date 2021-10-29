@@ -30,6 +30,6 @@ mpirun -np 4 \
 -file_name ab.h5m \
 -order 4 \
 -ts_max_time 4 \
--ts_dt 0.1
- -my_max_post_proc_ref_level 2
+-ts_dt 0.1 \
+-my_max_post_proc_ref_level 2
 ```
