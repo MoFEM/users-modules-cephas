@@ -208,13 +208,19 @@ MoFEMErrorCode Example::assembleSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   if (SPACE_DIM == 2) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+        new OpCalculateHOJacForFace(jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+        new OpCalculateHOJacForFace(jac_ptr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
   }
@@ -339,17 +345,21 @@ MoFEMErrorCode Example::solveSystem() {
   auto dm = simple->getDM();
   MoFEM::SmartPetscObj<TS> ts;
   if (is_quasi_static)
-    ts = pipeline_mng->createTS();
+    ts = pipeline_mng->createTSIM();
   else
-    ts = pipeline_mng->createTS2();
+    ts = pipeline_mng->createTSIM2();
 
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
   if (SPACE_DIM == 2) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+        new OpCalculateHOJacForFace(jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
   }

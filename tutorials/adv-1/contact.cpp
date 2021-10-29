@@ -355,23 +355,20 @@ MoFEMErrorCode Example::OPs() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto add_domain_base_ops = [&](auto &pipeline) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     if (SPACE_DIM == 2) {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
-      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+      pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
       pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
       pipeline.push_back(new OpMakeHdivFromHcurl());
       pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
       pipeline.push_back(new OpSetHOWeigthsOnFace());
     } else {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      auto det_ptr = boost::make_shared<VectorDouble>();
       pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
-      pipeline.push_back(
-          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+      pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
       pipeline.push_back(
           new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
       pipeline.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
@@ -421,8 +418,9 @@ MoFEMErrorCode Example::OPs() {
           new OpMass("U", "U", get_rho));
     }
 
-    pipeline.push_back(new OpMixDivULhs("SIGMA", "U", 1, true));
-    pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", 1, true));
+    auto unity = []() { return 1; };
+    pipeline.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
+    pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
 
     if (boundaryMarker)
       pipeline.push_back(new OpUnSetBc("U"));
@@ -528,7 +526,7 @@ MoFEMErrorCode Example::OPs() {
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         pipeline.push_back(new OpBoundaryMass(
             "U", "U", [](double, double, double) { return 1.; },
-            bc.second->getBcEdgesPtr()));
+            bc.second->getBcEntsPtr()));
         pipeline.push_back(new OpUnSetBc("U"));
       }
     }
@@ -576,11 +574,11 @@ MoFEMErrorCode Example::OPs() {
                   attr_vec->data().begin());
 
         pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
-                                             bc.second->getBcEdgesPtr()));
+                                             bc.second->getBcEntsPtr()));
         pipeline.push_back(new OpBoundaryInternal(
             "U", commonDataPtr->contactDispPtr,
             [](double, double, double) { return 1.; },
-            bc.second->getBcEdgesPtr()));
+            bc.second->getBcEntsPtr()));
 
         pipeline.push_back(new OpUnSetBc("U"));
       }
@@ -676,7 +674,7 @@ MoFEMErrorCode Example::tsSolve() {
     uZScatter = scatter_create(D, 2);
 
   if (is_quasi_static) {
-    auto solver = pipeline_mng->createTS();
+    auto solver = pipeline_mng->createTSIM();
     auto D = smartCreateDMVector(dm);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
@@ -685,7 +683,7 @@ MoFEMErrorCode Example::tsSolve() {
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
   } else {
-    auto solver = pipeline_mng->createTS2();
+    auto solver = pipeline_mng->createTSIM2();
     auto dm = simple->getDM();
     auto D = smartCreateDMVector(dm);
     auto DD = smartVectorDuplicate(D);

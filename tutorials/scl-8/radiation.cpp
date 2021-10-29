@@ -195,18 +195,22 @@ MoFEMErrorCode Example::OPs() {
     return heat_conductivity * (2 * M_PI * r);
   };
 
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateInvJacForFace(inv_jac_ptr));
+      new OpCalculateHOJacForFace(jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpSetInvJacH1ForFace(inv_jac_ptr));
+      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpDomainGradGrad("T", "T", beta));
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integrationRule);
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateInvJacForFace(inv_jac_ptr));
+      new OpCalculateHOJacForFace(jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpSetInvJacH1ForFace(inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -236,7 +240,7 @@ MoFEMErrorCode Example::kspSolve() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
-  auto ts = pipeline_mng->createTS();
+  auto ts = pipeline_mng->createTSIM();
 
   double ftime = 1;
   CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);

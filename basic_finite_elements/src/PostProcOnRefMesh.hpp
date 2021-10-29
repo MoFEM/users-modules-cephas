@@ -104,11 +104,13 @@ struct PostProcCommonOnRefMesh {
                              std::vector<EntityHandle> &map_gauss_pts,
                              const std::string field_name,
                              const std::string tag_name,
-                             CommonData &common_data, Vec v = PETSC_NULL, int space_dim = 3)
+                             CommonData &common_data, Vec v = PETSC_NULL,
+                             int space_dim = 3)
         : MoFEM::ForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL),
           postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
-          commonData(common_data), tagName(tag_name), V(v), spaceDim(space_dim) {}
+          commonData(common_data), tagName(tag_name), V(v),
+          spaceDim(space_dim) {}
 
     VectorDouble vAlues;
     VectorDouble *vAluesPtr;
@@ -473,9 +475,9 @@ struct PostProcTemplateVolumeOnRefinedMesh
           // refine mesh
           MeshRefinement *m_ref;
           CHKERR m_field_ref.getInterface(m_ref);
-          CHKERR m_ref->add_vertices_in_the_middle_of_edges(
+          CHKERR m_ref->addVerticesInTheMiddleOfEdges(
               edges, BitRefLevel().set(ll + 1));
-          CHKERR m_ref->refine_TET(tets, BitRefLevel().set(ll + 1));
+          CHKERR m_ref->refineTets(tets, BitRefLevel().set(ll + 1));
         }
         MoFEMFunctionReturn(0);
       };
