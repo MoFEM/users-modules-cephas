@@ -415,9 +415,9 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
-  CHKERR simple->addDomainField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
-  CHKERR simple->addDataField("HO_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE, 3);
+  CHKERR simple->addDomainField("U", H1, DEMKOWICZ_JACOBI_BASE, 3);
+  CHKERR simple->addDomainField("H", H1, DEMKOWICZ_JACOBI_BASE, 1);
+  CHKERR simple->addDataField("HO_POSITIONS", H1, DEMKOWICZ_JACOBI_BASE, 3);
 
   int order = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);

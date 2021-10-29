@@ -2,17 +2,12 @@
 
 
 ```
-./approx_sphere -file_name sphere.cub \
+./approx_sphere \                      
+-file_name ~/tmp/sphere.cub \
 -snes_stol 0 \
--ksp_monitor  \
--snes_linesearch_type l2 \
--ts_type beuler -ts_dt 1 \
--snes_rtol 1e-12 \
--snes_atol 1e-12 \
--order 4 \
--ksp_type gmres \
--pc_type lu \
--pc_factor_mat_solver_type mumps
+-ksp_monitor \ 
+-ts_type beuler -ts_dt 1 -ts_max_steps 1 \
+-snes_rtol 1e-12 -snes_rtol 1e-12 -order 4 -pc_type lu
 ```
 
 ```
