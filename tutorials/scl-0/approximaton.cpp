@@ -179,8 +179,8 @@ MoFEMErrorCode Example::readMesh() {
 MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   // Add field
-  CHKERR simpleInterface->addDomainField(
-      FIELD_NAME, H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, FIELD_DIM);
+  CHKERR simpleInterface->addDomainField(FIELD_NAME, H1, DEMKOWICZ_JACOBI_BASE,
+                                         FIELD_DIM);
   constexpr int order = 4;
   CHKERR simpleInterface->setFieldOrder(FIELD_NAME, order);
   CHKERR simpleInterface->setUp();
