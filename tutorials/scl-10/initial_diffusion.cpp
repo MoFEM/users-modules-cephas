@@ -47,19 +47,19 @@ using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
 using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
-constexpr double c = 30; ///< speed of light
-constexpr double mu_a = 0.09;
-constexpr double mu_sp = 16.5;
-constexpr double h = 0.5;   ///< convective heat coefficient
-constexpr double flux = 50; ///< 0.5 mW mm^-2
-constexpr double duration = 120;
+double n = 1.44; ///< refractive index of diffusive medium 
+double c = 30.; ///< speed of light (cm/ns)
+double v = c / n; ///< phase velocity of light in medium (cm/ns)
+double mu_a = 0.09; ///< absorption coefficient (cm^-1)
+double mu_sp = 16.5; ///< scattering coefficient (cm^-1)
+double flux = 1e3; ///< impulse magnitude 
 
-constexpr double D = 1. / (3. * (mu_a + mu_sp));
-constexpr double inv_c = 1. / c;    
+double thickness = 5.0;
+double radius = 2.5; //< spot radius
+double initial_time = 0.1;
 
-constexpr double z_thickness = 2.5;
-constexpr double R = 2; //< spot radius
-constexpr double impuls_time = 0.1;
+double D = 1. / (3. * (mu_a + mu_sp));
+
 
 #include <boost/math/quadrature/gauss_kronrod.hpp>
 using namespace boost::math::quadrature;
@@ -93,9 +93,9 @@ public:
    * @brief Pulse is infinitely short.
    *
    * \note It is good approximation of pulse in femtosecond scale. To make it
-   * loner one can apply third integral over time.
+   * longer one can apply third integral over time.
    *
-   * \note Note analysis in photon_diffusion is shifted in time by impuls_time.
+   * \note Note analysis in photon_diffusion is shifted in time by initial_time.
    *
    * @param x
    * @param y
@@ -103,18 +103,18 @@ public:
    * @return double
    */
   static double sourceFunction(const double x, const double y, const double z) {
-    const double A = 4 * D * c * impuls_time;
+    const double A = 4 * D * v * initial_time;
     const double T =
-        (c / pow(M_PI * A, 3. / 2.)) * exp(-mu_a * c * impuls_time);
+        (v / pow(M_PI * A, 3. / 2.)) * exp(-mu_a * v * initial_time);
 
-    auto phi_pulse = [&](const double r_s, const double fi_s) {
-      const double xs = r_s * cos(fi_s);
-      const double ys = r_s * sin(fi_s);
+    auto phi_pulse = [&](const double r_s, const double phi_s) {
+      const double xs = r_s * cos(phi_s);
+      const double ys = r_s * sin(phi_s);
       const double xp = x - xs;
       const double yp = y - ys;
-      const double zp = z - z_thickness;
-      const double rp = sqrt(xp * xp + yp * yp + zp * zp);
-      return exp(-pow(rp - r_s, 2) / A);
+      const double zp = z + thickness / 2. - 1. / mu_sp;
+      const double rp2 = xp * xp + yp * yp + zp * zp;
+      return exp(-rp2 / A) * r_s;
     };
 
     auto f = [&](const double r_s) {
@@ -123,8 +123,8 @@ public:
           g, 0, 2 * M_PI, 0, std::numeric_limits<float>::epsilon());
     };
 
-    return T * gauss_kronrod<double, 32>::integrate(
-                   f, 0, R, 0, std::numeric_limits<float>::epsilon());
+    return T * flux * gauss_kronrod<double, 32>::integrate(
+                   f, 0, radius, 0, std::numeric_limits<float>::epsilon());
   };
 
 private:
@@ -166,6 +166,12 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   auto *simple = mField.getInterface<Simple>();
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
+
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-thickness", &thickness,
+                               PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-radius", &radius, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-initial_time", &initial_time,
+                               PETSC_NULL);
 
   int order = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
@@ -247,7 +253,7 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
  
-  MOFEM_LOG("PHOTON", Sev::inform) << "Solver strat";
+  MOFEM_LOG("PHOTON", Sev::inform) << "Solver start";
   CHKERR KSPSolve(solver, F, D);
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
