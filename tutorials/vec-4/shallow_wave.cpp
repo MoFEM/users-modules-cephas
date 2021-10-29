@@ -113,7 +113,7 @@ struct OpURhs : public AssemblyDomainEleOp {
     auto t_w = getFTensor0IntegrationWeight();
     auto t_row_base = row_data.getFTensor0N();
     auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-    if(!is_implicit_solver) {
+    if (!is_implicit_solver) {
       uDotPtr->resize(3, nbIntegrationPts, false);
       uDotPtr->clear();
     }
@@ -415,10 +415,9 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 3);
-  CHKERR simple->addDomainField("H", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  CHKERR simple->addDataField("HO_POSITIONS", H1,
-                              AINSWORTH_BERNSTEIN_BEZIER_BASE, 3);
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
+  CHKERR simple->addDomainField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addDataField("HO_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE, 3);
 
   int order = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
@@ -434,170 +433,196 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Boundary condition]
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
+  
+  PetscBool is_restart = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_restart", &is_restart,
+                             PETSC_NULL);
 
-  const double e_n = exp(-4 / pow(phi_1 - phi_0, 2));
-  const double u0 = u_max / e_n;
-
-  FTensor::Tensor1<double, 3> t_k{0., 0., 1.};
-  FTensor::Tensor2<double, 3, 3> t_A;
-  t_A(i, m) = levi_civita(i, j, m) * t_k(j);
-
-  auto get_phi = [&](const double x, const double y, const double z) {
-    FTensor::Tensor1<double, 3> t_r{x, y, 0.};
-    const double r = sqrt(t_r(i) * t_r(i));
-    return atan2(z, r);
-  };
-
-  auto init_u_phi = [&](const double phi) {
-    if (phi > phi_0 && phi < phi_1) {
-      return u0 * exp(1. / ((phi - phi_0) * (phi - phi_1)));
-    } else {
-      return 0.;
-    }
-  };
-
-  auto init_u = [&](const double x, const double y, const double z) {
-    FTensor::Tensor1<double, 3> t_u{0., 0., 0.};
-    const double u_phi = init_u_phi(get_phi(x, y, z));
-    if (u_phi > 0) {
-      FTensor::Tensor1<double, 3> t_r{x, y, 0.};
-      t_r.normalize();
-      t_u(i) = ((t_A(i, j) * t_r(j)) * u_phi);
-    }
-    return t_u;
-  };
-
-  auto init_h = [&](const double x, const double y, const double z) {
-    const double a = sqrt(x * x + y * y + z * z);
-
-    auto integral = [&](const double fi) {
-      const double u_phi = init_u_phi(fi);
-      const auto f = 2 * omega * sin(fi);
-      return a * u_phi * (f + (tan(fi) / a) * u_phi);
-    };
-
-    auto montain = [&](const double lambda, const double fi) {
-      if (lambda > -M_PI && lambda < M_PI)
-        return h_hat * cos(fi) * exp(-pow(lambda / alpha, 2)) *
-               exp(-pow((phi_2 - fi) / beta, 2));
-      else
-        return 0.;
-    };
-
-    const double fi = get_phi(x, y, z);
-    const double lambda = atan2(x, y);
-
-    double h1 = 0;
-    if (fi > phi_0)
-      h1 = gauss_kronrod<double, 32>::integrate(
-          integral, phi_0, fi, 0, std::numeric_limits<float>::epsilon());
-
-    return h0 + (montain(lambda, fi) - (h1 / g));
-  };
-
-  auto set_domain_general = [&](auto &pipeline) {
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
-    pipeline.push_back(new OpCalculateHOCoords("HO_POSITIONS"));
-    pipeline.push_back(new OpSetHOWeigthsOnFace());
-  };
-
-  auto set_domain_rhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpSourceU("U", init_u));
-    pipeline.push_back(new OpSourceH("H", init_h));
-  };
-
-  auto set_domain_lhs = [&](auto &pipeline) {
-    pipeline.push_back(
-        new OpMassUU("U", "U", [](double, double, double) { return 1; }));
-    pipeline.push_back(
-        new OpMassHH("H", "H", [](double, double, double) { return 1; }));
-  };
-
-  auto post_proc = [&]() {
+  auto restart_vector = [&]() {
     MoFEMFunctionBegin;
     auto simple = mField.getInterface<Simple>();
     auto dm = simple->getDM();
-
-    auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-    post_proc_fe->generateReferenceElementMesh();
-
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpGetHONormalsOnFace("HO_POSITIONS"));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOCoords("HO_POSITIONS"));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFaceEmbeddedIn3DSpace(jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
-    post_proc_fe->addFieldValuesPostProc("U");
-    post_proc_fe->addFieldValuesPostProc("H");
-    post_proc_fe->addFieldValuesPostProc("HO_POSITIONS");
-
-    CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
-    CHKERR post_proc_fe->writeFile("out_init.h5m");
-
+    MOFEM_LOG("SW", Sev::inform)
+        << "reading vector in binary from vector.dat ...";
+    PetscViewer viewer;
+    PetscViewerBinaryOpen(PETSC_COMM_WORLD, "vector.dat", FILE_MODE_READ,
+                          &viewer);
+    auto T = smartCreateDMVector(simple->getDM());
+    VecLoad(T, viewer);
+    CHKERR DMoFEMMeshToLocalVector(dm, T, INSERT_VALUES, SCATTER_REVERSE);
     MoFEMFunctionReturn(0);
   };
 
-  auto solve_init = [&]() {
-    MoFEMFunctionBegin;
-    auto simple = mField.getInterface<Simple>();
+  if (is_restart) {
+
+    CHKERR restart_vector();
+
+  } else {
+
+    const double e_n = exp(-4 / pow(phi_1 - phi_0, 2));
+    const double u0 = u_max / e_n;
+
+    FTensor::Tensor1<double, 3> t_k{0., 0., 1.};
+    FTensor::Tensor2<double, 3, 3> t_A;
+    t_A(i, m) = levi_civita(i, j, m) * t_k(j);
+
+    auto get_phi = [&](const double x, const double y, const double z) {
+      FTensor::Tensor1<double, 3> t_r{x, y, 0.};
+      const double r = sqrt(t_r(i) * t_r(i));
+      return atan2(z, r);
+    };
+
+    auto init_u_phi = [&](const double phi) {
+      if (phi > phi_0 && phi < phi_1) {
+        return u0 * exp(1. / ((phi - phi_0) * (phi - phi_1)));
+      } else {
+        return 0.;
+      }
+    };
+
+    auto init_u = [&](const double x, const double y, const double z) {
+      FTensor::Tensor1<double, 3> t_u{0., 0., 0.};
+      const double u_phi = init_u_phi(get_phi(x, y, z));
+      if (u_phi > 0) {
+        FTensor::Tensor1<double, 3> t_r{x, y, 0.};
+        t_r.normalize();
+        t_u(i) = ((t_A(i, j) * t_r(j)) * u_phi);
+      }
+      return t_u;
+    };
+
+    auto init_h = [&](const double x, const double y, const double z) {
+      const double a = sqrt(x * x + y * y + z * z);
+
+      auto integral = [&](const double fi) {
+        const double u_phi = init_u_phi(fi);
+        const auto f = 2 * omega * sin(fi);
+        return a * u_phi * (f + (tan(fi) / a) * u_phi);
+      };
+
+      auto montain = [&](const double lambda, const double fi) {
+        if (lambda > -M_PI && lambda < M_PI)
+          return h_hat * cos(fi) * exp(-pow(lambda / alpha, 2)) *
+                 exp(-pow((phi_2 - fi) / beta, 2));
+        else
+          return 0.;
+      };
+
+      const double fi = get_phi(x, y, z);
+      const double lambda = atan2(x, y);
+
+      double h1 = 0;
+      if (fi > phi_0)
+        h1 = gauss_kronrod<double, 32>::integrate(
+            integral, phi_0, fi, 0, std::numeric_limits<float>::epsilon());
+
+      return h0 + (montain(lambda, fi) - (h1 / g));
+    };
+
+    auto set_domain_general = [&](auto &pipeline) {
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      pipeline.push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
+      pipeline.push_back(new OpCalculateHOCoords("HO_POSITIONS"));
+      pipeline.push_back(new OpSetHOWeigthsOnFace());
+    };
+
+    auto set_domain_rhs = [&](auto &pipeline) {
+      pipeline.push_back(new OpSourceU("U", init_u));
+      pipeline.push_back(new OpSourceH("H", init_h));
+    };
+
+    auto set_domain_lhs = [&](auto &pipeline) {
+      pipeline.push_back(
+          new OpMassUU("U", "U", [](double, double, double) { return 1; }));
+      pipeline.push_back(
+          new OpMassHH("H", "H", [](double, double, double) { return 1; }));
+    };
+
+    auto post_proc = [&]() {
+      MoFEMFunctionBegin;
+      auto simple = mField.getInterface<Simple>();
+      auto dm = simple->getDM();
+
+      auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+      post_proc_fe->generateReferenceElementMesh();
+
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpGetHONormalsOnFace("HO_POSITIONS"));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateHOCoords("HO_POSITIONS"));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateHOJacForFaceEmbeddedIn3DSpace(jac_ptr));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+      post_proc_fe->addFieldValuesPostProc("U");
+      post_proc_fe->addFieldValuesPostProc("H");
+      post_proc_fe->addFieldValuesPostProc("HO_POSITIONS");
+
+      CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
+      CHKERR post_proc_fe->writeFile("out_init.h5m");
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto solve_init = [&]() {
+      MoFEMFunctionBegin;
+      auto simple = mField.getInterface<Simple>();
+      auto pipeline_mng = mField.getInterface<PipelineManager>();
+
+      auto solver = pipeline_mng->createKSP();
+      CHKERR KSPSetFromOptions(solver);
+      PC pc;
+      CHKERR KSPGetPC(solver, &pc);
+      PetscBool is_pcfs = PETSC_FALSE;
+      PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+      if (is_pcfs == PETSC_TRUE) {
+        auto bc_mng = mField.getInterface<BcManager>();
+        auto name_prb = simple->getProblemName();
+        SmartPetscObj<IS> is_u;
+        CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+            name_prb, ROW, "U", 0, 3, is_u);
+        CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
+        CHKERR PCFieldSplitSetType(pc, PC_COMPOSITE_ADDITIVE);
+      }
+
+      CHKERR KSPSetUp(solver);
+
+      auto dm = simple->getDM();
+      auto D = smartCreateDMVector(dm);
+      auto F = smartVectorDuplicate(D);
+
+      CHKERR KSPSolve(solver, F, D);
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+      MoFEMFunctionReturn(0);
+    };
+
     auto pipeline_mng = mField.getInterface<PipelineManager>();
 
-    auto solver = pipeline_mng->createKSP();
-    CHKERR KSPSetFromOptions(solver);
-    PC pc;
-    CHKERR KSPGetPC(solver, &pc);
-    PetscBool is_pcfs = PETSC_FALSE;
-    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
-    if (is_pcfs == PETSC_TRUE) {
-      auto bc_mng = mField.getInterface<BcManager>();
-      auto name_prb = simple->getProblemName();
-      SmartPetscObj<IS> is_u;
-      CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-          name_prb, ROW, "U", 0, 3, is_u);
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
-      CHKERR PCFieldSplitSetType(pc, PC_COMPOSITE_ADDITIVE);
-    }
+    auto integration_rule = [](int, int, int approx_order) {
+      return 2 * approx_order + 4;
+    };
+    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
 
-    CHKERR KSPSetUp(solver);
+    set_domain_general(pipeline_mng->getOpDomainRhsPipeline());
+    set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline());
+    set_domain_general(pipeline_mng->getOpDomainLhsPipeline());
+    set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline());
 
-    auto dm = simple->getDM();
-    auto D = smartCreateDMVector(dm);
-    auto F = smartVectorDuplicate(D);
+    CHKERR solve_init();
+    CHKERR post_proc();
 
-    CHKERR KSPSolve(solver, F, D);
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
-    MoFEMFunctionReturn(0);
-  };
-
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-
-  auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order + 4;
-  };
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
-
-  set_domain_general(pipeline_mng->getOpDomainRhsPipeline());
-  set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline());
-  set_domain_general(pipeline_mng->getOpDomainLhsPipeline());
-  set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline());
-
-  CHKERR solve_init();
-  CHKERR post_proc();
-
-  // Clear pipelines
-  pipeline_mng->getOpDomainRhsPipeline().clear();
-  pipeline_mng->getOpDomainLhsPipeline().clear();
+    // Clear pipelines
+    pipeline_mng->getOpDomainRhsPipeline().clear();
+    pipeline_mng->getOpDomainLhsPipeline().clear();
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -667,10 +692,10 @@ MoFEMErrorCode Example::assembleSystem() {
     }));
     pipeline.push_back(new OpBaseDivU(
         "H", "U", []() { return h0; }, false, false));
-    pipeline.push_back(new OpConvectiveH_dU(
-        "H", "U", grad_h_ptr, []() { return 1; }));
-    pipeline.push_back(new OpConvectiveH_dGradH(
-        "H", "H", u_ptr, []() { return 1; }));
+    pipeline.push_back(
+        new OpConvectiveH_dU("H", "U", grad_h_ptr, []() { return 1; }));
+    pipeline.push_back(
+        new OpConvectiveH_dGradH("H", "H", u_ptr, []() { return 1; }));
     pipeline.push_back(new OpULhs_dU("U", "U", u_ptr, grad_u_ptr));
     pipeline.push_back(new OpULhs_dH("U", "H"));
   };
@@ -707,11 +732,18 @@ struct Monitor : public FEMethod {
       : dM(dm), postProc(post_proc){};
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    constexpr int save_every_nth_step = 20;
+    constexpr int save_every_nth_step = 100;
     if (ts_step % save_every_nth_step == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      MOFEM_LOG("SW", Sev::verbose)
+          << "writing vector in binary to vector.dat ...";
+      PetscViewer viewer;
+      PetscViewerBinaryOpen(PETSC_COMM_WORLD, "vector.dat", FILE_MODE_WRITE,
+                            &viewer);
+      VecView(ts_u, viewer);
+      PetscViewerDestroy(&viewer);
     }
     MoFEMFunctionReturn(0);
   }
@@ -728,6 +760,15 @@ MoFEMErrorCode Example::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto dm = simple->getDM();
+
+  auto set_initial_step = [&](auto ts) {
+    MoFEMFunctionBegin;
+    int step = 0;
+    CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-step", &step,
+                              PETSC_NULL);
+    CHKERR TSSetStepNumber(ts, step);
+    MoFEMFunctionReturn(0);
+  };
 
   auto assemble_mass_mat = [&](auto M) {
     MoFEMFunctionBegin;
@@ -773,7 +814,7 @@ MoFEMErrorCode Example::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  // Setup postprocessing 
+  // Setup postprocessing
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
     post_proc_fe->generateReferenceElementMesh();
@@ -799,7 +840,6 @@ MoFEMErrorCode Example::solveSystem() {
     post_proc_fe->addFieldValuesPostProc("HO_POSITIONS");
     return post_proc_fe;
   };
-
 
   if (is_implicit_solver) {
 
@@ -833,7 +873,7 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR TSSetFromOptions(ts);
     CHKERR set_fieldsplit_preconditioner_ts(ts);
     CHKERR TSSetUp(ts);
-
+    CHKERR set_initial_step(ts);
     CHKERR TSSolve(ts, NULL);
     CHKERR TSGetTime(ts, &ftime);
   } else {
@@ -882,11 +922,11 @@ MoFEMErrorCode Example::solveSystem() {
 
     CHKERR TSSetSolution(ts, T);
     CHKERR TSSetFromOptions(ts);
+    CHKERR set_initial_step(ts);
     CHKERR TSSetUp(ts);
 
     CHKERR TSSolve(ts, NULL);
     CHKERR TSGetTime(ts, &ftime);
-
   }
 
   MoFEMFunctionReturn(0);
@@ -917,10 +957,9 @@ int main(int argc, char *argv[]) {
 
   // Add logging channel for example
   auto core_log = logging::core::get();
-  core_log->add_sink(
-      LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
-  LogManager::setLog("EXAMPLE");
-  MOFEM_LOG_TAG("EXAMPLE", "example");
+  core_log->add_sink(LogManager::createSink(LogManager::getStrmWorld(), "SW"));
+  LogManager::setLog("SW");
+  MOFEM_LOG_TAG("SW", "example");
 
   try {
 

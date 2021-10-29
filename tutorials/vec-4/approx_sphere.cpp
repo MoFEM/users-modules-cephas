@@ -377,7 +377,7 @@ MoFEMErrorCode ApproxSphere::setOPs() {
 MoFEMErrorCode ApproxSphere::solveSystem() {
   MoFEMFunctionBegin;
 
-  // // Project HO geometry from mesh
+  // Project HO geometry from mesh
   Projection10NodeCoordsOnField ent_method_material(mField, "HO_POSITIONS");
   CHKERR mField.loop_dofs("HO_POSITIONS", ent_method_material);
 
