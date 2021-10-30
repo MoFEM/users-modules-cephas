@@ -89,7 +89,8 @@ constexpr double beta = 1. / 15.;
 
 constexpr double penalty = 1;
 
-constexpr bool is_implicit_solver = false;
+// Explict splver is faster !!!
+constexpr bool is_implicit_solver = true;
 
 FTensor::Index<'i', 3> i;
 FTensor::Index<'j', 3> j;
@@ -732,7 +733,7 @@ struct Monitor : public FEMethod {
       : dM(dm), postProc(post_proc){};
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    constexpr int save_every_nth_step = 100;
+    constexpr int save_every_nth_step = 50;
     if (ts_step % save_every_nth_step == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
       CHKERR postProc->writeFile(

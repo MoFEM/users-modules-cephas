@@ -20,10 +20,10 @@
 #-ts_theta_theta 1
 #-ts_theta_initial_guess_extrapolate 1
 
-#-ts_type alpha
-#-ts_alpha_radius 0.5
+-ts_type alpha
+-ts_alpha_radius 0.75
 
--ts_type rk
+#-ts_type rk
 
 -ts_exact_final_time matchstep
 -ts_max_time 1728000
