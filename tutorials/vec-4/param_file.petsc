@@ -31,9 +31,9 @@
 -ts_dt 1e2
 -ts_max_snes_failures -1
 -ts_error_if_step_fails false
--ts_adapt_type basic 
+-ts_adapt_type none
 -ts_monitor
--ts_adapt_monitor 
+#-ts_adapt_monitor 
 
 -mat_mumps_icntl_14 800 
 -mat_mumps_icntl_24 1 
