@@ -52,10 +52,10 @@ double c = 30.; ///< speed of light (cm/ns)
 double v = c / n; ///< phase velocity of light in medium (cm/ns)
 double mu_a = 0.09; ///< absorption coefficient (cm^-1)
 double mu_sp = 16.5; ///< scattering coefficient (cm^-1)
-double flux = 1e3; ///< impulse magnitude 
+double flux_magnitude = 1e3; ///< impulse magnitude 
 
-double thickness = 5.0;
-double radius = 2.5; //< spot radius
+double slab_thickness = 5.0;
+double spot_radius = 2.5; //< spot spot_radius
 double initial_time = 0.1;
 
 double D = 1. / (3. * (mu_a + mu_sp));
@@ -112,9 +112,11 @@ public:
       const double ys = r_s * sin(phi_s);
       const double xp = x - xs;
       const double yp = y - ys;
-      const double zp = z + thickness / 2. - 1. / mu_sp;
-      const double rp2 = xp * xp + yp * yp + zp * zp;
-      return exp(-rp2 / A) * r_s;
+      const double zp1 = z + slab_thickness / 2. - 1. / mu_sp;
+      const double zp2 = z + slab_thickness / 2. + 1. / mu_sp;
+      const double P1 = xp * xp + yp * yp + zp1 * zp1;
+      const double P2 = xp * xp + yp * yp + zp2 * zp2;
+      return r_s * (exp(-P1 / A) - exp(-P2 / A));
     };
 
     auto f = [&](const double r_s) {
@@ -123,8 +125,8 @@ public:
           g, 0, 2 * M_PI, 0, std::numeric_limits<float>::epsilon());
     };
 
-    return T * flux * gauss_kronrod<double, 32>::integrate(
-                   f, 0, radius, 0, std::numeric_limits<float>::epsilon());
+    return T * flux_magnitude * gauss_kronrod<double, 32>::integrate(
+                   f, 0, spot_radius, 0, std::numeric_limits<float>::epsilon());
   };
 
 private:
@@ -167,9 +169,11 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-thickness", &thickness,
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-flux_magnitude", &flux_magnitude,
                                PETSC_NULL);
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-radius", &radius, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-slab_thickness", &slab_thickness,
+                               PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-spot_radius", &spot_radius, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-initial_time", &initial_time,
                                PETSC_NULL);
 

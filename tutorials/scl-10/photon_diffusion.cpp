@@ -69,7 +69,9 @@ PetscBool from_initial = PETSC_FALSE;
 int order = 3;
 int saveEveryNthStep = 1;
 
-double h = 0.5;   ///< convective heat coefficient
+double A = 3.0;
+
+double h = 0.5 / A;   ///< convective heat coefficient
 double D = 1. / (3. * (mu_a + mu_sp));
 double inv_v = 1. / v;
 
@@ -457,15 +459,6 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
-  // if (!mField.getInterface<MeshsetsManager>()->checkMeshset("SPOT")) {
-  //   MOFEM_LOG("PHOTON", Sev::inform)
-  //       << "reading vector in binary from vector.dat ...";
-  //   PetscViewer viewer;
-  //   PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat",
-  //                         FILE_MODE_READ, &viewer);
-  //   VecLoad(D, viewer);
-  //   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-  // }
 
   if (from_initial) {
 
