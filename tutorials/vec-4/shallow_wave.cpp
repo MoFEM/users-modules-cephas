@@ -424,7 +424,7 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("H", order);
-  CHKERR simple->setFieldOrder("HO_POSITIONS", 4);
+  CHKERR simple->setFieldOrder("HO_POSITIONS", 3);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
