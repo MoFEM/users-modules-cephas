@@ -47,19 +47,18 @@ using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
 using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
-double n = 1.44; ///< refractive index of diffusive medium 
-double c = 30.; ///< speed of light (cm/ns)
-double v = c / n; ///< phase velocity of light in medium (cm/ns)
-double mu_a = 0.09; ///< absorption coefficient (cm^-1)
-double mu_sp = 16.5; ///< scattering coefficient (cm^-1)
-double flux_magnitude = 1e3; ///< impulse magnitude 
+double n = 1.44;             ///< refractive index of diffusive medium
+double c = 30.;              ///< speed of light (cm/ns)
+double v = c / n;            ///< phase velocity of light in medium (cm/ns)
+double mu_a = 0.09;          ///< absorption coefficient (cm^-1)
+double mu_sp = 16.5;         ///< scattering coefficient (cm^-1)
+double flux_magnitude = 1e3; ///< impulse magnitude
 
 double slab_thickness = 5.0;
 double spot_radius = 2.5; //< spot spot_radius
 double initial_time = 0.1;
 
 double D = 1. / (3. * (mu_a + mu_sp));
-
 
 #include <boost/math/quadrature/gauss_kronrod.hpp>
 using namespace boost::math::quadrature;
@@ -77,9 +76,9 @@ struct OpError : public DomainEleOp {
   //     MogEMFunctionReturn(0);
   //   }
 
-  private:
-    boost::shared_ptr<VectorDouble> uAtPtsPtr;
-    double &l2Error;
+private:
+  boost::shared_ptr<VectorDouble> uAtPtsPtr;
+  double &l2Error;
 };
 
 struct PhotonDiffusion {
@@ -125,8 +124,9 @@ public:
           g, 0, 2 * M_PI, 0, std::numeric_limits<float>::epsilon());
     };
 
-    return T * flux_magnitude * gauss_kronrod<double, 32>::integrate(
-                   f, 0, spot_radius, 0, std::numeric_limits<float>::epsilon());
+    return T * flux_magnitude *
+           gauss_kronrod<double, 32>::integrate(
+               f, 0, spot_radius, 0, std::numeric_limits<float>::epsilon());
   };
 
 private:
@@ -146,7 +146,6 @@ private:
 
   // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
-
 };
 
 PhotonDiffusion::PhotonDiffusion(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -169,16 +168,31 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-flux_magnitude", &flux_magnitude,
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-flux_magnitude",
+                               &flux_magnitude, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-slab_thickness",
+                               &slab_thickness, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-spot_radius", &spot_radius,
                                PETSC_NULL);
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-slab_thickness", &slab_thickness,
-                               PETSC_NULL);
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-spot_radius", &spot_radius, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-initial_time", &initial_time,
                                PETSC_NULL);
 
+  MOFEM_LOG("INITIAL", Sev::inform) << "Refractive index: " << n;
+  MOFEM_LOG("INITIAL", Sev::inform) << "Speed of light (cm/ns): " << c;
+  MOFEM_LOG("INITIAL", Sev::inform)
+      << "Phase velocity in medium (cm/ns): " << v;
+  MOFEM_LOG("INITIAL", Sev::inform)
+      << "Absorption coefficient (cm^-1): " << mu_a;
+  MOFEM_LOG("INITIAL", Sev::inform)
+      << "Scattering coefficient (cm^-1): " << mu_sp;
+  MOFEM_LOG("INITIAL", Sev::inform) << "Impulse magnitude: " << flux_magnitude;
+  MOFEM_LOG("INITIAL", Sev::inform) << "Initial time (ns): " << initial_time;
+
   int order = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+
+  MOFEM_LOG("INITIAL", Sev::inform) << "Approximation order: " << order;
+
   CHKERR simple->setFieldOrder("U", order);
 
   CHKERR simple->setUp();
@@ -256,14 +270,14 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
- 
-  MOFEM_LOG("PHOTON", Sev::inform) << "Solver start";
+
+  MOFEM_LOG("INITIAL", Sev::inform) << "Solver start";
   CHKERR KSPSolve(solver, F, D);
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
-  MOFEM_LOG("PHOTON", Sev::inform)
+  MOFEM_LOG("INITIAL", Sev::inform)
       << "writing vector in binary to vector.dat ...";
   PetscViewer viewer;
   PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat", FILE_MODE_WRITE,
@@ -271,7 +285,7 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   VecView(D, viewer);
   PetscViewerDestroy(&viewer);
 
-  MOFEM_LOG("PHOTON", Sev::inform) << "Solver done";
+  MOFEM_LOG("INITIAL", Sev::inform) << "Solver done";
   MoFEMFunctionReturn(0);
 }
 
@@ -288,7 +302,7 @@ MoFEMErrorCode PhotonDiffusion::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpError(u_vals_at_gauss_pts, l2_error));
   CHKERR pipeline_mng->loopFiniteElements();
-  MOFEM_LOG("PHOTON", Sev::inform) << "L2 error " << l2_error;
+  MOFEM_LOG("INITIAL", Sev::inform) << "L2 error " << l2_error;
   MoFEMFunctionReturn(0);
 }
 
@@ -301,9 +315,7 @@ MoFEMErrorCode PhotonDiffusion::outputResults() {
   post_proc_fe->addFieldValuesPostProc("U");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_approx.h5m");
-  // CHKERR mField.get_moab().write_file("out_initial.h5m", "MOAB",
-  //                                     "PARALLEL=WRITE_PART");
+  CHKERR post_proc_fe->writeFile("out_initial.h5m");
   MoFEMFunctionReturn(0);
 }
 
@@ -332,9 +344,9 @@ int main(int argc, char *argv[]) {
   // Add logging channel for example
   auto core_log = logging::core::get();
   core_log->add_sink(
-      LogManager::createSink(LogManager::getStrmWorld(), "PHOTON"));
-  LogManager::setLog("PHOTON");
-  MOFEM_LOG_TAG("PHOTON", "photon")
+      LogManager::createSink(LogManager::getStrmWorld(), "INITIAL"));
+  LogManager::setLog("INITIAL");
+  MOFEM_LOG_TAG("INITIAL", "initial_diffusion")
 
   // Error handling
   try {

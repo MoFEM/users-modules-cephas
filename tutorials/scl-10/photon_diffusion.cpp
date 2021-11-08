@@ -56,22 +56,23 @@ using OpBoundaryTimeScalarField = FormsIntegrators<BoundaryEleOp>::Assembly<
 using OpBoundarySource = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
-double n = 1.44; ///< refractive index of diffusive medium 
-double c = 30.; ///< speed of light (cm/ns)
-double v = c / n; ///< phase velocity of light in medium (cm/ns)
-double mu_a = 0.09; ///< absorption coefficient (cm^-1)
-double mu_sp = 16.5; ///< scattering coefficient (cm^-1)
-double flux = 1e3; ///< impulse magnitude 
+double n = 1.44;        ///< refractive index of diffusive medium
+double c = 30.;         ///< speed of light (cm/ns)
+double v = c / n;       ///< phase velocity of light in medium (cm/ns)
+double mu_a = 0.09;     ///< absorption coefficient (cm^-1)
+double mu_sp = 16.5;    ///< scattering coefficient (cm^-1)
+double flux = 1e3;      ///< impulse magnitude
 double duration = 0.05; ///< impulse duration (ns)
 
-PetscBool from_initial = PETSC_FALSE;
+PetscBool from_initial = PETSC_TRUE;
+PetscBool output_volume = PETSC_FALSE;
 
 int order = 3;
-int saveEveryNthStep = 1;
+int save_every_nth_step = 1;
 
 double A = 3.0;
 
-double h = 0.5 / A;   ///< convective heat coefficient
+double h = 0.5 / A; ///< convective heat coefficient
 double D = 1. / (3. * (mu_a + mu_sp));
 double inv_v = 1. / v;
 
@@ -92,15 +93,16 @@ struct Monitor : public FEMethod {
 
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    if (ts_step % saveEveryNthStep == 0) {
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
-      CHKERR postProc->writeFile(
-          "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+    if (ts_step % save_every_nth_step == 0) {
+      if (output_volume) {
+        CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
+        CHKERR postProc->writeFile(
+            "out_volume_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      }
       if (skinPostProc) {
         CHKERR DMoFEMLoopFiniteElements(dM, "CAMERA_FE", skinPostProc);
         CHKERR skinPostProc->writeFile(
-            "out_skin_level_" + boost::lexical_cast<std::string>(ts_step) +
-            ".h5m");
+            "out_camera_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
       }
     }
     MoFEMFunctionReturn(0);
@@ -139,7 +141,6 @@ private:
   boost::shared_ptr<FEMethod> domianLhsFEPtr;
   boost::shared_ptr<FEMethod> boundaryLhsFEPtr;
   boost::shared_ptr<FEMethod> boundaryRhsFEPtr;
-
 };
 
 PhotonDiffusion::PhotonDiffusion(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -166,29 +167,28 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-duration", &duration,
                                PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-from_initial", &from_initial,
-                               PETSC_NULL);                             
+                             PETSC_NULL);
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-output_volume", &output_volume,
+                             PETSC_NULL);
 
   MOFEM_LOG("PHOTON", Sev::inform) << "Refractive index: " << n;
   MOFEM_LOG("PHOTON", Sev::inform) << "Speed of light (cm/ns): " << c;
-  MOFEM_LOG("PHOTON", Sev::inform)
-      << "Phase velocity in medium (cm/ns): " << v;
+  MOFEM_LOG("PHOTON", Sev::inform) << "Phase velocity in medium (cm/ns): " << v;
   MOFEM_LOG("PHOTON", Sev::inform)
       << "Absorption coefficient (cm^-1): " << mu_a;
   MOFEM_LOG("PHOTON", Sev::inform)
       << "Scattering coefficient (cm^-1): " << mu_sp;
   MOFEM_LOG("PHOTON", Sev::inform) << "Impulse magnitude: " << flux;
-  MOFEM_LOG("PHOTON", Sev::inform)
-      << "Impulse duration (ns): " << duration;
+  MOFEM_LOG("PHOTON", Sev::inform) << "Impulse duration (ns): " << duration;
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_step", &saveEveryNthStep, PETSC_NULL);
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_step", &save_every_nth_step,
+                            PETSC_NULL);
 
-  MOFEM_LOG("PHOTON", Sev::inform)
-      << "Approximation order: " << order;
-  MOFEM_LOG("PHOTON", Sev::inform)
-      << "Save step: " << saveEveryNthStep;
+  MOFEM_LOG("PHOTON", Sev::inform) << "Approximation order: " << order;
+  MOFEM_LOG("PHOTON", Sev::inform) << "Save step: " << save_every_nth_step;
 
-  CHKERR simple->setFieldOrder("U", order);      
+  CHKERR simple->setFieldOrder("U", order);
 
   auto set_camera_skin_fe = [&]() {
     MoFEMFunctionBegin;
@@ -226,7 +226,7 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
     CHKERR simple->buildFields();
     CHKERR simple->buildFiniteElements();
 
-    if(mField.check_finite_element("CAMERA_FE")) {
+    if (mField.check_finite_element("CAMERA_FE")) {
       CHKERR mField.build_finite_elements("CAMERA_FE");
       CHKERR DMMoFEMAddElement(simple->getDM(), "CAMERA_FE");
     }
@@ -465,12 +465,11 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
     MOFEM_LOG("PHOTON", Sev::inform)
         << "reading vector in binary from vector.dat ...";
     PetscViewer viewer;
-    PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat", FILE_MODE_READ,
-                          &viewer);
+    PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat",
+                          FILE_MODE_READ, &viewer);
     VecLoad(D, viewer);
 
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
   }
 
   auto solver = pipeline_mng->createTS();
@@ -523,7 +522,7 @@ int main(int argc, char *argv[]) {
   core_log->add_sink(
       LogManager::createSink(LogManager::getStrmWorld(), "PHOTON"));
   LogManager::setLog("PHOTON");
-  MOFEM_LOG_TAG("PHOTON", "photon diffusion")
+  MOFEM_LOG_TAG("PHOTON", "photon_diffusion")
 
   // Error handling
   try {
