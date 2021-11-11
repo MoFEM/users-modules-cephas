@@ -96,9 +96,9 @@ int main(int argc, char *argv[]) {
     auto refine_mng = m_field.getInterface<MeshRefinement>();
 
     auto &meshsets_index = m_mng->getMeshsetsMultindex();
-    auto &m_by_type = meshsets_index.get<CubitMeshSets_mask_meshset_mi_tag>();
+    auto &m_by_type = meshsets_index.get<CubitMeshsetMaskedType_mi_tag>();
     auto &m_by_id_and_type =
-        meshsets_index.get<Composite_Cubit_msId_And_MeshSetType_mi_tag>();
+        meshsets_index.get<Composite_Cubit_msId_And_MeshsetType_mi_tag>();
 
     for (auto mit = m_by_type.lower_bound(SIDESET);
          mit != m_by_type.upper_bound(SIDESET); mit++) {
