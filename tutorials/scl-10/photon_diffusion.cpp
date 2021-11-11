@@ -329,28 +329,13 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
 
   auto add_lhs_base_ops = [&](auto &pipeline) {
     for (auto b : bc_map) {
-      if (std::regex_match(b.first, std::regex("(.*)MIX(.*)"))) {
+      if (std::regex_match(b.first, std::regex("(.*)EXT(.*)"))) {
         pipeline.push_back(new OpBoundaryMass(
             "U", "U",
 
             [](const double, const double, const double) { return h; },
 
             b.second->getBcEntsPtr()));
-      }
-    }
-    for (auto b : bc_map) {
-      if (std::regex_match(b.first, std::regex("(.*)SPOT(.*)"))) {
-        pipeline.push_back(new OpBoundaryMass(
-            "U", "U",
-
-            [&](const double, const double, const double) {
-              if (from_initial || boundaryRhsFEPtr->ts_t > duration)
-                return h;
-              else
-                return 0.;
-            },
-
-            b.second->getBcEdgesPtr()));
       }
     }
   };
@@ -359,41 +344,11 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
     auto u_at_gauss_pts = boost::make_shared<VectorDouble>();
     pipeline.push_back(new OpCalculateScalarFieldValues("U", u_at_gauss_pts));
     for (auto b : bc_map) {
-      if (std::regex_match(b.first, std::regex("(.*)MIX(.*)"))) {
+      if (std::regex_match(b.first, std::regex("(.*)EXT(.*)"))) {
         pipeline.push_back(new OpBoundaryTimeScalarField(
             "U", u_at_gauss_pts,
 
             [](const double, const double, const double) { return h; },
-
-            b.second->getBcEntsPtr()));
-      }
-    }
-    for (auto b : bc_map) {
-      if (std::regex_match(b.first, std::regex("(.*)SPOT(.*)"))) {
-        pipeline.push_back(new OpBoundaryTimeScalarField(
-            "U", u_at_gauss_pts,
-
-            [&](const double, const double, const double) {
-              if (from_initial || boundaryRhsFEPtr->ts_t > duration)
-                return h;
-              else
-                return 0.;
-            },
-
-            b.second->getBcEdgesPtr()));
-      }
-    }
-    for (auto b : bc_map) {
-      if (std::regex_match(b.first, std::regex("(.*)SPOT(.*)"))) {
-        pipeline.push_back(new OpBoundarySource(
-            "U",
-
-            [&](const double, const double, const double) {
-              if (!from_initial && boundaryRhsFEPtr->ts_t < duration)
-                return -flux;
-              else
-                return 0.;
-            },
 
             b.second->getBcEntsPtr()));
       }
