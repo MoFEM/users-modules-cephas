@@ -220,10 +220,11 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto add_domain_base_ops = [&](auto &pipeline) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
-    pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
     pipeline.push_back(new OpSetHOWeigthsOnFace());
   };
@@ -266,18 +267,7 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     pipeline.push_back(new OpUnSetBc("U"));
   };
 
-  auto add_boundary_base_ops = [&](auto &pipeline) {
-    if (SPACE_DIM == 2) {
-      // HO is not implemented for edges
-    } else {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
-      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetHOWeigthsOnFace());
-    }
-  };
+  auto add_boundary_base_ops = [&](auto &pipeline) {};
 
   auto add_lhs_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetBc("U", false, boundaryMarker));
@@ -328,9 +318,13 @@ MoFEMErrorCode HeatEquation::solveSystem() {
   auto create_post_process_element = [&]() {
     auto post_froc_fe = boost::make_shared<PostProcEle>(mField);
     post_froc_fe->generateReferenceElementMesh();
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     post_froc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+        new OpCalculateHOJacForFace(jac_ptr));
+    post_froc_fe->getOpPtrVector().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     post_froc_fe->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
     post_froc_fe->addFieldValuesPostProc("U");
@@ -376,7 +370,7 @@ MoFEMErrorCode HeatEquation::solveSystem() {
   auto D = smartCreateDMVector(dm);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
 
-  auto solver = pipeline_mng->createTS();
+  auto solver = pipeline_mng->createTSIM();
   CHKERR TSSetSolution(solver, D);
   CHKERR set_time_monitor(dm, solver);
   CHKERR TSSetSolution(solver, D);

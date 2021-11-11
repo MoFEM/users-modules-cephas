@@ -88,11 +88,13 @@ set(TUTORIALS_DIRS
   scl-7
   scl-8
   scl-9
+  scl-10
   clx-0
   vec-0
   vec-1
   vec-2
   vec-3
+  vec-4
   mix-0
   max-0
   max-1

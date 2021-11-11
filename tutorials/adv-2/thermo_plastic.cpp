@@ -101,7 +101,7 @@ using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 // Thermal operators
 /**
  * @brief Integrate Lhs base of flux (1/k) base of flux (FLUX x FLUX)
- * 
+ *
  */
 using OpHdivHdiv = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<3, 3>;
@@ -130,21 +130,22 @@ using OpHdivFlux = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
 
 /**
  * @brief  Integrate Rhs div flux base times temperature (T)
- * 
+ *
  */
 using OpHDivTemp = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpMixDivTimesU<3, 1, 2>;
 
 /**
- * @brief Integrate Rhs base of temerature time heat capacity times heat rate (T)
- * 
+ * @brief Integrate Rhs base of temerature time heat capacity times heat rate
+ * (T)
+ *
  */
 using OpBaseDotT = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesScalarField<1>;
 
 /**
  * @brief Integrate Rhs base of temerature times divergenc of flux (T)
- * 
+ *
  */
 using OpBaseDivFlux = OpBaseDotT;
 
@@ -162,7 +163,7 @@ double sigmaY = 450;
 double H = 129;
 double visH = 0;
 double cn = 1;
-double Qinf = 0;//265;
+double Qinf = 0; // 265;
 double b_iso = 16.93;
 double heat_conductivity =
     16.2; // Force / (time temerature )  or Power /
@@ -172,10 +173,13 @@ double heat_capacity =
 double omega_0 = 2e-3;
 double omega_h = 2e-3;
 double omega_inf = 0;
-double fraction_of_dissipation = 0.5;
+double fraction_of_dissipation = 0.9;
 int order = 2;
 
-int number_of_cylese_in_one_hour = 6;
+int number_of_cycles_in_total_time = 6;
+double amplitude_cycle = 0.5;
+double amplitude_shift = 0.5;
+double phase_shift = 0.8;
 
 inline long double hardening(long double tau, double temp) {
   return H * tau * (1 - omega_h * temp) +
@@ -236,7 +240,7 @@ private:
   struct BcTempFun {
     BcTempFun(double v, FEMethod &fe) : valTemp(v), fE(fe) {}
     double operator()(const double, const double, const double) {
-      return -valTemp;// * fE.ts_t;
+      return -valTemp; // * fE.ts_t;
     }
 
   private:
@@ -320,9 +324,14 @@ MoFEMErrorCode Example::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-fraction_of_dissipation",
                                  &fraction_of_dissipation, PETSC_NULL);
-    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-number_of_cylese_in_one_hour",
-                              &number_of_cylese_in_one_hour, PETSC_NULL);
-
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-number_of_cycles_in_total_time",
+                              &number_of_cycles_in_total_time, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-amplitude_cycle",
+                                 &amplitude_cycle, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-phase_shift", &phase_shift,
+                                 PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-amplitude_shift",
+                                 &amplitude_shift, PETSC_NULL);
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " << sigmaY;
@@ -550,11 +559,12 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
 
     if (SPACE_DIM == 2) {
+      auto det_ptr = boost::make_shared<VectorDouble>();
       auto jac_ptr = boost::make_shared<MatrixDouble>();
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+      pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
       pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-      pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
       pipeline.push_back(new OpMakeHdivFromHcurl());
       pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
@@ -736,8 +746,13 @@ MoFEMErrorCode Example::OPs() {
     auto time_scaled = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return -2 * sin(2 * (fe_domain_rhs->ts_t * number_of_cylese_in_one_hour) *
-                      M_PI);
+      if (number_of_cycles_in_total_time != 0) {
+        return amplitude_cycle * sin((2 * fe_domain_rhs->ts_t - phase_shift) *
+                                     number_of_cycles_in_total_time * M_PI) +
+               amplitude_shift;
+      } else {
+        return fe_domain_rhs->ts_t;
+      }
     };
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
@@ -922,8 +937,12 @@ MoFEMErrorCode Example::OPs() {
     if (reactionMarker) {
 
       if (SPACE_DIM == 2) {
+        auto det_ptr = boost::make_shared<VectorDouble>();
+        auto jac_ptr = boost::make_shared<MatrixDouble>();
         auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-        pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+        pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+        pipeline.push_back(
+            new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
         pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
       }
 
@@ -985,10 +1004,15 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
     if (SPACE_DIM == 2) {
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       postProcFe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(inv_jac_ptr));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+          new OpCalculateHOJacForFace(jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetInvJacH1ForFace(inv_jac_ptr));
     }
 
     postProcFe->getOpPtrVector().push_back(
@@ -1064,7 +1088,7 @@ MoFEMErrorCode Example::tsSolve() {
   if (SPACE_DIM == 3)
     uZScatter = scatter_create(D, 2);
 
-  auto solver = pipeline_mng->createTS();
+  auto solver = pipeline_mng->createTSIM();
 
   CHKERR TSSetSolution(solver, D);
   CHKERR set_section_monitor(solver);

@@ -198,10 +198,11 @@ MoFEMErrorCode WaveEquation::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto add_domain_base_ops = [&](auto &pipeline) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpCalculateJacForFace(jac_ptr));
-    pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
     pipeline.push_back(new OpSetHOWeigthsOnFace());
   };
@@ -289,9 +290,13 @@ MoFEMErrorCode WaveEquation::solveSystem() {
   auto create_post_process_element = [&]() {
     auto post_froc_fe = boost::make_shared<PostProcEle>(mField);
     post_froc_fe->generateReferenceElementMesh();
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     post_froc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+        new OpCalculateHOJacForFace(jac_ptr));
+    post_froc_fe->getOpPtrVector().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     post_froc_fe->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
     post_froc_fe->addFieldValuesPostProc("U");
@@ -337,7 +342,7 @@ MoFEMErrorCode WaveEquation::solveSystem() {
   auto D = smartCreateDMVector(dm);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
 
-  auto ts = pipeline_mng->createTS2();
+  auto ts = pipeline_mng->createTSIM2();
 
   CHKERR TSSetSolution(ts, D);
   auto DD = smartVectorDuplicate(D);

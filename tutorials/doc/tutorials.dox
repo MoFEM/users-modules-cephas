@@ -145,7 +145,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td>\ref basic_tutorials_wave_equation</td>
        <td> Time-dependent problem with second-order time derivative
-       <br/> *Keywords:* [TS](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/index.html) solver, implicit scheme
+       <br/> *Keywords:* [TS](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/index.html) solver, implicit scheme, non-homegenous time dependent boundaru condition
        </td>
   </tr>
 
@@ -159,7 +159,14 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td>\ref tutorial_heat_method</td>
        <td> Finding geodesic distance with heat method
-       <br/> *Keywords:*  Face elements embedded in 3d space
+       <br/> *Keywords:*  face elements embedded in 3d space
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref tutorials_photon_diffusion</td>
+       <td> Photon diffusion equation
+       <br/> *Keywords:*  Inital boundary conditions, parabolic equation, adding user element, postprocessing on skin, initial vector
        </td>
   </tr>
 
@@ -207,6 +214,13 @@ continuing with the one you are most excited about.
        <td width="350px">\ref tutorial_nonlinear_dynamic_elastic</td>
        <td> Time-dependent nonlinear elastic (dynamics)
        <br/> *Keywords:* Alpha2 method
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref shallow_wave_doc</td>
+       <td> Shallow wave equation on mainfold (atmospheric processes)
+       <br/> *Keywords:* Alpha method, initail conditions, hyperbolic equation, sphere approximation, explicit/implicit time integration, restart vector
        </td>
   </tr>
 

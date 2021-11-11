@@ -952,13 +952,11 @@ the implemented UDO for stiffness matrix `OpDomainLhsMatrixK` is pushed to the
 LhsPipeline.
 \code
   { // Push operators to the Pipeline that is responsible for calculating LHS
-
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
-
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField));
   }
@@ -1232,10 +1230,11 @@ to solve 3D problem with few changes as follows
 - No need to specifically calculate inverse of Jacobian in 3D case, it is done
   automatically behind the curtain (`.cpp` file)
   \code
-  // MatrixDouble invJac;
-  // pipelineLhs->getOpPtrVector().push_back(
-  //     new OpCalculateInvJacForFace(invJac));
-  // pipelineLhs->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+        auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  pipelineLhs->getOpPtrVector().push_back(new OpCalculateHOJacForFace(jac_ptr));
+  pipelineLhs->getOpPtrVector().push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   \endcode
 
 - [Optional] Objects' name changed for readability (`.cpp` and `.hpp` file)

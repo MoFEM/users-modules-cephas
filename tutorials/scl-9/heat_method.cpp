@@ -201,9 +201,11 @@ MoFEMErrorCode Example::assembleSystem() {
   // Push element from reference configuration to current configuration in 3d
   // space
   auto set_domain_general = [&](auto &pipeline) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(
-        new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac_ptr));
+    pipeline.push_back(new OpCalculateHOJacForFaceEmbeddedIn3DSpace(jac_ptr));
+    pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(inv_jac_ptr));
   };
 
@@ -303,6 +305,8 @@ MoFEMErrorCode Example::assembleSystem() {
     MoFEMFunctionBegin;
     auto tmp_lhs_fe = pipeline_mng->getDomainLhsFE();
     auto tmp_rhs_fe = pipeline_mng->getDomainRhsFE();
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline_mng->getDomainLhsFE().reset();
     pipeline_mng->getDomainRhsFE().reset();
@@ -310,7 +314,9 @@ MoFEMErrorCode Example::assembleSystem() {
         boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
     post_proc_fe->generateReferenceElementMesh();
     post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac_ptr));
+        new OpCalculateHOJacForFaceEmbeddedIn3DSpace(jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(inv_jac_ptr));
     post_proc_fe->addFieldValuesPostProc("U");

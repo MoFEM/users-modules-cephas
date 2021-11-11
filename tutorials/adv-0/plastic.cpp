@@ -409,8 +409,11 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
 
     if (SPACE_DIM == 2) {
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+      pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
       pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
     }
 
@@ -716,8 +719,12 @@ MoFEMErrorCode Example::OPs() {
     if (reactionMarker) {
 
       if (SPACE_DIM == 2) {
+        auto det_ptr = boost::make_shared<VectorDouble>();
+        auto jac_ptr = boost::make_shared<MatrixDouble>();
         auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-        pipeline.push_back(new OpCalculateInvJacForFace(inv_jac_ptr));
+        pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+        pipeline.push_back(
+            new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
         pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
       }
 
@@ -803,11 +810,20 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
     if (SPACE_DIM == 2) {
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       postProcFe->getOpPtrVector().push_back(
+<<<<<<< HEAD
           new OpCalculateInvJacForFace(inv_jac_ptr));
       postProcFe->getOpPtrVector().push_back(
           new OpSetInvJacH1ForFace(inv_jac_ptr));
+=======
+          new OpCalculateHOJacForFace(jac_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+>>>>>>> develop
     }
 
     postProcFe->getOpPtrVector().push_back(
@@ -935,7 +951,7 @@ MoFEMErrorCode Example::tsSolve() {
   if (SPACE_DIM == 3)
     uZScatter = scatter_create(D, 2);
 
-  auto solver = pipeline_mng->createTS();
+  auto solver = pipeline_mng->createTSIM();
 
   CHKERR TSSetSolution(solver, D);
   CHKERR set_section_monitor(solver);
