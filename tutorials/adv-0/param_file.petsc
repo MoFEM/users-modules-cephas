@@ -21,7 +21,7 @@
 -ts_dt 0.05
 -ts_max_snes_failures 0
 -ts_error_if_step_fails true
--ts_adapt_type none
+-ts_adapt_type basic
 
 -ts_monitor
 -ts_adapt_monitor

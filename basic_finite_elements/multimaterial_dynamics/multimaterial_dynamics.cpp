@@ -24,6 +24,17 @@ namespace po = boost::program_options;
 #include <ElasticMaterials.hpp>
 #include <SurfacePressureComplexForLazy.hpp>
 
+#ifdef WITH_MODULE_MORTAR_CONTACT
+#include <Mortar.hpp>
+#include <MortarContactInterface.hpp>
+// constexpr bool with_contact = true;
+// #else
+// constexpr bool with_contact = false;
+
+#endif
+
+#include <MortarContactFunctions.hpp>
+
 using DomainEle = VolumeElementForcesAndSourcesCore;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = FaceElementForcesAndSourcesCore;
@@ -115,9 +126,15 @@ int main(int argc, char *argv[]) {
     CHKERR md.getParams();
     CHKERR md.setupProblem();
     CHKERR md.bC();
-    // CHKERR md.OPs();
-    CHKERR md.tsSolve();
+    CHKERR md.tsSetup();
 
+    #ifdef WITH_MODULE_MORTAR_CONTACT
+    CHKERR MMortarContactFunctions::SetContactStructures(m_field);
+    #endif
+
+    CHKERR md.OPs();
+    CHKERR md.postProcessSetup();
+    CHKERR md.tsSolve();
   }
   CATCH_ERRORS;
 

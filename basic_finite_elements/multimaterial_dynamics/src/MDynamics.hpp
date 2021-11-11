@@ -19,6 +19,7 @@ struct MDynamics {
   int order;
   PetscBool isQuasiStatic;
   MoFEM::Interface &mField;
+  SmartPetscObj<TS> Tsolver;
 
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
@@ -48,6 +49,7 @@ struct MDynamics {
   MoFEMErrorCode bC();
   MoFEMErrorCode OPs();
   MoFEMErrorCode postProcessSetup();
+  MoFEMErrorCode tsSetup();
   MoFEMErrorCode tsSolve();
 
   MoFEMErrorCode getEntsOnMeshSkin(Range &bc);
@@ -393,7 +395,7 @@ MoFEMErrorCode MDynamics::OPs() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode MDynamics::tsSolve() {
+MoFEMErrorCode MDynamics::tsSetup() {
   MoFEMFunctionBegin;
 
   Simple *simple = mField.getInterface<Simple>();
@@ -411,35 +413,40 @@ MoFEMErrorCode MDynamics::tsSolve() {
   };
 
   auto D = smartCreateDMVector(dm);
-  SmartPetscObj<TS> solver;
 
   if (isQuasiStatic) {
-    solver = pipeline_mng->createTS();
-    CHKERR TSSetFromOptions(solver);
-    CHKERR TSSetSolution(solver, D);
+    Tsolver = pipeline_mng->createTS();
+    CHKERR TSSetFromOptions(Tsolver);
+    CHKERR TSSetSolution(Tsolver, D);
   } else {
-    solver = pipeline_mng->createTS2();
-    CHKERR TSSetFromOptions(solver);
-    CHKERR TSSetType(solver, TSALPHA2);
+    Tsolver = pipeline_mng->createTS2();
+    CHKERR TSSetFromOptions(Tsolver);
+    CHKERR TSSetType(Tsolver, TSALPHA2);
     auto DD = smartVectorDuplicate(D);
-    CHKERR TS2SetSolution(solver, D, DD);
+    CHKERR TS2SetSolution(Tsolver, D, DD);
   }
 
-  CHKERR set_time_monitor(dm, solver);
-  CHKERR OPs();
-  CHKERR postProcessSetup();
+  CHKERR set_time_monitor(dm, Tsolver);
+  // CHKERR OPs();
+  // CHKERR postProcessSetup();
   
-  CHKERR TSSetExactFinalTime(solver, TS_EXACTFINALTIME_MATCHSTEP);
-  CHKERR TSSetUp(solver);
-  CHKERR TSSolve(solver, NULL);
-
-  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR TSSetExactFinalTime(Tsolver, TS_EXACTFINALTIME_MATCHSTEP);
 
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode MDynamics::tsSolve() {
+  MoFEMFunctionBegin;
+
+  CHKERR TSSetUp(Tsolver);
+  CHKERR TSSolve(Tsolver, NULL);
+
+  // CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+  // CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+  // CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+  MoFEMFunctionReturn(0);
+}
 MoFEMErrorCode MDynamics::postProcessSetup() {
   MoFEMFunctionBegin;
   postProc = boost::make_shared<PostProcEle>(mField);
