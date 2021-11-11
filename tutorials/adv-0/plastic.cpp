@@ -342,30 +342,21 @@ MoFEMErrorCode Example::bC() {
                                         "U", 0, 3);
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
-
-  boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
-  for (auto b : bc_map) {
-    if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)"))) {
-      boundaryMarker->resize(b.second->bcMarkers.size(), 0);
-      for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
-        (*boundaryMarker)[i] |= b.second->bcMarkers[i];
-      }
-    }
-  }
-
+  boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_"});
+  
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
-  for (auto b : bc_map) {
-    MOFEM_LOG("EXAMPLE", Sev::verbose) << "Marker " << b.first;
-  }
 
+  for (auto bc : bc_map) 
+    MOFEM_LOG("EXAMPLE", Sev::verbose) << "Marker " << bc.first;
+  
   // OK. We have problem with GMesh, it adding empty characters at the end of
   // block. So first block is search by regexp. popMarkDOFsOnEntities should
   // work with regexp.
   std::string reaction_block_set;
-  for (auto b : bc_map) {
-    if (std::regex_match(b.first, std::regex("(.*)_REACTION.*"))) {
-      reaction_block_set = b.first;
+  for (auto bc : bc_map) {
+    if (bc_mng->checkBlock(bc, "REACTION")) {
+      reaction_block_set = bc.first;
       break;
     }
   }
@@ -397,6 +388,7 @@ MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   auto simple = mField.getInterface<Simple>();
+  auto bc_mng = mField.getInterface<BcManager>();
 
   feAxiatorLhs = boost::make_shared<DomainEle>(mField);
   feAxiatorRhs = boost::make_shared<DomainEle>(mField);
@@ -591,7 +583,7 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
     for (auto bc : bc_map) {
-      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+      if (bc_mng->checkBlock(bc, "FIX_")){
         pipeline.push_back(
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         pipeline.push_back(new OpBoundaryMass(
@@ -659,7 +651,7 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
 
     for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
-      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+      if (bc_mng->checkBlock(bc, "FIX_"))  {
         pipeline.push_back(
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
