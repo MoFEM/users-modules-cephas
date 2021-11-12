@@ -980,7 +980,7 @@ private:
   EntityHandle startingEleQuadHandle; ///< Starting handle for quads post proc
 
   int numberOfTriangles; ///< Number of triangles to  create
-  int numberOfQuads; ///< NUmber of quads to create
+  int numberOfQuads;     ///< NUmber of quads to create
   int counterTris;
   int counterQuads;
 };

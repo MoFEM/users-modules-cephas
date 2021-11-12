@@ -690,13 +690,9 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
             "post-process mesh not generated");
 
-  // const int nb_of_element_on_the_loop = getNinTheLoop();
-  // const int num_nodes_on_ele = refEleMap.size2();
-
   auto create_tri = [&](auto &gauss_pts) {
     std::array<EntityHandle, 3> tri_conn;
     MatrixDouble3by3 coords_tri(3, 3);
-    // VectorDouble3 coords(3);
     CHKERR mField.get_moab().get_connectivity(
         numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
     CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords_tri(0, 0));
@@ -719,9 +715,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
       verticesOnTriArrays[0][counterTris * num_nodes_on_ele + gg] = x;
       verticesOnTriArrays[1][counterTris * num_nodes_on_ele + gg] = y;
       verticesOnTriArrays[2][counterTris * num_nodes_on_ele + gg] = z;
-
-      // Here we do not create vertex, we set values to array, i.e. MOAB memory
-      // CHKERR postProcMesh.create_vertex(&coords[0], tri_conn[gg]);
     }
 
     mapGaussPts.resize(num_nodes_on_ele);
@@ -731,17 +724,14 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
       mapGaussPts[nn] = triConn[num_nodes_on_ele * counterTris + nn];
     }
 
-    // CHKERR postProcMesh.create_element(MBTRI, &tri_conn[0], 3, tri);
     const auto tri = startingEleTriHandle + counterTris;
-  
+
     return tri;
   };
 
   auto create_quad = [&](auto &gauss_pts) {
-    // EntityHandle quad;
     std::array<EntityHandle, 4> quad_conn;
     MatrixDouble coords_quad(4, 3);
-    // VectorDouble coords(4);
     CHKERR mField.get_moab().get_connectivity(
         numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
     CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords_quad(0, 0));
@@ -762,42 +752,25 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
       verticesOnQuadArrays[0][counterQuads * num_nodes_on_ele + gg] = x;
       verticesOnQuadArrays[1][counterQuads * num_nodes_on_ele + gg] = y;
       verticesOnQuadArrays[2][counterQuads * num_nodes_on_ele + gg] = z;
-
-      // CHKERR postProcMesh.create_vertex(&coords[0], quad_conn[gg]);
     }
 
     mapGaussPts.resize(num_nodes_on_ele);
-    // CHKERR postProcMesh.create_element(MBQUAD, &quad_conn[0], 4, quad);
+
     for (int nn = 0; nn != num_nodes_on_ele; ++nn) {
       quadConn[num_nodes_on_ele * counterQuads + nn] =
           num_nodes_on_ele * counterQuads + nn + startingVertQuadHandle;
       mapGaussPts[nn] = quadConn[num_nodes_on_ele * counterQuads + nn];
     }
 
-    // CHKERR postProcMesh.create_element(MBTRI, &tri_conn[0], 3, tri);
     const auto quad = startingEleQuadHandle + counterQuads;
     return quad;
   };
 
-  // auto add_mid_nodes = [&](auto tri) {
-  //   MoFEMFunctionBeginHot;
-  //   Range edges;
-  //   CHKERR postProcMesh.get_adjacencies(&tri, 1, 1, true, edges);
-  //   EntityHandle meshset;
-  //   CHKERR postProcMesh.create_meshset(MESHSET_SET, meshset);
-  //   CHKERR postProcMesh.add_entities(meshset, &tri, 1);
-  //   CHKERR postProcMesh.add_entities(meshset, edges);
-  //   CHKERR postProcMesh.convert_entities(meshset, true, false, false);
-  //   CHKERR postProcMesh.delete_entities(&meshset, 1);
-  //   CHKERR postProcMesh.delete_entities(edges);
-  //   MoFEMFunctionReturnHot(0);
-  // };
-
   EntityHandle tri;
 
   if (elementsMap.size() == getLoopSize()) {
-    // Note "at" that will trigger error if element is not there. 
-    tri = elementsMap.at(numeredEntFiniteElementPtr->getEnt()); 
+    // Note "at" that will trigger error if element is not there.
+    tri = elementsMap.at(numeredEntFiniteElementPtr->getEnt());
     switch (numeredEntFiniteElementPtr->getEntType()) {
     case MBTRI:
       gaussPts.resize(gaussPtsTri.size1(), gaussPtsTri.size2(), false);
@@ -838,11 +811,9 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
               "Not implemented element type");
     }
-    // if (sixNodePostProcTris)
-    //   CHKERR add_mid_nodes(tri);
+
     elementsMap[numeredEntFiniteElementPtr->getEnt()] = tri;
   }
-
 
   MoFEMFunctionReturn(0);
 }
@@ -867,7 +838,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
       auto type = (*miit)->getEntType();
       ++nb_elemms_by_type[type];
     }
-    
+
     return nb_elemms_by_type;
   };
 
