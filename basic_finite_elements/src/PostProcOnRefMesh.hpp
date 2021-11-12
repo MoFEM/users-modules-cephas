@@ -895,7 +895,8 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
                             bool six_node_post_proc_tris = true)
       : PostProcTemplateOnRefineMesh<MoFEM::FaceElementForcesAndSourcesCore>(
             m_field),
-        sixNodePostProcTris(six_node_post_proc_tris) {}
+        sixNodePostProcTris(six_node_post_proc_tris), counterTris(0),
+        counterQuads(0) {}
 
   // Gauss pts set on refined mesh
   int getRule(int order) { return -1; };
@@ -959,8 +960,29 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
       bool save_on_tag = true);
 
 private:
-  MatrixDouble gaussPtsTri;
-  MatrixDouble gaussPtsQuad;
+  MatrixDouble gaussPtsTri; ///<  Gauss points coordinates on reference triangle
+  MatrixDouble gaussPtsQuad; ///< Gauss points coordinates on reference quad
+  EntityHandle *triConn;     ///< Connectivity for created tri elements
+  EntityHandle *quadConn;    ///< Connectivity for created quad elements
+  EntityHandle
+      startingVertTriHandle; ///< Starting handle for vertices on triangles
+  EntityHandle
+      startingVertQuadHandle; ///< Starting handle for vertices on quads
+  std::vector<double *>
+      verticesOnTriArrays; /// pointers to memory allocated by MoAB for
+                           /// storing X, Y, and Z coordinates
+  std::vector<double *>
+      verticesOnQuadArrays; /// pointers to memory allocated by MoAB for
+                            /// storing X, Y, and Z coordinates
+
+  EntityHandle
+      startingEleTriHandle; ///< Starting handle for triangles post proc
+  EntityHandle startingEleQuadHandle; ///< Starting handle for quads post proc
+
+  int numberOfTriangles; ///< Number of triangles to  create
+  int numberOfQuads; ///< NUmber of quads to create
+  int counterTris;
+  int counterQuads;
 };
 
 /**
