@@ -332,18 +332,7 @@ MoFEMErrorCode Example::bC() {
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
                                         "U", 0, 3);
 
-  auto &bc_map = bc_mng->getBcMapByBlockName();
-  if (bc_map.size()) {
-    boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
-    for (auto b : bc_map) {
-      if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)"))) {
-        boundaryMarker->resize(b.second->bcMarkers.size(), 0);
-        for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
-          (*boundaryMarker)[i] |= b.second->bcMarkers[i];
-        }
-      }
-    }
-  }
+  boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_"});
 
   MoFEMFunctionReturn(0);
 }
