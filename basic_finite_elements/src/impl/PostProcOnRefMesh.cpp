@@ -662,11 +662,11 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::generateReferenceElementMesh() {
       CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
       gauss_pts.resize(3, num_nodes, false);
       gauss_pts.clear();
-      for (int nn = 0; nn != 4; nn++) {
+      for (int nn = 0; nn != num_nodes; nn++) {
         gauss_pts(0, nn) = coords(nn, 0);
         gauss_pts(1, nn) = coords(nn, 1);
-        gauss_pts(0, 4 + nn) = coords(4 + nn, 0);
-        gauss_pts(1, 4 + nn) = coords(4 + nn, 1);
+        // gauss_pts(0, 4 + nn) = coords(4 + nn, 0);
+        // gauss_pts(1, 4 + nn) = coords(4 + nn, 1);
       }
     } else {
       CHKERR moab_ref.get_connectivity(quad, conn, num_nodes, false);
@@ -728,9 +728,12 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
       // CHKERR postProcMesh.create_vertex(&coords[0], tri_conn[gg]);
     }
 
-    for (int nn = 0; nn != num_nodes_on_ele; ++nn)
+    mapGaussPts.resize(num_nodes_on_ele);
+    for (int nn = 0; nn != num_nodes_on_ele; ++nn) {
       triConn[num_nodes_on_ele * counterTris + nn] =
           num_nodes_on_ele * counterTris + nn + startingVertTriHandle;
+      mapGaussPts[nn] = triConn[num_nodes_on_ele * counterQuads + nn];
+    }
 
     // CHKERR postProcMesh.create_element(MBTRI, &tri_conn[0], 3, tri);
     const auto tri = startingEleTriHandle + counterTris;
@@ -742,7 +745,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
     // EntityHandle quad;
     std::array<EntityHandle, 4> quad_conn;
     MatrixDouble coords_quad(4, 3);
-    VectorDouble coords(4);
+    // VectorDouble coords(4);
     CHKERR mField.get_moab().get_connectivity(
         numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
     CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords_quad(0, 0));
@@ -766,10 +769,14 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
 
       // CHKERR postProcMesh.create_vertex(&coords[0], quad_conn[gg]);
     }
+
+    mapGaussPts.resize(num_nodes_on_ele);
     // CHKERR postProcMesh.create_element(MBQUAD, &quad_conn[0], 4, quad);
-    for (int nn = 0; nn != num_nodes_on_ele; ++nn)
+    for (int nn = 0; nn != num_nodes_on_ele; ++nn) {
       quadConn[num_nodes_on_ele * counterQuads + nn] =
           num_nodes_on_ele * counterQuads + nn + startingVertQuadHandle;
+      mapGaussPts[nn] = quadConn[num_nodes_on_ele * counterQuads + nn];
+    }
 
     // CHKERR postProcMesh.create_element(MBTRI, &tri_conn[0], 3, tri);
     const auto quad = startingEleQuadHandle + counterQuads;
@@ -808,6 +815,15 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
               "Not implemented element type");
     }
+
+    // Set values which map nodes with integration points on the prism
+    const EntityHandle *conn;
+    int num_nodes;
+    CHKERR postProcMesh.get_connectivity(tri, conn, num_nodes, false);
+    mapGaussPts.resize(num_nodes);
+    for (int nn = 0; nn != num_nodes; nn++)
+      mapGaussPts[nn] = conn[nn];
+
   } else {
     switch (numeredEntFiniteElementPtr->getEntType()) {
     case MBTRI:
@@ -831,14 +847,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
     elementsMap[numeredEntFiniteElementPtr->getEnt()] = tri;
   }
 
-  // Set values which map nodes with integration points on the prism
-  const EntityHandle *conn;
-  int num_nodes;
-
-  CHKERR postProcMesh.get_connectivity(tri, conn, num_nodes, false);
-  mapGaussPts.resize(num_nodes);
-  for (int nn = 0; nn != num_nodes; nn++)
-    mapGaussPts[nn] = conn[nn];
 
   MoFEMFunctionReturn(0);
 }
@@ -898,7 +906,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
                                     startingVertQuadHandle,
                                     verticesOnQuadArrays);
       CHKERR iface->get_element_connect(numberOfQuads, gaussPtsQuad.size2(),
-                                        MBQUAD, 0, startingVertQuadHandle,
+                                        MBQUAD, 0, startingEleQuadHandle,
                                         quadConn);
     }
   }
