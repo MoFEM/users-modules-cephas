@@ -599,11 +599,9 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::generateReferenceElementMesh() {
       CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
       gauss_pts.resize(3, num_nodes, false);
       gauss_pts.clear();
-      for (int nn = 0; nn < 3; nn++) {
+      for (int nn = 0; nn < num_nodes; nn++) {
         gauss_pts(0, nn) = coords(nn, 0);
         gauss_pts(1, nn) = coords(nn, 1);
-        gauss_pts(0, 3 + nn) = coords(3 + nn, 0);
-        gauss_pts(1, 3 + nn) = coords(3 + nn, 1);
       }
     } else {
       CHKERR moab_ref.get_connectivity(tri, conn, num_nodes, false);
@@ -665,8 +663,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::generateReferenceElementMesh() {
       for (int nn = 0; nn != num_nodes; nn++) {
         gauss_pts(0, nn) = coords(nn, 0);
         gauss_pts(1, nn) = coords(nn, 1);
-        // gauss_pts(0, 4 + nn) = coords(4 + nn, 0);
-        // gauss_pts(1, 4 + nn) = coords(4 + nn, 1);
       }
     } else {
       CHKERR moab_ref.get_connectivity(quad, conn, num_nodes, false);
@@ -732,7 +728,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
     for (int nn = 0; nn != num_nodes_on_ele; ++nn) {
       triConn[num_nodes_on_ele * counterTris + nn] =
           num_nodes_on_ele * counterTris + nn + startingVertTriHandle;
-      mapGaussPts[nn] = triConn[num_nodes_on_ele * counterQuads + nn];
+      mapGaussPts[nn] = triConn[num_nodes_on_ele * counterTris + nn];
     }
 
     // CHKERR postProcMesh.create_element(MBTRI, &tri_conn[0], 3, tri);
