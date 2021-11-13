@@ -821,42 +821,16 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
 MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
   MoFEMFunctionBegin;
 
-  const int number_of_ents_in_the_loop = getLoopSize();
-
-  auto get_number_of_computational_elements = [&]() {
-    auto fe_name = feName;
-    auto fe_ptr = problemPtr->numeredFiniteElementsPtr;
-
-    auto miit = fe_ptr->get<Composite_Name_And_Part_mi_tag>().lower_bound(
-        boost::make_tuple(fe_name, getLoFERank()));
-    auto hi_miit = fe_ptr->get<Composite_Name_And_Part_mi_tag>().upper_bound(
-        boost::make_tuple(fe_name, getHiFERank()));
-
-    if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
-      THROW_MESSAGE(
-          "Wrong size of indicices. Inconsistent size number of iterated "
-          "elements iterated by problem and from range.");
-    }
-
-    std::array<int, MBMAXTYPE> nb_elemms_by_type;
-    std::fill(nb_elemms_by_type.begin(), nb_elemms_by_type.end(), 0);
-
-    for (; miit != hi_miit; ++miit) {
-      auto type = (*miit)->getEntType();
-      ++nb_elemms_by_type[type];
-    }
-
-    return nb_elemms_by_type;
-  };
-
   ReadUtilIface *iface;
   CHKERR postProcMesh.query_interface(iface);
 
-
+  const int number_of_ents_in_the_loop = getLoopSize();
   if (elementsMap.size() != number_of_ents_in_the_loop) {
 
-    auto nb_computational_elements_by_type =
-        get_number_of_computational_elements();
+    elementsMap.clear();
+    postProcMesh.delete_mesh();
+
+    auto nb_computational_elements_by_type = getNumberOfComputationalElements();
 
     const int numberOfTriangles = nb_computational_elements_by_type[MBTRI];
     const int numberOfQuads = nb_computational_elements_by_type[MBQUAD];

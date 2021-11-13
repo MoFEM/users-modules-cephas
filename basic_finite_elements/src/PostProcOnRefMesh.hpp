@@ -273,6 +273,38 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
                                    "PARALLEL=WRITE_PART");
     MoFEMFunctionReturn(0);
   }
+
+protected:
+
+  std::array<int, MBMAXTYPE> getNumberOfComputationalElements() {
+
+    auto fe_name = this->feName;
+    auto fe_ptr = this->problemPtr->numeredFiniteElementsPtr;
+
+    auto miit =
+        fe_ptr->template get<Composite_Name_And_Part_mi_tag>().lower_bound(
+            boost::make_tuple(fe_name, this->getLoFERank()));
+    auto hi_miit =
+        fe_ptr->template get<Composite_Name_And_Part_mi_tag>().upper_bound(
+            boost::make_tuple(fe_name, this->getHiFERank()));
+
+    const int number_of_ents_in_the_loop = this->getLoopSize();
+    if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
+      THROW_MESSAGE(
+          "Wrong size of indicices. Inconsistent size number of iterated "
+          "elements iterated by problem and from range.");
+    }
+
+    std::array<int, MBMAXTYPE> nb_elemms_by_type;
+    std::fill(nb_elemms_by_type.begin(), nb_elemms_by_type.end(), 0);
+
+    for (; miit != hi_miit; ++miit) {
+      auto type = (*miit)->getEntType();
+      ++nb_elemms_by_type[type];
+    }
+
+    return nb_elemms_by_type;
+  };
 };
 
 template <class VOLUME_ELEMENT>
