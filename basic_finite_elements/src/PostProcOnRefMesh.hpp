@@ -304,7 +304,17 @@ protected:
     }
 
     return nb_elemms_by_type;
-  };
+  }
+
+  int getElementMaxDofsOrder() {
+    int max_order = 0;
+    auto dofs_vec = this->getDataVectorDofsPtr();
+    for (auto &dof : *dofs_vec) {
+      const int dof_order = dof->getDofOrder();
+      max_order = (max_order < dof_order) ? dof_order : max_order;
+    };
+    return max_order;
+  }
 };
 
 template <class VOLUME_ELEMENT>
@@ -599,17 +609,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
                              auto &level_shape_functions) {
       MoFEMFunctionBegin;
 
-      auto get_element_max_dofs_order = [this]() {
-        int max_order = 0;
-        auto dofs_vec = this->getDataVectorDofsPtr();
-        for (auto &dof : *dofs_vec) {
-          const int dof_order = dof->getDofOrder();
-          max_order = (max_order < dof_order) ? dof_order : max_order;
-        };
-        return max_order;
-      };
-
-      const int dof_max_order = get_element_max_dofs_order();
+      const auto dof_max_order = this->getElementMaxDofsOrder();
       size_t level = (dof_max_order > 0) ? (dof_max_order - 1) / 2 : 0;
       if (level > (level_gauss_pts_on_ref_mesh.size() - 1))
         level = level_gauss_pts_on_ref_mesh.size() - 1;
@@ -725,36 +725,47 @@ struct PostProcTemplateVolumeOnRefinedMesh
       delete pcomm_post_proc_mesh;
 
     CHKERR T::postProcMesh.delete_mesh();
+
+    auto nb_computational_elements_by_type =
+        this->getNumberOfComputationalElements();
+
     MoFEMFunctionReturnHot(0);
   }
 
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBeginHot;
 
-    ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&(T::postProcMesh), MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh == NULL) {
-      T::wrapRefMeshComm =
-          boost::make_shared<WrapMPIComm>(T::mField.get_comm(), false);
-      pcomm_post_proc_mesh = new ParallelComm(&(T::postProcMesh),
-                                              (T::wrapRefMeshComm)->get_comm());
-    }
+    auto resolve_shared_ents = [&]() {
+      MoFEMFunctionBegin;
+      ParallelComm *pcomm_post_proc_mesh =
+          ParallelComm::get_pcomm(&(T::postProcMesh), MYPCOMM_INDEX);
+      if (pcomm_post_proc_mesh == NULL) {
+        T::wrapRefMeshComm =
+            boost::make_shared<WrapMPIComm>(T::mField.get_comm(), false);
+        pcomm_post_proc_mesh = new ParallelComm(
+            &(T::postProcMesh), (T::wrapRefMeshComm)->get_comm());
+      }
 
-    Range edges;
-    CHKERR T::postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
-    CHKERR T::postProcMesh.delete_entities(edges);
-    Range faces;
-    CHKERR T::postProcMesh.get_entities_by_dimension(0, 2, faces, false);
-    CHKERR T::postProcMesh.delete_entities(faces);
+      Range edges;
+      CHKERR T::postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
+      CHKERR T::postProcMesh.delete_entities(edges);
+      Range faces;
+      CHKERR T::postProcMesh.get_entities_by_dimension(0, 2, faces, false);
+      CHKERR T::postProcMesh.delete_entities(faces);
 
-    Range ents;
-    CHKERR T::postProcMesh.get_entities_by_dimension(0, 3, ents, false);
+      Range ents;
+      CHKERR T::postProcMesh.get_entities_by_dimension(0, 3, ents, false);
 
-    int rank = T::mField.get_comm_rank();
-    CHKERR T::postProcMesh.tag_clear_data(pcomm_post_proc_mesh->part_tag(),
-                                          ents, &rank);
+      int rank = T::mField.get_comm_rank();
+      CHKERR T::postProcMesh.tag_clear_data(pcomm_post_proc_mesh->part_tag(),
+                                            ents, &rank);
 
-    CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
+      CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR resolve_shared_ents();
 
     MoFEMFunctionReturnHot(0);
   }
