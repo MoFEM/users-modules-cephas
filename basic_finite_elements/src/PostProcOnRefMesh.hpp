@@ -274,47 +274,6 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
     MoFEMFunctionReturn(0);
   }
 
-protected:
-
-  std::array<int, MBMAXTYPE> getNumberOfComputationalElements() {
-
-    auto fe_name = this->feName;
-    auto fe_ptr = this->problemPtr->numeredFiniteElementsPtr;
-
-    auto miit =
-        fe_ptr->template get<Composite_Name_And_Part_mi_tag>().lower_bound(
-            boost::make_tuple(fe_name, this->getLoFERank()));
-    auto hi_miit =
-        fe_ptr->template get<Composite_Name_And_Part_mi_tag>().upper_bound(
-            boost::make_tuple(fe_name, this->getHiFERank()));
-
-    const int number_of_ents_in_the_loop = this->getLoopSize();
-    if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
-      THROW_MESSAGE(
-          "Wrong size of indicices. Inconsistent size number of iterated "
-          "elements iterated by problem and from range.");
-    }
-
-    std::array<int, MBMAXTYPE> nb_elemms_by_type;
-    std::fill(nb_elemms_by_type.begin(), nb_elemms_by_type.end(), 0);
-
-    for (; miit != hi_miit; ++miit) {
-      auto type = (*miit)->getEntType();
-      ++nb_elemms_by_type[type];
-    }
-
-    return nb_elemms_by_type;
-  }
-
-  int getElementMaxDofsOrder() {
-    int max_order = 0;
-    auto dofs_vec = this->getDataVectorDofsPtr();
-    for (auto &dof : *dofs_vec) {
-      const int dof_order = dof->getDofOrder();
-      max_order = (max_order < dof_order) ? dof_order : max_order;
-    };
-    return max_order;
-  }
 };
 
 template <class VOLUME_ELEMENT>
@@ -505,7 +464,8 @@ struct PostProcTemplateVolumeOnRefinedMesh
         m_field_ref.getInterface<BitRefManager>()->setBitRefLevelByDim(
             0, 3, BitRefLevel().set(0));
         for (int ll = 0; ll != max_level; ++ll) {
-          PetscPrintf(T::mField.get_comm(), "Refine Level %d\n", ll);
+          MOFEM_TAG_AND_LOG_C("WORLD", Sev::verbose, "PostProc",
+                              "Refine Level %d", ll);
           Range edges;
           CHKERR m_field_ref.getInterface<BitRefManager>()
               ->getEntitiesByTypeAndRefLevel(
@@ -593,6 +553,20 @@ struct PostProcTemplateVolumeOnRefinedMesh
     MoFEMFunctionReturn(0);
   }
 
+  size_t getMaxLevel() const {
+    auto get_element_max_dofs_order = [&]() {
+      int max_order = 0;
+      auto dofs_vec = this->getDataVectorDofsPtr();
+      for (auto &dof : *dofs_vec) {
+        const int dof_order = dof->getDofOrder();
+        max_order = (max_order < dof_order) ? dof_order : max_order;
+      };
+      return max_order;
+    };
+    const auto dof_max_order = get_element_max_dofs_order();
+    return (dof_max_order > 0) ? (dof_max_order - 1) / 2 : 0;
+  };
+
   /** \brief Set integration points
 
   If reference mesh is generated on single elements. This function maps
@@ -606,13 +580,20 @@ struct PostProcTemplateVolumeOnRefinedMesh
     auto type = type_from_handle(this->getFEEntityHandle());
 
     auto set_gauss_pts = [&](auto &level_gauss_pts_on_ref_mesh, auto &level_ref,
-                             auto &level_shape_functions) {
+                             auto &level_shape_functions, 
+                             
+                             auto start_vert_handle,
+                             auto start_ele_handle,
+                             auto &verts_array,
+                             auto &conn,
+                             auto &ver_count,
+                             auto &ele_count
+                             
+                             ) {
       MoFEMFunctionBegin;
 
-      const auto dof_max_order = this->getElementMaxDofsOrder();
-      size_t level = (dof_max_order > 0) ? (dof_max_order - 1) / 2 : 0;
-      if (level > (level_gauss_pts_on_ref_mesh.size() - 1))
-        level = level_gauss_pts_on_ref_mesh.size() - 1;
+      auto level =
+          std::min(getMaxLevel(), level_gauss_pts_on_ref_mesh.size() - 1);
 
       auto &level_ref_gauss_pts = level_gauss_pts_on_ref_mesh[level];
       auto &level_ref_ele = level_ref[level];
@@ -620,41 +601,6 @@ struct PostProcTemplateVolumeOnRefinedMesh
       T::gaussPts.resize(level_ref_gauss_pts.size1(),
                          level_ref_gauss_pts.size2(), false);
       noalias(T::gaussPts) = level_ref_gauss_pts;
-
-      ReadUtilIface *iface;
-      CHKERR T::postProcMesh.query_interface(iface);
-
-      const int num_nodes = level_ref_gauss_pts.size2();
-      std::vector<double *> arrays;
-      EntityHandle startv;
-      CHKERR iface->get_node_coords(3, num_nodes, 0, startv, arrays);
-      T::mapGaussPts.resize(level_ref_gauss_pts.size2());
-      for (int gg = 0; gg != num_nodes; ++gg)
-        T::mapGaussPts[gg] = startv + gg;
-
-      Tag th;
-      int def_in_the_loop = -1;
-      CHKERR T::postProcMesh.tag_get_handle(
-          "NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER, th,
-          MB_TAG_CREAT | MB_TAG_SPARSE, &def_in_the_loop);
-
-      commonData.tEts.clear();
-      const int num_el = level_ref_ele.size1();
-      const int num_nodes_on_ele = level_ref_ele.size2();
-      EntityHandle starte;
-      EntityHandle *conn;
-      CHKERR iface->get_element_connect(num_el, num_nodes_on_ele, type, 0,
-                                        starte, conn);
-      for (unsigned int tt = 0; tt != level_ref_ele.size1(); ++tt) {
-        for (int nn = 0; nn != num_nodes_on_ele; ++nn)
-          conn[num_nodes_on_ele * tt + nn] =
-              T::mapGaussPts[level_ref_ele(tt, nn)];
-      }
-      CHKERR iface->update_adjacencies(starte, num_el, num_nodes_on_ele, conn);
-      commonData.tEts = Range(starte, starte + num_el - 1);
-      const int n_in_the_loop = T::nInTheLoop;
-      CHKERR T::postProcMesh.tag_clear_data(th, commonData.tEts,
-                                            &n_in_the_loop);
 
       EntityHandle fe_ent = T::numeredEntFiniteElementPtr->getEnt();
       {
@@ -665,25 +611,61 @@ struct PostProcTemplateVolumeOnRefinedMesh
         CHKERR T::mField.get_moab().get_coords(conn, num_nodes, &T::coords[0]);
       }
 
+      const int num_nodes = level_ref_gauss_pts.size2();
+      T::mapGaussPts.resize(level_ref_gauss_pts.size2());
+
       FTensor::Index<'i', 3> i;
       FTensor::Tensor0<FTensor::PackPtr<double *, 1>> t_n(
           &*shape_functions.data().begin());
       FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 3> t_coords(
-          arrays[0], arrays[1], arrays[2]);
-      const double *t_coords_ele_x = &T::coords[0];
-      const double *t_coords_ele_y = &T::coords[1];
-      const double *t_coords_ele_z = &T::coords[2];
-      for (int gg = 0; gg != num_nodes; ++gg) {
-        FTensor::Tensor1<FTensor::PackPtr<const double *, 3>, 3> t_ele_coords(
-            t_coords_ele_x, t_coords_ele_y, t_coords_ele_z);
+          &verts_array[0][ver_count], &verts_array[1][ver_count],
+          &verts_array[2][ver_count]);
+      for (int gg = 0; gg != num_nodes; ++gg, ++ver_count) {
+
+        T::mapGaussPts[gg] = start_vert_handle + ver_count;
+
+        auto set_float_precision = [](const double x) {
+          if (std::abs(x) < std::numeric_limits<float>::epsilon())
+            return 0.;
+          else
+            return x;
+        };
+
         t_coords(i) = 0;
+        auto t_ele_coords = getFTensor1FromArray<3, 3>(T::coords);
         for (int nn = 0; nn != CN::VerticesPerEntity(type); ++nn) {
           t_coords(i) += t_n * t_ele_coords(i);
           ++t_ele_coords;
           ++t_n;
         }
+
+        for (auto ii : {0, 1, 2})
+          t_coords(ii) = set_float_precision(t_coords(ii));
+
         ++t_coords;
       }
+
+      Tag th;
+      int def_in_the_loop = -1;
+      CHKERR T::postProcMesh.tag_get_handle(
+          "NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER, th,
+          MB_TAG_CREAT | MB_TAG_SPARSE, &def_in_the_loop);
+
+      commonData.tEts.clear();
+      const int num_el = level_ref_ele.size1();
+      const int num_nodes_on_ele = level_ref_ele.size2();
+      auto start_e = start_ele_handle + ele_count;
+      commonData.tEts = Range(start_e, start_e + num_el - 1);
+      for (auto tt = 0; tt != level_ref_ele.size1(); ++tt, ++ele_count) {
+        for (int nn = 0; nn != num_nodes_on_ele; ++nn) {
+          conn[num_nodes_on_ele * ele_count + nn] =
+              T::mapGaussPts[level_ref_ele(tt, nn)];
+        }
+      }
+
+      const int n_in_the_loop = T::nInTheLoop;
+      CHKERR T::postProcMesh.tag_clear_data(th, commonData.tEts,
+                                            &n_in_the_loop);
 
       MoFEMFunctionReturn(0);
     };
@@ -691,10 +673,31 @@ struct PostProcTemplateVolumeOnRefinedMesh
     switch (type) {
     case MBTET:
       return set_gauss_pts(levelGaussPtsOnRefMeshTets, levelRefTets,
-                           levelShapeFunctionsTets);
+                           levelShapeFunctionsTets, 
+                           
+                           startingVertTetHandle,
+                           startingEleTetHandle,
+                           verticesOnTetArrays,
+                           tetConn,
+                           countVertTet,
+                           countTet                          
+
+                           
+                           
+                           
+                           );
     case MBHEX:
       return set_gauss_pts(levelGaussPtsOnRefMeshHexes, levelRefHexes,
-                           levelShapeFunctionsHexes);
+                           levelShapeFunctionsHexes,
+                           
+                           startingVertHexHandle,
+                           startingEleHexHandle,
+                           verticesOnHexArrays,
+                           hexConn,
+                           countVertHex,
+                           countHex
+                           
+                           );
     default:
       SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
               "Element type not implemented");
@@ -726,14 +729,117 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
     CHKERR T::postProcMesh.delete_mesh();
 
-    auto nb_computational_elements_by_type =
-        this->getNumberOfComputationalElements();
+    auto alloc_vertives_and_elements_on_post_proc_mesh = [&]() {
+      MoFEMFunctionBegin;
+
+      auto fe_name = this->feName;
+      auto fe_ptr = this->problemPtr->numeredFiniteElementsPtr;
+
+      auto miit =
+          fe_ptr->template get<Composite_Name_And_Part_mi_tag>().lower_bound(
+              boost::make_tuple(fe_name, this->getLoFERank()));
+      auto hi_miit =
+          fe_ptr->template get<Composite_Name_And_Part_mi_tag>().upper_bound(
+              boost::make_tuple(fe_name, this->getHiFERank()));
+
+      const int number_of_ents_in_the_loop = this->getLoopSize();
+      if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
+        SETERRQ(this->mField.get_comm(), MOFEM_DATA_INCONSISTENCY,
+            "Wrong size of indicices. Inconsistent size number of iterated "
+            "elements iterated by problem and from range.");
+      }
+
+      int nb_tet_vertices = 0;
+      int nb_tets = 0;
+      int nb_hex_vertices = 0;
+      int nb_hexes = 0;
+      
+      for (; miit != hi_miit; ++miit) {
+        auto type = (*miit)->getEntType();
+
+        // Set pointer to element. So that getDataVectorDofsPtr in getMaxLevel
+        // can work
+        this->numeredEntFiniteElementPtr = *miit;  
+        auto level = getMaxLevel();
+
+        switch (type) {
+        case MBTET:
+          level = std::min(level, levelGaussPtsOnRefMeshTets.size() - 1);
+          nb_tet_vertices += levelGaussPtsOnRefMeshTets[level].size2();
+          nb_tets += levelRefTets[level].size1();
+          break;
+        case MBHEX:
+          level = std::min(level, levelGaussPtsOnRefMeshHexes.size() - 1);
+          nb_hex_vertices += levelGaussPtsOnRefMeshHexes[level].size2();
+          nb_hexes += levelRefHexes[level].size1();
+          break;
+        default:
+          SETERRQ(this->mField.get_comm(), MOFEM_DATA_INCONSISTENCY,
+                  "Element type not implemented");
+          break;
+        }
+      }
+
+      ReadUtilIface *iface;
+      CHKERR this->postProcMesh.query_interface(iface);
+
+      if (nb_tets) {
+        CHKERR iface->get_node_coords(3, nb_tet_vertices, 0,
+                                      startingVertTetHandle,
+                                      verticesOnTetArrays);
+        CHKERR iface->get_element_connect(nb_tets, levelRefTets[0].size2(),
+                                          MBTET, 0, startingEleTetHandle,
+                                          tetConn);
+      }
+
+      if (nb_hexes) {
+        CHKERR iface->get_node_coords(
+            3, nb_hex_vertices, 0, startingVertHexHandle, verticesOnHexArrays);
+        CHKERR iface->get_element_connect(nb_hexes, levelRefHexes[0].size2(),
+                                          MBHEX, 0, startingEleHexHandle,
+                                          hexConn);
+      }
+
+      countTet = 0;
+      countVertTet = 0;
+      countHex = 0;
+      countVertHex = 0;
+
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR alloc_vertives_and_elements_on_post_proc_mesh();
 
     MoFEMFunctionReturnHot(0);
   }
 
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBeginHot;
+
+    auto update_elements = [&]() {
+      MoFEMFunctionBegin;
+      ReadUtilIface *iface;
+      CHKERR this->postProcMesh.query_interface(iface);
+
+      if (countTet) {
+        MOFEM_TAG_AND_LOG("SELF", Sev::noisy, "PostProc")
+            << "Update tets " << countTet;
+
+        MOFEM_TAG_AND_LOG("SELF", Sev::noisy, "PostProc")
+            << "Nb nodes on tets " << levelRefTets[0].size2();
+
+        CHKERR iface->update_adjacencies(startingEleTetHandle, countTet,
+                                         levelRefTets[0].size2(), tetConn);
+
+      }
+      if (countHex) {
+        MOFEM_TAG_AND_LOG("SELF", Sev::noisy, "PostProc")
+            << "Update hexes " << countHex;
+        CHKERR iface->update_adjacencies(startingEleHexHandle, countHex,
+                                         levelRefHexes[0].size2(), hexConn);
+      }
+      MoFEMFunctionReturn(0);
+    };
 
     auto resolve_shared_ents = [&]() {
       MoFEMFunctionBegin;
@@ -766,6 +872,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
     };
 
     CHKERR resolve_shared_ents();
+    CHKERR update_elements();
 
     MoFEMFunctionReturnHot(0);
   }
@@ -845,6 +952,21 @@ private:
   std::vector<MatrixDouble> levelShapeFunctionsHexes;
   std::vector<MatrixDouble> levelGaussPtsOnRefMeshHexes;
   std::vector<ublas::matrix<int>> levelRefHexes;
+
+  EntityHandle startingVertTetHandle;
+  std::vector<double *> verticesOnTetArrays;
+  EntityHandle startingEleTetHandle;
+  EntityHandle *tetConn;
+  int countTet;
+  int countVertTet;
+
+  EntityHandle startingVertHexHandle;
+  std::vector<double *> verticesOnHexArrays;
+  EntityHandle startingEleHexHandle;
+  EntityHandle *hexConn;
+  int countHex;
+  int countVertHex;
+
 };
 
 /** \brief Post processing
@@ -854,11 +976,9 @@ struct PostProcVolumeOnRefinedMesh
     : public PostProcTemplateVolumeOnRefinedMesh<
           MoFEM::VolumeElementForcesAndSourcesCore> {
 
-  PostProcVolumeOnRefinedMesh(MoFEM::Interface &m_field,
-                              bool ten_nodes_post_proc_tets = true,
-                              int nb_ref_levels = -1)
-      : PostProcTemplateVolumeOnRefinedMesh<
-            MoFEM::VolumeElementForcesAndSourcesCore>(m_field) {}
+  using PostProcTemplateVolumeOnRefinedMesh<
+      MoFEM::VolumeElementForcesAndSourcesCore>::
+      PostProcTemplateVolumeOnRefinedMesh;
 };
 
 // /** \deprecated Use PostPocOnRefinedMesh instead
@@ -1005,6 +1125,7 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
 private:
   MatrixDouble gaussPtsTri; ///<  Gauss points coordinates on reference triangle
   MatrixDouble gaussPtsQuad; ///< Gauss points coordinates on reference quad
+
   EntityHandle *triConn;     ///< Connectivity for created tri elements
   EntityHandle *quadConn;    ///< Connectivity for created quad elements
   EntityHandle

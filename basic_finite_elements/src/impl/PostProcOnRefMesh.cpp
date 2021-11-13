@@ -830,7 +830,37 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
     elementsMap.clear();
     postProcMesh.delete_mesh();
 
-    auto nb_computational_elements_by_type = getNumberOfComputationalElements();
+    auto get_number_of_computational_elements = [&]() {
+      auto fe_name = this->feName;
+      auto fe_ptr = this->problemPtr->numeredFiniteElementsPtr;
+
+      auto miit =
+          fe_ptr->template get<Composite_Name_And_Part_mi_tag>().lower_bound(
+              boost::make_tuple(fe_name, this->getLoFERank()));
+      auto hi_miit =
+          fe_ptr->template get<Composite_Name_And_Part_mi_tag>().upper_bound(
+              boost::make_tuple(fe_name, this->getHiFERank()));
+
+      const int number_of_ents_in_the_loop = this->getLoopSize();
+      if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
+        THROW_MESSAGE(
+            "Wrong size of indicices. Inconsistent size number of iterated "
+            "elements iterated by problem and from range.");
+      }
+
+      std::array<int, MBMAXTYPE> nb_elemms_by_type;
+      std::fill(nb_elemms_by_type.begin(), nb_elemms_by_type.end(), 0);
+
+      for (; miit != hi_miit; ++miit) {
+        auto type = (*miit)->getEntType();
+        ++nb_elemms_by_type[type];
+      }
+
+      return nb_elemms_by_type;
+    };
+
+    auto nb_computational_elements_by_type =
+        get_number_of_computational_elements();
 
     const int numberOfTriangles = nb_computational_elements_by_type[MBTRI];
     const int numberOfQuads = nb_computational_elements_by_type[MBQUAD];
