@@ -821,15 +821,22 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
 MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
   MoFEMFunctionBegin;
 
+  const int number_of_ents_in_the_loop = getLoopSize();
+
   auto get_number_of_computational_elements = [&]() {
     auto fe_name = feName;
     auto fe_ptr = problemPtr->numeredFiniteElementsPtr;
-    auto rank = mField.get_comm_rank();
 
     auto miit = fe_ptr->get<Composite_Name_And_Part_mi_tag>().lower_bound(
-        boost::make_tuple(fe_name, rank));
+        boost::make_tuple(fe_name, getLoFERank()));
     auto hi_miit = fe_ptr->get<Composite_Name_And_Part_mi_tag>().upper_bound(
-        boost::make_tuple(fe_name, rank));
+        boost::make_tuple(fe_name, getHiFERank()));
+
+    if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
+      THROW_MESSAGE(
+          "Wrong size of indicices. Inconsistent size number of iterated "
+          "elements iterated by problem and from range.");
+    }
 
     std::array<int, MBMAXTYPE> nb_elemms_by_type;
     std::fill(nb_elemms_by_type.begin(), nb_elemms_by_type.end(), 0);
@@ -844,7 +851,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
 
   ReadUtilIface *iface;
   CHKERR postProcMesh.query_interface(iface);
-  const int number_of_ents_in_the_loop = getLoopSize();
+
 
   if (elementsMap.size() != number_of_ents_in_the_loop) {
 
