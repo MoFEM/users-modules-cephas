@@ -731,7 +731,7 @@ MoFEMErrorCode HookeElement::calculateEnergy(
   auto fe_ptr =
       boost::make_shared<VolumeElementForcesAndSourcesCore>(*m_field_ptr);
   fe_ptr->getRuleHook = [](const double, const double, const double o) {
-    return 2 * (o - 1) + 1;
+    return 2 * o;
   };
 
   if (m_field_ptr->check_field("MESH_NODE_POSITIONS")) CHKERR addHOOpsVol(

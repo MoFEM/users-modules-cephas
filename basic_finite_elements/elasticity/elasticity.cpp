@@ -92,7 +92,7 @@ using VolUserDataOperator = VolumeElementForcesAndSourcesCore::UserDataOperator;
 
 /// Set integration rule
 struct VolRule {
-  int operator()(int, int, int order) const { return 2 * (order - 1) + 1; }
+  int operator()(int, int, int order) const { return 2 * order; }
 };
 
 struct PrismFE : public FatPrismElementForcesAndSourcesCore {
