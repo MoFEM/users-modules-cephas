@@ -33,4 +33,4 @@ tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
 tutorials_build_and_install(
-  approximaton ${CMAKE_CURRENT_SOURCE_DIR}/free_surface.cpp)
+  free_surface ${CMAKE_CURRENT_SOURCE_DIR}/free_surface.cpp)
