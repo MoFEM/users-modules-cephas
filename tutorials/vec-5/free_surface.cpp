@@ -199,17 +199,19 @@ private:
 struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
 
   OpRhsExplicitTermH(const std::string field_name,
+                     boost::shared_ptr<MatrixDouble> u_ptr,
+                     boost::shared_ptr<MatrixDouble> grad_phi_ptr,
                      boost::shared_ptr<VectorDouble> f_ptr,
                      boost::shared_ptr<double> ksi_ptr)
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
         fPtr(f_ptr), ksiPtr(ksi_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data) {
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_row_base = row_data.getFTensor0N();
+    auto t_base = data.getFTensor0N();
     auto t_f = getFTensor0FromVec(*fPtr);
     const double ksi = *ksiPtr;
 
@@ -221,19 +223,27 @@ struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
       int rr = 0;
       for (; rr != nbRows; ++rr) {
 
-        (*nf_ptr) += alpha * (t_f - ksi) * t_row_base;
+        (*nf_ptr) += (alpha * lambda) * (-t_f + ksi) * t_base;
+        (*nf_ptr) += (alpha * lambda) * (-t_f + ksi) * t_base;
+        (*nf_ptr) -= alpha * (t_u(i) * t_grad_phi(i)) * t_base;
 
         ++nf_ptr;
-        ++t_row_base;
+        ++t_base;
       }
 
       ++t_f;
+      ++t_u;
+      ++t_grad_phi;
+
+      ++t_w;
     }
 
     MoFEMFunctionReturn(0);
   }
 
 private:
+  boost::shared_ptr<MatrixDouble> uPtr;
+  boost::shared_ptr<MatrixDouble> gradPhiPtr;
   boost::shared_ptr<VectorDouble> fPtr;
   boost::shared_ptr<double> ksiPtr;
 };
