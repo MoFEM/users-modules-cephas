@@ -55,7 +55,10 @@ double mu_sp = 16.5;         ///< scattering coefficient (cm^-1)
 double flux_magnitude = 1e3; ///< impulse magnitude
 
 double slab_thickness = 5.0;
-double spot_radius = 2.5; //< spot spot_radius
+double beam_radius = 2.5; //< spot radius
+double beam_centre_x = 0.0;
+double beam_centre_y = 0.0;
+
 double initial_time = 0.1;
 
 double D = 1. / (3. * (mu_a + mu_sp));
@@ -109,8 +112,8 @@ public:
     auto phi_pulse = [&](const double r_s, const double phi_s) {
       const double xs = r_s * cos(phi_s);
       const double ys = r_s * sin(phi_s);
-      const double xp = x - xs;
-      const double yp = y - ys;
+      const double xp = x - xs - beam_centre_x;
+      const double yp = y - ys - beam_centre_y;
       const double zp1 = z + slab_thickness / 2. - 1. / mu_sp;
       const double zp2 = z + slab_thickness / 2. + 1. / mu_sp;
       const double P1 = xp * xp + yp * yp + zp1 * zp1;
@@ -120,13 +123,13 @@ public:
 
     auto f = [&](const double r_s) {
       auto g = [&](const double phi_s) { return phi_pulse(r_s, phi_s); };
-      return gauss_kronrod<double, 42>::integrate(
+      return gauss_kronrod<double, 31>::integrate(
           g, 0, 2 * M_PI, 0, std::numeric_limits<float>::epsilon());
     };
 
     return T * flux_magnitude *
-           gauss_kronrod<double, 32>::integrate(
-               f, 0, spot_radius, 0, std::numeric_limits<float>::epsilon());
+           gauss_kronrod<double, 31>::integrate(
+               f, 0, beam_radius, 0, std::numeric_limits<float>::epsilon());
   };
 
 private:
@@ -172,7 +175,11 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
                                &flux_magnitude, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-slab_thickness",
                                &slab_thickness, PETSC_NULL);
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-spot_radius", &spot_radius,
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-beam_radius", &beam_radius,
+                               PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-beam_centre_x", &beam_centre_x,
+                               PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-beam_centre_y", &beam_centre_y,
                                PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-initial_time", &initial_time,
                                PETSC_NULL);
@@ -265,7 +272,7 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   auto solver = pipeline_mng->createKSP();
 
   CHKERR KSPSetFromOptions(solver);
-  CHKERR KSPSetUp(solver);
+  //CHKERR KSPSetUp(solver);
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);

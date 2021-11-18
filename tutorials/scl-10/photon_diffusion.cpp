@@ -61,8 +61,6 @@ double c = 30.;         ///< speed of light (cm/ns)
 double v = c / n;       ///< phase velocity of light in medium (cm/ns)
 double mu_a = 0.09;     ///< absorption coefficient (cm^-1)
 double mu_sp = 16.5;    ///< scattering coefficient (cm^-1)
-double flux = 1e3;      ///< impulse magnitude
-double duration = 0.05; ///< impulse duration (ns)
 
 PetscBool from_initial = PETSC_TRUE;
 PetscBool output_volume = PETSC_FALSE;
@@ -163,7 +161,6 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-flux", &flux, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-duration", &duration,
                                PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-from_initial", &from_initial,
@@ -178,8 +175,6 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
       << "Absorption coefficient (cm^-1): " << mu_a;
   MOFEM_LOG("PHOTON", Sev::inform)
       << "Scattering coefficient (cm^-1): " << mu_sp;
-  MOFEM_LOG("PHOTON", Sev::inform) << "Impulse magnitude: " << flux;
-  MOFEM_LOG("PHOTON", Sev::inform) << "Impulse duration (ns): " << duration;
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_step", &save_every_nth_step,
@@ -267,10 +262,8 @@ MoFEMErrorCode PhotonDiffusion::boundaryCondition() {
   MoFEMFunctionBegin;
   auto bc_mng = mField.getInterface<BcManager>();
   auto *simple = mField.getInterface<Simple>();
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "MIX", "U", 0,
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "EXT", "U", 0,
                                         0, false);
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "SPOT", "U",
-                                        0, 0, false);
   MoFEMFunctionReturn(0);
 }
 
@@ -418,7 +411,7 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   if (from_initial) {
 
     MOFEM_LOG("PHOTON", Sev::inform)
-        << "reading vector in binary from vector.dat ...";
+        << "reading vector in binary from initial_vector.dat ...";
     PetscViewer viewer;
     PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat",
                           FILE_MODE_READ, &viewer);
