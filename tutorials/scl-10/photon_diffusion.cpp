@@ -160,9 +160,7 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   auto *simple = mField.getInterface<Simple>();
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
-
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-duration", &duration,
-                               PETSC_NULL);
+  
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-from_initial", &from_initial,
                              PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-output_volume", &output_volume,
