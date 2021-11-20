@@ -22,6 +22,8 @@
 #include <cmath>
 #include <BasicFiniteElements.hpp>
 
+#define BOOST_MATH_GAUSS_NO_COMPUTE_ON_DEMAND
+
 using namespace MoFEM;
 
 static char help[] = "...\n\n";
@@ -59,16 +61,18 @@ double beam_radius = 2.5; //< spot radius
 double beam_centre_x = 0.0;
 double beam_centre_y = 0.0;
 
-double initial_time = 0.1;
-
+double compute_time = 0.1;
 double D = 1. / (3. * (mu_a + mu_sp));
+
+PetscBool output_volume = PETSC_FALSE;
 
 #include <boost/math/quadrature/gauss_kronrod.hpp>
 using namespace boost::math::quadrature;
 
 struct OpError : public DomainEleOp {
   OpError(boost::shared_ptr<VectorDouble> u_at_pts_ptr, double &l2_error)
-      : DomainEleOp("U", OPROW), uAtPtsPtr(u_at_pts_ptr), l2Error(l2_error) {
+      : DomainEleOp("PHOTON_FLUENCE_RATE", OPROW), uAtPtsPtr(u_at_pts_ptr),
+        l2Error(l2_error) {
     // Only will be executed once on vertices
     std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
   }
@@ -105,9 +109,9 @@ public:
    * @return double
    */
   static double sourceFunction(const double x, const double y, const double z) {
-    const double A = 4 * D * v * initial_time;
+    const double A = 4 * D * v * compute_time;
     const double T =
-        (v / pow(M_PI * A, 3. / 2.)) * exp(-mu_a * v * initial_time);
+        (v / pow(M_PI * A, 3. / 2.)) * exp(-mu_a * v * compute_time);
 
     auto phi_pulse = [&](const double r_s, const double phi_s) {
       const double xs = r_s * cos(phi_s);
@@ -123,12 +127,12 @@ public:
 
     auto f = [&](const double r_s) {
       auto g = [&](const double phi_s) { return phi_pulse(r_s, phi_s); };
-      return gauss_kronrod<double, 31>::integrate(
+      return gauss_kronrod<double, 15>::integrate(
           g, 0, 2 * M_PI, 0, std::numeric_limits<float>::epsilon());
     };
 
     return T * flux_magnitude *
-           gauss_kronrod<double, 31>::integrate(
+           gauss_kronrod<double, 15>::integrate(
                f, 0, beam_radius, 0, std::numeric_limits<float>::epsilon());
   };
 
@@ -168,8 +172,10 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   MoFEMFunctionBegin;
 
   auto *simple = mField.getInterface<Simple>();
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addDomainField("PHOTON_FLUENCE_RATE", H1,
+                                AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("PHOTON_FLUENCE_RATE", H1,
+                                  AINSWORTH_LEGENDRE_BASE, 1);
 
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-flux_magnitude",
                                &flux_magnitude, PETSC_NULL);
@@ -181,8 +187,11 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
                                PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-beam_centre_y", &beam_centre_y,
                                PETSC_NULL);
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-initial_time", &initial_time,
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-compute_time", &compute_time,
                                PETSC_NULL);
+
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-output_volume", &output_volume,
+                             PETSC_NULL);
 
   MOFEM_LOG("INITIAL", Sev::inform) << "Refractive index: " << n;
   MOFEM_LOG("INITIAL", Sev::inform) << "Speed of light (cm/ns): " << c;
@@ -193,14 +202,14 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   MOFEM_LOG("INITIAL", Sev::inform)
       << "Scattering coefficient (cm^-1): " << mu_sp;
   MOFEM_LOG("INITIAL", Sev::inform) << "Impulse magnitude: " << flux_magnitude;
-  MOFEM_LOG("INITIAL", Sev::inform) << "Initial time (ns): " << initial_time;
+  MOFEM_LOG("INITIAL", Sev::inform) << "Compute time (ns): " << compute_time;
 
   int order = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
 
   MOFEM_LOG("INITIAL", Sev::inform) << "Approximation order: " << order;
 
-  CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("PHOTON_FLUENCE_RATE", order);
 
   CHKERR simple->setUp();
 
@@ -249,11 +258,13 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpDomainMass(
-        "U", "U", [](const double, const double, const double) { return 1; }));
+        "PHOTON_FLUENCE_RATE", "PHOTON_FLUENCE_RATE",
+        [](const double, const double, const double) { return 1; }));
   };
 
   auto add_domain_rhs_ops = [&](auto &pipeline) {
-    pipeline.push_back(new OpDomainSource("U", sourceFunction));
+    pipeline.push_back(
+        new OpDomainSource("PHOTON_FLUENCE_RATE", sourceFunction));
   };
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
@@ -272,7 +283,7 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   auto solver = pipeline_mng->createKSP();
 
   CHKERR KSPSetFromOptions(solver);
-  //CHKERR KSPSetUp(solver);
+  // CHKERR KSPSetUp(solver);
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
@@ -305,7 +316,8 @@ MoFEMErrorCode PhotonDiffusion::checkResults() {
   auto u_vals_at_gauss_pts = boost::make_shared<VectorDouble>();
   double l2_error = 0;
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateScalarFieldValues("U", u_vals_at_gauss_pts));
+      new OpCalculateScalarFieldValues("PHOTON_FLUENCE_RATE",
+                                       u_vals_at_gauss_pts));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpError(u_vals_at_gauss_pts, l2_error));
   CHKERR pipeline_mng->loopFiniteElements();
@@ -319,7 +331,7 @@ MoFEMErrorCode PhotonDiffusion::outputResults() {
   pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc("U");
+  post_proc_fe->addFieldValuesPostProc("PHOTON_FLUENCE_RATE");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_initial.h5m");
@@ -337,7 +349,8 @@ MoFEMErrorCode PhotonDiffusion::runProgram() {
   CHKERR assembleSystem();
   CHKERR solveSystem();
   // CHKERR checkResults();
-  CHKERR outputResults();
+  if (output_volume)
+    CHKERR outputResults();
 
   MoFEMFunctionReturn(0);
 }

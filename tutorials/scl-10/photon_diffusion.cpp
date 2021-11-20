@@ -56,11 +56,11 @@ using OpBoundaryTimeScalarField = FormsIntegrators<BoundaryEleOp>::Assembly<
 using OpBoundarySource = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
-double n = 1.44;        ///< refractive index of diffusive medium
-double c = 30.;         ///< speed of light (cm/ns)
-double v = c / n;       ///< phase velocity of light in medium (cm/ns)
-double mu_a = 0.09;     ///< absorption coefficient (cm^-1)
-double mu_sp = 16.5;    ///< scattering coefficient (cm^-1)
+double n = 1.44;     ///< refractive index of diffusive medium
+double c = 30.;      ///< speed of light (cm/ns)
+double v = c / n;    ///< phase velocity of light in medium (cm/ns)
+double mu_a = 0.09;  ///< absorption coefficient (cm^-1)
+double mu_sp = 16.5; ///< scattering coefficient (cm^-1)
 
 PetscBool from_initial = PETSC_TRUE;
 PetscBool output_volume = PETSC_FALSE;
@@ -158,9 +158,11 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   MoFEMFunctionBegin;
 
   auto *simple = mField.getInterface<Simple>();
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
-  
+  CHKERR simple->addDomainField("PHOTON_FLUENCE_RATE", H1,
+                                AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("PHOTON_FLUENCE_RATE", H1,
+                                  AINSWORTH_LEGENDRE_BASE, 1);
+
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-from_initial", &from_initial,
                              PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-output_volume", &output_volume,
@@ -181,7 +183,7 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   MOFEM_LOG("PHOTON", Sev::inform) << "Approximation order: " << order;
   MOFEM_LOG("PHOTON", Sev::inform) << "Save step: " << save_every_nth_step;
 
-  CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("PHOTON_FLUENCE_RATE", order);
 
   auto set_camera_skin_fe = [&]() {
     MoFEMFunctionBegin;
@@ -205,7 +207,8 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
 
     if (add_fe) {
       CHKERR mField.add_finite_element("CAMERA_FE");
-      CHKERR mField.modify_finite_element_add_field_data("CAMERA_FE", "U");
+      CHKERR mField.modify_finite_element_add_field_data("CAMERA_FE",
+                                                         "PHOTON_FLUENCE_RATE");
       CHKERR mField.add_ents_to_finite_element_by_dim(camera_surface, 2,
                                                       "CAMERA_FE");
     }
@@ -260,8 +263,8 @@ MoFEMErrorCode PhotonDiffusion::boundaryCondition() {
   MoFEMFunctionBegin;
   auto bc_mng = mField.getInterface<BcManager>();
   auto *simple = mField.getInterface<Simple>();
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "EXT", "U", 0,
-                                        0, false);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "EXT",
+                                        "PHOTON_FLUENCE_RATE", 0, 0, false);
   MoFEMFunctionReturn(0);
 }
 
@@ -283,11 +286,13 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpDomainGradGrad(
-        "U", "U", [](double, double, double) -> double { return D; }));
+        "PHOTON_FLUENCE_RATE", "PHOTON_FLUENCE_RATE",
+        [](double, double, double) -> double { return D; }));
     auto get_mass_coefficient = [&](const double, const double, const double) {
       return inv_v * domianLhsFEPtr->ts_a + mu_a;
     };
-    pipeline.push_back(new OpDomainMass("U", "U", get_mass_coefficient));
+    pipeline.push_back(new OpDomainMass(
+        "PHOTON_FLUENCE_RATE", "PHOTON_FLUENCE_RATE", get_mass_coefficient));
   };
 
   auto add_domain_rhs_ops = [&](auto &pipeline) {
@@ -295,23 +300,24 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
     auto u_at_gauss_pts = boost::make_shared<VectorDouble>();
     auto dot_u_at_gauss_pts = boost::make_shared<VectorDouble>();
     pipeline.push_back(new OpCalculateScalarFieldGradient<SPACE_DIM>(
-        "U", grad_u_at_gauss_pts));
-    pipeline.push_back(new OpCalculateScalarFieldValues("U", u_at_gauss_pts));
-    pipeline.push_back(
-        new OpCalculateScalarFieldValuesDot("U", dot_u_at_gauss_pts));
+        "PHOTON_FLUENCE_RATE", grad_u_at_gauss_pts));
+    pipeline.push_back(new OpCalculateScalarFieldValues("PHOTON_FLUENCE_RATE",
+                                                        u_at_gauss_pts));
+    pipeline.push_back(new OpCalculateScalarFieldValuesDot(
+        "PHOTON_FLUENCE_RATE", dot_u_at_gauss_pts));
     pipeline.push_back(new OpDomainGradTimesVec(
-        "U", grad_u_at_gauss_pts,
+        "PHOTON_FLUENCE_RATE", grad_u_at_gauss_pts,
         [](double, double, double) -> double { return D; }));
     pipeline.push_back(new OpDomainTimesScalarField(
-        "U", dot_u_at_gauss_pts,
+        "PHOTON_FLUENCE_RATE", dot_u_at_gauss_pts,
         [](const double, const double, const double) { return inv_v; }));
     pipeline.push_back(new OpDomainTimesScalarField(
-        "U", u_at_gauss_pts,
+        "PHOTON_FLUENCE_RATE", u_at_gauss_pts,
         [](const double, const double, const double) { return mu_a; }));
     auto source_term = [&](const double, const double, const double) {
       return 0;
     };
-    pipeline.push_back(new OpDomainSource("U", source_term));
+    pipeline.push_back(new OpDomainSource("PHOTON_FLUENCE_RATE", source_term));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -322,7 +328,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
     for (auto b : bc_map) {
       if (std::regex_match(b.first, std::regex("(.*)EXT(.*)"))) {
         pipeline.push_back(new OpBoundaryMass(
-            "U", "U",
+            "PHOTON_FLUENCE_RATE", "PHOTON_FLUENCE_RATE",
 
             [](const double, const double, const double) { return h; },
 
@@ -333,11 +339,12 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
 
   auto add_rhs_base_ops = [&](auto &pipeline) {
     auto u_at_gauss_pts = boost::make_shared<VectorDouble>();
-    pipeline.push_back(new OpCalculateScalarFieldValues("U", u_at_gauss_pts));
+    pipeline.push_back(new OpCalculateScalarFieldValues("PHOTON_FLUENCE_RATE",
+                                                        u_at_gauss_pts));
     for (auto b : bc_map) {
       if (std::regex_match(b.first, std::regex("(.*)EXT(.*)"))) {
         pipeline.push_back(new OpBoundaryTimeScalarField(
-            "U", u_at_gauss_pts,
+            "PHOTON_FLUENCE_RATE", u_at_gauss_pts,
 
             [](const double, const double, const double) { return h; },
 
@@ -373,8 +380,8 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   auto create_post_process_element = [&]() {
     auto post_froc_fe = boost::make_shared<PostProcEle>(mField);
     post_froc_fe->generateReferenceElementMesh();
-    post_froc_fe->addFieldValuesPostProc("U");
-    post_froc_fe->addFieldValuesGradientPostProc("U");
+    post_froc_fe->addFieldValuesPostProc("PHOTON_FLUENCE_RATE");
+    post_froc_fe->addFieldValuesGradientPostProc("PHOTON_FLUENCE_RATE");
     return post_froc_fe;
   };
 
@@ -383,9 +390,9 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
       auto post_proc_skin =
           boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
       post_proc_skin->generateReferenceElementMesh();
-      CHKERR post_proc_skin->addFieldValuesPostProc("U");
+      CHKERR post_proc_skin->addFieldValuesPostProc("PHOTON_FLUENCE_RATE");
       CHKERR post_proc_skin->addFieldValuesGradientPostProcOnSkin(
-          "U", simple->getDomainFEName());
+          "PHOTON_FLUENCE_RATE", simple->getDomainFEName());
       return post_proc_skin;
     } else {
       return boost::shared_ptr<PostProcFaceOnRefinedMesh>();
