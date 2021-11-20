@@ -599,11 +599,9 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::generateReferenceElementMesh() {
       CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
       gauss_pts.resize(3, num_nodes, false);
       gauss_pts.clear();
-      for (int nn = 0; nn < 3; nn++) {
+      for (int nn = 0; nn < num_nodes; nn++) {
         gauss_pts(0, nn) = coords(nn, 0);
         gauss_pts(1, nn) = coords(nn, 1);
-        gauss_pts(0, 3 + nn) = coords(3 + nn, 0);
-        gauss_pts(1, 3 + nn) = coords(3 + nn, 1);
       }
     } else {
       CHKERR moab_ref.get_connectivity(tri, conn, num_nodes, false);
@@ -662,11 +660,9 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::generateReferenceElementMesh() {
       CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
       gauss_pts.resize(3, num_nodes, false);
       gauss_pts.clear();
-      for (int nn = 0; nn != 4; nn++) {
+      for (int nn = 0; nn != num_nodes; nn++) {
         gauss_pts(0, nn) = coords(nn, 0);
         gauss_pts(1, nn) = coords(nn, 1);
-        gauss_pts(0, 4 + nn) = coords(4 + nn, 0);
-        gauss_pts(1, 4 + nn) = coords(4 + nn, 1);
       }
     } else {
       CHKERR moab_ref.get_connectivity(quad, conn, num_nodes, false);
@@ -695,43 +691,52 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
             "post-process mesh not generated");
 
   auto create_tri = [&](auto &gauss_pts) {
-    EntityHandle tri;
     std::array<EntityHandle, 3> tri_conn;
     MatrixDouble3by3 coords_tri(3, 3);
-    VectorDouble3 coords(3);
     CHKERR mField.get_moab().get_connectivity(
         numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
     CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords_tri(0, 0));
-    for (int gg = 0; gg != 3; gg++) {
-      double ksi = gauss_pts(0, gg);
-      double eta = gauss_pts(1, gg);
-      double n0 = N_MBTRI0(ksi, eta);
-      double n1 = N_MBTRI1(ksi, eta);
-      double n2 = N_MBTRI2(ksi, eta);
-      double x =
+    const int num_nodes_on_ele = gauss_pts.size2();
+
+    for (int gg = 0; gg != num_nodes_on_ele; gg++) {
+
+      const double ksi = gauss_pts(0, gg);
+      const double eta = gauss_pts(1, gg);
+      const double n0 = N_MBTRI0(ksi, eta);
+      const double n1 = N_MBTRI1(ksi, eta);
+      const double n2 = N_MBTRI2(ksi, eta);
+      const double x =
           n0 * coords_tri(0, 0) + n1 * coords_tri(1, 0) + n2 * coords_tri(2, 0);
-      double y =
+      const double y =
           n0 * coords_tri(0, 1) + n1 * coords_tri(1, 1) + n2 * coords_tri(2, 1);
-      double z =
+      const double z =
           n0 * coords_tri(0, 2) + n1 * coords_tri(1, 2) + n2 * coords_tri(2, 2);
-      coords[0] = x;
-      coords[1] = y;
-      coords[2] = z;
-      CHKERR postProcMesh.create_vertex(&coords[0], tri_conn[gg]);
+
+      verticesOnTriArrays[0][counterTris * num_nodes_on_ele + gg] = x;
+      verticesOnTriArrays[1][counterTris * num_nodes_on_ele + gg] = y;
+      verticesOnTriArrays[2][counterTris * num_nodes_on_ele + gg] = z;
     }
-    CHKERR postProcMesh.create_element(MBTRI, &tri_conn[0], 3, tri);
+
+    mapGaussPts.resize(num_nodes_on_ele);
+    for (int nn = 0; nn != num_nodes_on_ele; ++nn) {
+      triConn[num_nodes_on_ele * counterTris + nn] =
+          num_nodes_on_ele * counterTris + nn + startingVertTriHandle;
+      mapGaussPts[nn] = triConn[num_nodes_on_ele * counterTris + nn];
+    }
+
+    const auto tri = startingEleTriHandle + counterTris;
+
     return tri;
   };
 
   auto create_quad = [&](auto &gauss_pts) {
-    EntityHandle quad;
     std::array<EntityHandle, 4> quad_conn;
     MatrixDouble coords_quad(4, 3);
-    VectorDouble coords(4);
     CHKERR mField.get_moab().get_connectivity(
         numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
     CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords_quad(0, 0));
-    for (int gg = 0; gg != 4; gg++) {
+    const int num_nodes_on_ele = gauss_pts.size2();
+    for (int gg = 0; gg != num_nodes_on_ele; ++gg) {
       double ksi = gauss_pts(0, gg);
       double eta = gauss_pts(1, gg);
       double n0 = N_MBQUAD0(ksi, eta);
@@ -744,34 +749,28 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
                  n2 * coords_quad(2, 1) + n3 * coords_quad(3, 1);
       double z = n0 * coords_quad(0, 2) + n1 * coords_quad(1, 2) +
                  n2 * coords_quad(2, 2) + n3 * coords_quad(3, 2);
-      coords[0] = x;
-      coords[1] = y;
-      coords[2] = z;
-      CHKERR postProcMesh.create_vertex(&coords[0], quad_conn[gg]);
+      verticesOnQuadArrays[0][counterQuads * num_nodes_on_ele + gg] = x;
+      verticesOnQuadArrays[1][counterQuads * num_nodes_on_ele + gg] = y;
+      verticesOnQuadArrays[2][counterQuads * num_nodes_on_ele + gg] = z;
     }
-    CHKERR postProcMesh.create_element(MBQUAD, &quad_conn[0], 4, quad);
-    return quad;
-  };
 
-  auto add_mid_nodes = [&](auto tri) {
-    MoFEMFunctionBeginHot;
-    Range edges;
-    CHKERR postProcMesh.get_adjacencies(&tri, 1, 1, true, edges);
-    EntityHandle meshset;
-    CHKERR postProcMesh.create_meshset(MESHSET_SET, meshset);
-    CHKERR postProcMesh.add_entities(meshset, &tri, 1);
-    CHKERR postProcMesh.add_entities(meshset, edges);
-    CHKERR postProcMesh.convert_entities(meshset, true, false, false);
-    CHKERR postProcMesh.delete_entities(&meshset, 1);
-    CHKERR postProcMesh.delete_entities(edges);
-    MoFEMFunctionReturnHot(0);
+    mapGaussPts.resize(num_nodes_on_ele);
+
+    for (int nn = 0; nn != num_nodes_on_ele; ++nn) {
+      quadConn[num_nodes_on_ele * counterQuads + nn] =
+          num_nodes_on_ele * counterQuads + nn + startingVertQuadHandle;
+      mapGaussPts[nn] = quadConn[num_nodes_on_ele * counterQuads + nn];
+    }
+
+    const auto quad = startingEleQuadHandle + counterQuads;
+    return quad;
   };
 
   EntityHandle tri;
 
-  if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
-      elementsMap.end()) {
-    tri = elementsMap[numeredEntFiniteElementPtr->getEnt()];
+  if (elementsMap.size() == getLoopSize()) {
+    // Note "at" that will trigger error if element is not there.
+    tri = elementsMap.at(numeredEntFiniteElementPtr->getEnt());
     switch (numeredEntFiniteElementPtr->getEntType()) {
     case MBTRI:
       gaussPts.resize(gaussPtsTri.size1(), gaussPtsTri.size2(), false);
@@ -785,60 +784,157 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
               "Not implemented element type");
     }
+
+    // Set values which map nodes with integration points on the prism
+    const EntityHandle *conn;
+    int num_nodes;
+    CHKERR postProcMesh.get_connectivity(tri, conn, num_nodes, false);
+    mapGaussPts.resize(num_nodes);
+    for (int nn = 0; nn != num_nodes; nn++)
+      mapGaussPts[nn] = conn[nn];
+
   } else {
     switch (numeredEntFiniteElementPtr->getEntType()) {
     case MBTRI:
       gaussPts.resize(gaussPtsTri.size1(), gaussPtsTri.size2(), false);
       noalias(gaussPts) = gaussPtsTri;
       tri = create_tri(gaussPtsTri);
+      ++counterTris;
       break;
     case MBQUAD:
       gaussPts.resize(gaussPtsQuad.size1(), gaussPtsQuad.size2(), false);
       noalias(gaussPts) = gaussPtsQuad;
       tri = create_quad(gaussPtsQuad);
+      ++counterQuads;
       break;
     default:
       SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
               "Not implemented element type");
     }
-    if (sixNodePostProcTris)
-      CHKERR add_mid_nodes(tri);
+
     elementsMap[numeredEntFiniteElementPtr->getEnt()] = tri;
   }
-
-  // Set values which map nodes with integration points on the prism
-  const EntityHandle *conn;
-  int num_nodes;
-
-  CHKERR postProcMesh.get_connectivity(tri, conn, num_nodes, false);
-  mapGaussPts.resize(num_nodes);
-  for (int nn = 0; nn != num_nodes; nn++)
-    mapGaussPts[nn] = conn[nn];
 
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
-  MoFEMFunctionBeginHot;
-  MoFEMFunctionReturnHot(0);
+  MoFEMFunctionBegin;
+
+  ReadUtilIface *iface;
+  CHKERR postProcMesh.query_interface(iface);
+
+  const int number_of_ents_in_the_loop = getLoopSize();
+  if (elementsMap.size() != number_of_ents_in_the_loop) {
+
+    elementsMap.clear();
+    postProcMesh.delete_mesh();
+
+    auto get_number_of_computational_elements = [&]() {
+      auto fe_name = this->feName;
+      auto fe_ptr = this->problemPtr->numeredFiniteElementsPtr;
+
+      auto miit =
+          fe_ptr->template get<Composite_Name_And_Part_mi_tag>().lower_bound(
+              boost::make_tuple(fe_name, this->getLoFERank()));
+      auto hi_miit =
+          fe_ptr->template get<Composite_Name_And_Part_mi_tag>().upper_bound(
+              boost::make_tuple(fe_name, this->getHiFERank()));
+
+      const int number_of_ents_in_the_loop = this->getLoopSize();
+      if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
+        THROW_MESSAGE(
+            "Wrong size of indicices. Inconsistent size number of iterated "
+            "elements iterated by problem and from range.");
+      }
+
+      std::array<int, MBMAXTYPE> nb_elemms_by_type;
+      std::fill(nb_elemms_by_type.begin(), nb_elemms_by_type.end(), 0);
+
+      for (; miit != hi_miit; ++miit) {
+        auto type = (*miit)->getEntType();
+        ++nb_elemms_by_type[type];
+      }
+
+      return nb_elemms_by_type;
+    };
+
+    auto nb_computational_elements_by_type =
+        get_number_of_computational_elements();
+
+    const int numberOfTriangles = nb_computational_elements_by_type[MBTRI];
+    const int numberOfQuads = nb_computational_elements_by_type[MBQUAD];
+
+    // Here we create vertices using ReadUtilface
+    const int total_number_of_nodes_on_tri =
+        numberOfTriangles * gaussPtsTri.size2();
+    const int total_number_of_nodes_on_quad =
+        numberOfQuads * gaussPtsQuad.size2();
+
+    if (total_number_of_nodes_on_tri) {
+      CHKERR iface->get_node_coords(3, total_number_of_nodes_on_tri, 0,
+                                    startingVertTriHandle, verticesOnTriArrays);
+      CHKERR iface->get_element_connect(numberOfTriangles, gaussPtsTri.size2(),
+                                        MBTRI, 0, startingEleTriHandle,
+                                        triConn);
+    }
+
+    if (total_number_of_nodes_on_quad) {
+      CHKERR iface->get_node_coords(3, total_number_of_nodes_on_quad, 0,
+                                    startingVertQuadHandle,
+                                    verticesOnQuadArrays);
+      CHKERR iface->get_element_connect(numberOfQuads, gaussPtsQuad.size2(),
+                                        MBQUAD, 0, startingEleQuadHandle,
+                                        quadConn);
+    }
+  }
+
+  counterTris = 0;
+  counterQuads = 0;
+
+  MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
-  ParallelComm *pcomm_post_proc_mesh =
-      ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
-  if (pcomm_post_proc_mesh == NULL) {
-    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-    pcomm_post_proc_mesh =
-        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
-  }
 
-  Range faces;
-  CHKERR postProcMesh.get_entities_by_dimension(0, 2, faces, false);
-  int rank = mField.get_comm_rank();
-  CHKERR postProcMesh.tag_clear_data(pcomm_post_proc_mesh->part_tag(), faces,
-                                     &rank);
-  CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
+  auto update_elements = [&]() {
+    MoFEMFunctionBegin;
+    ReadUtilIface *iface;
+    CHKERR postProcMesh.query_interface(iface);
+
+    if (counterTris)
+      CHKERR iface->update_adjacencies(startingEleTriHandle, counterTris,
+                                       gaussPtsTri.size2(), triConn);
+    if (counterQuads)
+      CHKERR iface->update_adjacencies(startingEleQuadHandle, counterQuads,
+                                       gaussPtsQuad.size2(), quadConn);
+    MoFEMFunctionReturn(0);
+  };
+
+  auto resolve_shared = [&]() {
+    MoFEMFunctionBegin;
+    ParallelComm *pcomm_post_proc_mesh =
+        ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
+    if (pcomm_post_proc_mesh == NULL) {
+      wrapRefMeshComm =
+          boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+      pcomm_post_proc_mesh =
+          new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+    }
+
+    Range faces;
+    CHKERR postProcMesh.get_entities_by_dimension(0, 2, faces, false);
+    int rank = mField.get_comm_rank();
+    CHKERR postProcMesh.tag_clear_data(pcomm_post_proc_mesh->part_tag(), faces,
+                                       &rank);
+    CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR update_elements();
+  CHKERR resolve_shared();
+
   MoFEMFunctionReturn(0);
 }
 
@@ -920,7 +1016,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
 
   if (!grad_mat_ptr)
     grad_mat_ptr = boost::make_shared<MatrixDouble>();
-
+  
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
 

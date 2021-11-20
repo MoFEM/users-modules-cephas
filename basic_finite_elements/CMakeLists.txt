@@ -69,8 +69,16 @@ if(MOFEM_UM_BUILD_TESTS)
   ${PROJECT_BINARY_DIR}/basic_finite_elements/atom_tests)
 endif(MOFEM_UM_BUILD_TESTS)
 
+option(BUILD_BASIC_FINITE_ELEMENTS
+  "Compile basic finite elements" ON)
+message(STATUS "Build basic finite elements ${BUILD_BASIC_FINITE_ELEMENTS}")
+  
+if(BUILD_BASIC_FINITE_ELEMENTS) 
+
 foreach(LOOP_DIR ${BFE_DIRS})
   set(BFE_MOD_DIR ${LOOP_DIR})
   add_subdirectory(${LOOP_DIR})
   bfe_install(${LOOP_DIR})
 endforeach(LOOP_DIR)
+
+endif(BUILD_BASIC_FINITE_ELEMENTS)

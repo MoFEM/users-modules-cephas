@@ -343,13 +343,13 @@ MoFEMErrorCode Example::bC() {
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
   boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_"});
-
+  
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
-  for (auto bc : bc_map) {
-    MOFEM_LOG("EXAMPLE", Sev::verbose) << "Marker " << bc.first;
-  }
 
+  for (auto bc : bc_map) 
+    MOFEM_LOG("EXAMPLE", Sev::verbose) << "Marker " << bc.first;
+  
   // OK. We have problem with GMesh, it adding empty characters at the end of
   // block. So first block is search by regexp. popMarkDOFsOnEntities should
   // work with regexp.
@@ -582,7 +582,7 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
     for (auto bc : bc_map) {
-      if (bc_mng->checkBlock(bc, "FIX_")) {
+      if (bc_mng->checkBlock(bc, "FIX_")){
         pipeline.push_back(
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         pipeline.push_back(new OpBoundaryMass(
@@ -650,7 +650,7 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
 
     for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
-      if (bc_mng->checkBlock(bc, "FIX_")) {
+      if (bc_mng->checkBlock(bc, "FIX_"))  {
         pipeline.push_back(
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
@@ -814,16 +814,10 @@ MoFEMErrorCode Example::tsSolve() {
       auto jac_ptr = boost::make_shared<MatrixDouble>();
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       postProcFe->getOpPtrVector().push_back(
-<<<<<<< HEAD
-          new OpCalculateInvJacForFace(inv_jac_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpSetInvJacH1ForFace(inv_jac_ptr));
-=======
           new OpCalculateHOJacForFace(jac_ptr));
       postProcFe->getOpPtrVector().push_back(
           new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
       postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
->>>>>>> develop
     }
 
     postProcFe->getOpPtrVector().push_back(
