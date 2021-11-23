@@ -373,7 +373,7 @@ struct CohesiveInterfaceElement {
             double nrm2_tangent1 = 0;
             double nrm2_tangent2 = 0;
             for(int dd = 0;dd<3;dd++) {
-              nrm2_normal += pow(getNormalsAtGaussPtF3()(gg,dd),2);
+              nrm2_normal += pow(getNormalsAtGaussPtsF3()(gg,dd),2);
               nrm2_tangent1 += pow(getTangent1AtGaussPtF3()(gg,dd),2);
               nrm2_tangent2 += pow(getTangent2AtGaussPtF3()(gg,dd),2);
             }
@@ -381,7 +381,7 @@ struct CohesiveInterfaceElement {
             nrm2_tangent1 = sqrt(nrm2_tangent1);
             nrm2_tangent2 = sqrt(nrm2_tangent2);
             for(int dd = 0;dd<3;dd++) {
-              commonData.R[gg](0,dd) = getNormalsAtGaussPtF3()(gg,dd)/nrm2_normal;
+              commonData.R[gg](0,dd) = getNormalsAtGaussPtsF3()(gg,dd)/nrm2_normal;
               commonData.R[gg](1,dd) = getTangent1AtGaussPtF3()(gg,dd)/nrm2_tangent1;
               commonData.R[gg](2,dd) = getTangent2AtGaussPtF3()(gg,dd)/nrm2_tangent2;
             }
@@ -463,7 +463,7 @@ struct CohesiveInterfaceElement {
         int nb_gauss_pts = data.getN().size1();
         for(int gg = 0;gg<nb_gauss_pts;gg++) {
           ierr = physicalEqations.calculateTraction(traction,gg,commonData,getFEMethod()); CHKERRG(ierr);
-          double w = getGaussPts()(2,gg)*cblas_dnrm2(3,&getNormalsAtGaussPtF3()(gg,0),1)*0.5;
+          double w = getGaussPts()(2,gg)*cblas_dnrm2(3,&getNormalsAtGaussPtsF3()(gg,0),1)*0.5;
           for(int nn = 0;nn<nb_dofs/3;nn++) {
             for(int dd = 0;dd<3;dd++) {
               Nf[3*nn+dd] += w*data.getN(gg)[nn]*traction[dd];
@@ -518,7 +518,7 @@ struct CohesiveInterfaceElement {
         int nb_gauss_pts = row_data.getN().size1();
         for(int gg = 0;gg<nb_gauss_pts;gg++) {
           ierr = physicalEqations.calculateTangentStiffeness(D,gg,commonData,getFEMethod()); CHKERRG(ierr);
-          double w = getGaussPts()(2,gg)*cblas_dnrm2(3,&getNormalsAtGaussPtF3()(gg,0),1)*0.5;
+          double w = getGaussPts()(2,gg)*cblas_dnrm2(3,&getNormalsAtGaussPtsF3()(gg,0),1)*0.5;
           ND.clear();
           for(int nn = 0; nn<nb_row/3;nn++) {
             for(int dd = 0;dd<3;dd++) {

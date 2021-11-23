@@ -10,15 +10,10 @@
 
 
 ## Nonlinear with fieldsplit (block) solver
--pc_type fieldsplit
--pc_fieldsplit_type schur
 -ksp_type fgmres
--ksp_initial_guess_nonzero
 -ksp_atol 1e-12
 -ksp_rtol 0
 -ksp_monitor ascii
--pc_fieldsplit_schur_precondition selfp
--fieldsplit_0_ksp_type gmres
 -snes_atol 1e-7
 -snes_rtol 1e-12
 -snes_monitor
@@ -27,3 +22,23 @@
 ## Line search (applicable for both fieldsplit and non-fieldsplit solver) 
 -snes_linesearch_type cp  
 -snes_linesearch_monitor
+
+-pc_type fieldsplit 
+-pc_fieldsplit_type multiplicative
+-fieldsplit_0_ksp_type preonly 
+-fieldsplit_0_pc_type lu 
+-fieldsplit_0_pc_factor_mat_solver_type mumps
+
+-fieldsplit_1_ksp_type preonly 
+-fieldsplit_1_pc_type lu 
+-fieldsplit_1_pc_factor_mat_solver_type mumps 
+
+-mat_mumps_icntl_14 800 
+-mat_mumps_icntl_24 1 
+-mat_mumps_icntl_13 1
+-fieldsplit_0_mat_mumps_icntl_14 800 
+-fieldsplit_0_mat_mumps_icntl_24 1 
+-fieldsplit_0_mat_mumps_icntl_13 1
+-fieldsplit_1_mat_mumps_icntl_14 800 
+-fieldsplit_1_mat_mumps_icntl_24 1 
+-fieldsplit_1_mat_mumps_icntl_13 1

@@ -41,7 +41,14 @@
   <tr valign="top">
         <td width="350px">COLAB-3: <a href="https://gist.github.com/likask/5e38e09d79fbcf02a58f92ff9a96261c">Multifield plasticity</a></td>
         <td> Google Colab
-        <br/> *Keywords:*  ADV-0 titorial, Multifield plasticity
+        <br/> *Keywords:*  ADV-0 tutorial, Multifield plasticity
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">COLAB-4: <a href="https://gist.github.com/likask/be00986ecb80db8cbf0bf9aacd0889fe">Thermo plasticity</a></td>
+        <td> Google Colab
+        <br/> *Keywords:*  ADV-2 tutorial, Multifield thermo-plasticity
         </td>
   </tr>
 

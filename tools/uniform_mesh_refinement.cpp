@@ -87,9 +87,9 @@ int main(int argc, char *argv[]) {
     MeshRefinement *refine;
     CHKERR m_field.getInterface(refine);
 
-    CHKERR refine->add_vertices_in_the_middle_of_edges(meshset_ref_edges,
+    CHKERR refine->addVerticesInTheMiddleOfEdges(meshset_ref_edges,
                                                       BitRefLevel().set(1));
-    CHKERR refine->refine_TET(0, BitRefLevel().set(1));
+    CHKERR refine->refineTets(0, BitRefLevel().set(1));
 
     // update cubit meshsets
     for (_IT_CUBITMESHSETS_FOR_LOOP_(m_field, ciit)) {

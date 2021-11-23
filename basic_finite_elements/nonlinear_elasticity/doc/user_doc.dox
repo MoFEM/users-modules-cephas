@@ -40,7 +40,7 @@ If bar material model is NeoHookean (note that using key word KIRCHHOFF a St Ven
 \code
 mpirun -np 4  ../../nonlinear_dynamics \
   -my_file rod.cub \
-  -ts_dt 0.01 -ts_final_time 4 -ts_max_snes_failures -1  \
+  -ts_dt 0.01 -ts_max_time 4 -ts_max_snes_failures -1  \
   -my_output_prt -1 -my_max_post_proc_ref_level 0  \
   -my_disp_order 2 -my_time_data_file rod_history.in -default_material NEOHOOKEAN 2>&1 | tee log
 \endcode
@@ -49,7 +49,7 @@ If bar is made form Hooke material subjected to small strains and displacements,
 \code
 mpirun -np 4  ../../nonlinear_dynamics \
   -my_file rod.cub \
-  -ts_dt 0.01 -ts_final_time 4 -ts_max_snes_failures -1  \
+  -ts_dt 0.01 -ts_max_time 4 -ts_max_snes_failures -1  \
   -my_output_prt -1 -my_max_post_proc_ref_level 0  \
   -my_disp_order 2 -my_time_data_file rod_history.in -default_material HOOKE -is_linear -snes_lag_jacobian -2 2>&1 | tee log
 \endcode
@@ -144,7 +144,7 @@ mpirun -np 4 ../../nonlinear_dynamics \
 -my_file dam.h5m \
 -ts_dt 0.2 \
 -ts_alpha_radius 0.5 \
--ts_final_time 8 -ts_max_snes_failures -1 \
+-ts_max_time 8 -ts_max_snes_failures -1 \
 -my_time_data_file dam_history.in \
 -my_accelerogram accelerogram.in \
 -my_solve_at_time_zero 1 \

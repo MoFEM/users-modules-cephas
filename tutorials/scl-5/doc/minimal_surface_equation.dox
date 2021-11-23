@@ -21,13 +21,8 @@
 
 \section basic_tutorials_minimal_surface_equation_plain_program Plain program 
 
-
-The plain program for both the implementation of the UDOs (\c *.hpp) and the
+The plain program for both the implementation of the UDOs (\c *.cpp) and the
 main program (\c *.cpp) are as follows
-
-\subsection basic_tutorials_minimal_surface_equation_impl_udo Implementation of User Data Operators (*.hpp)
-
-\include minimal_surface_equation.hpp
 
 \subsection basic_tutorials_minimal_surface_equation_impl_main Implementation of the main program (*.cpp) 
 

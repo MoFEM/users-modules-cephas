@@ -88,16 +88,19 @@ set(TUTORIALS_DIRS
   scl-7
   scl-8
   scl-9
+  scl-10
   clx-0
   vec-0
   vec-1
   vec-2
   vec-3
+  vec-4
   mix-0
   max-0
   max-1
   adv-0
   adv-1
+  adv-2
   cor-0to1
   cor-2to5
   cor-6
@@ -107,8 +110,22 @@ set(TUTORIALS_DIRS
   cor-10
 )
 
+option(BUILD_TUTORIALS "Compile tutorials" ON)
+message(STATUS "Build tutorials ${BUILD_TUTORIALS}")
+
 foreach(LOOP_DIR ${TUTORIALS_DIRS})
+
+  string(REGEX REPLACE "-" "" OP_NAME ${LOOP_DIR})
+  string(TOUPPER ${OP_NAME} OP_NAME)
+  set(VAR_OP_NAME "BUILD_TUT_${OP_NAME}") 
+
+  option("${VAR_OP_NAME}" "Build tutorial {OP_NAME}" ${BUILD_TUTORIALS})
+  set(VAR_OP_NAME "${${VAR_OP_NAME}}")   
+
+  message(STATUS "Build status ${OP_NAME} ${VAR_OP_NAME}")
+
   set(TUTORIALS_MOD_DIR ${LOOP_DIR})
   add_subdirectory(${LOOP_DIR})
   tutorials_install(${LOOP_DIR})
+
 endforeach(LOOP_DIR)

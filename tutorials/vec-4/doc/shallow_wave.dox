@@ -1,0 +1,50 @@
+/*! \page shallow_wave_doc VEC-4: Shallow wave equation on sphere
+
+\note Prerequisites of this tutorial include \ref tutorial_elastic_problem
+
+<br>
+
+\note Intended learning outcome:
+- solving PhD on mainfold
+- handling two vectorial fields
+- setting inital boundary conditions
+- material time direvative
+- hyperbolic equation
+- approximation sphere with high-order polynomials
+
+\section tut_sw_solution Example solution
+
+\htmlonly
+<center>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/zfrkelKgE74" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+\endhtmlonly
+
+\section tut_sw_additional_resources Supplement lectures
+
+You can find many resources on the internet about shallow wave equations. We point to two of them, which has been used as a starting point for this tutorial.
+
+\htmlonly
+<center>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/gQ7KGhuE1e8" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+</center>
+\endhtmlonly
+
+\htmlonly
+<center>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/IYnlQx0W454" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+</center>
+\endhtmlonly
+
+\tableofcontents
+
+\section tut_sw_main_prog Plain program
+
+The inital conditions are set following this paper \cite scott2016test. 
+
+\include shallow_wave.cpp
+
+\section tut_sw_init_state Higher order geometry
+
+\include approx_sphere.cpp
+
+*/

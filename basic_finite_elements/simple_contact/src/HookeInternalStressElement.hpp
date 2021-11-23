@@ -221,12 +221,6 @@ HookeInternalStressElement::OpInternalStrain_dx::iNtegrate(EntData &row_data) {
 
     // calculate scalar weight times element volume
     double a = t_w * vol;
-
-    if (getHoGaussPtsDetJac().size()) {
-      // If HO geometry
-      a *= getHoGaussPtsDetJac()[gg];
-    }
-
     auto t_nf = get_tensor1(nF, 0);
 
     int rr = 0;
@@ -266,14 +260,7 @@ HookeInternalStressElement::OpGetAnalyticalInternalStress<S>::doWork(
   };
 
   const int nb_integration_pts = getGaussPts().size2();
-
-  auto get_coords = [&]() {
-    if (getHoCoordsAtGaussPts().size1() == nb_integration_pts)
-      return getFTensor1HoCoordsAtGaussPts();
-    else
-      return getFTensor1CoordsAtGaussPts();
-  };
-  auto t_coords = get_coords();
+  auto t_coords = getFTensor1CoordsAtGaussPts();
 
   // elastic stiffness tensor (4th rank tensor with minor and major
   // symmetry)

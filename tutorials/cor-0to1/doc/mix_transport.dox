@@ -370,8 +370,7 @@ In this example, we have four kinds of finite elements \e MIX,
 \code{.cpp}
 MoFEMErrorCode MixTransport::MixTransportElement::addFiniteElements(
   const std::string &fluxes_name,
-  const std::string &values_name,
-  const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS"
+  const std::string &values_name
 ) {
   MoFEMFunctionBegin;
 
@@ -1072,9 +1071,11 @@ struct MixTransport::MixTransportElement::OpVDivSigma_L2Hdiv: public MoFEM::Volu
     int nb_gauss_pts = row_data.getVectorN().size1();
     for(int gg = 0;gg<nb_gauss_pts;gg++) {
       double w = getGaussPts()(3,gg)*getVolume();
+      /// FIXME:
+      /// This in newer versions is removed. Using FTensor you can directly calulate 
+      /// trace of direvative of HDiv base function.
       CHKERR getDivergenceOfHDivBaseFunctions(
-        row_side,row_type,col_data,gg,divVec
-      ); 
+        row_side,row_type,col_data,gg,divVec);   
       noalias(C) += w*outer_prod(divVec,row_data.getN(gg));
     }
     CHKERR MatSetValues(
@@ -1153,6 +1154,9 @@ over integration points and calculate local matrix \b C, as follows
 int nb_gauss_pts = row_data.getVectorN().size1();
 for(int gg = 0;gg<nb_gauss_pts;gg++) {
   double w = getGaussPts()(3,gg)*getVolume();
+  /// FIXME:
+  /// This in newer versions is removed. Using FTensor you can directly calulate 
+  /// trace of direvative of HDiv base function. 
   CHKERR getDivergenceOfHDivBaseFunctions(
     row_side,row_type,col_data,gg,divVec
   ); 
@@ -1801,14 +1805,14 @@ for(int ll = 0;ll!=nb_levels;ll++) {
   // get intersection of all edges to refine and edges of previous level
   edges = intersect(edges,refined_edges);
   // refine edges by creation of node in middle of edge, if node was previously created use that node, and set BitRefLevel to that node
-  CHKERR refine_ptr->add_vertices_in_the_middle_of_edges(edges,BitRefLevel().set(ll+1)); 
+  CHKERR refine_ptr->addVerticesInTheMiddleOfEdges(edges,BitRefLevel().set(ll+1)); 
   //  get all tetrahderals for current refined level
   Range tets;
   CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
     BitRefLevel().set(ll),BitRefLevel().set(),MBTET,tets
   ); 
   // refine those tetrahedrals using nodes in middle of refined edges
-  CHKERR refine_ptr->refine_TET(tets,BitRefLevel().set(ll+1)); 
+  CHKERR refine_ptr->refineTets(tets,BitRefLevel().set(ll+1)); 
   // update meshsets with boundary conditons, etc.
   CHKERR updateMeshsetsFieldsAndElements(ll+1); 
 }

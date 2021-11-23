@@ -54,7 +54,6 @@ private:
   // Field name and approximation order
   std::string domainField;
   int order;
-  MatrixDouble invJac;
 
   // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
@@ -197,15 +196,22 @@ MoFEMErrorCode NonlinearPoisson::boundaryCondition() {
 MoFEMErrorCode NonlinearPoisson::assembleSystem() {
   MoFEMFunctionBegin;
 
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
   { // Push operators to the Pipeline that is responsible for calculating the
     // domain tangent matrix (LHS)
 
     // Add default operators to calculate inverse of Jacobian (needed for
     // implementation of 2D problem but not 3D ones)
+
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateHOJacForFace(jac_ptr));
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+    domainTangentMatrixPipeline->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
 
     // Add default operator to calculate field values at integration points
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
@@ -226,9 +232,11 @@ MoFEMErrorCode NonlinearPoisson::assembleSystem() {
     // Add default operators to calculate inverse of Jacobian (needed for
     // implementation of 2D problem but not 3D ones)
     domainResidualVectorPipeline->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateHOJacForFace(jac_ptr));
     domainResidualVectorPipeline->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+    domainResidualVectorPipeline->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
 
     // Add default operator to calculate field values at integration points
     domainResidualVectorPipeline->getOpPtrVector().push_back(

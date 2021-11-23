@@ -309,8 +309,10 @@ MoFEMErrorCode MetaSimpleRodElement::addSimpleRodElements(
 
 MoFEMErrorCode MetaSimpleRodElement::setSimpleRodOperators(
     MoFEM::Interface &m_field,
-    boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_lhs_ptr,
-    boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_rhs_ptr,
+    boost::shared_ptr<EdgeElementForcesAndSourcesCoreBase>
+        fe_simple_rod_lhs_ptr,
+    boost::shared_ptr<EdgeElementForcesAndSourcesCoreBase>
+        fe_simple_rod_rhs_ptr,
     const std::string field_name, const std::string mesh_nodals_positions) {
   MoFEMFunctionBegin;
 

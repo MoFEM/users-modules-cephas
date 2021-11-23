@@ -86,9 +86,6 @@ struct FieldApproximationH1 {
       unsigned int nb_gauss_pts = row_data.getN().size1();
       for (unsigned int gg = 0; gg != nb_gauss_pts; gg++) {
         double w = getVolume() * getGaussPts()(3, gg);
-        if (getHoCoordsAtGaussPts().size1() == nb_gauss_pts) {
-          w *= getHoGaussPtsDetJac()[gg];
-        }
         // noalias(NN) += w*outer_prod(row_data.getN(gg),col_data.getN(gg));
         cblas_dger(CblasRowMajor, nb_row_dofs, nb_col_dofs, w,
                    &row_data.getN()(gg, 0), 1, &col_data.getN()(gg, 0), 1,
@@ -197,26 +194,15 @@ struct FieldApproximationH1 {
                 "data inconsistency");
       }
 
-      // itegration
+      // integration
       unsigned int nb_gauss_pts = data.getN().size1();
       for (unsigned int gg = 0; gg != nb_gauss_pts; gg++) {
 
-        double x, y, z, w;
-        w = getVolume() * getGaussPts()(3, gg);
-        if (getHoCoordsAtGaussPts().size1() == nb_gauss_pts) {
-          // intergation points global positions if higher order geometry is
-          // given
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
-          // correction of jacobian for higher order geometry
-          w *= getHoGaussPtsDetJac()[gg];
-        } else {
-          // intergartion point global positions for linear tetrahedral element
-          x = getCoordsAtGaussPts()(gg, 0);
-          y = getCoordsAtGaussPts()(gg, 1);
-          z = getCoordsAtGaussPts()(gg, 2);
-        }
+        const double w = getVolume() * getGaussPts()(3, gg);
+        // intergartion point global positions for linear tetrahedral element
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
+        const double z = getCoordsAtGaussPts()(gg, 2);
 
         std::vector<VectorDouble> fun_val;
 
@@ -412,26 +398,13 @@ struct FieldApproximationH1 {
       // integration
       unsigned int nb_gauss_pts = data.getN().size1();
       for (unsigned int gg = 0; gg != nb_gauss_pts; gg++) {
-        double x, y, z, w;
-        w = getGaussPts()(2, gg);
-        if (getNormalsAtGaussPts().size1()) {
-          w *= 0.5 * cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
-        } else {
-          w *= getArea();
-        }
+        double w = getGaussPts()(2, gg);
+        w *= 0.5 * cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
 
-        if (getHoCoordsAtGaussPts().size1() == nb_gauss_pts) {
-          // intergation points global positions if higher order geometry is
-          // given
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
-        } else {
-          // intergartion point global positions for linear tetrahedral element
-          x = getCoordsAtGaussPts()(gg, 0);
-          y = getCoordsAtGaussPts()(gg, 1);
-          z = getCoordsAtGaussPts()(gg, 2);
-        }
+        // intergartion point global positions for linear tetrahedral element
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
+        const double z = getCoordsAtGaussPts()(gg, 2);
 
         if (getNormalsAtGaussPts().size1()) {
           noalias(normal) = getNormalsAtGaussPts(gg);

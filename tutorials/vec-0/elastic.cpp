@@ -27,9 +27,9 @@ using namespace MoFEM;
 template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
-  using DomainEle = PipelineManager::FaceEle2D;
+  using DomainEle = PipelineManager::FaceEle;
   using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = PipelineManager::EdgeEle2D;
+  using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 };
@@ -57,9 +57,8 @@ using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
-using OpInternalForce =
-    FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-        GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.3;
@@ -87,7 +86,6 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  MatrixDouble invJac;
   boost::shared_ptr<MatrixDouble> matGradPtr;
   boost::shared_ptr<MatrixDouble> matStrainPtr;
   boost::shared_ptr<MatrixDouble> matStressPtr;
@@ -202,8 +200,8 @@ MoFEMErrorCode Example::boundaryCondition() {
                                            "U", 1, 1);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
                                            "U", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "FIX_ALL", "U", 0, 3);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
+                                           "U", 0, 3);
 
   //! [Pushing gravity load operator]
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
@@ -220,10 +218,15 @@ MoFEMErrorCode Example::assembleSystem() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   if (SPACE_DIM == 2) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateHOJacForFace(jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
   }
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
 
@@ -262,14 +265,19 @@ MoFEMErrorCode Example::solveSystem() {
 MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
-
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
   pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
   if (SPACE_DIM == 2) {
     post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+        new OpCalculateHOJacForFace(jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
   }
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
@@ -300,10 +308,15 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getDomainLhsFE().reset();
 
   if (SPACE_DIM == 2) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateHOJacForFace(jac_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
   }
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",

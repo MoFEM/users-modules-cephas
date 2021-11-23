@@ -79,7 +79,7 @@ param_file.petsc which is stored in the working directory
 users_modules/basic_finite_elements/reaction_diffusion_equation/param_file.petsc
 
 The key parameters are
-- \em -ts_final_time: time duration
+- \em -ts_max_time: time duration
 - \em -ts_dt: time step size
 - \em -ts_arkimex_type: ARKIMEX time integration type
 - \em -ts_adapt_type: time step adaptation (if the stiff part is not updated, it
@@ -433,7 +433,6 @@ struct CommonData {
   MatrixDouble grad;    ///< Gradients of field "u" at integration points
   VectorDouble val;     ///< Values of field "u" at integration points
   VectorDouble dot_val; ///< Rate of values of field "u" at integration points
-  MatrixDouble invJac;  ///< Inverse of element jacobian
 
   SmartPetscObj<Mat> M;   ///< Mass matrix
   SmartPetscObj<KSP> ksp; ///< Linear solver
@@ -459,10 +458,13 @@ auto grad_ptr = boost::shared_ptr<MatrixDouble>(data, &data->grad);
 Each of those user data operators are added to finite element, for example to
 \em vol_ele_stiff_rhs we add operators as following
 \code
+auto det_ptr = boost::make_shared<VectorDouble>();
+auto jac_ptr = boost::make_shared<MatrixDouble>();
+auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+vol_ele_stiff_rhs->getOpPtrVector().push_back(new OpCalculateHOJacForFace(jac_ptr));
+vol_ele_stiff_rhs->getOpPtrVector().push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
-MoFEM::OpCalculateInvJacForFace(data->invJac));
-vol_ele_stiff_rhs->getOpPtrVector().push_back(new
-MoFEM::OpSetInvJacH1ForFace(data->invJac));
+MoFEM::OpSetInvJacH1ForFace(inv_jac_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
 MoFEM::OpCalculateScalarFieldValuesDot("u", dot_val_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
@@ -470,7 +472,7 @@ MoFEM::OpCalculateScalarFieldGradient<2>("u", grad_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
 ReactionDiffusionEquation::OpAssembleStiffRhs<2>(data)); 
 \endcode 
-where MoFEM::OpCalculateInvJacForFace and MoFEM::OpSetInvJacH1ForFace are
+where MoFEM::OpCalculateJacForFace,  and MoFEM::OpSetInvJacH1ForFace are
 standard operators to calculate element inverse of jacobian, and pull
 derivatives of base functions to element reference configuration \f[
 \frac{\partial \pmb\Phi}{\partial \mathbf{x}} = \frac{\partial
@@ -535,11 +537,11 @@ function
 auto solve_for_g = [&]() {
   MoFEMFunctionBegin;
   if (vol_ele_slow_rhs->vecAssembleSwitch) {
-    CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES,
-SCATTER_REVERSE); CHKERR VecGhostUpdateEnd(vol_ele_slow_rhs->ts_F, ADD_VALUES,
-SCATTER_REVERSE); CHKERR VecAssemblyBegin(vol_ele_slow_rhs->ts_F); CHKERR
-VecAssemblyEnd(vol_ele_slow_rhs->ts_F); *vol_ele_slow_rhs->vecAssembleSwitch =
-false;
+    CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES, SCATTER_REVERSE); 
+    CHKERR VecGhostUpdateEnd(vol_ele_slow_rhs->ts_F, ADD_VALUES, SCATTER_REVERSE); 
+    CHKERR VecAssemblyBegin(vol_ele_slow_rhs->ts_F); 
+    CHKERR VecAssemblyEnd(vol_ele_slow_rhs->ts_F); 
+    *vol_ele_slow_rhs->vecAssembleSwitch = false;
   }
   CHKERR KSPSolve(data->ksp, vol_ele_slow_rhs->ts_F, vol_ele_slow_rhs->ts_F);
   MoFEMFunctionReturn(0);

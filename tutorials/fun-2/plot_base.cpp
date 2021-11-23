@@ -1,6 +1,6 @@
 /**
- * \file approximation.cpp
- * \example approximation.cpp
+ * \file plot_base.cpp
+ * \example plot_base.cpp
  *
  * Utility for plotting base functions for different spaces, polynomial bases 
  */
@@ -154,6 +154,7 @@ MoFEMErrorCode Example::readMesh() {
     CHKERR mField.getInterface(simpleInterface);
     CHKERR simpleInterface->getOptions();
     CHKERR simpleInterface->loadFile();
+
   }
 
   MoFEMFunctionReturn(0);
@@ -247,13 +248,14 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->generateReferenceElementMesh();
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
-  MatrixDouble inv_jac(2, 2), jac(2, 2);
   if (SPACE_DIM == 2) {
     if (space == HCURL) {
-      post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac));
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateHOJacForFace(jac_ptr));
       post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       post_proc_fe->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformFace(jac));
+          new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
     }
   }
 
@@ -286,6 +288,7 @@ MoFEMErrorCode Example::outputResults() {
 
   size_t nb = 0;
   auto dofs_ptr = mField.get_dofs();
+
   for (auto dof_ptr : (*dofs_ptr)) {
     MOFEM_LOG("PLOTBASE", Sev::verbose) << *dof_ptr;
     auto &val = const_cast<double &>(dof_ptr->getFieldData());
@@ -343,7 +346,9 @@ int main(int argc, char *argv[]) {
   }
   CATCH_ERRORS;
 
-  CHKERR MoFEM::Core::Finalize();
+  MoFEM::Core::Finalize();
+
+  return 0;
 }
 
 MoFEMErrorCode MyPostProc::generateReferenceElementMesh() {
@@ -361,7 +366,7 @@ MoFEMErrorCode MyPostProc::generateReferenceElementMesh() {
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
             "Dimension not implemented");
 
-  CHKERR PetscOptionsGetString(PETSC_NULL, "", "-my_file", ref_mesh_file_name,
+  CHKERR PetscOptionsGetString(PETSC_NULL, "", "-ref_file", ref_mesh_file_name,
                                255, PETSC_NULL);
   CHKERR moab_ref.load_file(ref_mesh_file_name, 0, "");
 
@@ -395,9 +400,13 @@ MoFEMErrorCode MyPostProc::generateReferenceElementMesh() {
     nodes_pts_map[*nit] = gg;
   }
 
-  // Set size of adjacency matrix (note ho order nodes 3 nodes and 3 nodes on
-  // edges)
-  refEleMap.resize(elems.size(), 2 * (SPACE_DIM + 1));
+  if (SPACE_DIM == 2) {
+    // Set size of adjacency matrix (note ho order nodes 3 nodes and 3 nodes on
+    // edges)
+    refEleMap.resize(elems.size(), 3 + 3);
+  } else if (SPACE_DIM == 3) {
+    refEleMap.resize(elems.size(), 4 + 6);
+  }
 
   // Set adjacency matrix
   Range::iterator tit = elems.begin();
@@ -422,12 +431,12 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   switch (numeredEntFiniteElementPtr->getEntType()) {
   case MBTRI:
-    shapeFunctions.resize(num_nodes, SPACE_DIM + 1);
+    shapeFunctions.resize(num_nodes, 3);
     CHKERR Tools::shapeFunMBTRI(&*shapeFunctions.data().begin(),
                                 &gaussPts(0, 0), &gaussPts(1, 0), num_nodes);
     break;
   case MBQUAD: {
-    shapeFunctions.resize(num_nodes, SPACE_DIM + 2);
+    shapeFunctions.resize(num_nodes, 4);
     for (int gg = 0; gg != num_nodes; gg++) {
       double ksi = gaussPts(0, gg);
       double eta = gaussPts(1, gg);
@@ -437,18 +446,47 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
       shapeFunctions(gg, 3) = N_MBQUAD3(ksi, eta);
     }
   } break;
+  case MBTET: {
+    shapeFunctions.resize(num_nodes, 8);
+    CHKERR Tools::shapeFunMBTET(&*shapeFunctions.data().begin(),
+                                &gaussPts(0, 0), &gaussPts(1, 0),
+                                &gaussPts(2, 0), num_nodes);
+  } break;
+  case MBHEX: {
+    shapeFunctions.resize(num_nodes, 8);
+    for (int gg = 0; gg != num_nodes; gg++) {
+      double ksi = gaussPts(0, gg);
+      double eta = gaussPts(1, gg);
+      double zeta = gaussPts(2, gg);
+      shapeFunctions(gg, 0) = N_MBHEX0(ksi, eta, zeta);
+      shapeFunctions(gg, 1) = N_MBHEX1(ksi, eta, zeta);
+      shapeFunctions(gg, 2) = N_MBHEX2(ksi, eta, zeta);
+      shapeFunctions(gg, 3) = N_MBHEX3(ksi, eta, zeta);
+      shapeFunctions(gg, 4) = N_MBHEX4(ksi, eta, zeta);
+      shapeFunctions(gg, 5) = N_MBHEX5(ksi, eta, zeta);
+      shapeFunctions(gg, 6) = N_MBHEX6(ksi, eta, zeta);
+      shapeFunctions(gg, 7) = N_MBHEX7(ksi, eta, zeta);
+    }
+  } break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
             "Not implemented element type");
   }
 
+
   // Create physical nodes
+
+  // MoAB interface allowing for creating nodes and elements in the bulk
   ReadUtilIface *iface;
   CHKERR postProcMesh.query_interface(iface);
 
-  std::vector<double *> arrays;
-  EntityHandle startv;
+  std::vector<double *> arrays; /// pointers to memory allocated by MoAB for
+                                /// storing X, Y, and Z coordinates
+  EntityHandle startv; // Starting handle for vertex
+  // Allocate memory for num_nodes, and return starting handle, and access to
+  // memort.
   CHKERR iface->get_node_coords(3, num_nodes, 0, startv, arrays);
+
   mapGaussPts.resize(gaussPts.size2());
   for (int gg = 0; gg != num_nodes; ++gg)
     mapGaussPts[gg] = startv + gg;
@@ -464,9 +502,10 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   const int num_el = refEleMap.size1();
   const int num_nodes_on_ele = refEleMap.size2();
 
-  EntityHandle starte;
-  EntityHandle *conn;
-
+  EntityHandle starte; // Starting handle to first created element
+  EntityHandle *conn; // Access to MOAB memory with connectivity of elements 
+  
+  // Create tris/tets in the bulk in MoAB database
   if (SPACE_DIM == 2)
     CHKERR iface->get_element_connect(num_el, num_nodes_on_ele, MBTRI, 0,
                                       starte, conn);
@@ -477,20 +516,26 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
             "Dimension not implemented");
 
+  // At this point elements (memory for elements) is allocated, at code bellow
+  // actual connectivity of elements is set.
   for (unsigned int tt = 0; tt != refEleMap.size1(); ++tt) {
     for (int nn = 0; nn != num_nodes_on_ele; ++nn)
       conn[num_nodes_on_ele * tt + nn] = mapGaussPts[refEleMap(tt, nn)];
   }
+
+  // Finalise elements creation. At that point MOAB updates adjacency tables,
+  // and elements are ready to use.
   CHKERR iface->update_adjacencies(starte, num_el, num_nodes_on_ele, conn);
+  
   auto physical_elements = Range(starte, starte + num_el - 1);
   CHKERR postProcMesh.tag_clear_data(th, physical_elements, &(nInTheLoop));
 
   EntityHandle fe_ent = numeredEntFiniteElementPtr->getEnt();
-  coords.resize(12, false);
   int fe_num_nodes;
   {
     const EntityHandle *conn;
     mField.get_moab().get_connectivity(fe_ent, conn, fe_num_nodes, true);
+    coords.resize(3 * fe_num_nodes, false);
     CHKERR mField.get_moab().get_coords(conn, fe_num_nodes, &coords[0]);
   }
 
@@ -498,6 +543,7 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   FTensor::Index<'i', 3> i;
   FTensor::Tensor0<FTensor::PackPtr<double *, 1>> t_n(
       &*shapeFunctions.data().begin());
+
   FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 3> t_coords(
       arrays[0], arrays[1], arrays[2]);
   const double *t_coords_ele_x = &coords[0];

@@ -895,6 +895,8 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
         new PostProcFaceOnRefinedMesh(m_field));
 
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *post_proc_contact_ptr, false,
+                          false);
     CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("LAGMULT");
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("SPATIAL_POSITION");

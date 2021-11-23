@@ -19,7 +19,7 @@ add_test(reaction_diffusion
    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
    ${CMAKE_CURRENT_BINARY_DIR}/reaction_diffusion
    -file_name mesh_quad_2part.h5m
-   -ts_final_time 0.4)
+   -ts_max_time 0.4)
 
 set(permissions_default 
    OWNER_WRITE 

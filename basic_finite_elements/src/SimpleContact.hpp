@@ -81,7 +81,7 @@ struct SimpleContactProblem {
 
     SimpleContactElement(MoFEM::Interface &m_field, bool newton_cotes = false)
         : ContactEle(m_field), mField(m_field), newtonCotes(newton_cotes),
-          contactStateVec(0) {}
+          contactStateVec() {}
 
     MoFEMErrorCode preProcess() {
       MoFEMFunctionBegin;

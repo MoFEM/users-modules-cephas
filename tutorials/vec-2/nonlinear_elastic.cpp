@@ -28,9 +28,9 @@ using namespace MoFEM;
 template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
-  using DomainEle = PipelineManager::FaceEle2D;
+  using DomainEle = PipelineManager::FaceEle;
   using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = PipelineManager::EdgeEle2D;
+  using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 };
@@ -63,7 +63,6 @@ using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
 using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
 
-
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
@@ -90,7 +89,6 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  MatrixDouble invJac;
   boost::shared_ptr<MatrixDouble> matGradPtr;
   boost::shared_ptr<MatrixDouble> matStrainPtr;
   boost::shared_ptr<MatrixDouble> matStressPtr;
@@ -191,8 +189,8 @@ MoFEMErrorCode Example::boundaryCondition() {
                                            "U", 1, 1);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
                                            "U", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "FIX_ALL", "U", 0, 3);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
+                                           "U", 0, 3);
 
   auto get_time = [&](double, double, double) {
     auto *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -219,7 +217,7 @@ MoFEMErrorCode Example::boundaryCondition() {
                             boost::make_shared<Range>(force_edges)));
     }
   }
-  
+
   //! [Define gravity vector]
   auto get_body_force = [this](const double, const double, const double) {
     auto *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -233,7 +231,7 @@ MoFEMErrorCode Example::boundaryCondition() {
     return t_source;
   };
   //! [Define gravity vector]
-  
+
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpBodyForce("U", get_body_force));
 
@@ -250,8 +248,12 @@ MoFEMErrorCode Example::assembleSystem() {
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
     if (SPACE_DIM == 2) {
-      pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-      pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+      pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
     }
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -338,15 +340,21 @@ MoFEMErrorCode Example::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto dm = simple->getDM();
-  auto ts = pipeline_mng->createTS();
+  auto ts = pipeline_mng->createTSIM();
 
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
   if (SPACE_DIM == 2) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+        new OpCalculateHOJacForFace(jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
   }
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -365,7 +373,7 @@ MoFEMErrorCode Example::solveSystem() {
   post_proc_fe->getOpPtrVector().push_back(new OpPostProcHencky<SPACE_DIM>(
       "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
       commonHenckyDataPtr));
-      
+
   post_proc_fe->addFieldValuesPostProc("U");
 
   // Add monitor to time solver
@@ -410,7 +418,7 @@ MoFEMErrorCode Example::outputResults() {
     auto *simple = mField.getInterface<Simple>();
     auto T = smartCreateDMVector(simple->getDM());
     CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
-                                      SCATTER_FORWARD);
+                                   SCATTER_FORWARD);
     double nrm2;
     CHKERR VecNorm(T, NORM_2, &nrm2);
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Regression norm " << nrm2;

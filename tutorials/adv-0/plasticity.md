@@ -241,7 +241,7 @@ data_reaction=data_reaction.rename(columns={3: "reaction"})
 table=pd.concat([data_reaction, data_ux.reindex(data_reaction.index)], axis=1)
 table=table.drop([0, 1, 2, 3, 5], axis=1)
 
-table['reaction']=-1*table['reaction'].to_numpy()
+table['reaction']=1*table['reaction'].to_numpy()
 
 fig, ax = plt.subplots()
 ax.plot(table['max'].to_numpy(), table['reaction'].to_numpy(), 'ro-')

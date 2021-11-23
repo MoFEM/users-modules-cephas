@@ -49,9 +49,6 @@ struct VolumeCalculation
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
       double vol = getVolume() * getGaussPts()(3, gg);
-      if (getHoGaussPtsDetJac().size() > 0) {
-        vol *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-      }
 
       CHKERR VecSetValue(volumeVec, 0, vol, ADD_VALUES);
     }

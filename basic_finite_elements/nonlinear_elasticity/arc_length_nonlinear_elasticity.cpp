@@ -307,11 +307,19 @@ int main(int argc, char *argv[]) {
     ElasticMaterials elastic_materials(m_field);
     CHKERR elastic_materials.setBlocks(elastic.setOfBlocks);
     CHKERR elastic.addElement("ELASTIC", "SPATIAL_POSITION");
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true, false,
+                    false, false);
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeLhs(), true, false,
+                    false, false);
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeEnergy(), true,
+                    false, false, false);
     CHKERR elastic.setOperators("SPATIAL_POSITION");
 
     // post_processing
     PostProcVolumeOnRefinedMesh post_proc(m_field);
     CHKERR post_proc.generateReferenceElementMesh();
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", post_proc, true, false, false,
+                    false);
     CHKERR post_proc.addFieldValuesPostProc("SPATIAL_POSITION");
     CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     CHKERR post_proc.addFieldValuesGradientPostProc("SPATIAL_POSITION");

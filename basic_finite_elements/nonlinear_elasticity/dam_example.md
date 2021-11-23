@@ -113,7 +113,7 @@ log_file=data_dir+'/log'
 -my_time_data_file {time_history_file} \
 -my_accelerogram {accelartion_file} \
 -ts_dt {time_step} \
--ts_final_time {final_time} \
+-ts_max_time {final_time} \
 -ts_max_snes_failures -1 \
 -ts_alpha_radius {spectral_radius} \
 -my_solve_at_time_zero 1 \

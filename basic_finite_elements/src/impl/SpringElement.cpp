@@ -1224,14 +1224,21 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
     MoFEM::Interface &m_field,
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr,
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
-    const std::string field_name, const std::string mesh_nodals_positions) {
+    const std::string field_name, const std::string mesh_nodals_positions, double stiffness_scale) {
   MoFEMFunctionBegin;
 
   // Push operators to instances for springs
   // loop over blocks
   boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> commonDataPtr =
-      boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(m_field);
+      boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(m_field, stiffness_scale);
   CHKERR commonDataPtr->getParameters();
+
+  if (m_field.check_field(mesh_nodals_positions)) {
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, *fe_spring_lhs_ptr, false,
+                          false);
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, *fe_spring_rhs_ptr, false,
+                          false);
+  }
 
   for (auto &sitSpring : commonDataPtr->mapSpring) {
 
@@ -1272,6 +1279,15 @@ MoFEMErrorCode MetaSpringBC::setSpringOperatorsMaterial(
   // Push operators to instances for springs
   // loop over blocks
   CHKERR data_at_integration_pts->getParameters();
+
+  if (m_field.check_field(mesh_nodals_positions)) {
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, *fe_spring_lhs_ptr_dx, false,
+                          false);
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, *fe_spring_lhs_ptr_dX, false,
+                          false);
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, *fe_spring_rhs_ptr, false,
+                          false);
+  }
 
   for (auto &sitSpring : data_at_integration_pts->mapSpring) {
 

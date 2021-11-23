@@ -1,0 +1,32 @@
+reset
+brick x 10 y 20 z 5
+
+create surface rectangle width 2 height 6 zplane 
+rotate Surface 7 angle 45  about Z include_merged 
+create surface rectangle width 2 height 6 zplane 
+rotate Surface 8 angle -45  about Z include_merged 
+unite volume 2 3
+subtract volume 2 from volume 1 
+
+#create surface circle radius 2.5 zplane
+#move Volume 5 location surface 2 except x y include_merged 
+#
+#undo group begin
+#merge tolerance 5.0e-4
+#imprint tolerant volume all merge 
+#merge tolerance 5.000000e-04
+#undo group end
+#
+delete Body 4
+
+block 1 add surface 1 2 3 4 5 6
+block 1 name "MIX"
+#block 2 add surface 11 
+#block 2 name "SPOT"
+sideset 1 add surface 10 
+
+volume all size auto factor 5 propagate 
+volume all scheme tetmesh proximity layers off 
+Trimesher geometry sizing on
+mesh volume all
+refine surface 10 numsplit 1 bias 1.0 depth 1 smooth

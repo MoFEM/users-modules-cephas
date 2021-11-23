@@ -69,7 +69,7 @@ struct MagneticElement {
   };
 
   MagneticElement(MoFEM::Interface &m_field) : mField(m_field) {}
-  virtual ~MagneticElement() {}
+  virtual ~MagneticElement() = default;
 
   /**
    * \brief data structure storing material constants, model parameters,
@@ -335,9 +335,21 @@ struct MagneticElement {
     MoFEMFunctionBegin;
 
     VolumeFE vol_fe(mField);
+    auto material_grad_mat = boost::make_shared<MatrixDouble>();
+    auto material_det_vec = boost::make_shared<VectorDouble>();
+    auto material_inv_grad_mat = boost::make_shared<MatrixDouble>();
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", vol_fe, false, true, false, true);
     vol_fe.getOpPtrVector().push_back(new OpCurlCurl(blockData));
     vol_fe.getOpPtrVector().push_back(new OpStab(blockData));
     TriFE tri_fe(mField);
+    tri_fe.meshPositionsFieldName = "none";
+
+    tri_fe.getOpPtrVector().push_back(
+        new OpGetHONormalsOnFace("MESH_NODE_POSITIONS"));
+    tri_fe.getOpPtrVector().push_back(
+        new OpCalculateHOCoords("MESH_NODE_POSITIONS"));
+    tri_fe.getOpPtrVector().push_back(
+        new OpHOSetCovariantPiolaTransformOnFace3D(HCURL));
     tri_fe.getOpPtrVector().push_back(new OpNaturalBC(blockData));
 
     // create matrices and vectors
@@ -411,6 +423,7 @@ struct MagneticElement {
     MoFEMFunctionBegin;
     PostProcVolumeOnRefinedMesh post_proc(mField);
     CHKERR post_proc.generateReferenceElementMesh();
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", post_proc, false, true, false, true);
     CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     CHKERR post_proc.addFieldValuesPostProc(blockData.fieldName);
     post_proc.getOpPtrVector().push_back(new OpPostProcessCurl(
@@ -493,43 +506,36 @@ struct MagneticElement {
 
       MatrixDouble row_curl_mat, col_curl_mat;
       FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
 
       const double c0 = 1. / blockData.mU;
       const int nb_gauss_pts = row_data.getN().size1();
+      auto t_row_curl_base = row_data.getFTensor2DiffN<3, 3>();
 
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
         // get integration weight scaled by volume
         double w = getGaussPts()(3, gg) * getVolume();
-        // if ho geometry is given
-        w *= getHoGaussPtsDetJac()(gg);
-        CHKERR getCurlOfHCurlBaseFunctions(row_side, row_type, row_data, gg,
-                                           row_curl_mat);
-        CHKERR getCurlOfHCurlBaseFunctions(col_side, col_type, col_data, gg,
-                                           col_curl_mat);
 
-        // cerr << row_curl_mat << endl;
-        // cerr << col_curl_mat << endl;
-
-        FTensor::Tensor1<double *, 3> t_row_curl(&row_curl_mat(0, HVEC0),
-                                                 &row_curl_mat(0, HVEC1),
-                                                 &row_curl_mat(0, HVEC2), 3);
+        FTensor::Tensor1<double, 3> t_row_curl;
         for (int aa = 0; aa != nb_row_dofs; aa++) {
+          t_row_curl(i) = levi_civita(j, i, k) * t_row_curl_base(j, k);
+
           FTensor::Tensor0<double *> t_local_mat(&entityLocalMatrix(aa, 0), 1);
-          FTensor::Tensor1<double *, 3> t_col_curl(&col_curl_mat(0, HVEC0),
-                                                   &col_curl_mat(0, HVEC1),
-                                                   &col_curl_mat(0, HVEC2), 3);
+          FTensor::Tensor1<double, 3> t_col_curl;
+
+          auto t_col_curl_base = col_data.getFTensor2DiffN<3, 3>(gg, 0);
           for (int bb = 0; bb != nb_col_dofs; bb++) {
+            t_col_curl(i) = levi_civita(j, i, k) * t_col_curl_base(j, k);
             t_local_mat += c0 * w * t_row_curl(i) * t_col_curl(i);
-            ++t_col_curl;
             ++t_local_mat;
+            ++t_col_curl_base;
           }
-          ++t_row_curl;
+          
+          ++t_row_curl_base;
         }
       }
-
-      // cerr << entityLocalMatrix << endl;
-      // cerr << endl;
 
       CHKERR MatSetValues(blockData.A, nb_row_dofs, &row_data.getIndices()[0],
                           nb_col_dofs, &col_data.getIndices()[0],
@@ -623,8 +629,6 @@ struct MagneticElement {
 
         // get integration weight scaled by volume
         double w = getGaussPts()(3, gg) * getVolume();
-        // if ho geometry is given
-        w *= getHoGaussPtsDetJac()(gg);
 
         FTensor::Tensor1<const double *, 3> t_row_base(
             &row_data.getVectorN<3>(gg)(0, HVEC0),
@@ -724,8 +728,8 @@ struct MagneticElement {
 
         // Current is on surface where natural bc are applied. It is set that
         // current is in XY plane, circular, around the coil.
-        const double x = getHoCoordsAtGaussPts()(gg, 0);
-        const double y = getHoCoordsAtGaussPts()(gg, 1);
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
         const double r = sqrt(x * x + y * y);
         FTensor::Tensor1<double, 3> t_j;
         t_j(0) = -y / r;
@@ -770,7 +774,6 @@ struct MagneticElement {
               data.fieldName, UserDataOperator::OPROW),
           blockData(data), postProcMesh(post_proc_mesh),
           mapGaussPts(map_gauss_pts) {}
-    virtual ~OpPostProcessCurl() {}
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
                           DataForcesAndSourcesCore::EntData &row_data) {
@@ -788,36 +791,36 @@ struct MagneticElement {
       if (nb_row_dofs == 0)
         MoFEMFunctionReturnHot(0);
       const void *tags_ptr[mapGaussPts.size()];
-      MatrixDouble row_curl_mat;
+
+      if(nb_row_dofs != row_data.getFieldData().size())
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                 "Wrong number of base functions and DOFs %d != %d",
+                 nb_row_dofs, row_data.getFieldData().size());
+
       FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
       const int nb_gauss_pts = row_data.getN().size1();
       if (nb_gauss_pts != static_cast<int>(mapGaussPts.size())) {
         SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                  "Inconsistency number of dofs %d!=%d", nb_gauss_pts,
                  mapGaussPts.size());
       }
-
       CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0],
                                          mapGaussPts.size(), tags_ptr);
-
+      auto t_curl_base = row_data.getFTensor2DiffN<3, 3>();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
-
-        // get curl of base functions
-        CHKERR getCurlOfHCurlBaseFunctions(row_side, row_type, row_data, gg,
-                                           row_curl_mat);
-        FTensor::Tensor1<double *, 3> t_base_curl(&row_curl_mat(0, HVEC0),
-                                                  &row_curl_mat(0, HVEC1),
-                                                  &row_curl_mat(0, HVEC2), 3);
-
         // get pointer to tag values on entity (i.e. vertex on refined
         // post-processing mesh)
         double *ptr = &((double *)tags_ptr[gg])[0];
-        FTensor::Tensor1<double *, 3> t_curl(ptr, &ptr[1], &ptr[2]);
-
+        FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_curl(ptr, &ptr[1],
+                                                                  &ptr[2]);
         // calculate curl value
+        auto t_dof = row_data.getFTensor0FieldData();
         for (int aa = 0; aa != nb_row_dofs; aa++) {
-          t_curl(i) += row_data.getFieldData()[aa] * t_base_curl(i);
-          ++t_base_curl;
+          t_curl(i) += t_dof * (levi_civita(j, i, k) * t_curl_base(j, k));
+          ++t_curl_base;
+          ++t_dof;
         }
       }
       MoFEMFunctionReturn(0);

@@ -33,7 +33,6 @@ private:
   // Field name and approximation order
   std::string domainField;
   int oRder;
-  MatrixDouble invJac;
 
 };
 
@@ -102,12 +101,19 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
+        new OpCalculateHOJacForFace(jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField));
