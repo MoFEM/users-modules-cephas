@@ -130,10 +130,12 @@ int main(int argc, char *argv[]) {
       }
       ProblemsManager *prb_mng_ptr;
       CHKERR m_field.getInterface(prb_mng_ptr);
-      CHKERR prb_mng_ptr->partitionMesh(ents_dim, dim, adj_dim, n_partas);
+      CHKERR prb_mng_ptr->partitionMesh(ents_dim, dim, adj_dim, n_partas,
+                                        nullptr, nullptr, nullptr, VERBOSE);
     }
 
-    CHKERR moab.write_file(mesh_out_file);
+    if (m_field.get_comm_rank() == 0) 
+      CHKERR moab.write_file(mesh_out_file);
   }
   CATCH_ERRORS;
 
