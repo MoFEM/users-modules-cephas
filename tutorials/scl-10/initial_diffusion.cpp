@@ -187,6 +187,8 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
                                PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-beam_centre_y", &beam_centre_y,
                                PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-mu_a", &mu_a, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-mu_sp", &mu_sp, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-compute_time", &compute_time,
                                PETSC_NULL);
 

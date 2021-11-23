@@ -167,6 +167,8 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
                              PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-output_volume", &output_volume,
                              PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-mu_a", &mu_a, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-mu_sp", &mu_sp, PETSC_NULL);
 
   MOFEM_LOG("PHOTON", Sev::inform) << "Refractive index: " << n;
   MOFEM_LOG("PHOTON", Sev::inform) << "Speed of light (cm/ns): " << c;
