@@ -805,7 +805,7 @@ MoFEMErrorCode ThermalElement::setTimeSteppingProblem(
 
   // rhs
   TsCtx::FEMethodsSequence &loops_to_do_Rhs =
-      ts_ctx.get_loops_to_do_IFunction();
+      ts_ctx.getLoopsIFunction();
   loops_to_do_Rhs.push_back(TsCtx::PairNameFEMethodPtr("THERMAL_FE", &feRhs));
   loops_to_do_Rhs.push_back(
       TsCtx::PairNameFEMethodPtr("THERMAL_FLUX_FE", &feFlux));
@@ -818,7 +818,7 @@ MoFEMErrorCode ThermalElement::setTimeSteppingProblem(
 
   // lhs
   TsCtx::FEMethodsSequence &loops_to_do_Mat =
-      ts_ctx.get_loops_to_do_IJacobian();
+      ts_ctx.getLoopsIJacobian();
   loops_to_do_Mat.push_back(TsCtx::PairNameFEMethodPtr("THERMAL_FE", &feLhs));
   if (mField.check_finite_element("THERMAL_CONVECTION_FE"))
     loops_to_do_Mat.push_back(

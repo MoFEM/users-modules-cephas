@@ -740,11 +740,11 @@ int main(int argc, char *argv[]) {
 
     // right hand side
     // preprocess
-    ts_ctx.get_preProcess_to_do_IFunction().push_back(&update_and_control);
-    ts_ctx.get_preProcess_to_do_IFunction().push_back(&my_dirichlet_bc);
+    ts_ctx.getPreProcessIFunction().push_back(&update_and_control);
+    ts_ctx.getPreProcessIFunction().push_back(&my_dirichlet_bc);
     // fe looops
     TsCtx::FEMethodsSequence &loops_to_do_Rhs =
-        ts_ctx.get_loops_to_do_IFunction();
+        ts_ctx.getLoopsIFunction();
 
     auto add_static_rhs = [&](auto &loops_to_do_Rhs) {
       MoFEMFunctionBegin;
@@ -779,23 +779,23 @@ int main(int argc, char *argv[]) {
     loops_to_do_Rhs.push_back(
         PairNameFEMethodPtr("MASS_ELEMENT", &inertia.getLoopFeMassRhs()));
 
-    ts_ctx.get_preProcess_to_do_IFunction().push_back(&shell_matrix_residual);
+    ts_ctx.getPreProcessIFunction().push_back(&shell_matrix_residual);
 
     // postproc
-    ts_ctx.get_postProcess_to_do_IFunction().push_back(&my_dirichlet_bc);
-    ts_ctx.get_postProcess_to_do_IFunction().push_back(&shell_matrix_residual);
+    ts_ctx.getPostProcessIFunction().push_back(&my_dirichlet_bc);
+    ts_ctx.getPostProcessIFunction().push_back(&shell_matrix_residual);
 
     // left hand side
     // preprocess
-    ts_ctx.get_preProcess_to_do_IJacobian().push_back(&update_and_control);
-    ts_ctx.get_preProcess_to_do_IJacobian().push_back(&shell_matrix_element);
-    ts_ctx.get_postProcess_to_do_IJacobian().push_back(&update_and_control);
+    ts_ctx.getPreProcessIJacobian().push_back(&update_and_control);
+    ts_ctx.getPreProcessIJacobian().push_back(&shell_matrix_element);
+    ts_ctx.getPostProcessIJacobian().push_back(&update_and_control);
     // monitor
-    TsCtx::FEMethodsSequence &loops_to_do_Monitor =
-        ts_ctx.get_loops_to_do_Monitor();
-    loops_to_do_Monitor.push_back(
+    TsCtx::FEMethodsSequence &loopsMonitor =
+        ts_ctx.getLoopsMonitor();
+    loopsMonitor.push_back(
         TsCtx::PairNameFEMethodPtr("MASS_ELEMENT", &post_proc));
-    loops_to_do_Monitor.push_back(
+    loopsMonitor.push_back(
         TsCtx::PairNameFEMethodPtr("MASS_ELEMENT", &monitor_restart));
 
     CHKERR TSSetIFunction(ts, F, TsSetIFunction, &ts_ctx);
