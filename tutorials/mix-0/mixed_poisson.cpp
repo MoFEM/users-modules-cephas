@@ -260,7 +260,7 @@ MoFEMErrorCode MixedPoisson::assembleSystem() {
       new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacHcurlFace(inv_jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeigthsOnFace());
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeightsOnFace());
 
   auto beta = [](const double, const double, const double) { return 1; };
   pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -388,7 +388,7 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
       new OpSetInvJacHcurlFace(inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpSetInvJacL2ForFace(inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeigthsOnFace());
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", commonDataPtr->approxVals));

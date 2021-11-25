@@ -313,7 +313,7 @@ MoFEMErrorCode MinimalSurfaceEqn::assembleSystem() {
     pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
     pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-    pipeline.push_back(new OpSetHOWeigthsOnFace());
+    pipeline.push_back(new OpSetHOWeightsOnFace());
   };
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {
