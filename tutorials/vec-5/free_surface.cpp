@@ -75,6 +75,14 @@ using OpDomianGradHGradHRhs =
 using OpDomianGradHGradHLhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpGradGrad<BASE_DIM, H_FIELD_DIM, SPACE_DIM>;
 
+using OpConvectivePhi = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpConvectiveTermRhs<1, 1, 2>;
+using OpConvectivePhi_dU = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpConvectiveTermLhsDu<1, 1, 2>;
+using OpConvectivePhi_dGradH = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpConvectiveTermLhsDy<1, 1, 2>;
+
+
 FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
@@ -127,8 +135,9 @@ struct OpRhsU : public AssemblyDomainEleOp {
       const double alpha = t_w * vol;
 
       const double Re = 0.5 * ((1 + t_phi) * Re_p + (1 - t_phi) * Re_m);
-      const double buoyancy =
-          t_phi * (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
+      const double tmp_buoyancy =
+          (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
+      const double buoyancy = t_phi * tmp_buoyancy;
 
       const double tr =
           t_grad_u(i, i); // That is equivalent to t_kd(i,j) * t_grad_u(i, j);
@@ -153,9 +162,9 @@ struct OpRhsU : public AssemblyDomainEleOp {
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
 
         t_nf(i) +=
-            (t_base * alpha) * (t_dot_u(i) + t_convection(i) - t_buoyancy(i));
-        t_nf(i) += (t_diff_base(j) * alpha) *
-                   (t_p(i, j) + t_stress(i, j) + t_tension(i, j));
+            (t_base * alpha) * (t_dot_u(i) /*+ t_convection(i)*/ - t_buoyancy(i));
+        // t_nf(i) += (t_diff_base(j) * alpha) *
+        //            (t_p(i, j) + t_stress(i, j) + t_tension(i, j));
 
         ++t_base;
         ++t_diff_base;
@@ -247,28 +256,28 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       t_buoyancy(i) = 0;
       t_buoyancy(SPACE_DIM - 1) = buoyancy;
 
-      FTensor::Tensor2<double, U_FIELD_DIM, SPACE_DIM> t_base_lhs1;
-      t_base_lhs1(i, j) = ts_a * t_kd(i, j) + t_grad_u(i, j);
+      FTensor::Tensor2<double, U_FIELD_DIM, SPACE_DIM> t_base_lhs;
+      t_base_lhs(i, j) = ts_a * t_kd(i, j);// + t_grad_u(i, j);
 
       int bb = 0;
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
 
         auto t_mat = get_mat(bb * U_FIELD_DIM);
-        auto t_col_base = col_data.getFTensor0N(gg);
-        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg);
+        auto t_col_base = col_data.getFTensor0N(gg, 0);
+        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
         for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
 
-          t_mat(i, j) += (t_row_base * t_col_base * alpha) * t_base_lhs1(i, j);
-          t_mat(i, j) += (alpha * t_row_base) * (t_col_diff_base(k) * t_u(k));
+          t_mat(i, j) += (t_row_base * t_col_base * alpha) * t_base_lhs(i, j);
+          // t_mat(i, j) += (alpha * t_row_base) * (t_col_diff_base(k) * t_u(k));
 
-          t_mat(i, j) += ((alpha * penalty) * t_row_diff_base(i)) *
-                         (t_kd(j, k) * t_col_diff_base(k));
+          // t_mat(i, j) += ((alpha * penalty) * t_row_diff_base(i)) *
+          //                (t_kd(j, k) * t_col_diff_base(k));
 
-          t_mat(i, j) +=
-              (alpha * (1 / Re)) *
-              (t_row_diff_base(i) * t_col_diff_base(j) +
-               t_kd(i, j) * (t_row_diff_base(k) * t_col_diff_base(k)));
+          // t_mat(i, j) +=
+          //     (alpha * (1 / Re)) *
+          //     (t_row_diff_base(i) * t_col_diff_base(j) +
+          //      t_kd(i, j) * (t_row_diff_base(k) * t_col_diff_base(k)));
 
           ++t_mat;
           ++t_col_base;
@@ -341,8 +350,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       std::array<double *, U_FIELD_DIM> ptrs;
       for (auto i = 0; i != U_FIELD_DIM; ++i)
         ptrs[i] = &locMat(rr + i, 0);
-      return FTensor::Tensor1<FTensor::PackPtr<double *, U_FIELD_DIM>,
-                              U_FIELD_DIM>(ptrs);
+      return FTensor::Tensor1<FTensor::PackPtr<double *, 1>, U_FIELD_DIM>(ptrs);
     };
 
     auto ts_a = getTSa();
@@ -372,17 +380,17 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
 
         auto t_mat = get_mat(bb * U_FIELD_DIM);
-        auto t_col_base = col_data.getFTensor0N(gg);
-        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg);
+        auto t_col_base = col_data.getFTensor0N(gg, 0);
+        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
         for (int cc = 0; cc != nbCols; ++cc) {
 
           t_mat(i) += (t_row_base * t_col_base * alpha) * (-t_buoyancy_dH(i));
-          t_mat(i) +=
-              (t_row_diff_base(j) * t_col_base * alpha) * t_stress_dH(i, j);
-          t_mat(i) += (t_row_diff_base(j) * (t_col_base * alpha * lambda)) *
-                      (t_grad_phi(i) * t_col_diff_base(j) +
-                       t_col_diff_base(i) * t_grad_phi(j));
+          // t_mat(i) +=
+          //     (t_row_diff_base(j) * t_col_base * alpha) * t_stress_dH(i, j);
+          // t_mat(i) += (t_row_diff_base(j) * (t_col_base * alpha * lambda)) *
+          //             (t_grad_phi(i) * t_col_diff_base(j) +
+          //              t_col_diff_base(i) * t_grad_phi(j));
 
           ++t_mat;
           ++t_col_base;
@@ -427,13 +435,10 @@ private:
 struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
 
   OpRhsExplicitTermH(const std::string field_name,
-                     boost::shared_ptr<MatrixDouble> u_ptr,
-                     boost::shared_ptr<MatrixDouble> grad_phi_ptr,
                      boost::shared_ptr<VectorDouble> phi_ptr,
                      boost::shared_ptr<double> ksi_ptr)
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
-        uPtr(u_ptr), gradPhiPtr(grad_phi_ptr), phiPtr(phi_ptr),
-        ksiPtr(ksi_ptr) {}
+        phiPtr(phi_ptr), ksiPtr(ksi_ptr) {}
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
@@ -443,9 +448,6 @@ struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
     auto t_base = data.getFTensor0N();
     auto t_phi = getFTensor0FromVec(*phiPtr);
     const double ksi = *ksiPtr;
-
-    auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
-    auto t_grad_phi = getFTensor1FromMat<SPACE_DIM>(*gradPhiPtr);
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -458,17 +460,12 @@ struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
       for (; rr != nbRows; ++rr) {
 
         (*nf_ptr) += (alpha * lambda) * (-f + ksi) * t_base;
-        (*nf_ptr) += (alpha * lambda) * (-f + ksi) * t_base;
-        (*nf_ptr) -= alpha * (t_u(i) * t_grad_phi(i)) * t_base;
 
         ++nf_ptr;
         ++t_base;
       }
 
       ++t_phi;
-      ++t_u;
-      ++t_grad_phi;
-
       ++t_w;
     }
 
@@ -504,13 +501,17 @@ struct OpCalculateKsi : public DomainEleOp {
     auto nb_gauss_pts = getGaussPts().size2();
 
     double ksi = 0;
+    double vol_ele = 0;
     for (int gg = 0; gg != nb_gauss_pts; gg++) {
       const double alpha = t_w * vol;
-      ksi += alpha * t_phi;
+      ksi += alpha * t_phi * (t_phi * t_phi - 1);
+      vol_ele += alpha;
       ++t_phi;
+      ++t_w;
     }
 
     CHKERR VecSetValue(ksiVec, 0, ksi, ADD_VALUES);
+    CHKERR VecSetValue(ksiVec, 1, vol_ele, ADD_VALUES);
 
     MoFEMFunctionReturn(0);
   }
@@ -586,7 +587,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   auto init_h = [](double, double y, double) { return tanh((y - 0.5) * 10); };
 
   auto set_domain_general = [&](auto &pipeline) {
-    pipeline.push_back(new OpSetHOWeigthsOnFace());
+    pipeline.push_back(new OpSetHOWeightsOnFace());
   };
 
   auto set_domain_rhs = [&](auto &pipeline) {
@@ -690,7 +691,6 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   auto dot_phi_ptr = boost::make_shared<VectorDouble>();
   auto phi_ptr = boost::make_shared<VectorDouble>();
   auto grad_phi_ptr = boost::make_shared<MatrixDouble>();
-  auto ksi_ptr = boost::make_shared<double>();
 
   // Push element from reference configuration to current configuration in 3d
   // space
@@ -698,7 +698,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpSetHOWeigthsOnFace());
+    pipeline.push_back(new OpSetHOWeightsOnFace());
     pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
     pipeline.push_back(
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
@@ -725,22 +725,22 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         "H", dot_phi_ptr, [](double, double, double) { return 1; }));
     pipeline.push_back(new OpDomianGradHGradHRhs(
         "H", grad_phi_ptr, [&](double, double, double) { return lambda; }));
-  };
-
-  auto set_domain_rhs_explicit = [&](auto &pipeline) {
-    pipeline.push_back(
-        new OpRhsExplicitTermH("H", u_ptr, grad_phi_ptr, phi_ptr, ksi_ptr));
+    pipeline.push_back(new OpConvectivePhi("H", u_ptr, grad_phi_ptr));
   };
 
   auto set_domain_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpLhsU_dU("U", u_ptr, grad_u_ptr, phi_ptr));
-    pipeline.push_back(new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr,
-                                     phi_ptr, grad_phi_ptr));
+    // pipeline.push_back(new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr,
+    //                                  phi_ptr, grad_phi_ptr));
     pipeline.push_back(new OpDomainMassH("H", "H", [&](double, double, double) {
       return domianLhsFEPtr->ts_a;
     }));
     pipeline.push_back(new OpDomianGradHGradHLhs(
         "H", "H", [&](double, double, double) { return lambda; }));
+    pipeline.push_back(
+        new OpConvectivePhi_dU("H", "U", grad_phi_ptr, []() { return 1; }));
+    pipeline.push_back(
+        new OpConvectivePhi_dGradH("H", "H", u_ptr, []() { return 1; }));
   };
 
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -750,13 +750,11 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setDomainExplicitRhsIntegrationRule(integration_rule);
 
   set_domain_general(pipeline_mng->getOpDomainRhsPipeline());
   set_domain_general(pipeline_mng->getOpDomainLhsPipeline());
 
   set_domain_rhs_implicit(pipeline_mng->getOpDomainRhsPipeline());
-  set_domain_rhs_explicit(pipeline_mng->getOpDomainExplicitRhsPipeline());
   set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline());
 
   domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
@@ -776,18 +774,19 @@ struct Monitor : public FEMethod {
       : dM(dm), postProc(post_proc){};
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    constexpr int save_every_nth_step = 50;
+    constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
+                                      this->getCacheWeakPtr());
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
-      MOFEM_LOG("FS", Sev::verbose)
-          << "writing vector in binary to vector.dat ...";
-      PetscViewer viewer;
-      PetscViewerBinaryOpen(PETSC_COMM_WORLD, "vector.dat", FILE_MODE_WRITE,
-                            &viewer);
-      VecView(ts_u, viewer);
-      PetscViewerDestroy(&viewer);
+      // MOFEM_LOG("FS", Sev::verbose)
+      //     << "writing vector in binary to vector.dat ...";
+      // PetscViewer viewer;
+      // PetscViewerBinaryOpen(PETSC_COMM_WORLD, "vector.dat", FILE_MODE_WRITE,
+      //                       &viewer);
+      // VecView(ts_u, viewer);
+      // PetscViewerDestroy(&viewer);
     }
     MoFEMFunctionReturn(0);
   }
@@ -826,7 +825,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     MoFEMFunctionBegin;
     auto fe = boost::make_shared<DomainEle>(mField);
     CHKERR MatZeroEntries(M);
-    fe->getOpPtrVector().push_back(new OpSetHOWeigthsOnFace());
+    fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
     fe->getOpPtrVector().push_back(
         new OpDomainMassU("U", "U", [&](double, double, double) { return 1; }));
     fe->getOpPtrVector().push_back(
@@ -849,7 +848,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
     post_proc_fe->generateReferenceElementMesh();
-
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
@@ -863,8 +861,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     post_proc_fe->addFieldValuesPostProc("U");
     post_proc_fe->addFieldValuesPostProc("H");
-    post_proc_fe->addFieldValuesGradientPostProc("U");
-    post_proc_fe->addFieldValuesGradientPostProc("H");
+    post_proc_fe->addFieldValuesGradientPostProc("U", 2);
+    post_proc_fe->addFieldValuesGradientPostProc("H", 2);
     return post_proc_fe;
   };
 
@@ -878,16 +876,67 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
+  auto create_ksi_vec = [&]() {
+    int ghost[] = {0, 1};
+    return createSmartGhostVector(mField.get_comm(),
+                                  (!mField.get_comm_rank()) ? 2 : 0, 2,
+                                  (!mField.get_comm_rank()) ? 0 : 2, ghost);
+  };
+
+  auto integration_rule = [](int, int, int approx_order) {
+    return 2 * approx_order;
+  };
+  CHKERR pipeline_mng->setDomainExplicitRhsIntegrationRule(integration_rule);
   auto fe_explicit_rhs = pipeline_mng->getDomainExplicitRhsFE();
+
   auto M = smartCreateDMMatrix(dm);
+  auto ksi_vec = create_ksi_vec();
+  auto ksi_ptr = boost::make_shared<double>();
   auto ksp = createKSP(mField.get_comm());
 
   CHKERR assemble_mass_mat(M);
   CHKERR set_mass_ksp(ksp, M);
 
+  auto caluclate_global_terms = [&]() {
+    MoFEMFunctionBegin;
+    MOFEM_LOG("FS", Sev::verbose) << "Assemble global terms -> Start";
+    auto fe_global_terms = boost::make_shared<DomainEle>(mField);
+    auto phi_ptr = boost::make_shared<VectorDouble>();
+    fe_global_terms->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("H", phi_ptr));
+    fe_global_terms->getOpPtrVector().push_back(
+        new OpCalculateKsi("H", phi_ptr, ksi_vec));
+
+    CHKERR VecZeroEntries(ksi_vec);
+
+    if (!fe_explicit_rhs->getCacheWeakPtr().use_count())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "Weak pointer to cache entities not valid");
+
+    CHKERR DMoFEMLoopFiniteElements(dm, "dFE", fe_global_terms,
+                                    fe_explicit_rhs->getCacheWeakPtr());
+
+    CHKERR VecAssemblyBegin(ksi_vec);
+    CHKERR VecAssemblyEnd(ksi_vec);
+    CHKERR VecGhostUpdateBegin(ksi_vec, ADD_VALUES, SCATTER_REVERSE);
+    CHKERR VecGhostUpdateEnd(ksi_vec, ADD_VALUES, SCATTER_REVERSE);
+    CHKERR VecGhostUpdateBegin(ksi_vec, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(ksi_vec, INSERT_VALUES, SCATTER_FORWARD);
+
+    const double *a;
+    CHKERR VecGetArrayRead(ksi_vec, &a);
+    *ksi_ptr = a[0] / a[1];
+    MOFEM_LOG("FS", Sev::inform)
+        << "Value of ksi " << *ksi_ptr << " Volume " << a[1];
+    CHKERR VecRestoreArrayRead(ksi_vec, &a);
+
+    MOFEM_LOG("FS", Sev::verbose) << "Assemble global terms <- End";
+    MoFEMFunctionReturn(0);
+  };
+
   auto solve_explicit_rhs = [&]() {
     MoFEMFunctionBegin;
-    MOFEM_LOG("FS", Sev::verbose) << "Solve explicity term -> Start";
+    MOFEM_LOG("FS", Sev::verbose) << "Solve explicit term -> Start";
     if (fe_explicit_rhs->vecAssembleSwitch) {
       CHKERR VecGhostUpdateBegin(fe_explicit_rhs->ts_F, ADD_VALUES,
                                  SCATTER_REVERSE);
@@ -896,14 +945,24 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       CHKERR VecAssemblyBegin(fe_explicit_rhs->ts_F);
       CHKERR VecAssemblyEnd(fe_explicit_rhs->ts_F);
       CHKERR KSPSolve(ksp, fe_explicit_rhs->ts_F, fe_explicit_rhs->ts_F);
-      CHKERR VecScale(fe_explicit_rhs->ts_F, -1);
       *fe_explicit_rhs->vecAssembleSwitch = false;
     }
-    MOFEM_LOG("FS", Sev::verbose) << "Solve explicity term <- Done";
+    MOFEM_LOG("FS", Sev::verbose) << "Solve explicit term <- Done";
     MoFEMFunctionReturn(0);
   };
 
+  auto set_domain_rhs_explicit = [&](auto &pipeline) {
+    pipeline.push_back(new OpSetHOWeightsOnFace());
+    auto phi_ptr = boost::make_shared<VectorDouble>();
+    pipeline.push_back(new OpCalculateScalarFieldValues("H", phi_ptr));
+    pipeline.push_back(new OpRhsExplicitTermH("H", phi_ptr, ksi_ptr));
+  };
+
+  set_domain_rhs_explicit(pipeline_mng->getOpDomainExplicitRhsPipeline());
+
+  fe_explicit_rhs->preProcessHook = caluclate_global_terms;
   fe_explicit_rhs->postProcessHook = solve_explicit_rhs;
+
 
   MoFEM::SmartPetscObj<TS> ts;
   ts = pipeline_mng->createTSIMEX();
