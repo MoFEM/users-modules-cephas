@@ -445,9 +445,9 @@ inline MoFEMErrorCode iNtegrate(
   // get element volume
   double vol = getVolume();
   // get integration weigths
-  FTensor::Tensor0<double*> t_w = getFTensor0IntegrationWeight();
+  auto t_w = getFTensor0IntegrationWeight();
   // get base function gradient on rows
-  FTensor::Tensor1<double*,3> t_row_grad = row_data.getFTensor1DiffN<3>();
+  auto t_row_grad = row_data.getFTensor1DiffN<3>();
   // loop over integration points
   for(int gg = 0;gg!=nbIntegrationPts;gg++) {
     ...
@@ -604,11 +604,11 @@ MoFEMErrorCode PoissonExample::OpF::iNtegrate(DataForcesAndSourcesCore::EntData 
   // get finite element volume
   double vol = getVolume();
   // get integration weights
-  FTensor::Tensor0<double*> t_w = getFTensor0IntegrationWeight();
+  auto t_w = getFTensor0IntegrationWeight();
   // get base functions on entity
-  FTensor::Tensor0<double*> t_v = data.getFTensor0N();
+  auto t_v = data.getFTensor0N();
   // get coordinates at integration points
-  FTensor::Tensor1<double*,3> t_coords = getFTensor1CoordsAtGaussPts();
+  auto t_coords = getFTensor1CoordsAtGaussPts();
   // loop over all integration points
   for(int gg = 0;gg!=nbIntegrationPts;gg++) {
     // evaluate constant term
@@ -697,13 +697,13 @@ MoFEMErrorCode PoissonExample::OpError::iNtegrate(DataForcesAndSourcesCore::EntD
   // get volume of element
   const double vol = getVolume();
   // get integration weight
-  FTensor::Tensor0<double*> t_w = getFTensor0IntegrationWeight();
+  auto t_w = getFTensor0IntegrationWeight();
   // get solution at integration point
   FTensor::Tensor0<double*> t_u = getFTensor0FromVec(*fieldVals);
   // get solution at integration point
   FTensor::Tensor1<double*,3> t_grad = getFTensor1FromMat<3>(*gradVals);
   // get coordinates at integration point
-  ftensor::Tensor1<double*,3> t_coords = getFTensor1CoordsAtGaussPts();
+  auto t_coords = getFTensor1CoordsAtGaussPts();
   // keep exact gradient and error or gradient
   FTensor::Tensor1<double,3> t_exact_grad,t_error_grad;
   // integrate over
@@ -731,10 +731,10 @@ MoFEMErrorCode PoissonExample::OpError::iNtegrate(DataForcesAndSourcesCore::EntD
 Note how we get approximate values at integration points. First, we get tensors
 of rank 0 and rank 1, for field values and gradients, respectively
 \code
-FTensor::Tensor0<double*> t_w = getFTensor0IntegrationWeight();
-FTensor::Tensor0<double*> t_u = getFTensor0FromVec(*fieldVals);
-FTensor::Tensor1<double*,3> t_grad = getFTensor1FromMat<3>(*gradVals);
-ftensor::Tensor1<double*,3> t_coords = getFTensor1CoordsAtGaussPts();
+auto t_w = getFTensor0IntegrationWeight();
+auto t_u = getFTensor0FromVec(*fieldVals);
+auto t_grad = getFTensor1FromMat<3>(*gradVals);
+auto t_coords = getFTensor1CoordsAtGaussPts();
 \endcode
 and then iterate over integration points
 \code

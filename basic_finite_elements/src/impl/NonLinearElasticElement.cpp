@@ -661,8 +661,7 @@ MoFEMErrorCode NonlinearElasticElement::OpRhsPiolaKirchhoff::doWork(
   nf.resize(nb_dofs, false);
   nf.clear();
 
-  FTensor::Tensor1<double *, 3> diff_base_functions =
-      row_data.getFTensor1DiffN<3>();
+  auto diff_base_functions = row_data.getFTensor1DiffN<3>();
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
 
@@ -977,8 +976,7 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::doWork(
         &jac(3 * 2 + 1, 0), &jac(3 * 2 + 1, 1), &jac(3 * 2 + 1, 2),
         &jac(3 * 2 + 2, 0), &jac(3 * 2 + 2, 1), &jac(3 * 2 + 2, 2));
     for (int cc = 0; cc != nb_col / 3; cc++) {
-      FTensor::Tensor1<double *, 3> diff_base_functions =
-          row_data.getFTensor1DiffN<3>(gg, 0);
+      auto diff_base_functions = row_data.getFTensor1DiffN<3>(gg, 0);
       FTensor::Tensor2<double *, 3, 3> lhs(
           &k(0, 3 * cc + 0), &k(0, 3 * cc + 1), &k(0, 3 * cc + 2),
           &k(1, 3 * cc + 0), &k(1, 3 * cc + 1), &k(1, 3 * cc + 2),
