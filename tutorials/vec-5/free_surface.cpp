@@ -86,6 +86,9 @@ using OpConvectivePhi_dGradH = FormsIntegrators<DomainEleOp>::Assembly<
 FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
+FTensor::Index<'l', SPACE_DIM> l;
+
+constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 constexpr double Re_p = 1e1;
 constexpr double Re_m = 1e-1;
@@ -93,7 +96,14 @@ constexpr double Ri_p = 1e1;
 constexpr double Ri_m = 1e-1;
 constexpr double lambda = 1;
 constexpr double eta = 1;
-constexpr double penalty = 1e4;
+constexpr double K = 1;
+
+auto get_D = [](const double A, const double K) {
+  FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
+  t_D(i, j, k, l) =
+      A * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) + K * (t_kd(i, j) * t_kd(k, l));
+  return t_D;
+};
 
 /**
  * @brief Rhs for U
@@ -126,8 +136,6 @@ struct OpRhsU : public AssemblyDomainEleOp {
 
     auto t_w = getFTensor0IntegrationWeight();
 
-    constexpr auto t_kd_symmetric =
-        FTensor::Kronecker_Delta_symmetric<double>();
     constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<double>();
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
@@ -139,17 +147,12 @@ struct OpRhsU : public AssemblyDomainEleOp {
           (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
       const double buoyancy = t_phi * tmp_buoyancy;
 
-      const double tr =
-          t_grad_u(i, i); // That is equivalent to t_kd(i,j) * t_grad_u(i, j);
-      FTensor::Tensor2_symmetric<double, SPACE_DIM> t_p;
-      t_p(i, j) = penalty * tr * t_kd_symmetric(i, j);
+      auto t_D = get_D(1. / Re, K);
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress;
-      t_stress(i, j) = (1 / Re) * (t_grad_u(i, j) || t_grad_u(j, i)) +
-                       penalty * t_kd_symmetric(i, j) * t_grad_u(i, j);
+      t_stress(i, j) = t_D(i, j, k, l) * t_grad_u(k, l);
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_tension;
       t_tension(i, j) = (lambda) * (t_grad_phi(i) ^ t_grad_phi(j));
-
       FTensor::Tensor1<double, SPACE_DIM> t_convection;
       t_convection(i) = t_u(j) * t_grad_u(i, j);
       FTensor::Tensor1<double, SPACE_DIM> t_buoyancy;
@@ -161,10 +164,10 @@ struct OpRhsU : public AssemblyDomainEleOp {
       int bb = 0;
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
 
+        t_nf(i) += (t_base * alpha) *
+                   (t_dot_u(i) /*+ t_convection(i)*/ + t_buoyancy(i));
         t_nf(i) +=
-            (t_base * alpha) * (t_dot_u(i) /*+ t_convection(i)*/ - t_buoyancy(i));
-        // t_nf(i) += (t_diff_base(j) * alpha) *
-        //            (t_p(i, j) + t_stress(i, j) + t_tension(i, j));
+            (t_diff_base(j) * alpha) * (t_stress(i, j)); // + t_tension(i, j));
 
         ++t_base;
         ++t_diff_base;
@@ -181,9 +184,6 @@ struct OpRhsU : public AssemblyDomainEleOp {
       ++t_grad_u;
       ++t_phi;
       ++t_grad_phi;
-
-      ++t_base;
-      ++t_diff_base;
 
       ++t_w;
     }
@@ -237,7 +237,6 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
     };
 
     auto ts_a = getTSa();
-    constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -247,14 +246,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       const double buoyancy =
           t_phi * (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
 
-      FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress;
-      t_stress(i, j) = (1 / Re) * (t_grad_u(i, j) || t_grad_u(j, i));
-
-      FTensor::Tensor1<double, SPACE_DIM> t_convection;
-      t_convection(i) = t_u(j) * t_grad_u(j, i);
-      FTensor::Tensor1<double, SPACE_DIM> t_buoyancy;
-      t_buoyancy(i) = 0;
-      t_buoyancy(SPACE_DIM - 1) = buoyancy;
+      auto t_D = get_D(1. / Re, K);
 
       FTensor::Tensor2<double, U_FIELD_DIM, SPACE_DIM> t_base_lhs;
       t_base_lhs(i, j) = ts_a * t_kd(i, j);// + t_grad_u(i, j);
@@ -271,8 +263,8 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
           t_mat(i, j) += (t_row_base * t_col_base * alpha) * t_base_lhs(i, j);
           // t_mat(i, j) += (alpha * t_row_base) * (t_col_diff_base(k) * t_u(k));
 
-          // t_mat(i, j) += ((alpha * penalty) * t_row_diff_base(i)) *
-          //                (t_kd(j, k) * t_col_diff_base(k));
+          t_mat(i, k) += alpha * ((t_row_diff_base(j) * t_D(i, j, k, l)) *
+                                  t_col_diff_base(l));
 
           // t_mat(i, j) +=
           //     (alpha * (1 / Re)) *
@@ -296,9 +288,6 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       ++t_u;
       ++t_grad_u;
       ++t_phi;
-
-      ++t_row_base;
-      ++t_row_diff_base;
 
       ++t_w;
     }
@@ -361,16 +350,17 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double alpha = t_w * vol;
 
       const double Re = 0.5 * ((1 + t_phi) * Re_p + (1 - t_phi) * Re_m);
-      const double tmp_buoyancy =
+      const double tmp_b =
           (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
-      const double buoyancy = t_phi * tmp_buoyancy;
 
-      const double dRe = 0.5 * (Re_p - Re_m);
-      const double d_buoyancy = t_phi * (0.5 * (Ri_p - Ri_m)) + tmp_buoyancy;
+      const double d_tmp_b = 0.5 * (Re_p - Re_m);
+      const double d_buoyancy = t_phi * d_tmp_b + tmp_b;
+      const double d_Re = 0.5 * (Re_p - Re_m);
+
+      auto t_D_dH = get_D(-(d_Re / (Re * Re)), 0);
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress_dH;
-      t_stress_dH(i, j) =
-          -(dRe / (Re * Re)) * (t_grad_u(i, j) || t_grad_u(j, i));
+      t_stress_dH(i, j) = t_D_dH(i, j, k, l) * t_grad_u(k, l);
 
       FTensor::Tensor1<double, SPACE_DIM> t_buoyancy_dH;
       t_buoyancy_dH(i) = 0;
@@ -385,10 +375,15 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
 
         for (int cc = 0; cc != nbCols; ++cc) {
 
-          t_mat(i) += (t_row_base * t_col_base * alpha) * (-t_buoyancy_dH(i));
+          t_mat(i) += (t_row_base * t_col_base * alpha) * (t_buoyancy_dH(i));
+          t_mat(i) +=
+              (t_row_diff_base(j) * (alpha * t_col_base)) * t_stress_dH(i, j);
+
           // t_mat(i) +=
-          //     (t_row_diff_base(j) * t_col_base * alpha) * t_stress_dH(i, j);
-          // t_mat(i) += (t_row_diff_base(j) * (t_col_base * alpha * lambda)) *
+          //     (t_row_diff_base(j) * t_col_base * alpha) *
+          //     t_stress_dH(i, j);
+          // t_mat(i) += (t_row_diff_base(j) * (t_col_base * alpha *
+          // lambda)) *
           //             (t_grad_phi(i) * t_col_diff_base(j) +
           //              t_col_diff_base(i) * t_grad_phi(j));
 
@@ -410,9 +405,6 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       ++t_grad_u;
       ++t_phi;
       ++t_grad_phi;
-
-      ++t_row_base;
-      ++t_row_diff_base;
 
       ++t_w;
     }
@@ -776,10 +768,10 @@ struct Monitor : public FEMethod {
     MoFEMFunctionBegin;
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
-                                      this->getCacheWeakPtr());
-      CHKERR postProc->writeFile(
-          "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      // CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
+      //                                 this->getCacheWeakPtr());
+      // CHKERR postProc->writeFile(
+      //     "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
       // MOFEM_LOG("FS", Sev::verbose)
       //     << "writing vector in binary to vector.dat ...";
       // PetscViewer viewer;
@@ -960,15 +952,15 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
   set_domain_rhs_explicit(pipeline_mng->getOpDomainExplicitRhsPipeline());
 
-  fe_explicit_rhs->preProcessHook = caluclate_global_terms;
-  fe_explicit_rhs->postProcessHook = solve_explicit_rhs;
-
+  // fe_explicit_rhs->preProcessHook = caluclate_global_terms;
+  // fe_explicit_rhs->postProcessHook = solve_explicit_rhs;
 
   MoFEM::SmartPetscObj<TS> ts;
-  ts = pipeline_mng->createTSIMEX();
+  // ts = pipeline_mng->createTSIMEX();
+  ts = pipeline_mng->createTSIM();
 
-  CHKERR TSSetType(ts, TSARKIMEX);
-  CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
+  // CHKERR TSSetType(ts, TSARKIMEX);
+  // CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
 
   boost::shared_ptr<FEMethod> null_fe;
   auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
