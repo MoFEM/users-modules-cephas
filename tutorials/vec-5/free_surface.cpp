@@ -147,7 +147,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
           (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
       const double buoyancy = t_phi * tmp_buoyancy;
 
-      auto t_D = get_D(1., K);
+      auto t_D = get_D(1. / Re, K);
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress;
       t_stress(i, j) = t_D(i, j, k, l) * t_grad_u(k, l);
@@ -240,7 +240,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       const double buoyancy =
           t_phi * (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
 
-      auto t_D = get_D(1., K);
+      auto t_D = get_D(1. / Re, K);
 
       FTensor::Tensor2<double, U_FIELD_DIM, SPACE_DIM> t_base_lhs;
       t_base_lhs(i, j) = ts_a * t_kd(i, j);// + t_grad_u(i, j);
@@ -357,7 +357,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double d_buoyancy = t_phi * d_tmp_b + tmp_b;
       const double d_Re = 0.5 * (Re_p - Re_m);
 
-      auto t_D_dH = get_D(0/*-(d_Re / (Re * Re))*/, 0);
+      auto t_D_dH = get_D(-(d_Re / (Re * Re)), 0);
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress_dH;
       t_stress_dH(i, j) = t_D_dH(i, j, k, l) * t_grad_u(k, l);
@@ -376,8 +376,8 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
         for (int cc = 0; cc != nbCols; ++cc) {
 
           t_mat(i) += (t_row_base * t_col_base * alpha) * (t_buoyancy_dH(i));
-          // t_mat(i) +=
-          //     (t_row_diff_base(j) * (alpha * t_col_base)) * t_stress_dH(i, j);
+          t_mat(i) +=
+              (t_row_diff_base(j) * (alpha * t_col_base)) * t_stress_dH(i, j);
 
           // t_mat(i) +=
           //     (t_row_diff_base(j) * t_col_base * alpha) *
