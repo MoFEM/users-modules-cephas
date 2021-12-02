@@ -147,7 +147,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
           (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
       const double buoyancy = t_phi * tmp_buoyancy;
 
-      auto t_D = get_D(1. / Re, K);
+      auto t_D = get_D(1., K);
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress;
       t_stress(i, j) = t_D(i, j, k, l) * t_grad_u(k, l);
@@ -227,13 +227,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
     auto t_w = getFTensor0IntegrationWeight();
 
     auto get_mat = [&](const int rr) {
-      std::array<double *, U_FIELD_DIM * U_FIELD_DIM> ptrs;
-      int k = 0;
-      for (auto i = 0; i != U_FIELD_DIM; ++i)
-        for (auto j = 0; j != U_FIELD_DIM; ++j, ++k)
-          ptrs[k] = &locMat(rr + i, j);
-      return FTensor::Tensor2<FTensor::PackPtr<double *, U_FIELD_DIM>,
-                              U_FIELD_DIM, U_FIELD_DIM>(ptrs);
+      return getFTensor2FromArray<SPACE_DIM, SPACE_DIM, SPACE_DIM>(locMat, rr);
     };
 
     auto ts_a = getTSa();
@@ -246,7 +240,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       const double buoyancy =
           t_phi * (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
 
-      auto t_D = get_D(1. / Re, K);
+      auto t_D = get_D(1., K);
 
       FTensor::Tensor2<double, U_FIELD_DIM, SPACE_DIM> t_base_lhs;
       t_base_lhs(i, j) = ts_a * t_kd(i, j);// + t_grad_u(i, j);
@@ -258,13 +252,19 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
+        FTensor::Christof<double, SPACE_DIM, SPACE_DIM> t_rowD;
+        // I mix up the indices here so that it behaves like a
+        // Dg.  That way I don't have to have a separate wrapper
+        // class Christof_Expr, which simplifies things.
+        t_rowD(l, j, k) = t_D(i, j, k, l) * (alpha * t_row_diff_base(i));
+
         for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
 
           t_mat(i, j) += (t_row_base * t_col_base * alpha) * t_base_lhs(i, j);
           // t_mat(i, j) += (alpha * t_row_base) * (t_col_diff_base(k) * t_u(k));
 
-          t_mat(i, k) += alpha * ((t_row_diff_base(j) * t_D(i, j, k, l)) *
-                                  t_col_diff_base(l));
+          // integrate block local stiffens matrix
+          t_mat(i, j) += t_rowD(i, j, k) * t_col_diff_base(k);
 
           // t_mat(i, j) +=
           //     (alpha * (1 / Re)) *
@@ -339,7 +339,9 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       std::array<double *, U_FIELD_DIM> ptrs;
       for (auto i = 0; i != U_FIELD_DIM; ++i)
         ptrs[i] = &locMat(rr + i, 0);
-      return FTensor::Tensor1<FTensor::PackPtr<double *, 1>, U_FIELD_DIM>(ptrs);
+      return getFTensor1FromArray<SPACE_DIM, SPACE_DIM>(locMat)
+      
+      FTensor::Tensor1<FTensor::PackPtr<double *, 1>, U_FIELD_DIM>(ptrs);
     };
 
     auto ts_a = getTSa();
@@ -357,7 +359,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double d_buoyancy = t_phi * d_tmp_b + tmp_b;
       const double d_Re = 0.5 * (Re_p - Re_m);
 
-      auto t_D_dH = get_D(-(d_Re / (Re * Re)), 0);
+      auto t_D_dH = get_D(0/*-(d_Re / (Re * Re))*/, 0);
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress_dH;
       t_stress_dH(i, j) = t_D_dH(i, j, k, l) * t_grad_u(k, l);
@@ -376,8 +378,8 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
         for (int cc = 0; cc != nbCols; ++cc) {
 
           t_mat(i) += (t_row_base * t_col_base * alpha) * (t_buoyancy_dH(i));
-          t_mat(i) +=
-              (t_row_diff_base(j) * (alpha * t_col_base)) * t_stress_dH(i, j);
+          // t_mat(i) +=
+          //     (t_row_diff_base(j) * (alpha * t_col_base)) * t_stress_dH(i, j);
 
           // t_mat(i) +=
           //     (t_row_diff_base(j) * t_col_base * alpha) *
