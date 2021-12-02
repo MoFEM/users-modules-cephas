@@ -94,7 +94,7 @@ constexpr double Re_p = 1e1;
 constexpr double Re_m = 1e-1;
 constexpr double Ri_p = 1e1;
 constexpr double Ri_m = 1e-1;
-constexpr double lambda = 1;
+constexpr double lambda = 0.1;
 constexpr double eta = 1;
 constexpr double K = 1e4;
 
@@ -129,7 +129,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
     auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
     auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
     auto t_phi = getFTensor0FromVec(*phiPtr);
-    auto t_grad_phi = getFTensor1FromMat<SPACE_DIM>(*dotUPtr);
+    auto t_grad_phi = getFTensor1FromMat<SPACE_DIM>(*gradPhiPtr);
 
     auto t_base = data.getFTensor0N();
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
@@ -151,8 +151,8 @@ struct OpRhsU : public AssemblyDomainEleOp {
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress;
       t_stress(i, j) = t_D(i, j, k, l) * t_grad_u(k, l);
-      FTensor::Tensor2_symmetric<double, SPACE_DIM> t_tension;
-      t_tension(i, j) = (lambda) * (t_grad_phi(i) ^ t_grad_phi(j));
+      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_tension;
+      t_tension(i, j) = (lambda) * (t_grad_phi(i) * t_grad_phi(j));
       FTensor::Tensor1<double, SPACE_DIM> t_convection;
       t_convection(i) = t_u(j) * t_grad_u(i, j);
       FTensor::Tensor1<double, SPACE_DIM> t_buoyancy;
@@ -164,10 +164,10 @@ struct OpRhsU : public AssemblyDomainEleOp {
       int bb = 0;
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
 
-        t_nf(i) += (t_base * alpha) *
-                   (t_dot_u(i) /*+ t_convection(i)*/ + t_buoyancy(i));
         t_nf(i) +=
-            (t_diff_base(j) * alpha) * (t_stress(i, j)); // + t_tension(i, j));
+            (t_base * alpha) * (t_dot_u(i) + t_convection(i) + t_buoyancy(i));
+        t_nf(i) +=
+            (t_diff_base(j) * alpha) * (t_stress(i, j) + t_tension(i, j));
 
         ++t_base;
         ++t_diff_base;
@@ -243,7 +243,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       auto t_D = get_D(1. / Re, K);
 
       FTensor::Tensor2<double, U_FIELD_DIM, SPACE_DIM> t_base_lhs;
-      t_base_lhs(i, j) = ts_a * t_kd(i, j);// + t_grad_u(i, j);
+      t_base_lhs(i, j) = ts_a * t_kd(i, j) + t_grad_u(i, j);
 
       int bb = 0;
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
@@ -261,15 +261,10 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
         for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
 
           t_mat(i, j) += (t_row_base * t_col_base * alpha) * t_base_lhs(i, j);
-          // t_mat(i, j) += (alpha * t_row_base) * (t_col_diff_base(k) * t_u(k));
+          t_mat(i, j) += (alpha * t_row_base) * (t_col_diff_base(k) * t_u(k));
 
           // integrate block local stiffens matrix
           t_mat(i, j) += t_rowD(i, j, k) * t_col_diff_base(k);
-
-          // t_mat(i, j) +=
-          //     (alpha * (1 / Re)) *
-          //     (t_row_diff_base(i) * t_col_diff_base(j) +
-          //      t_kd(i, j) * (t_row_diff_base(k) * t_col_diff_base(k)));
 
           ++t_mat;
           ++t_col_base;
@@ -378,14 +373,9 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
           t_mat(i) += (t_row_base * t_col_base * alpha) * (t_buoyancy_dH(i));
           t_mat(i) +=
               (t_row_diff_base(j) * (alpha * t_col_base)) * t_stress_dH(i, j);
-
-          // t_mat(i) +=
-          //     (t_row_diff_base(j) * t_col_base * alpha) *
-          //     t_stress_dH(i, j);
-          // t_mat(i) += (t_row_diff_base(j) * (t_col_base * alpha *
-          // lambda)) *
-          //             (t_grad_phi(i) * t_col_diff_base(j) +
-          //              t_col_diff_base(i) * t_grad_phi(j));
+          t_mat(i) += (t_row_diff_base(j) * (alpha * lambda)) *
+                      (t_grad_phi(i) * t_col_diff_base(j) +
+                       t_col_diff_base(i) * t_grad_phi(j));
 
           ++t_mat;
           ++t_col_base;
@@ -563,7 +553,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
   CHKERR simple->addDomainField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  constexpr int order = 2;
+  constexpr int order = 3;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("H", order);
   CHKERR simple->setUp();
