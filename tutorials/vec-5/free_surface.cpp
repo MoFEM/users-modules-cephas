@@ -96,7 +96,7 @@ constexpr double Ri_p = 1e1;
 constexpr double Ri_m = 1e-1;
 constexpr double lambda = 1;
 constexpr double eta = 1;
-constexpr double K = 1;
+constexpr double K = 1e4;
 
 auto get_D = [](const double A, const double K) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
@@ -339,9 +339,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       std::array<double *, U_FIELD_DIM> ptrs;
       for (auto i = 0; i != U_FIELD_DIM; ++i)
         ptrs[i] = &locMat(rr + i, 0);
-      return getFTensor1FromArray<SPACE_DIM, SPACE_DIM>(locMat)
-      
-      FTensor::Tensor1<FTensor::PackPtr<double *, 1>, U_FIELD_DIM>(ptrs);
+      return FTensor::Tensor1<FTensor::PackPtr<double *, 1>, U_FIELD_DIM>(ptrs);
     };
 
     auto ts_a = getTSa();
