@@ -758,10 +758,10 @@ struct Monitor : public FEMethod {
     MoFEMFunctionBegin;
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
-      // CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
-      //                                 this->getCacheWeakPtr());
-      // CHKERR postProc->writeFile(
-      //     "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
+                                      this->getCacheWeakPtr());
+      CHKERR postProc->writeFile(
+          "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
       // MOFEM_LOG("FS", Sev::verbose)
       //     << "writing vector in binary to vector.dat ...";
       // PetscViewer viewer;
@@ -942,15 +942,14 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
   set_domain_rhs_explicit(pipeline_mng->getOpDomainExplicitRhsPipeline());
 
-  // fe_explicit_rhs->preProcessHook = caluclate_global_terms;
-  // fe_explicit_rhs->postProcessHook = solve_explicit_rhs;
+  fe_explicit_rhs->preProcessHook = caluclate_global_terms;
+  fe_explicit_rhs->postProcessHook = solve_explicit_rhs;
 
   MoFEM::SmartPetscObj<TS> ts;
-  // ts = pipeline_mng->createTSIMEX();
-  ts = pipeline_mng->createTSIM();
+  ts = pipeline_mng->createTSIMEX();
 
-  // CHKERR TSSetType(ts, TSARKIMEX);
-  // CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
+  CHKERR TSSetType(ts, TSARKIMEX);
+  CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
 
   boost::shared_ptr<FEMethod> null_fe;
   auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
