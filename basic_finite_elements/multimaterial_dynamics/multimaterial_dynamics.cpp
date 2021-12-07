@@ -27,10 +27,9 @@ namespace po = boost::program_options;
 #ifdef WITH_MODULE_MORTAR_CONTACT
 #include <Mortar.hpp>
 #include <MortarContactInterface.hpp>
-// constexpr bool with_contact = true;
-// #else
-// constexpr bool with_contact = false;
-
+constexpr bool with_contact = true;
+#else
+constexpr bool with_contact = false;
 #endif
 
 #include <MortarContactFunctions.hpp>
@@ -128,9 +127,9 @@ int main(int argc, char *argv[]) {
     CHKERR md.bC();
     CHKERR md.tsSetup();
 
-    #ifdef WITH_MODULE_MORTAR_CONTACT
+#ifdef WITH_MODULE_MORTAR_CONTACT
     CHKERR MMortarContactFunctions::SetContactStructures(m_field);
-    #endif
+#endif
 
     CHKERR md.OPs();
     CHKERR md.postProcessSetup();

@@ -68,6 +68,7 @@ extern "C" {
 #include <NavierStokesElement.hpp>
 #include <SimpleContact.hpp>
 #include <SimpleRodElement.hpp>
+#include <GenericElementInterface.hpp>
 
 using namespace BasicFiniteElements;
 

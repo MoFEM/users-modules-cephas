@@ -20,6 +20,7 @@ MoFEMErrorCode SetContactStructures(MoFEM::Interface &mField) {
   MoFEMFunctionBegin;
 
   MortarContactInterface contact(mField, "U", "MESH_NODE_POSITIONS");
+  // CHKERR contact.getCommandLineParameters();
 
   MoFEMFunctionReturn(0);
 }

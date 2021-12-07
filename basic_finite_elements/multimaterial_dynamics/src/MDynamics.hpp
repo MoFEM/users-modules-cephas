@@ -21,6 +21,7 @@ struct MDynamics {
   MoFEM::Interface &mField;
   SmartPetscObj<TS> Tsolver;
 
+  boost::shared_ptr<MortarContactInterface> contactPtr;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
   boost::ptr_map<std::string, NodalForce> nodal_forces;
@@ -78,6 +79,7 @@ public:
   SmartPetscObj<DM> dM;
   boost::shared_ptr<PostProcEle> postProc;
   boost::shared_ptr<PostProcSkinEle> postProcSkin;
+  // boost::shared_ptr<MortarContactInterface> contactPtr;
 };
 
 boost::shared_ptr<MDmonitor> monitorPtr;
@@ -135,9 +137,23 @@ MoFEMErrorCode MDynamics::setupProblem() {
   // if (!simple->skeletonFields.empty())
   //   CHKERR simple->setSkeletonAdjacency();
   CHKERR simple->defineProblem(PETSC_TRUE);
+
+  contactPtr = boost::make_shared<MortarContactInterface>(
+      mField, "U", "MESH_NODE_POSITIONS", true);
+
+  // CHKERR contactPtr->getCommandLineParameters();
+  // CHKERR contactPtr->setPositionFieldContactOrder(order);
+  // CHKERR contactPtr->addFields(true, true);
+  
   CHKERR simple->buildFields();
   CHKERR simple->buildFiniteElements();
+
+  // CHKERR contactPtr->createContactElements();
+  // auto dm = mField.getInterface<Simple>()->getDM();
+  // CHKERR contactPtr->addContactElements(dm);
+
   CHKERR simple->buildProblem();
+
 
   MoFEMFunctionReturn(0);
 }
@@ -392,6 +408,9 @@ MoFEMErrorCode MDynamics::OPs() {
   CHKERR push_methods(&elasticElementPtr->getLoopFeLhs(),
                       simple->getDomainFEName().c_str(), true, false);
 
+  // CHKERR contactPtr->setupSolverFunction<TS>(isQuasiStatic);
+  // CHKERR contactPtr->setupSolverJacobian<TS>(isQuasiStatic);
+
   MoFEMFunctionReturn(0);
 }
 
@@ -415,11 +434,11 @@ MoFEMErrorCode MDynamics::tsSetup() {
   auto D = smartCreateDMVector(dm);
 
   if (isQuasiStatic) {
-    Tsolver = pipeline_mng->createTS();
+    Tsolver = pipeline_mng->createTS(PipelineManager::IM, dm);
     CHKERR TSSetFromOptions(Tsolver);
     CHKERR TSSetSolution(Tsolver, D);
   } else {
-    Tsolver = pipeline_mng->createTS2();
+    Tsolver = pipeline_mng->createTS(PipelineManager::IM2, dm);
     CHKERR TSSetFromOptions(Tsolver);
     CHKERR TSSetType(Tsolver, TSALPHA2);
     auto DD = smartVectorDuplicate(D);
@@ -477,6 +496,7 @@ MoFEMErrorCode MDmonitor::postProcess() {
     // CHKERR DMoFEMLoopFiniteElements(dM, "ELASTIC", postProc);
     CHKERR postProc->writeFile(
         "out_vol_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+    // CHKERR contactPtr->postContactProcessPrisms(ts_step);
   }
   MoFEMFunctionReturn(0);
 }
