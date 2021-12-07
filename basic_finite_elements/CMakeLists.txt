@@ -15,8 +15,7 @@ set(BFE_DIRS
   multimaterial_dynamics
   nonlinear_elasticity
   thermal
-  cohesive_interface
-  simple_contact)
+  cohesive_interface)
 
 function(bfe_install bfe_mod_dir)
   install(
