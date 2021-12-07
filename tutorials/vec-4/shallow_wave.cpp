@@ -524,7 +524,7 @@ MoFEMErrorCode Example::boundaryCondition() {
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       pipeline.push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
       pipeline.push_back(new OpCalculateHOCoords("HO_POSITIONS"));
-      pipeline.push_back(new OpSetHOWeigthsOnFace());
+      pipeline.push_back(new OpSetHOWeightsOnFace());
     };
 
     auto set_domain_rhs = [&](auto &pipeline) {
@@ -641,7 +641,7 @@ MoFEMErrorCode Example::assembleSystem() {
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline.push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
     pipeline.push_back(new OpCalculateHOCoords("HO_POSITIONS"));
-    pipeline.push_back(new OpSetHOWeigthsOnFace());
+    pipeline.push_back(new OpSetHOWeightsOnFace());
     pipeline.push_back(new OpCalculateHOJacForFaceEmbeddedIn3DSpace(jac_ptr));
     pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(inv_jac_ptr));
@@ -777,7 +777,7 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR MatZeroEntries(M);
     fe->getOpPtrVector().push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
     fe->getOpPtrVector().push_back(new OpCalculateHOCoords("HO_POSITIONS"));
-    fe->getOpPtrVector().push_back(new OpSetHOWeigthsOnFace());
+    fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
     fe->getOpPtrVector().push_back(
         new OpMassUU("U", "U", [&](double, double, double) { return 1; }));
     fe->getOpPtrVector().push_back(

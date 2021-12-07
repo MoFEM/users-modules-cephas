@@ -355,7 +355,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpMakeHdivFromHcurl());
       pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetHOWeigthsOnFace());
+      pipeline.push_back(new OpSetHOWeightsOnFace());
     } else {
       pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
       pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
@@ -493,7 +493,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
     if (SPACE_DIM == 3)
-      pipeline.push_back(new OpSetHOWeigthsOnFace());
+      pipeline.push_back(new OpSetHOWeightsOnFace());
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(

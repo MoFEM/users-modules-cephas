@@ -531,7 +531,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 <td>
 
 Modify integration weights on face to take in account higher-order
-geometry \ref MoFEM::OpSetHOWeigthsOnFace
+geometry \ref MoFEM::OpSetHOWeightsOnFace
 
 Suppose Jacobian is not constant on the finite element, then this operator sets integration weights to take into account the geometry of the finite element, that is, a case for a non-parallelepiped quad. Also, that is a case for any face element given by higher-order geometry approximation. Note that geometry in MoFEM can be represented by an arbitrary order approximation field.
 
@@ -545,7 +545,7 @@ where \f$w^g\f$ is weight on update configuration, \f$W^g\f$ integration weight 
 %Example 
 \code
 pipeline_mng->getOpDomainLhsPipeline().push_back(
-    new OpSetHOWeigthsOnFace());
+    new OpSetHOWeightsOnFace());
 \endcode
 
 <tr>

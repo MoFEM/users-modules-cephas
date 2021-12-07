@@ -523,8 +523,8 @@ int main(int argc, char *argv[]) {
   TsCtx *ts_ctx;
   DMMoFEMGetTsCtx(dm,&ts_ctx);
   //add monitor operator
-  ts_ctx->get_postProcess_to_do_Monitor().push_back(&monitor);
-  ts_ctx->get_postProcess_to_do_Monitor().push_back(&post_proc);
+  ts_ctx->getPostProcessMonitor().push_back(&monitor);
+  ts_ctx->getPostProcessMonitor().push_back(&post_proc);
 
   //create time solver
   TS ts;
