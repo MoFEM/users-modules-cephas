@@ -42,8 +42,6 @@ function(tutorials_install tutorials_mod_dir)
     PATTERN "atom_tests" EXCLUDE)
 endfunction(tutorials_install)
 
-
-
 function(tutorials_build_and_install target source)
   tutorials_add_executable(${target} ${source})
   target_link_libraries(${target}
@@ -101,6 +99,7 @@ set(TUTORIALS_DIRS
   adv-0
   adv-1
   adv-2
+  adv-3
   cor-0to1
   cor-2to5
   cor-6

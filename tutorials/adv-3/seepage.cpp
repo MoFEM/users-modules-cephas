@@ -164,6 +164,82 @@ double fluid_density = 1;
 
 #include <OpPostProcElastic.hpp>
 
+struct Monitor : public FEMethod {
+
+  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<PostProcEle> &post_proc_fe,
+          boost::shared_ptr<DomainEle> &reaction_fe,
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
+      : dM(dm), postProcFe(post_proc_fe), reactionFe(reaction_fe),
+        uXScatter(ux_scatter), uYScatter(uy_scatter), uZScatter(uz_scatter){};
+
+  MoFEMErrorCode preProcess() { return 0; }
+  MoFEMErrorCode operator()() { return 0; }
+
+  MoFEMErrorCode postProcess() {
+    MoFEMFunctionBegin;
+
+    auto make_vtk = [&]() {
+      MoFEMFunctionBegin;
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
+      CHKERR postProcFe->writeFile(
+          "out_plastic_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      MoFEMFunctionReturn(0);
+    };
+
+    auto calculate_reaction = [&]() {
+      MoFEMFunctionBegin;
+      auto r = smartCreateDMVector(dM);
+      reactionFe->f = r;
+      CHKERR VecZeroEntries(r);
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", reactionFe);
+      CHKERR VecGhostUpdateBegin(r, ADD_VALUES, SCATTER_REVERSE);
+      CHKERR VecGhostUpdateEnd(r, ADD_VALUES, SCATTER_REVERSE);
+      CHKERR VecAssemblyBegin(r);
+      CHKERR VecAssemblyEnd(r);
+
+      double sum;
+      CHKERR VecSum(r, &sum);
+      MOFEM_LOG_C("EXAMPLE", Sev::inform, "reaction time %3.4e %3.4e", ts_t,
+                  sum);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto print_max_min = [&](auto &tuple, const std::string msg) {
+      MoFEMFunctionBegin;
+      CHKERR VecScatterBegin(std::get<1>(tuple), ts_u, std::get<0>(tuple),
+                             INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecScatterEnd(std::get<1>(tuple), ts_u, std::get<0>(tuple),
+                           INSERT_VALUES, SCATTER_FORWARD);
+      double max, min;
+      CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
+      CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
+      MOFEM_LOG_C("EXAMPLE", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
+                  msg.c_str(), ts_t, min, max);
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR make_vtk();
+    CHKERR calculate_reaction();
+    CHKERR print_max_min(uXScatter, "Ux");
+    CHKERR print_max_min(uYScatter, "Uy");
+    if (SPACE_DIM == 3)
+      CHKERR print_max_min(uZScatter, "Uz");
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  SmartPetscObj<DM> dM;
+  boost::shared_ptr<PostProcEle> postProcFe;
+  boost::shared_ptr<DomainEle> reactionFe;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
+};
+
 struct Example {
 
   Example(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -179,8 +255,6 @@ private:
   MoFEMErrorCode OPs();
   MoFEMErrorCode tsSolve();
 
-  boost::shared_ptr<PlasticThermalOps::CommonData> commonPlasticDataPtr;
-  boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   boost::shared_ptr<PostProcEle> postProcFe;
   boost::shared_ptr<DomainEle> reactionFe;
 
@@ -236,7 +310,8 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->addDomainField("H", L2, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addDomainField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addBoundaryField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
-
+  
+  int order = 2.;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("H", order - 1);
@@ -268,7 +343,7 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Conductivity " << conductivity;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Capacity " << capacity;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Fluid denisty " << fluid_denisty;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Fluid denisty " << fluid_density;
 
     MoFEMFunctionReturn(0);
   };
@@ -289,11 +364,15 @@ MoFEMErrorCode Example::createCommonData() {
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                          : 1;
 
-    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(mDPtr);
+    mDPtr = boost::make_shared<MatrixDouble>();
+    mDPtr_Axiator = boost::make_shared<MatrixDouble>();
+    mDPtr_Deviator = boost::make_shared<MatrixDouble>();
+    
+    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mDPtr);
     auto t_D_axiator =
-        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(mDPtr_Axiator);
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mDPtr_Axiator);
     auto t_D_deviator =
-        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(mDPtr_Deviator);
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mDPtr_Deviator);
 
     constexpr double third = boost::math::constants::third<double>();
     t_D_axiator(i, j, k, l) = A *
@@ -420,7 +499,7 @@ MoFEMErrorCode Example::OPs() {
   auto strain_ptr = boost::make_shared<MatrixDouble>();
   auto stress_ptr = boost::make_shared<MatrixDouble>();
 
-  auto integration_rule_bc = [](int, int, int approx_order) {
+  auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order;
   };
 
@@ -500,9 +579,9 @@ MoFEMErrorCode Example::OPs() {
     // Calculate internal forece
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-            "U", strain_ptr, stress_ptr, m_D_ptr));
+            "U", strain_ptr, stress_ptr, mDPtr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpInternalForce("U", stress_ptr));
+        new OpInternalForceCauchy("U", stress_ptr));
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -521,8 +600,8 @@ MoFEMErrorCode Example::OPs() {
   //       pipeline.push_back(new OpUnSetBc("U"));
   //     }
   //   }
-  //   MoFEMFunctionReturn(0);
-  // };
+    MoFEMFunctionReturn(0);
+  };
 
   auto add_boundary_ops_rhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
@@ -533,11 +612,11 @@ MoFEMErrorCode Example::OPs() {
     //   return fe_domain_rhs->ts_t;
     // };
 
-    // auto get_time_scaled = [&](double, double, double) {
-    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    //   auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-    //   return fe_domain_rhs->ts_t * scale;
-    // };
+    auto get_time_scaled = [&](double, double, double) {
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
+      return fe_domain_rhs->ts_t * scale;
+    };
 
     // auto get_minus_time = [&](double, double, double) {
     //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -545,17 +624,11 @@ MoFEMErrorCode Example::OPs() {
     //   return -fe_domain_rhs->ts_t;
     // };
 
-    // auto time_scaled = [&](double, double, double) {
-    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    //   auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-    //   if (number_of_cycles_in_total_time != 0) {
-    //     return amplitude_cycle * sin((2 * fe_domain_rhs->ts_t - phase_shift) *
-    //                                  number_of_cycles_in_total_time * M_PI) +
-    //            amplitude_shift;
-    //   } else {
-    //     return fe_domain_rhs->ts_t;
-    //   }
-    // };
+    auto time_scaled = [&](double, double, double) {
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
+      return fe_domain_rhs->ts_t;
+    };
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
@@ -613,7 +686,7 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_lhs_seepage = [&](auto &pipeline, auto &fe) {
+  auto add_domain_ops_lhs_seepage = [&](auto &pipeline) {
     MoFEMFunctionBegin;
     // auto resistance = [](const double, const double, const double) {
     //   return (1. / conductivity);
@@ -633,7 +706,7 @@ MoFEMErrorCode Example::OPs() {
     auto resistance = [](const double, const double, const double) {
       return (1. / conductivity);
     };
-    auto capacity = [&](const double, const double, const double) {
+    auto get_capacity = [&](const double, const double, const double) {
       return capacity;
     };
     auto minus_one = [](const double, const double, const double) {
@@ -644,7 +717,7 @@ MoFEMErrorCode Example::OPs() {
     // 2
     pipeline.push_back(new OpHDivH("FLUX", h_ptr, minus_one));
     // 3
-    pipeline.push_back(new OpBaseDotT("H", dot_h_ptr, capacity));
+    pipeline.push_back(new OpBaseDotT("H", dot_h_ptr, get_capacity));
     // 4
     pipeline.push_back(new OpBaseDivFlux("H", div_flux_ptr, minus_one));
 
@@ -677,7 +750,7 @@ MoFEMErrorCode Example::OPs() {
         MOFEM_LOG("EXAMPLE", Sev::inform)
             << "Set temerature " << attr_vec[0] << " on ents:\n"
             << temp_edges;
-        bcHFunctions.push_back(BcHFun(attr_vec[0], fe));
+        bcHFunctions.push_back(BcHFun(attr_vec[0], *fe));
         tmp_edges_vec.push_back(temp_edges);
       }
     }
@@ -704,12 +777,13 @@ MoFEMErrorCode Example::OPs() {
 
   CHKERR add_boundary_ops_rhs_mechanical(
       pipeline_mng->getOpBoundaryRhsPipeline());
-  CHKERR add_boundary_ops_rhs_seepage(pipeline_mng->getOpBoundaryRhsPipeline());
+  CHKERR add_boundary_ops_rhs_seepage(pipeline_mng->getOpBoundaryRhsPipeline(),
+                                      pipeline_mng->getBoundaryRhsFE());
 
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_bc);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_bc);
-  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_bc);
-  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_bc);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
 
   auto create_reaction_pipeline = [&](auto &pipeline) {
     MoFEMFunctionBegin;
@@ -727,12 +801,12 @@ MoFEMErrorCode Example::OPs() {
       }
 
       pipeline.push_back(
-          new OpSymmetrizeTensor<SPACE_DIM>("U", u_grad_ptr, u_symm_grad_ptr));
+          new OpSymmetrizeTensor<SPACE_DIM>("U", u_grad_ptr, strain_ptr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-              "U", u_symm_grad_ptr, stress_ptr, m_D_ptr));
+              "U", strain_ptr, stress_ptr, mDPtr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpInternalForce("U", stress_ptr));
+          new OpInternalForceCauchy("U", stress_ptr));
 
       pipeline.push_back(new OpUnSetBc("U"));
     }
@@ -741,7 +815,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   reactionFe = boost::make_shared<DomainEle>(mField);
-  reactionFe->getRuleHook = integration_rule_deviator;
+  reactionFe->getRuleHook = integration_rule;
 
   CHKERR create_reaction_pipeline(reactionFe->getOpPtrVector());
 
@@ -787,11 +861,11 @@ MoFEMErrorCode Example::tsSolve() {
           new OpSetInvJacH1ForFace(inv_jac_ptr));
     }
 
-    auto u_grad_ptr = boost::make_shared_ptr<MatrixDouble>();
-    auto strain_ptr = boost::make_shared_ptr<MatrixDouble>();
-    auto stresses_ptr = boost::make_shared_ptr<MatrixDouble>();
-    auto h_ptr = boost::make_shared_ptr<VectorDouble>();
-    auto flux_ptr = boost::make_shared_ptr<MatrixDouble>();
+    auto u_grad_ptr = boost::make_shared<MatrixDouble>();
+    auto strain_ptr = boost::make_shared<MatrixDouble>();
+    auto stresses_ptr = boost::make_shared<MatrixDouble>();
+    auto h_ptr = boost::make_shared<VectorDouble>();
+    auto flux_ptr = boost::make_shared<MatrixDouble>();
 
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
@@ -800,14 +874,14 @@ MoFEMErrorCode Example::tsSolve() {
         new OpSymmetrizeTensor<SPACE_DIM>("U", u_grad_ptr, strain_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-            "U", strain_ptr, stress_ptr, t_D));
+            "U", strain_ptr, stresses_ptr, mDPtr));
                                                                  
     postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         "H", h_ptr));
     postProcFe->getOpPtrVector().push_back(
         new Tutorial::OpPostProcElastic<SPACE_DIM>(
             "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, strain_ptr,
-            stress_ptr));
+            stresses_ptr));
 
     postProcFe->addFieldValuesPostProc("U");
     postProcFe->addFieldValuesPostProc("H");
