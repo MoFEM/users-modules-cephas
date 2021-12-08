@@ -132,7 +132,7 @@ using OpHdivFlux = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
  * @brief  Integrate Rhs div flux base times temperature (T)
  *
  */
-using OpHDivTemp = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+using OpHDivH = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpMixDivTimesU<3, 1, 2>;
 
 /**
@@ -151,7 +151,7 @@ using OpBaseDivFlux = OpBaseDotT;
 
 using OpHeatSource = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, 1>;
-using OpPBC = FormsIntegrators<BoundaryEleOp>::Assembly<
+using OpHBC = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpNormalMixVecTimesScalar<SPACE_DIM>;
 
 double scale = 1.;
@@ -160,11 +160,10 @@ double young_modulus = 206913;
 double poisson_ratio = 0.29;
 double conductivity = 1;
 double capacity = 1;
+double fluid_density = 1;
 
-#include <HenckyOps.hpp>
 #include <OpPostProcElastic.hpp>
 
-using namespace HenckyOps;
 struct Example {
 
   Example(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -194,17 +193,17 @@ private:
 
   std::vector<FTensor::Tensor1<double, 3>> bodyForces;
 
-  struct BcPFun {
-    BcPFun(double v, FEMethod &fe) : valTemp(v), fE(fe) {}
-    double operator()(const double, const double, const double) {
-      return -valTemp; // * fE.ts_t;
+  struct BcHFun {
+    BcHFun(double v, FEMethod &fe) : valH(v), fE(fe) {}
+    double operator()(const double x, const double y, const double z) {
+      return valH;// - y; // * fE.ts_t;
     }
 
   private:
-    double valTemp;
+    double valH;
     FEMethod &fE;
   };
-  std::vector<BcPFun> bcPFunctions;
+  std::vector<BcHFun> bcHFunctions;
 
   boost::shared_ptr<MatrixDouble> mDPtr;
   boost::shared_ptr<MatrixDouble> mDPtr_Axiator;
@@ -229,20 +228,20 @@ MoFEMErrorCode Example::setupProblem() {
   Simple *simple = mField.getInterface<Simple>();
   // Add field
   constexpr FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   // Mechanical fields
   CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
   CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
   // Temerature
   const auto flux_space = (SPACE_DIM == 2) ? HCURL : HDIV;
-  CHKERR simple->addDomainField("P", L2, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addDomainField("H", L2, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addDomainField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addBoundaryField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("H", order - 1);
   CHKERR simple->setFieldOrder("FLUX", order);
-  CHKERR simple->setFieldOrder("T", order - 1);
+
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }
@@ -262,11 +261,14 @@ MoFEMErrorCode Example::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-capacity", &capacity,
                                  PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-fluid_density",
+                                 &fluid_density, PETSC_NULL);
 
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Conductivity " << conductivity;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Capacity " << capacity;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Fluid denisty " << fluid_denisty;
 
     MoFEMFunctionReturn(0);
   };
@@ -330,9 +332,10 @@ MoFEMErrorCode Example::bC() {
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "ZERO_FLUX", "FLUX", 0, 1);
 
+  // undrained means that there will be no fluid flow on the boundaries, essentially all boundaries are fixed...
   PetscBool zero_fix_skin_flux = PETSC_TRUE;
-  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-fix_skin_flux",
-                             &zero_fix_skin_flux, PETSC_NULL);
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-undrained", &zero_fix_skin_flux,
+                             PETSC_NULL);
   if (zero_fix_skin_flux) {
     Range faces;
     CHKERR mField.get_moab().get_entities_by_dimension(0, SPACE_DIM, faces);
@@ -409,39 +412,20 @@ MoFEMErrorCode Example::OPs() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  auto integration_rule_deviator = [](int o_row, int o_col, int approx_order) {
-    return 2 * (approx_order - 1);
-  };
+  auto u_grad_ptr = boost::make_shared<MatrixDouble>();
+  auto h_ptr = boost::make_shared<VectorDouble>();
+  auto dot_h_ptr = boost::make_shared<VectorDouble>();
+  auto flux_ptr = boost::make_shared<MatrixDouble>();
+  auto div_flux_ptr = boost::make_shared<VectorDouble>();
+  auto strain_ptr = boost::make_shared<MatrixDouble>();
+  auto stress_ptr = boost::make_shared<MatrixDouble>();
+
   auto integration_rule_bc = [](int, int, int approx_order) {
     return 2 * approx_order;
   };
 
-  feAxiatorRhs = boost::make_shared<DomainEle>(mField);
-  feAxiatorLhs = boost::make_shared<DomainEle>(mField);
-  auto integration_rule_axiator = [](int, int, int approx_order) {
-    return 2 * (approx_order - 1);
-  };
-  feAxiatorRhs->getRuleHook = integration_rule_axiator;
-  feAxiatorLhs->getRuleHook = integration_rule_axiator;
-
-  feThermalRhs = boost::make_shared<DomainEle>(mField);
-  feThermalLhs = boost::make_shared<DomainEle>(mField);
-  auto integration_rule_thermal = [](int, int, int approx_order) {
-    return 2 * approx_order;
-  };
-  feThermalRhs->getRuleHook = integration_rule_thermal;
-  feThermalLhs->getRuleHook = integration_rule_thermal;
-
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-
-    auto u_grad_ptr = boost::make_shared<MatrixDouble>();
-    auto p_ptr = boost::make_shared<VectorDouble>();
-    auto dot_p_ptr = boost::make_shared<VectorDouble>();
-    auto div_flux_ptr = boost::make_shared<VectorDouble>();
-    auto flux = boost::make_shared<MatrixDouble>();
-    auto u_symm_grad_ptr = boost::make_shared<MatrixDouble>();
-    auto stress_ptr = boost::make_shared<MatrixDouble>();
 
     if (SPACE_DIM == 2) {
       auto det_ptr = boost::make_shared<VectorDouble>();
@@ -458,21 +442,23 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", u_grad_ptr));
-    pipeline.push_back(new OpCalculateScalarFieldValues("P", p_ptr));
-    pipeline.push_back(new OpCalculateScalarFieldValuesDot("P", dot_p_ptr));
+    pipeline.push_back(
+        new OpSymmetrizeTensor<SPACE_DIM>("U", u_grad_ptr, strain_ptr));
+    pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
+    pipeline.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
+    pipeline.push_back(new OpCalculateHVecVectorField<3>("FLUX", flux_ptr));
     pipeline.push_back(new OpCalculateHdivVectorDivergence<3, SPACE_DIM>(
         "FLUX", div_flux_ptr));
-    pipeline.push_back(new OpCalculateHVecVectorField<3>("FLUX", flux));
 
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_lhs_mechanical = [&](auto &pipeline, auto m_D_ptr) {
+  auto add_domain_ops_lhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpK("U", "U", m_D_ptr));
-    pipeline.push_back(new OpUnSetBc("U"));
+    // pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    // pipeline_mng->getOpDomainLhsPipeline().push_back(
+    //     new OpK("U", "U", m_D_ptr));
+    // pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
@@ -512,13 +498,11 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpBodyForce("U", get_body_force));
 
     // Calculate internal forece
-    pipeline.push_back(
-        new OpSymmetrizeTensor<SPACE_DIM>("U", u_grad_ptr, u_symm_grad_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-            "U", u_symm_grad_ptr, stress_ptr, m_D_ptr));
+            "U", strain_ptr, stress_ptr, m_D_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpInternalForce("U", matStressPtr));
+        new OpInternalForce("U", stress_ptr));
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -526,52 +510,52 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_lhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
-    for (auto bc : bc_map) {
-      if (bc_mng->checkBlock(bc, "FIX_")) {
-        pipeline.push_back(
-            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
-        pipeline.push_back(new OpBoundaryMass(
-            "U", "U", [](double, double, double) { return 1.; },
-            bc.second->getBcEntsPtr()));
-        pipeline.push_back(new OpUnSetBc("U"));
-      }
-    }
-    MoFEMFunctionReturn(0);
-  };
+  //   auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
+  //   for (auto bc : bc_map) {
+  //     if (bc_mng->checkBlock(bc, "FIX_")) {
+  //       pipeline.push_back(
+  //           new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
+  //       pipeline.push_back(new OpBoundaryMass(
+  //           "U", "U", [](double, double, double) { return 1.; },
+  //           bc.second->getBcEntsPtr()));
+  //       pipeline.push_back(new OpUnSetBc("U"));
+  //     }
+  //   }
+  //   MoFEMFunctionReturn(0);
+  // };
 
   auto add_boundary_ops_rhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    auto get_time = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return fe_domain_rhs->ts_t;
-    };
+    // auto get_time = [&](double, double, double) {
+    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    //   auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
+    //   return fe_domain_rhs->ts_t;
+    // };
 
-    auto get_time_scaled = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return fe_domain_rhs->ts_t * scale;
-    };
+    // auto get_time_scaled = [&](double, double, double) {
+    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    //   auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
+    //   return fe_domain_rhs->ts_t * scale;
+    // };
 
-    auto get_minus_time = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return -fe_domain_rhs->ts_t;
-    };
+    // auto get_minus_time = [&](double, double, double) {
+    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    //   auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
+    //   return -fe_domain_rhs->ts_t;
+    // };
 
-    auto time_scaled = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      if (number_of_cycles_in_total_time != 0) {
-        return amplitude_cycle * sin((2 * fe_domain_rhs->ts_t - phase_shift) *
-                                     number_of_cycles_in_total_time * M_PI) +
-               amplitude_shift;
-      } else {
-        return fe_domain_rhs->ts_t;
-      }
-    };
+    // auto time_scaled = [&](double, double, double) {
+    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    //   auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
+    //   if (number_of_cycles_in_total_time != 0) {
+    //     return amplitude_cycle * sin((2 * fe_domain_rhs->ts_t - phase_shift) *
+    //                                  number_of_cycles_in_total_time * M_PI) +
+    //            amplitude_shift;
+    //   } else {
+    //     return fe_domain_rhs->ts_t;
+    //   }
+    // };
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
@@ -631,41 +615,39 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs_seepage = [&](auto &pipeline, auto &fe) {
     MoFEMFunctionBegin;
+    // auto resistance = [](const double, const double, const double) {
+    //   return (1. / conductivity);
+    // };
+    // auto capacity = [&](const double, const double, const double) {
+    //   return -capacity * fe.ts_a;
+    // };
+    // auto unity = []() { return 1; };
+    // pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
+    // pipeline.push_back(new OpHdivT("FLUX", "T", unity, true));
+    // pipeline.push_back(new OpCapacity("T", "T", capacity));
+    MoFEMFunctionReturn(0);
+  };
+
+  auto add_domain_ops_rhs_seepage = [&](auto &pipeline) {
+    MoFEMFunctionBegin;
     auto resistance = [](const double, const double, const double) {
       return (1. / conductivity);
     };
     auto capacity = [&](const double, const double, const double) {
-      return -capacity * fe.ts_a;
+      return capacity;
     };
-    auto unity = []() { return 1; };
-    pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
-    pipeline.push_back(new OpHdivT("FLUX", "T", unity, true));
-    pipeline.push_back(new OpCapacity("T", "T", capacity));
-    MoFEMFunctionReturn(0);
-  };
+    auto minus_one = [](const double, const double, const double) {
+      return -1;
+    };
+    // 1
+    pipeline.push_back(new OpHdivFlux("FLUX", flux_ptr, resistance));
+    // 2
+    pipeline.push_back(new OpHDivH("FLUX", h_ptr, minus_one));
+    // 3
+    pipeline.push_back(new OpBaseDotT("H", dot_h_ptr, capacity));
+    // 4
+    pipeline.push_back(new OpBaseDivFlux("H", div_flux_ptr, minus_one));
 
-  auto add_domain_ops_rhs_seppeage = [&](auto &pipeline) {
-    MoFEMFunctionBegin;
-    auto resistance = [](const double, const double, const double) {
-      return (1. / heat_conductivity);
-    };
-    auto capacity = [&](const double, const double, const double) {
-      return -heat_capacity;
-    };
-    auto unity = [](const double, const double, const double) { return 1; };
-    pipeline.push_back(new OpHdivFlux(
-        "FLUX", commonPlasticDataPtr->getTempFluxValPtr(), resistance));
-    pipeline.push_back(
-        new OpHDivTemp("FLUX", commonPlasticDataPtr->getTempValPtr(), unity));
-    pipeline.push_back(new OpBaseDivFlux(
-        "T", commonPlasticDataPtr->getTempDivFluxPtr(), unity));
-    // auto source = [&](const double x, const double y, const double z) {
-    //   return 1;
-    // };
-    // pipeline.push_back(new OpHeatSource("T", source));
-
-    pipeline.push_back(new OpBaseDotT(
-        "T", commonPlasticDataPtr->getTempValDotPtr(), capacity));
     MoFEMFunctionReturn(0);
   };
 
@@ -678,8 +660,11 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpHOSetCovariantPiolaTransformOnFace3D(HDIV));
     }
 
+    std::vector<Range> tmp_edges_vec;
+    bcHFunctions.clear();
+
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      const std::string block_name = "P";
+      const std::string block_name = "H";
       if (it->getName().compare(0, block_name.size(), block_name) == 0) {
         Range temp_edges;
         std::vector<double> attr_vec;
@@ -692,52 +677,37 @@ MoFEMErrorCode Example::OPs() {
         MOFEM_LOG("EXAMPLE", Sev::inform)
             << "Set temerature " << attr_vec[0] << " on ents:\n"
             << temp_edges;
-        bcTemperatureFunctions.push_back(BcTempFun(attr_vec[0], fe));
-        pipeline.push_back(
-            new OpPBC("FLUX", bcTemperatureFunctions.back(),
-                                boost::make_shared<Range>(temp_edges)));
+        bcHFunctions.push_back(BcHFun(attr_vec[0], fe));
+        tmp_edges_vec.push_back(temp_edges);
       }
+    }
+
+    for (int v = 0; v != bcHFunctions.size(); ++v) {
+      pipeline.push_back(
+          new OpHBC("FLUX", bcHFunctions[v],
+                    boost::make_shared<Range>(tmp_edges_vec[v])));
     }
     MoFEMFunctionReturn(0);
   };
 
-  // Mechanics
+  // LHS
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
-  CHKERR add_domain_ops_lhs_mechanical(pipeline_mng->getOpDomainLhsPipeline(),
-                                       commonPlasticDataPtr->mDPtr_Deviator);
+  CHKERR add_domain_ops_lhs_mechanical(pipeline_mng->getOpDomainLhsPipeline());
+  CHKERR add_domain_ops_lhs_seepage(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_boundary_ops_lhs_mechanical(
       pipeline_mng->getOpBoundaryLhsPipeline());
 
-  // Seepage
-  CHKERR add_domain_base_ops(feThermalLhs->getOpPtrVector());
-  CHKERR add_domain_ops_lhs_thermal(feThermalLhs->getOpPtrVector(),
-                                    *feThermalLhs);
-
-  // Mechanics
+  // RHS
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline(),
-                               commonPlasticDataPtr->mDPtr_Deviator);
   CHKERR add_domain_ops_rhs_mechanical(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_domain_ops_rhs_constrain(pipeline_mng->getOpDomainRhsPipeline());
+  CHKERR add_domain_ops_rhs_seepage(pipeline_mng->getOpDomainRhsPipeline());
+
   CHKERR add_boundary_ops_rhs_mechanical(
       pipeline_mng->getOpBoundaryRhsPipeline());
+  CHKERR add_boundary_ops_rhs_seepage(pipeline_mng->getOpBoundaryRhsPipeline());
 
-  // Axiator
-  CHKERR add_domain_base_ops(feAxiatorRhs->getOpPtrVector());
-  CHKERR add_domain_stress_ops(feAxiatorRhs->getOpPtrVector(),
-                               commonPlasticDataPtr->mDPtr_Axiator);
-  CHKERR add_domain_ops_rhs_mechanical(feAxiatorRhs->getOpPtrVector());
-
-  // Temperature
-  CHKERR add_domain_base_ops(feThermalRhs->getOpPtrVector());
-  CHKERR add_domain_ops_rhs_thermal(feThermalRhs->getOpPtrVector());
-  CHKERR
-  add_boundary_ops_rhs_thermal(pipeline_mng->getOpBoundaryRhsPipeline(),
-                               *pipeline_mng->getBoundaryRhsFE());
-
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_deviator);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_deviator);
-
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_bc);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_bc);
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_bc);
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_bc);
 
@@ -757,20 +727,12 @@ MoFEMErrorCode Example::OPs() {
       }
 
       pipeline.push_back(
-          new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-              "U", commonPlasticDataPtr->mGradPtr));
-      pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
-          "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
-      pipeline.push_back(
-          new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
-                                            commonPlasticDataPtr->mStrainPtr));
-      pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr,
-                                             commonPlasticDataPtr->mDPtr, 1));
-      pipeline.push_back(new OpSetBc("U", false, reactionMarker));
-
-      // Calculate internal forece
-      pipeline.push_back(
-          new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
+          new OpSymmetrizeTensor<SPACE_DIM>("U", u_grad_ptr, u_symm_grad_ptr));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+              "U", u_symm_grad_ptr, stress_ptr, m_D_ptr));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpInternalForce("U", stress_ptr));
 
       pipeline.push_back(new OpUnSetBc("U"));
     }
@@ -825,33 +787,32 @@ MoFEMErrorCode Example::tsSolve() {
           new OpSetInvJacH1ForFace(inv_jac_ptr));
     }
 
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-            "U", commonPlasticDataPtr->mGradPtr));
-    postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
-            "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
-    postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
-        "T", commonPlasticDataPtr->getTempValPtr()));
+    auto u_grad_ptr = boost::make_shared_ptr<MatrixDouble>();
+    auto strain_ptr = boost::make_shared_ptr<MatrixDouble>();
+    auto stresses_ptr = boost::make_shared_ptr<MatrixDouble>();
+    auto h_ptr = boost::make_shared_ptr<VectorDouble>();
+    auto flux_ptr = boost::make_shared_ptr<MatrixDouble>();
 
-    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
-    postProcFe->getOpPtrVector().push_back(new OpPlasticStress(
-        "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
+                                                                 u_grad_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpSymmetrizeTensor<SPACE_DIM>("U", u_grad_ptr, strain_ptr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+            "U", strain_ptr, stress_ptr, t_D));
+                                                                 
+    postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
+        "H", h_ptr));
     postProcFe->getOpPtrVector().push_back(
         new Tutorial::OpPostProcElastic<SPACE_DIM>(
-            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-            commonPlasticDataPtr->mStrainPtr,
-            commonPlasticDataPtr->mStressPtr));
+            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, strain_ptr,
+            stress_ptr));
 
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpPostProcPlastic("U", postProcFe->postProcMesh,
-                              postProcFe->mapGaussPts, commonPlasticDataPtr));
     postProcFe->addFieldValuesPostProc("U");
+    postProcFe->addFieldValuesPostProc("H");
+    postProcFe->addFieldValuesPostProc("FLUX");
+
     MoFEMFunctionReturn(0);
   };
 
@@ -881,16 +842,6 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
-
-  boost::shared_ptr<FEMethod> null;
-  CHKERR DMMoFEMTSSetIJacobian(dm, simple->getDomainFEName(), feAxiatorLhs,
-                               null, null);
-  CHKERR DMMoFEMTSSetIFunction(dm, simple->getDomainFEName(), feAxiatorRhs,
-                               null, null);
-  CHKERR DMMoFEMTSSetIJacobian(dm, simple->getDomainFEName(), feThermalLhs,
-                               null, null);
-  CHKERR DMMoFEMTSSetIFunction(dm, simple->getDomainFEName(), feThermalRhs,
-                               null, null);
 
   CHKERR create_post_process_element();
   uXScatter = scatter_create(D, 0);

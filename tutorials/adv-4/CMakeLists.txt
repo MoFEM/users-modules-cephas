@@ -48,12 +48,7 @@ tutorials_build_and_install(
 set_target_properties(
   seepage_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
-  tutorials_build_and_install(
-  seepage_3d ${CMAKE_CURRENT_SOURCE_DIR}/seepage.cpp)
-
-# set_target_properties(
-#   seepage_3d PROPERTIES COMPILE_Ftutorials_build_and_install(
-#     seepage_2d ${CMAKE_CURRENT_SOURCE_DIR}/seepage.cpp)
-  
+# tutorials_build_and_install(
+#   seepage_3d ${CMAKE_CURRENT_SOURCE_DIR}/seepage.cpp)
 # set_target_properties(
 #     seepage_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
