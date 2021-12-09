@@ -39,23 +39,31 @@ template <int DIM> struct ElementsAndOps {};
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
   using DomainEleOp = DomainEle::UserDataOperator;
+  using BoundaryEle = PipelineManager::EdgeEle;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
 template <> struct ElementsAndOps<3> {
   using DomainEle = VolumeElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
+  using BoundaryEle = PipelineManager::FaceEle;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
+using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
+
 using EntData = DataForcesAndSourcesCore::EntData;
 
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
-
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
+using AssemblyBoundaryEleOp =
+    FormsIntegrators<BoundaryEleOp>::Assembly<PETSC>::OpBase;
 
 using OpDomainMassU = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<BASE_DIM, U_FIELD_DIM>;
@@ -82,7 +90,6 @@ using OpConvectivePhi_dU = FormsIntegrators<DomainEleOp>::Assembly<
 using OpConvectivePhi_dGradH = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpConvectiveTermLhsDy<1, 1, 2>;
 
-
 FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
@@ -90,13 +97,138 @@ FTensor::Index<'l', SPACE_DIM> l;
 
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
-constexpr double Re_p = 1e1;
-constexpr double Re_m = 1e-1;
-constexpr double Ri_p = 1e1;
-constexpr double Ri_m = 1e-1;
+constexpr double Re_p = 1;
+constexpr double Re_m = 1;
+constexpr double Ri_p = 0;
+constexpr double Ri_m = 1;
 constexpr double lambda = 0.1;
-constexpr double eta = 1;
-constexpr double K = 1e4;
+constexpr double eta = 5e-2;
+constexpr double K = 1e6;
+
+struct OpNormalConstrainbRhs : public AssemblyBoundaryEleOp {
+  OpNormalConstrainbRhs(const std::string field_name,
+                        boost::shared_ptr<MatrixDouble> u_ptr)
+      : AssemblyBoundaryEleOp(field_name, field_name,
+                              AssemblyBoundaryEleOp::OPROW),
+        uPtr(u_ptr) {}
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data) {
+    MoFEMFunctionBegin;
+
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_normal = getFTensor1Normal();
+    auto t_u = getFTensor1FromMat<SPACE_DIM>(*uPtr);
+    auto t_row_base = row_data.getFTensor0N();
+
+    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+
+      int bb = 0;
+      for (; bb != nbRows; ++bb) {
+        locF[bb] += t_w * t_row_base * (t_normal(i) * t_u(i));
+        ++t_row_base;
+      }
+
+      for (; bb < nbRowBaseFunctions; ++bb)
+        ++t_row_base;
+
+      ++t_w;
+      ++t_u;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<MatrixDouble> uPtr;
+};
+
+struct OpNormalForcebRhs : public AssemblyBoundaryEleOp {
+  OpNormalForcebRhs(const std::string field_name,
+                    boost::shared_ptr<VectorDouble> lambda_ptr)
+      : AssemblyBoundaryEleOp(field_name, field_name,
+                              AssemblyDomainEleOp::OPROW),
+        lambdaPtr(lambda_ptr) {}
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data) {
+    MoFEMFunctionBegin;
+
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_normal = getFTensor1Normal();
+    auto t_lambda = getFTensor0FromVec(*lambdaPtr);
+    auto t_row_base = row_data.getFTensor0N();
+
+    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+
+      auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
+
+      int bb = 0;
+      for (; bb != nbRows / U_FIELD_DIM; ++bb) {
+
+        t_nf(i) += t_w * t_row_base * t_normal(i) * t_lambda;
+        ++t_row_base;
+        ++t_nf;
+      }
+
+      for (; bb < nbRowBaseFunctions; ++bb)
+        ++t_row_base;
+
+      ++t_w;
+      ++t_lambda;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<VectorDouble> lambdaPtr;
+};
+
+struct OpNormalConstrainLhs : public AssemblyBoundaryEleOp {
+
+  OpNormalConstrainLhs(const std::string field_name_row,
+                        const std::string field_name_col)
+      : AssemblyBoundaryEleOp(field_name_row, field_name_col,
+                              AssemblyBoundaryEleOp::OPROWCOL) {
+    assembleTranspose = true;
+    sYmm = false;
+  }
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_normal = getFTensor1Normal();
+    auto t_row_base = row_data.getFTensor0N();
+
+    for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+      auto t_mat =
+          getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(&locMat(0, 0));
+
+      int rr = 0;
+      for (; rr != nbRows; ++rr) {
+
+        auto t_col_base = col_data.getFTensor0N(gg, 0);
+        const double a = t_w * t_row_base;
+
+        for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
+          t_mat(i) += (a * t_col_base) * t_normal(i);
+          ++t_col_base;
+          ++t_mat;
+        }
+        ++t_row_base;
+      }
+
+      for (; rr < nbRowBaseFunctions; ++rr)
+        ++t_row_base;
+
+      ++t_w;
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+};
 
 auto get_D = [](const double A, const double K) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
@@ -345,12 +477,12 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double alpha = t_w * vol;
 
       const double Re = 0.5 * ((1 + t_phi) * Re_p + (1 - t_phi) * Re_m);
-      const double tmp_b =
-          (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
+      const double d_Re = 0.5 * (Re_p - Re_m);
 
+      const double tmp_b = (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
       const double d_tmp_b = 0.5 * (Re_p - Re_m);
       const double d_buoyancy = t_phi * d_tmp_b + tmp_b;
-      const double d_Re = 0.5 * (Re_p - Re_m);
+
 
       auto t_D_dH = get_D(-(d_Re / (Re * Re)), 0);
 
@@ -552,10 +684,14 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   auto simple = mField.getInterface<Simple>();
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
   CHKERR simple->addDomainField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE,
+                                  U_FIELD_DIM);
+  CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  constexpr int order = 3;
+  constexpr int order = 4;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("H", order);
+  CHKERR simple->setFieldOrder("L", order);
   CHKERR simple->setUp();
 
   MoFEMFunctionReturn(0);
@@ -566,7 +702,9 @@ MoFEMErrorCode FreeSurface::setupProblem() {
 MoFEMErrorCode FreeSurface::boundaryCondition() {
   MoFEMFunctionBegin;
 
-  auto init_h = [](double, double y, double) { return tanh((y - 0.5) * 10); };
+  auto init_h = [](double, double y, double) {
+    return tanh((y - 0.5) * (1 / eta));
+  };
 
   auto set_domain_general = [&](auto &pipeline) {
     pipeline.push_back(new OpSetHOWeightsOnFace());
@@ -673,6 +811,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   auto dot_phi_ptr = boost::make_shared<VectorDouble>();
   auto phi_ptr = boost::make_shared<VectorDouble>();
   auto grad_phi_ptr = boost::make_shared<MatrixDouble>();
+  auto lambda_ptr = boost::make_shared<VectorDouble>();
 
   // Push element from reference configuration to current configuration in 3d
   // space
@@ -700,7 +839,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_phi_ptr));
   };
 
-  auto set_domain_rhs_implicit = [&](auto &pipeline) {
+  auto set_domain_rhs = [&](auto &pipeline) {
     pipeline.push_back(
         new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, phi_ptr, grad_phi_ptr));
     pipeline.push_back(new OpDomianHDotPhi(
@@ -712,8 +851,8 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
 
   auto set_domain_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpLhsU_dU("U", u_ptr, grad_u_ptr, phi_ptr));
-    // pipeline.push_back(new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr,
-    //                                  phi_ptr, grad_phi_ptr));
+    pipeline.push_back(new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr,
+                                     phi_ptr, grad_phi_ptr));
     pipeline.push_back(new OpDomainMassH("H", "H", [&](double, double, double) {
       return domianLhsFEPtr->ts_a;
     }));
@@ -725,19 +864,37 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         new OpConvectivePhi_dGradH("H", "H", u_ptr, []() { return 1; }));
   };
 
+  auto set_boundary_rhs = [&](auto &pipeline) {
+
+
+
+    pipeline.push_back(
+        new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
+    pipeline.push_back(new OpCalculateScalarFieldValues("L", lambda_ptr));
+    pipeline.push_back(new OpNormalConstrainbRhs("L", u_ptr));
+    pipeline.push_back(new OpNormalForcebRhs("U", lambda_ptr));
+  };
+
+  auto set_boundary_lhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpNormalConstrainLhs("L", "U"));
+  };
+
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order;
+    return 2 * approx_order + 1;
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
 
   set_domain_general(pipeline_mng->getOpDomainRhsPipeline());
   set_domain_general(pipeline_mng->getOpDomainLhsPipeline());
-
-  set_domain_rhs_implicit(pipeline_mng->getOpDomainRhsPipeline());
+  set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline());
   set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline());
+  set_boundary_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
+  set_boundary_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
 
   domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
 
@@ -756,7 +913,7 @@ struct Monitor : public FEMethod {
       : dM(dm), postProc(post_proc){};
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    constexpr int save_every_nth_step = 1;
+    constexpr int save_every_nth_step = 10;
     if (ts_step % save_every_nth_step == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
                                       this->getCacheWeakPtr());
@@ -859,7 +1016,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   };
 
   auto create_ksi_vec = [&]() {
-    int ghost[] = {0, 1};
+    constexpr int ghost[] = {0, 1};
     return createSmartGhostVector(mField.get_comm(),
                                   (!mField.get_comm_rank()) ? 2 : 0, 2,
                                   (!mField.get_comm_rank()) ? 0 : 2, ghost);
@@ -875,6 +1032,13 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto ksi_vec = create_ksi_vec();
   auto ksi_ptr = boost::make_shared<double>();
   auto ksp = createKSP(mField.get_comm());
+  auto phi_ptr = boost::make_shared<VectorDouble>();
+
+  auto fe_global_terms = boost::make_shared<DomainEle>(mField);
+  fe_global_terms->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues("H", phi_ptr));
+  fe_global_terms->getOpPtrVector().push_back(
+      new OpCalculateKsi("H", phi_ptr, ksi_vec));
 
   CHKERR assemble_mass_mat(M);
   CHKERR set_mass_ksp(ksp, M);
@@ -882,14 +1046,10 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto caluclate_global_terms = [&]() {
     MoFEMFunctionBegin;
     MOFEM_LOG("FS", Sev::verbose) << "Assemble global terms -> Start";
-    auto fe_global_terms = boost::make_shared<DomainEle>(mField);
-    auto phi_ptr = boost::make_shared<VectorDouble>();
-    fe_global_terms->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldValues("H", phi_ptr));
-    fe_global_terms->getOpPtrVector().push_back(
-        new OpCalculateKsi("H", phi_ptr, ksi_vec));
 
     CHKERR VecZeroEntries(ksi_vec);
+    CHKERR VecGhostUpdateBegin(ksi_vec, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(ksi_vec, INSERT_VALUES, SCATTER_FORWARD);
 
     if (!fe_explicit_rhs->getCacheWeakPtr().use_count())
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
@@ -951,10 +1111,29 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   CHKERR TSSetType(ts, TSARKIMEX);
   CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
 
-  boost::shared_ptr<FEMethod> null_fe;
-  auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
-  CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
-                             null_fe, monitor_ptr);
+  auto set_post_proc_monitor = [&](auto dm) {
+    MoFEMFunctionBegin;
+    boost::shared_ptr<FEMethod> null_fe;
+    auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
+    CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
+                               null_fe, monitor_ptr);
+    MoFEMFunctionReturn(0);
+  };
+  CHKERR set_post_proc_monitor(dm);
+
+  auto set_section_monitor = [&](auto solver) {
+    MoFEMFunctionBegin;
+    SNES snes;
+    CHKERR TSGetSNES(solver, &snes);
+    PetscViewerAndFormat *vf;
+    CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
+                                      PETSC_VIEWER_DEFAULT, &vf);
+    CHKERR SNESMonitorSet(
+        snes,
+        (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal, void *))SNESMonitorFields,
+        vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
+    MoFEMFunctionReturn(0);
+  };
 
   // Add monitor to time solver
   double ftime = 1;
@@ -967,6 +1146,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   CHKERR TSSetSolution(ts, T);
   CHKERR TSSetFromOptions(ts);
   CHKERR set_ts(ts);
+  CHKERR set_section_monitor(ts);
   CHKERR TSSetUp(ts);
   CHKERR TSSolve(ts, NULL);
   CHKERR TSGetTime(ts, &ftime);
