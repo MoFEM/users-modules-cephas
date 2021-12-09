@@ -33,6 +33,9 @@ extern "C" {
     double circumcenter[3],double *xi,double *eta);
 }
 
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
+
 #include <cholesky.hpp>
 
 #include <MethodForForceScaling.hpp>
@@ -68,7 +71,10 @@ extern "C" {
 #include <NavierStokesElement.hpp>
 // #include <SimpleContact.hpp>
 #include <SimpleRodElement.hpp>
+
 #include <GenericElementInterface.hpp>
+// #include <NonlinearElasticElementInterface.hpp>
+#include <BasicBoundaryConditionsInterface.hpp>
 
 using namespace BasicFiniteElements;
 

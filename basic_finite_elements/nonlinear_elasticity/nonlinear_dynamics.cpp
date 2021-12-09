@@ -35,9 +35,6 @@
 #include <BasicFiniteElements.hpp>
 using namespace MoFEM;
 
-#include <boost/program_options.hpp>
-using namespace std;
-namespace po = boost::program_options;
 #include <ElasticMaterials.hpp>
 #include <SurfacePressureComplexForLazy.hpp>
 

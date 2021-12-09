@@ -24,10 +24,6 @@
 #include <BasicFiniteElements.hpp>
 using namespace MoFEM;
 
-#include <boost/program_options.hpp>
-using namespace std;
-namespace po = boost::program_options;
-
 #ifdef __GROUND_SURFACE_TEMPERATURE_HPP
 
   #include <GenericClimateModel.hpp>

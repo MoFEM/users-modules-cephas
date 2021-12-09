@@ -16,11 +16,10 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
+#include <MoFEM.hpp>
 #include <BasicFiniteElements.hpp>
 using namespace MoFEM;
 
-#include <boost/program_options.hpp>
-namespace po = boost::program_options;
 #include <ElasticMaterials.hpp>
 #include <SurfacePressureComplexForLazy.hpp>
 
@@ -32,7 +31,7 @@ constexpr bool with_contact = true;
 constexpr bool with_contact = false;
 #endif
 
-#include <MortarContactFunctions.hpp>
+// #include <MortarContactFunctions.hpp>
 
 using DomainEle = VolumeElementForcesAndSourcesCore;
 using DomainEleOp = DomainEle::UserDataOperator;
@@ -127,9 +126,9 @@ int main(int argc, char *argv[]) {
     CHKERR md.bC();
     CHKERR md.tsSetup();
 
-#ifdef WITH_MODULE_MORTAR_CONTACT
-    CHKERR MMortarContactFunctions::SetContactStructures(m_field);
-#endif
+// #ifdef WITH_MODULE_MORTAR_CONTACT
+//     CHKERR MMortarContactFunctions::SetContactStructures(m_field);
+// #endif
 
     CHKERR md.OPs();
     CHKERR md.postProcessSetup();

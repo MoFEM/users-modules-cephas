@@ -21,7 +21,7 @@ struct MDynamics {
   MoFEM::Interface &mField;
   SmartPetscObj<TS> Tsolver;
 
-  boost::shared_ptr<MortarContactInterface> contactPtr;
+  // boost::shared_ptr<MortarContactInterface> contactPtr;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
   boost::ptr_map<std::string, NodalForce> nodal_forces;
@@ -138,8 +138,8 @@ MoFEMErrorCode MDynamics::setupProblem() {
   //   CHKERR simple->setSkeletonAdjacency();
   CHKERR simple->defineProblem(PETSC_TRUE);
 
-  contactPtr = boost::make_shared<MortarContactInterface>(
-      mField, "U", "MESH_NODE_POSITIONS", true);
+  // contactPtr = boost::make_shared<MortarContactInterface>(
+  //     mField, "U", "MESH_NODE_POSITIONS", true);
 
   // CHKERR contactPtr->getCommandLineParameters();
   // CHKERR contactPtr->setPositionFieldContactOrder(order);
