@@ -492,6 +492,8 @@ MoFEMErrorCode Example::OPs() {
   auto bc_mng = mField.getInterface<BcManager>();
 
   auto u_grad_ptr = boost::make_shared<MatrixDouble>();
+  auto dot_u_grad_ptr = boost::make_shared<MatrixDouble>();
+  auto trace_dot_u_grad_ptr = boost::make_shared<VectorDouble>();
   auto h_ptr = boost::make_shared<VectorDouble>();
   auto dot_h_ptr = boost::make_shared<VectorDouble>();
   auto flux_ptr = boost::make_shared<MatrixDouble>();
@@ -523,8 +525,14 @@ MoFEMErrorCode Example::OPs() {
         "U", u_grad_ptr));
     pipeline.push_back(
         new OpSymmetrizeTensor<SPACE_DIM>("U", u_grad_ptr, strain_ptr));
+    pipeline.getOpDomainRhsPipeline().push_back(
+        new OpCalculateVectorFieldGradientDot<SPACE_DIM, SPACE_DIM>(
+            "U", dot_u_grad_ptr));
+    pipeline.getOpDomainRhsPipeline().push_back(
+        new OpCalculateTraceFromMat<SPACE_DIM>(dot_u_grad_ptr,
+                                               trace_dot_u_grad_ptr));
     pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
-    pipeline.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
+    // pipeline.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
     pipeline.push_back(new OpCalculateHVecVectorField<3>("FLUX", flux_ptr));
     pipeline.push_back(new OpCalculateHdivVectorDivergence<3, SPACE_DIM>(
         "FLUX", div_flux_ptr));
@@ -714,10 +722,13 @@ MoFEMErrorCode Example::OPs() {
     };
     // 1
     pipeline.push_back(new OpHdivFlux("FLUX", flux_ptr, resistance));
+    
     // 2
     pipeline.push_back(new OpHDivH("FLUX", h_ptr, minus_one));
+
     // 3
-    pipeline.push_back(new OpBaseDotT("H", dot_h_ptr, get_capacity));
+    pipeline.push_back(new OpBaseDotT("H", trace_dot_u_grad_ptr, minus_one));
+
     // 4
     pipeline.push_back(new OpBaseDivFlux("H", div_flux_ptr, minus_one));
 
