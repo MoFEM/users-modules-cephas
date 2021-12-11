@@ -99,10 +99,10 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 constexpr double Re_p = 1;
 constexpr double Re_m = 1;
-constexpr double Ri_p = 0;
-constexpr double Ri_m = 1;
-constexpr double lambda = 0.1;
-constexpr double eta = 5e-2;
+constexpr double Ri_p = 1e3;
+constexpr double Ri_m = 0;
+constexpr double lambda = 0.01;
+constexpr double eta = 2.5e-2;
 constexpr double K = 1e6;
 
 struct OpNormalConstrainbRhs : public AssemblyBoundaryEleOp {
@@ -369,8 +369,6 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       const double alpha = t_w * vol;
 
       const double Re = 0.5 * ((1 + t_phi) * Re_p + (1 - t_phi) * Re_m);
-      const double buoyancy =
-          t_phi * (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
 
       auto t_D = get_D(1. / Re, K);
 
