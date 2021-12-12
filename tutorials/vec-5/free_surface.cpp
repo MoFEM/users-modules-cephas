@@ -88,7 +88,7 @@ constexpr double Ri_p = 1e3;
 constexpr double Ri_m = 0;
 constexpr double lambda = 0.01;
 constexpr double eta = 2.5e-2;
-constexpr double K = 1e6;
+constexpr double K = 1e3;
 
 struct OpNormalConstrainbRhs : public AssemblyBoundaryEleOp {
   OpNormalConstrainbRhs(const std::string field_name,
@@ -260,9 +260,8 @@ struct OpRhsU : public AssemblyDomainEleOp {
       const double alpha = t_w * vol;
 
       const double Re = 0.5 * ((1 + t_phi) * Re_p + (1 - t_phi) * Re_m);
-      const double tmp_buoyancy =
-          (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
-      const double buoyancy = t_phi * tmp_buoyancy;
+      const double tmp_b = 0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m);
+      const double buoyancy = t_phi * tmp_b;
 
       auto t_D = get_D(1. / Re, K);
 
@@ -380,8 +379,6 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
 
           t_mat(i, j) += (t_row_base * t_col_base * alpha) * t_base_lhs(i, j);
           t_mat(i, j) += (alpha * t_row_base) * (t_col_diff_base(k) * t_u(k));
-
-          // integrate block local stiffens matrix
           t_mat(i, j) += t_rowD(i, j, k) * t_col_diff_base(k);
 
           ++t_mat;
@@ -463,8 +460,8 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double Re = 0.5 * ((1 + t_phi) * Re_p + (1 - t_phi) * Re_m);
       const double d_Re = 0.5 * (Re_p - Re_m);
 
-      const double tmp_b = (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
-      const double d_tmp_b = 0.5 * (Re_p - Re_m);
+      const double tmp_b = 0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m);
+      const double d_tmp_b = 0.5 * (Ri_p - Ri_m);
       const double d_buoyancy = t_phi * d_tmp_b + tmp_b;
 
       auto t_D_dH = get_D(-(d_Re / (Re * Re)), 0);
@@ -861,7 +858,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
                                   U_FIELD_DIM);
   CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  constexpr int order = 3;
+  constexpr int order = 2;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("H", order);
   CHKERR simple->setFieldOrder("L", order);
