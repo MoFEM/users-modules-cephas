@@ -75,21 +75,6 @@ using OpDomainSourceU = FormsIntegrators<DomainEleOp>::Assembly<
 using OpDomainSourceH = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, H_FIELD_DIM>;
 
-using OpDomianHDotPhi = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<BASE_DIM, 1>;
-using OpDomianGradHGradHRhs =
-    FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-        GAUSS>::OpGradTimesTensor<BASE_DIM, H_FIELD_DIM, SPACE_DIM, 1>;
-using OpDomianGradHGradHLhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<BASE_DIM, H_FIELD_DIM, SPACE_DIM>;
-
-using OpConvectivePhi = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpConvectiveTermRhs<1, 1, 2>;
-using OpConvectivePhi_dU = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpConvectiveTermLhsDu<1, 1, 2>;
-using OpConvectivePhi_dGradH = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpConvectiveTermLhsDy<1, 1, 2>;
-
 FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
@@ -186,7 +171,7 @@ private:
 struct OpNormalConstrainLhs : public AssemblyBoundaryEleOp {
 
   OpNormalConstrainLhs(const std::string field_name_row,
-                        const std::string field_name_col)
+                       const std::string field_name_col)
       : AssemblyBoundaryEleOp(field_name_row, field_name_col,
                               AssemblyBoundaryEleOp::OPROWCOL) {
     assembleTranspose = true;
@@ -342,7 +327,10 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
             boost::shared_ptr<VectorDouble> phi_ptr)
       : AssemblyDomainEleOp(field_name, field_name,
                             AssemblyDomainEleOp::OPROWCOL),
-        uPtr(u_ptr), gradUPtr(grad_u_ptr), phiPtr(phi_ptr) {}
+        uPtr(u_ptr), gradUPtr(grad_u_ptr), phiPtr(phi_ptr) {
+    sYmm = false;
+    assembleTranspose = false;
+  }
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
                            DataForcesAndSourcesCore::EntData &col_data) {
@@ -427,7 +415,7 @@ private:
 };
 
 /**
- * @brief Lhs for U dU
+ * @brief Lhs for U dH
  *
  */
 struct OpLhsU_dH : public AssemblyDomainEleOp {
@@ -443,6 +431,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
         dotUPtr(dot_u_ptr), uPtr(u_ptr), gradUPtr(grad_u_ptr), phiPtr(phi_ptr),
         gradPhiPtr(grad_phi_ptr) {
     sYmm = false;
+    assembleTranspose = false;
   }
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
@@ -467,9 +456,6 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       return FTensor::Tensor1<FTensor::PackPtr<double *, 1>, U_FIELD_DIM>(ptrs);
     };
 
-    auto ts_a = getTSa();
-    constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
-
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
       const double alpha = t_w * vol;
@@ -480,7 +466,6 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double tmp_b = (0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m));
       const double d_tmp_b = 0.5 * (Re_p - Re_m);
       const double d_buoyancy = t_phi * d_tmp_b + tmp_b;
-
 
       auto t_D_dH = get_D(-(d_Re / (Re * Re)), 0);
 
@@ -540,6 +525,198 @@ private:
   boost::shared_ptr<MatrixDouble> gradPhiPtr;
 };
 
+struct OpRhsH : public AssemblyDomainEleOp {
+
+  OpRhsH(const std::string field_name, boost::shared_ptr<MatrixDouble> u_ptr,
+         boost::shared_ptr<VectorDouble> dot_phi_ptr,
+         boost::shared_ptr<VectorDouble> phi_ptr,
+         boost::shared_ptr<MatrixDouble> grad_phi_ptr)
+      : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
+        uPtr(u_ptr), dotPhiPtr(dot_phi_ptr), phiPtr(phi_ptr),
+        gradPhiPtr(grad_phi_ptr) {}
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+
+    const double vol = getMeasure();
+    auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
+    auto t_dot_phi = getFTensor0FromVec(*dotPhiPtr);
+    auto t_phi = getFTensor0FromVec(*phiPtr);
+    auto t_grad_phi = getFTensor1FromMat<SPACE_DIM>(*gradPhiPtr);
+
+    auto t_base = data.getFTensor0N();
+    auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
+    auto t_w = getFTensor0IntegrationWeight();
+
+    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+
+      const double alpha = t_w * vol;
+      const double f = (1 / (eta * eta)) * t_phi * (t_phi * t_phi - 1);
+
+      int bb = 0;
+      for (; bb != nbRows; ++bb) {
+        locF[bb] += (t_base * alpha) *
+                    (t_dot_phi + t_u(i) * t_grad_phi(i) + lambda * f);
+        locF[bb] += (lambda * alpha) * (t_diff_base(i) * t_grad_phi(i));
+        ++t_base;
+        ++t_diff_base;
+      }
+
+      for (; bb < nbRowBaseFunctions; ++bb) {
+        ++t_base;
+        ++t_diff_base;
+      }
+
+      ++t_u;
+      ++t_dot_phi;
+      ++t_phi;
+      ++t_grad_phi;
+
+      ++t_w;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<MatrixDouble> uPtr;
+  boost::shared_ptr<VectorDouble> dotPhiPtr;
+  boost::shared_ptr<VectorDouble> phiPtr;
+  boost::shared_ptr<MatrixDouble> gradPhiPtr;
+};
+
+/**
+ * @brief Lhs for H dU
+ *
+ */
+struct OpLhsH_dU : public AssemblyDomainEleOp {
+
+  OpLhsH_dU(const std::string h_field_name, const std::string u_field_name,
+            boost::shared_ptr<MatrixDouble> grad_phi_ptr)
+      : AssemblyDomainEleOp(h_field_name, u_field_name,
+                            AssemblyDomainEleOp::OPROWCOL),
+        gradPhiPtr(grad_phi_ptr) {
+    sYmm = false;
+    assembleTranspose = false;
+  }
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    const double vol = getMeasure();
+    auto t_grad_phi = getFTensor1FromMat<SPACE_DIM>(*gradPhiPtr);
+
+    auto t_row_base = row_data.getFTensor0N();
+    auto t_w = getFTensor0IntegrationWeight();
+
+    auto get_mat = [&](const int rr) {
+      return getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(&locMat(rr, 0));
+    };
+
+    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+
+      const double alpha = t_w * vol;
+      auto t_mat = get_mat(0);
+
+      int rr = 0;
+      for (; rr != nbRows; ++rr) {
+        auto t_col_base = col_data.getFTensor0N(gg, 0);
+        for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
+          t_mat(i) += (t_row_base * t_col_base * alpha) * t_grad_phi(i);
+          ++t_mat;
+          ++t_col_base;
+        }
+        ++t_row_base;
+      }
+
+      for (; rr < nbRowBaseFunctions; ++rr)
+        ++t_row_base;
+
+      ++t_grad_phi;
+      ++t_w;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<MatrixDouble> gradPhiPtr;
+};
+
+/**
+ * @brief Lhs for H dH
+ *
+ */
+struct OpLhsH_dH : public AssemblyDomainEleOp {
+
+  OpLhsH_dH(const std::string field_name, boost::shared_ptr<MatrixDouble> u_ptr,
+            boost::shared_ptr<VectorDouble> phi_ptr)
+      : AssemblyDomainEleOp(field_name, field_name,
+                            AssemblyDomainEleOp::OPROWCOL),
+        uPtr(u_ptr), phiPtr(phi_ptr) {
+    sYmm = false;
+  }
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    const double vol = getMeasure();
+    auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
+    auto t_phi = getFTensor0FromVec(*phiPtr);
+
+    auto t_row_base = row_data.getFTensor0N();
+    auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto ts_a = getTSa();
+
+    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+
+      const double alpha = t_w * vol;
+      const double df = (1 / (eta * eta)) * (3 * t_phi * t_phi - 1);
+
+      int rr = 0;
+      for (; rr != nbRows; ++rr) {
+
+        auto t_col_base = col_data.getFTensor0N(gg, 0);
+        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
+
+        for (int cc = 0; cc != nbCols; ++cc) {
+
+          locMat(rr, cc) +=
+              (t_row_base * t_col_base * alpha) * (ts_a + lambda * df);
+          locMat(rr, cc) +=
+              (t_row_base * alpha) * (t_col_diff_base(i) * t_u(i));
+          locMat(rr, cc) +=
+              (alpha * lambda) * (t_row_diff_base(i) * t_col_diff_base(i));
+
+          ++t_col_base;
+          ++t_col_diff_base;
+        }
+
+        ++t_row_base;
+        ++t_row_diff_base;
+      }
+
+      for (; rr < nbRowBaseFunctions; ++rr) {
+        ++t_row_base;
+        ++t_row_diff_base;
+      }
+
+      ++t_u;
+      ++t_phi;
+      ++t_w;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<MatrixDouble> uPtr;
+  boost::shared_ptr<VectorDouble> phiPtr;
+};
+
 /**
  * @brief Explict term for IMEX method
  *
@@ -566,12 +743,10 @@ struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
       const double alpha = t_w * vol;
       auto nf_ptr = &locF[0];
 
-      const double f = (1 / (eta * eta)) * t_phi * (t_phi * t_phi - 1);
-
       int rr = 0;
       for (; rr != nbRows; ++rr) {
 
-        (*nf_ptr) += (alpha * lambda) * (-f + ksi) * t_base;
+        (*nf_ptr) += (alpha * lambda) * (ksi * t_base);
 
         ++nf_ptr;
         ++t_base;
@@ -686,7 +861,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
                                   U_FIELD_DIM);
   CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  constexpr int order = 4;
+  constexpr int order = 3;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("H", order);
   CHKERR simple->setFieldOrder("L", order);
@@ -840,32 +1015,19 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   auto set_domain_rhs = [&](auto &pipeline) {
     pipeline.push_back(
         new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, phi_ptr, grad_phi_ptr));
-    pipeline.push_back(new OpDomianHDotPhi(
-        "H", dot_phi_ptr, [](double, double, double) { return 1; }));
-    pipeline.push_back(new OpDomianGradHGradHRhs(
-        "H", grad_phi_ptr, [&](double, double, double) { return lambda; }));
-    pipeline.push_back(new OpConvectivePhi("H", u_ptr, grad_phi_ptr));
+    pipeline.push_back(
+        new OpRhsH("H", u_ptr, dot_phi_ptr, phi_ptr, grad_phi_ptr));
   };
 
   auto set_domain_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpLhsU_dU("U", u_ptr, grad_u_ptr, phi_ptr));
     pipeline.push_back(new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr,
                                      phi_ptr, grad_phi_ptr));
-    pipeline.push_back(new OpDomainMassH("H", "H", [&](double, double, double) {
-      return domianLhsFEPtr->ts_a;
-    }));
-    pipeline.push_back(new OpDomianGradHGradHLhs(
-        "H", "H", [&](double, double, double) { return lambda; }));
-    pipeline.push_back(
-        new OpConvectivePhi_dU("H", "U", grad_phi_ptr, []() { return 1; }));
-    pipeline.push_back(
-        new OpConvectivePhi_dGradH("H", "H", u_ptr, []() { return 1; }));
+    pipeline.push_back(new OpLhsH_dU("H", "U", grad_phi_ptr));
+    pipeline.push_back(new OpLhsH_dH("H", u_ptr, phi_ptr));
   };
 
   auto set_boundary_rhs = [&](auto &pipeline) {
-
-
-
     pipeline.push_back(
         new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
     pipeline.push_back(new OpCalculateScalarFieldValues("L", lambda_ptr));
