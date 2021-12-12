@@ -362,10 +362,10 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       FTensor::Tensor2<double, U_FIELD_DIM, SPACE_DIM> t_base_lhs;
       t_base_lhs(i, j) = ts_a * t_kd(i, j) + t_grad_u(i, j);
 
-      int bb = 0;
-      for (; bb != nbRows / U_FIELD_DIM; ++bb) {
+      int rr = 0;
+      for (; rr != nbRows / U_FIELD_DIM; ++rr) {
 
-        auto t_mat = get_mat(bb * U_FIELD_DIM);
+        auto t_mat = get_mat(rr * U_FIELD_DIM);
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
@@ -390,7 +390,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
         ++t_row_diff_base;
       }
 
-      for (; bb < nbRowBaseFunctions; ++bb) {
+      for (; rr < nbRowBaseFunctions; ++rr) {
         ++t_row_diff_base;
         ++t_row_base;
       }
@@ -453,6 +453,10 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       return FTensor::Tensor1<FTensor::PackPtr<double *, 1>, U_FIELD_DIM>(ptrs);
     };
 
+    FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress_dH;
+    FTensor::Tensor1<double, SPACE_DIM> t_buoyancy_dH;
+    t_buoyancy_dH(i) = 0;
+
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
       const double alpha = t_w * vol;
@@ -465,24 +469,19 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double d_buoyancy = t_phi * d_tmp_b + tmp_b;
 
       auto t_D_dH = get_D(-(d_Re / (Re * Re)), 0);
-
-      FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress_dH;
       t_stress_dH(i, j) = t_D_dH(i, j, k, l) * t_grad_u(k, l);
-
-      FTensor::Tensor1<double, SPACE_DIM> t_buoyancy_dH;
-      t_buoyancy_dH(i) = 0;
       t_buoyancy_dH(SPACE_DIM - 1) = d_buoyancy;
 
-      int bb = 0;
-      for (; bb != nbRows / U_FIELD_DIM; ++bb) {
+      int rr = 0;
+      for (; rr != nbRows / U_FIELD_DIM; ++rr) {
 
-        auto t_mat = get_mat(bb * U_FIELD_DIM);
+        auto t_mat = get_mat(rr * U_FIELD_DIM);
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
         for (int cc = 0; cc != nbCols; ++cc) {
 
-          t_mat(i) += (t_row_base * t_col_base * alpha) * (t_buoyancy_dH(i));
+          t_mat(i) += (t_row_base * t_col_base * alpha) * t_buoyancy_dH(i);
           t_mat(i) +=
               (t_row_diff_base(j) * (alpha * t_col_base)) * t_stress_dH(i, j);
           t_mat(i) += (t_row_diff_base(j) * (alpha * lambda)) *
@@ -498,7 +497,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
         ++t_row_diff_base;
       }
 
-      for (; bb < nbRowBaseFunctions; ++bb) {
+      for (; rr < nbRowBaseFunctions; ++rr) {
         ++t_row_diff_base;
         ++t_row_base;
       }
