@@ -69,11 +69,17 @@ using OpDomainMassU = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<BASE_DIM, U_FIELD_DIM>;
 using OpDomainMassH = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<BASE_DIM, H_FIELD_DIM>;
+using OpDomainMassP = OpDomainMassH;
 
 using OpDomainSourceU = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, U_FIELD_DIM>;
 using OpDomainSourceH = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, H_FIELD_DIM>;
+
+using OpBaseTimesScalarField = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1, 1>;
+using OpMixScalarTimesDiv = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMixScalarTimesDiv<SPACE_DIM>;
 
 FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'j', SPACE_DIM> j;
@@ -88,7 +94,7 @@ constexpr double Ri_p = 1e3;
 constexpr double Ri_m = 0;
 constexpr double lambda = 0.01;
 constexpr double eta = 2.5e-2;
-constexpr double K = 1e3;
+constexpr double eps = 1e-6;
 
 struct OpNormalConstrainbRhs : public AssemblyBoundaryEleOp {
   OpNormalConstrainbRhs(const std::string field_name,
@@ -189,7 +195,7 @@ struct OpNormalConstrainLhs : public AssemblyBoundaryEleOp {
     for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
       auto t_mat =
-          getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(&locMat(0, 0));
+          getFTensor1FromPtr<U_FIELD_DIM>(&locMat(0, 0));
 
       int rr = 0;
       for (; rr != nbRows; ++rr) {
@@ -233,10 +239,11 @@ struct OpRhsU : public AssemblyDomainEleOp {
          boost::shared_ptr<MatrixDouble> u_ptr,
          boost::shared_ptr<MatrixDouble> grad_u_ptr,
          boost::shared_ptr<VectorDouble> phi_ptr,
-         boost::shared_ptr<MatrixDouble> grad_phi_ptr)
+         boost::shared_ptr<MatrixDouble> grad_phi_ptr,
+         boost::shared_ptr<VectorDouble> p_ptr)
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
         dotUPtr(dot_u_ptr), uPtr(u_ptr), gradUPtr(grad_u_ptr), phiPtr(phi_ptr),
-        gradPhiPtr(grad_phi_ptr) {}
+        gradPhiPtr(grad_phi_ptr), pPtr(p_ptr) {}
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
@@ -244,6 +251,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
     const double vol = getMeasure();
     auto t_dot_u = getFTensor1FromMat<U_FIELD_DIM>(*dotUPtr);
     auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
+    auto t_p = getFTensor0FromVec(*pPtr);
     auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
     auto t_phi = getFTensor0FromVec(*phiPtr);
     auto t_grad_phi = getFTensor1FromMat<SPACE_DIM>(*gradPhiPtr);
@@ -254,6 +262,11 @@ struct OpRhsU : public AssemblyDomainEleOp {
     auto t_w = getFTensor0IntegrationWeight();
 
     constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<double>();
+    FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress;
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_tension;
+    FTensor::Tensor1<double, SPACE_DIM> t_convection;
+    FTensor::Tensor1<double, SPACE_DIM> t_buoyancy;
+    t_buoyancy(i) = 0;
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -263,16 +276,10 @@ struct OpRhsU : public AssemblyDomainEleOp {
       const double tmp_b = 0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m);
       const double buoyancy = t_phi * tmp_b;
 
-      auto t_D = get_D(1. / Re, K);
-
-      FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress;
-      t_stress(i, j) = t_D(i, j, k, l) * t_grad_u(k, l);
-      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_tension;
+      auto t_D = get_D(1. / Re, 0);
+      t_stress(i, j) = t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p;
       t_tension(i, j) = (lambda) * (t_grad_phi(i) * t_grad_phi(j));
-      FTensor::Tensor1<double, SPACE_DIM> t_convection;
       t_convection(i) = t_u(j) * t_grad_u(i, j);
-      FTensor::Tensor1<double, SPACE_DIM> t_buoyancy;
-      t_buoyancy(i) = 0;
       t_buoyancy(SPACE_DIM - 1) = buoyancy;
 
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
@@ -300,6 +307,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
       ++t_grad_u;
       ++t_phi;
       ++t_grad_phi;
+      ++t_p;
 
       ++t_w;
     }
@@ -313,6 +321,7 @@ private:
   boost::shared_ptr<MatrixDouble> gradUPtr;
   boost::shared_ptr<VectorDouble> phiPtr;
   boost::shared_ptr<MatrixDouble> gradPhiPtr;
+  boost::shared_ptr<VectorDouble> pPtr;
 };
 
 /**
@@ -357,7 +366,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
 
       const double Re = 0.5 * ((1 + t_phi) * Re_p + (1 - t_phi) * Re_m);
 
-      auto t_D = get_D(1. / Re, K);
+      auto t_D = get_D(1. / Re, 0);
 
       FTensor::Tensor2<double, U_FIELD_DIM, SPACE_DIM> t_base_lhs;
       t_base_lhs(i, j) = ts_a * t_kd(i, j) + t_grad_u(i, j);
@@ -506,7 +515,6 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       ++t_grad_u;
       ++t_phi;
       ++t_grad_phi;
-
       ++t_w;
     }
 
@@ -607,7 +615,7 @@ struct OpLhsH_dU : public AssemblyDomainEleOp {
     auto t_w = getFTensor0IntegrationWeight();
 
     auto get_mat = [&](const int rr) {
-      return getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(&locMat(rr, 0));
+      return getFTensor1FromPtr<U_FIELD_DIM>(&locMat(rr, 0));
     };
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
@@ -852,6 +860,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
 
   auto simple = mField.getInterface<Simple>();
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
+  CHKERR simple->addDomainField("P", L2, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addDomainField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE,
                                   U_FIELD_DIM);
@@ -859,6 +868,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
 
   constexpr int order = 2;
   CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("P", order - 2);
   CHKERR simple->setFieldOrder("H", order);
   CHKERR simple->setFieldOrder("L", order);
   CHKERR simple->setUp();
@@ -981,6 +991,8 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   auto phi_ptr = boost::make_shared<VectorDouble>();
   auto grad_phi_ptr = boost::make_shared<MatrixDouble>();
   auto lambda_ptr = boost::make_shared<VectorDouble>();
+  auto p_ptr = boost::make_shared<VectorDouble>();
+  auto div_u_ptr = boost::make_shared<VectorDouble>();
 
   // Push element from reference configuration to current configuration in 3d
   // space
@@ -1006,13 +1018,23 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(new OpCalculateScalarFieldValues("H", phi_ptr));
     pipeline.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_phi_ptr));
+    pipeline.push_back(new OpCalculateScalarFieldValues("P", p_ptr));
+    pipeline.push_back(
+        new OpCalculateDivergenceVectorFieldValues<SPACE_DIM>("U", div_u_ptr));
   };
 
   auto set_domain_rhs = [&](auto &pipeline) {
-    pipeline.push_back(
-        new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, phi_ptr, grad_phi_ptr));
+    pipeline.push_back(new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, phi_ptr,
+                                  grad_phi_ptr, p_ptr));
     pipeline.push_back(
         new OpRhsH("H", u_ptr, dot_phi_ptr, phi_ptr, grad_phi_ptr));
+    pipeline.push_back(new OpBaseTimesScalarField(
+        "P", div_u_ptr,
+        [](const double, const double, const double) { return 1; }));
+    pipeline.push_back(new OpBaseTimesScalarField(
+        "P", p_ptr,
+        [](const double, const double, const double) { return eps; }));
+
   };
 
   auto set_domain_lhs = [&](auto &pipeline) {
@@ -1021,6 +1043,10 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
                                      phi_ptr, grad_phi_ptr));
     pipeline.push_back(new OpLhsH_dU("H", "U", grad_phi_ptr));
     pipeline.push_back(new OpLhsH_dH("H", u_ptr, phi_ptr));
+    pipeline.push_back(new OpMixScalarTimesDiv(
+        "P", "U", []() { return 1; }, true, false));
+    pipeline.push_back(new OpDomainMassP(
+        "P", "P", [&](double, double, double) { return eps; }));
   };
 
   auto set_boundary_rhs = [&](auto &pipeline) {
@@ -1125,6 +1151,29 @@ MoFEMErrorCode FreeSurface::solveSystem() {
         new OpDomainMassU("U", "U", [&](double, double, double) { return 1; }));
     fe->getOpPtrVector().push_back(
         new OpDomainMassH("H", "H", [&](double, double, double) { return 1; }));
+
+    // Set values on diagonal
+    auto D = smartCreateDMDVector(dm);
+    const MoFEM::Problem *problem_ptr;
+    CHKERR DMMoFEMGetProblemPtr(dm, &problem_ptr);
+    double *a;
+    CHKERR VecGetArray(D, &a);
+    auto dofs = problem_ptr->numeredRowDofsPtr;
+    auto fields = {"L", "P"};
+    for (auto f : fields) {
+      const auto bit_number = mField.get_field_bit_number(f);
+      auto it = dofs->get<Unique_mi_tag>().lower_bound(
+          FieldEntity::getLoBitNumberUId(bit_number));
+      auto hi_it = dofs->get<Unique_mi_tag>().upper_bound(
+          FieldEntity::getHiBitNumberUId(bit_number));
+      for (; it != hi_it; ++it) {
+        const auto loc_idx = (*it)->getPetscLocalDofIdx();
+        a[loc_idx] = 1;
+      }
+    }
+    CHKERR VecRestoreArray(D, &a);
+
+    CHKERR MatDiagonalSet(M, D, ADD_ALL_VALUES);
     fe->B = M;
     CHKERR DMoFEMLoopFiniteElements(dm, "dFE", fe);
     CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
@@ -1156,6 +1205,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     post_proc_fe->addFieldValuesPostProc("U");
     post_proc_fe->addFieldValuesPostProc("H");
+    post_proc_fe->addFieldValuesPostProc("P");
     post_proc_fe->addFieldValuesGradientPostProc("U", 2);
     post_proc_fe->addFieldValuesGradientPostProc("H", 2);
     return post_proc_fe;
