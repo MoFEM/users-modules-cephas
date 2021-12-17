@@ -102,8 +102,8 @@ auto cylindrical = [](const double r) {
 
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
-constexpr double Re_p = 1;
-constexpr double Re_m = 1;
+constexpr double Re_p = 2;
+constexpr double Re_m = 5;
 constexpr double Ri_p = 1e3;
 constexpr double Ri_m = 0;
 constexpr double lambda = 0.01;
@@ -311,7 +311,6 @@ struct OpRhsU : public AssemblyDomainEleOp {
       auto t_D = get_D(1. / Re, 0);
       t_stress(i, j) = t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p;
       t_tension(i, j) = (lambda) * (t_grad_phi(i) * t_grad_phi(j));
-      t_convection(i) = t_u(j) * t_grad_u(i, j);
       t_buoyancy(SPACE_DIM - 1) = buoyancy;
 
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
@@ -319,8 +318,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
       int bb = 0;
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
 
-        t_nf(i) +=
-            (t_base * alpha) * (t_dot_u(i) + t_convection(i) + t_buoyancy(i));
+        t_nf(i) += (t_base * alpha) * (t_dot_u(i) + t_buoyancy(i));
         t_nf(i) +=
             (t_diff_base(j) * alpha) * (t_stress(i, j) + t_tension(i, j));
 
@@ -410,7 +408,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       auto t_D = get_D(1. / Re, 0);
 
       FTensor::Tensor2<double, U_FIELD_DIM, SPACE_DIM> t_base_lhs;
-      t_base_lhs(i, j) = ts_a * t_kd(i, j) + t_grad_u(i, j);
+      t_base_lhs(i, j) = ts_a * t_kd(i, j);
 
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
@@ -430,7 +428,6 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
           const double bb = t_row_base * t_col_base;
 
           t_mat(i, j) += (bb * alpha) * t_base_lhs(i, j);
-          t_mat(i, j) += (alpha * t_row_base) * (t_col_diff_base(k) * t_u(k));
           t_mat(i, j) += t_rowD(i, j, k) * t_col_diff_base(k);
           // When we move to C++17 add if constexpr()
           if (coord_type == CYLINDRICAL) {
@@ -788,6 +785,71 @@ private:
   boost::shared_ptr<VectorDouble> phiPtr;
 };
 
+
+/**
+ * @brief Explict term for IMEX method
+ *
+ */
+struct OpRhsExplicitTermU : public AssemblyDomainEleOp {
+
+  OpRhsExplicitTermU(const std::string field_name,
+                     boost::shared_ptr<MatrixDouble> u_ptr,
+                     boost::shared_ptr<MatrixDouble> grad_u_ptr)
+      : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
+        uPtr(u_ptr), gradUPtr(grad_u_ptr) {}
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+
+    const double vol = getMeasure();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
+    auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
+    auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
+
+    auto t_base = data.getFTensor0N();
+    auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
+
+    auto t_w = getFTensor0IntegrationWeight();
+
+    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+
+      const double r = t_coords(0);
+      const double alpha = t_w * vol * cylindrical(r);
+
+      FTensor::Tensor1<double, U_FIELD_DIM> t_convection;
+      t_convection(i) = t_u(j) * t_grad_u(i, j);
+
+      auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
+
+      int bb = 0;
+      for (; bb != nbRows / U_FIELD_DIM; ++bb) {
+
+        t_nf(i) += (t_base * alpha) * t_convection(i);
+
+        ++t_base;
+        ++t_nf;
+      }
+
+      for (; bb < nbRowBaseFunctions; ++bb) {
+        ++t_base;
+      }
+
+      ++t_u;
+      ++t_grad_u;
+
+      ++t_w;
+      ++t_coords;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<MatrixDouble> uPtr;
+  boost::shared_ptr<MatrixDouble> gradUPtr;
+};
+
+
 /**
  * @brief Explict term for IMEX method
  *
@@ -834,8 +896,6 @@ struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
   }
 
 private:
-  boost::shared_ptr<MatrixDouble> uPtr;
-  boost::shared_ptr<MatrixDouble> gradPhiPtr;
   boost::shared_ptr<VectorDouble> phiPtr;
   boost::shared_ptr<double> ksiPtr;
 };
@@ -1367,9 +1427,25 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   };
 
   auto set_domain_rhs_explicit = [&](auto &pipeline) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline.push_back(new OpSetHOWeightsOnFace());
+    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+
     auto phi_ptr = boost::make_shared<VectorDouble>();
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    auto grad_u_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(
+        new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
+    pipeline.push_back(
+        new OpCalculateVectorFieldGradient<U_FIELD_DIM, SPACE_DIM>("U",
+                                                                   grad_u_ptr));
     pipeline.push_back(new OpCalculateScalarFieldValues("H", phi_ptr));
+    pipeline.push_back(new OpRhsExplicitTermU("U", u_ptr, grad_u_ptr));
     pipeline.push_back(new OpRhsExplicitTermH("H", phi_ptr, ksi_ptr));
   };
 
