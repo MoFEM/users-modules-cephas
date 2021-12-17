@@ -146,19 +146,19 @@ AnalyticalDirichletBC::DirichletBC::DirichletBC(MoFEM::Interface &m_field,
                                                 const std::string &field)
     : DirichletDisplacementBc(m_field, field) {}
 
-MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitalize() {
+MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitialize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty()) {
     if (!trisPtr) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
               "Need to initialized from AnalyticalDirichletBC::solveProblem");
     }
-    CHKERR iNitalize(*trisPtr);
+    CHKERR iNitialize(*trisPtr);
   }
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitalize(Range &tris) {
+MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitialize(Range &tris) {
   MoFEMFunctionBegin;
   ParallelComm *pcomm =
       ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);

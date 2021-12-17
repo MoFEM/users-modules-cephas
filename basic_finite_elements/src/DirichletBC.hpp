@@ -42,18 +42,16 @@ using namespace boost::numeric;
  */
 struct DataFromBc {
   VectorDouble scaled_values;
-  VectorInt bc_flags; 
+  VectorInt bc_flags;
   Range bc_ents[3];
 
-  //for rotation
+  // for rotation
   bool is_rotation;
   FTensor::Tensor1<double, 3> t_normal;
   FTensor::Tensor1<double, 3> t_centr;
   double theta;
 
-  DataFromBc()
-      : scaled_values(3), bc_flags(3), is_rotation(false) {
-  }
+  DataFromBc() : scaled_values(3), bc_flags(3), is_rotation(false) {}
 
   MoFEMErrorCode getBcData(DisplacementCubitBcData &mydata,
                            const MoFEM::CubitMeshSets *it);
@@ -69,15 +67,18 @@ struct DataFromBc {
 struct DirichletDisplacementBc : public MoFEM::FEMethod {
 
   MoFEM::Interface &mField;
+  boost::shared_ptr<vector<DataFromBc>> bcDataPtr;
   const std::string fieldName; ///< field name to set Dirichlet BC
   double dIag;                 ///< diagonal value set on zeroed column and rows
 
   DirichletDisplacementBc(MoFEM::Interface &m_field,
                           const std::string &field_name, Mat Aij, Vec X, Vec F,
-                          string blockset_name = "DISPLACEMENT");
+                          string blockset_name = "DISPLACEMENT",
+                          bool is_partitioned = false);
   DirichletDisplacementBc(MoFEM::Interface &m_field,
                           const std::string &field_name,
-                          string blockset_name = "DISPLACEMENT");
+                          string blockset_name = "DISPLACEMENT",
+                          bool is_partitioned = false);
 
   std::map<DofIdx, FieldData> mapZeroRows;
   std::vector<int> dofsIndices;
@@ -85,7 +86,8 @@ struct DirichletDisplacementBc : public MoFEM::FEMethod {
   std::vector<double> dofsXValues;
   const std::string blocksetName;
 
-  virtual MoFEMErrorCode iNitalize();
+  bool isPartitioned;
+  virtual MoFEMErrorCode iNitialize();
 
   MoFEMErrorCode preProcess();
   MoFEMErrorCode operator()() { return 0; }
@@ -96,8 +98,8 @@ struct DirichletDisplacementBc : public MoFEM::FEMethod {
    *  with 6 atributes:
    *  1,2,3 are values of displacements x,y,z
    *  4,5,6 are flags for x,y,z (0 or 1)
-   * @param bc_data 
-   * @return MoFEMErrorCode 
+   * @param bc_data
+   * @return MoFEMErrorCode
    */
   MoFEMErrorCode getBcDataFromSetsAndBlocks(std::vector<DataFromBc> &bc_data);
   /**
@@ -106,8 +108,8 @@ struct DirichletDisplacementBc : public MoFEM::FEMethod {
    *  with 7 atributes:
    *  1,2,3 are x,y,z coords of the center of rotation
    *  4,5,6 are are angular velocities in x,y,z
-   * @param bc_data 
-   * @return MoFEMErrorCode 
+   * @param bc_data
+   * @return MoFEMErrorCode
    */
   MoFEMErrorCode getRotationBcFromBlock(std::vector<DataFromBc> &bc_data);
 
@@ -117,9 +119,91 @@ struct DirichletDisplacementBc : public MoFEM::FEMethod {
    * @param bc_data
    * @return MoFEMErrorCode
    */
-  MoFEMErrorCode
-  calculateRotationForDof(EntityHandle ent,
-                          DataFromBc &bc_data);
+  static MoFEMErrorCode calculateRotationForDof(MoFEM::Interface &m_field,
+                                                EntityHandle ent,
+                                                DataFromBc &bc_data);
+
+  struct BcEntMethodDisp : public MoFEM::EntityMethod {
+    MoFEM::Interface &mField;
+    DataFromBc &dataFromDirichletBc;
+    BcEntMethodDisp(MoFEM::Interface &m_field,
+                    DataFromBc &data_from_dirichlet_bc)
+        : mField(m_field), dataFromDirichletBc(data_from_dirichlet_bc) {}
+    MoFEMErrorCode preProcess() { return 0; }
+    MoFEMErrorCode postProcess() { return 0; }
+    MoFEMErrorCode operator()() {
+      MoFEMFunctionBegin;
+      EntityHandle v = entPtr->getEnt();
+      int coeff = fieldPtr->getNbOfCoeffs();
+      auto &bc_it = dataFromDirichletBc;
+      CHKERR calculateRotationForDof(mField, v, bc_it);
+      for (int i = 0; i != coeff; i++) {
+        if (bc_it.bc_flags[i]) {
+          if (entPtr->getEntType() == MBVERTEX) {
+            entPtr->getEntFieldData()[i] = bc_it.scaled_values[i];
+          } else {
+            entPtr->getEntFieldData()[i] = 0;
+          }
+        }
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
+
+  struct BcEntMethodSpatial : public MoFEM::EntityMethod {
+    MoFEM::Interface &mField;
+    DataFromBc &dataFromDirichletBc;
+    string materialPositions;
+    BcEntMethodSpatial(MoFEM::Interface &m_field,
+                       DataFromBc &data_from_dirichlet_bc,
+                       string material_positions)
+        : mField(m_field), dataFromDirichletBc(data_from_dirichlet_bc),
+          materialPositions(material_positions) {}
+
+    MoFEMErrorCode preProcess() { return 0; }
+    MoFEMErrorCode postProcess() { return 0; }
+    MoFEMErrorCode operator()() {
+      MoFEMFunctionBegin;
+      EntityHandle ent = entPtr->getEnt();
+
+      const FieldEntity_multiIndex *field_ents;
+      CHKERR mField.get_field_ents(&field_ents);
+      auto &field_ents_by_uid = field_ents->get<Unique_mi_tag>();
+
+      auto get_coords = [&]() {
+        VectorDouble3 coords(3);
+        if (entPtr->getEntType() == MBVERTEX) {
+          auto eit =
+              field_ents_by_uid.find(FieldEntity::getLocalUniqueIdCalculate(
+                  mField.get_field_bit_number(materialPositions), ent));
+          if (eit != field_ents_by_uid.end())
+            noalias(coords) = (*eit)->getEntFieldData();
+          else
+            CHKERR mField.get_moab().get_coords(&ent, 1,
+                                                &*coords.data().begin());
+        }
+        return coords;
+      };
+
+      int coeff = fieldPtr->getNbOfCoeffs();
+      auto coords = get_coords();
+
+      auto &bc_it = dataFromDirichletBc;
+      CHKERR calculateRotationForDof(mField, ent, bc_it);
+      for (int i = 0; i != coeff; i++) {
+        if (bc_it.bc_flags[i]) {
+          if (entPtr->getEntType() == MBVERTEX) {
+            entPtr->getEntFieldData()[i] = coords(i) + bc_it.scaled_values[i];
+          } else {
+            entPtr->getEntFieldData()[i] = 0;
+          }
+        }
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
 
   boost::ptr_vector<MethodForForceScaling> methodsOp;
 };
@@ -148,10 +232,8 @@ struct DirichletSpatialPositionsBc : public DirichletDisplacementBc {
 
   std::string materialPositions; ///< name of the field with reference material
                                  ///< positions
-  std::vector<std::string> fixFields; ///<
 
-  VectorDouble cOords;
-  MoFEMErrorCode iNitalize();
+  MoFEMErrorCode preProcess();
 };
 
 /// \deprecated use DirichletSpatialPositionsBc
@@ -161,14 +243,21 @@ DEPRECATED typedef DirichletSpatialPositionsBc
 struct DirichletTemperatureBc : public DirichletDisplacementBc {
 
   DirichletTemperatureBc(MoFEM::Interface &m_field,
-                         const std::string &field_name, Mat aij, Vec x, Vec f)
-      : DirichletDisplacementBc(m_field, field_name, aij, x, f) {}
+                         const std::string &field_name, Mat aij, Vec x, Vec f,
+                         string blockset_name = "TEMPERATURE",
+                         bool is_partitioned = false)
+      : DirichletDisplacementBc(m_field, field_name, aij, x, f, blockset_name,
+                                is_partitioned) {}
 
   DirichletTemperatureBc(MoFEM::Interface &m_field,
-                         const std::string &field_name)
-      : DirichletDisplacementBc(m_field, field_name) {}
+                         const std::string &field_name,
+                         string blockset_name = "TEMPERATURE",
+                         bool is_partitioned = false)
+      : DirichletDisplacementBc(m_field, field_name, blockset_name,
+                                is_partitioned) {}
 
-  MoFEMErrorCode iNitalize();
+  // MoFEMErrorCode iNitialize();
+  MoFEMErrorCode preProcess();
 };
 
 /// \deprecated use DirichletTemperatureBc
@@ -194,9 +283,9 @@ struct DirichletFixFieldAtEntitiesBc : public DirichletDisplacementBc {
     fieldNames.push_back(fieldName);
   }
 
-  MoFEMErrorCode iNitalize();
-  MoFEMErrorCode preProcess();
-  MoFEMErrorCode postProcess();
+  MoFEMErrorCode iNitialize();
+  MoFEMErrorCode preProcess() { return 0; }
+  // MoFEMErrorCode postProcess();
 };
 
 /// \deprecated use DirichletFixFieldAtEntitiesBc

@@ -445,7 +445,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.get_problem("ELASTIC_MECHANICS",
                                &(my_dirichlet_bc->problemPtr));
     CHKERR dynamic_cast<DirichletSpatialPositionsBc *>(my_dirichlet_bc.get())
-        ->iNitalize();
+        ->iNitialize();
 
     struct AssembleRhsVectors : public FEMethod {
 

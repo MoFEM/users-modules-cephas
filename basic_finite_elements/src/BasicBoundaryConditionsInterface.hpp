@@ -29,6 +29,7 @@ struct BasicBoundaryConditionsInterface {
   PetscInt oRder;
 
   bool isDisplacementField;
+  bool isQuasiStatic;
   BitRefLevel bIt;
 
   string positionField;
@@ -37,6 +38,9 @@ struct BasicBoundaryConditionsInterface {
   boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
   boost::ptr_map<std::string, NodalForce> nodal_forces;
   boost::ptr_map<std::string, EdgeForce> edge_forces;
+
+  boost::shared_ptr<FaceElementForcesAndSourcesCore> springRhsElPtr;
+  boost::shared_ptr<FaceElementForcesAndSourcesCore> springLhsElPtr;
 
   string elasticProblemName;
   using BcDataTuple = std::tuple<VectorDouble, VectorDouble,
@@ -54,8 +58,6 @@ struct BasicBoundaryConditionsInterface {
     oRder = 1;
   }
 
-  BasicBoundaryConditionsInterface() {}
-
   ~BasicBoundaryConditionsInterface() {}
 
   MoFEMErrorCode getCommandLineParameters() { return 0; };
@@ -68,6 +70,9 @@ struct BasicBoundaryConditionsInterface {
     CHKERR MetaNodalForces::addElement(mField, positionField);
     CHKERR MetaEdgeForces::addElement(mField, positionField);
 
+    // Add spring boundary condition applied on surfaces.
+    CHKERR MetaSpringBC::addSpringElements(m_field, positionField,
+                                           meshNodeField);
     MoFEMFunctionReturnHot(0);
   };
 
@@ -96,6 +101,18 @@ struct BasicBoundaryConditionsInterface {
   MoFEMErrorCode setupSolverJacobianSNES() {
     MoFEMFunctionBegin;
 
+    auto set_neumann_methods = [&](auto &neumann_el, string hist_name) {
+      MoFEMFunctionBeginHot;
+      for (auto &&mit : neumann_el) {
+        mit->second->methodsOp.push_back(
+            new TimeForceScale(get_history_param(hist_name), false));
+        // CHKERR addHOOpsFace3D(meshNodeField, mit->second->getLoopFe(),
+        //                       false, false);
+        CHKERR push_methods(&mit->second->getLoopFe(), mit->first.c_str(),
+                            false, true);
+      }
+      MoFEMFunctionReturnHot(0);
+    };
 
     MoFEMFunctionReturn(0);
   };

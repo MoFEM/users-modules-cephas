@@ -142,8 +142,8 @@ struct AnalyticalDirichletBC {
 
     boost::shared_ptr<Range> trisPtr;
 
-    MoFEMErrorCode iNitalize();
-    MoFEMErrorCode iNitalize(Range &tris);
+    MoFEMErrorCode iNitialize();
+    MoFEMErrorCode iNitialize(Range &tris);
   };
 
   ApproxField approxField;
