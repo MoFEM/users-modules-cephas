@@ -692,7 +692,8 @@ MoFEMErrorCode Example::assembleSystem() {
       return domianLhsFEPtr->ts_a;
     }));
     pipeline.push_back(new OpBaseDivU(
-        "H", "U", []() { return h0; }, false, false));
+        "H", "U", [](const double, const double, const double) { return h0; },
+        false, false));
     pipeline.push_back(
         new OpConvectiveH_dU("H", "U", grad_h_ptr, []() { return 1; }));
     pipeline.push_back(
