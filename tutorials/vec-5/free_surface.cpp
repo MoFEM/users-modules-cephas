@@ -88,6 +88,29 @@ FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
 FTensor::Index<'l', SPACE_DIM> l;
 
+constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+
+// Physical parameters
+constexpr double a0 = 10;
+constexpr double rho_p = 1;
+constexpr double rho_m = 1;
+constexpr double mu_p = 1;
+constexpr double mu_m = 1;
+constexpr double lambda = 0.01;
+constexpr double W = 1;
+
+// Model parameters
+constexpr double eta = 2.5e-2;
+
+// Numerical parameteres
+constexpr double md = 1;
+constexpr double eps = 1e-10;
+constexpr double tol = std::numeric_limits<float>::epsilon();
+
+constexpr double rho_ave = (rho_p + rho_m) / 2;
+constexpr double rho_diff = (rho_p - rho_m) / 2;
+const double kappa = (3 / (4 * sqrt(2 * W))) * (lambda / eta);
+
 auto integration_rule = [](int, int, int approx_order) {
   return 4 * approx_order;
 };
@@ -100,17 +123,38 @@ auto cylindrical = [](const double r) {
     return 1.;
 };
 
-constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+auto cut_off = [](const double h) { return std::max(-1., std::min(h, 1.)); };
 
-constexpr double Re_p = 2;
-constexpr double Re_m = 5;
-constexpr double Ri_p = 1e3;
-constexpr double Ri_m = 0;
-constexpr double lambda = 0.01;
-constexpr double eta = 2.5e-2;
-constexpr double eps = 1e-10;
+auto phase_function = [](const double h, const double p, const double m) {
+  return 0.5 * ((1 + cut_off(h)) * p + (1 - cut_off(h)) * m);
+};
 
-constexpr double tol = std::numeric_limits<float>::epsilon();
+auto d_phase_function_h = [](const double h, const double p, const double m) {
+  return 0.5 * (p - m);
+};
+
+auto get_F = [](const double h) { return W * pow(1 - h * h, 2); };
+auto get_dF = [](const double h) { return -4 * W * (1 - h * h); };
+
+auto get_M2 = [](auto h) {
+  if (std::abs(h) <= 1)
+    return md * (1 - h * h);
+  else
+    return 0.;
+};
+auto get_M = [](auto h) { return get_M2(h); };
+
+auto get_J = [](auto h, auto &t_g) {
+  FTensor::Tensor1<double, U_FIELD_DIM> t_J;
+  t_J(i) = -rho_diff * get_M(h) * t_g(i);
+  return t_J;
+};
+
+auto get_D = [](const double A) {
+  FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
+  t_D(i, j, k, l) = A * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
+  return t_D;
+};
 
 struct OpNormalConstrainRhs : public AssemblyBoundaryEleOp {
   OpNormalConstrainRhs(const std::string field_name,
@@ -251,13 +295,6 @@ struct OpNormalConstrainLhs : public AssemblyBoundaryEleOp {
   };
 };
 
-auto get_D = [](const double A, const double K) {
-  FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
-  t_D(i, j, k, l) =
-      A * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) + K * (t_kd(i, j) * t_kd(k, l));
-  return t_D;
-};
-
 /**
  * @brief Rhs for U
  *
@@ -268,12 +305,14 @@ struct OpRhsU : public AssemblyDomainEleOp {
          boost::shared_ptr<MatrixDouble> dot_u_ptr,
          boost::shared_ptr<MatrixDouble> u_ptr,
          boost::shared_ptr<MatrixDouble> grad_u_ptr,
-         boost::shared_ptr<VectorDouble> phi_ptr,
-         boost::shared_ptr<MatrixDouble> grad_phi_ptr,
+         boost::shared_ptr<VectorDouble> h_ptr,
+         boost::shared_ptr<MatrixDouble> grad_h_ptr,
+         boost::shared_ptr<VectorDouble> g_ptr,
+         boost::shared_ptr<MatrixDouble> grad_g_ptr,
          boost::shared_ptr<VectorDouble> p_ptr)
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
-        dotUPtr(dot_u_ptr), uPtr(u_ptr), gradUPtr(grad_u_ptr), phiPtr(phi_ptr),
-        gradPhiPtr(grad_phi_ptr), pPtr(p_ptr) {}
+        dotUPtr(dot_u_ptr), uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr),
+        gradHPtr(grad_h_ptr), gPtr(g_ptr), gradGPtr(grad_g_ptr), pPtr(p_ptr) {}
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
@@ -283,8 +322,10 @@ struct OpRhsU : public AssemblyDomainEleOp {
     auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
     auto t_p = getFTensor0FromVec(*pPtr);
     auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
-    auto t_phi = getFTensor0FromVec(*phiPtr);
-    auto t_grad_phi = getFTensor1FromMat<SPACE_DIM>(*gradPhiPtr);
+    auto t_h = getFTensor0FromVec(*hPtr);
+    auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
+    auto t_g = getFTensor0FromVec(*gPtr);
+    auto t_grad_g = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
     auto t_base = data.getFTensor0N();
@@ -294,38 +335,39 @@ struct OpRhsU : public AssemblyDomainEleOp {
 
     constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<double>();
     FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress;
-    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_tension;
-    FTensor::Tensor1<double, SPACE_DIM> t_convection;
-    FTensor::Tensor1<double, SPACE_DIM> t_buoyancy;
-    t_buoyancy(i) = 0;
+    FTensor::Tensor1<double, SPACE_DIM> t_phase_force;
+    FTensor::Tensor1<double, SPACE_DIM> t_inertia_force;
+    FTensor::Tensor1<double, SPACE_DIM> t_a0;
+    t_a0(i) = 0;
+    t_a0(SPACE_DIM - 1) = a0;
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      const double Re = 0.5 * ((1 + t_phi) * Re_p + (1 - t_phi) * Re_m);
-      const double tmp_b = 0.5 * ((1 + t_phi) * Ri_p + (1 - t_phi) * Ri_m);
-      const double buoyancy = t_phi * tmp_b;
+      const double rho = phase_function(t_h, rho_p, rho_m);
+      const double mu = phase_function(t_h, mu_p, mu_m);
 
-      auto t_D = get_D(1. / Re, 0);
-      t_stress(i, j) = t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p;
-      t_tension(i, j) = (lambda) * (t_grad_phi(i) * t_grad_phi(j));
-      t_buoyancy(SPACE_DIM - 1) = buoyancy;
+      auto t_D = get_D(2 * mu);
+      auto t_J = get_J(t_h, t_grad_g);
+
+      t_inertia_force(i) = rho * (t_dot_u(i) + t_a0(i));
+      t_stress(i, j) = (t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p);
+      t_phase_force(i) = (t_J(i) - kappa * t_g * t_grad_h(i));
 
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
 
       int bb = 0;
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
 
-        t_nf(i) += (t_base * alpha) * (t_dot_u(i) + t_buoyancy(i));
-        t_nf(i) +=
-            (t_diff_base(j) * alpha) * (t_stress(i, j) + t_tension(i, j));
+        t_nf(i) += (t_base * alpha) * (t_inertia_force(i) + t_phase_force(i));
+        t_nf(i) += (t_diff_base(j) * alpha) * t_stress(i, j);
 
         // When we move to C++17 add if constexpr()
         if (coord_type == CYLINDRICAL) {
           t_nf(0) +=
-              (t_base * (alpha / t_coords(0))) * ((1 / Re) * t_u(0) + t_p);
+              (t_base * (alpha / t_coords(0))) * ((2 * mu) * t_u(0) + t_p);
         }
 
         ++t_base;
@@ -341,8 +383,9 @@ struct OpRhsU : public AssemblyDomainEleOp {
       ++t_dot_u;
       ++t_u;
       ++t_grad_u;
-      ++t_phi;
-      ++t_grad_phi;
+      ++t_h;
+      ++t_grad_h;
+      ++t_g;
       ++t_p;
 
       ++t_w;
@@ -356,8 +399,10 @@ private:
   boost::shared_ptr<MatrixDouble> dotUPtr;
   boost::shared_ptr<MatrixDouble> uPtr;
   boost::shared_ptr<MatrixDouble> gradUPtr;
-  boost::shared_ptr<VectorDouble> phiPtr;
-  boost::shared_ptr<MatrixDouble> gradPhiPtr;
+  boost::shared_ptr<VectorDouble> hPtr;
+  boost::shared_ptr<MatrixDouble> gradHPtr;
+  boost::shared_ptr<VectorDouble> gPtr;
+  boost::shared_ptr<MatrixDouble> gradGPtr;
   boost::shared_ptr<VectorDouble> pPtr;
 };
 
@@ -785,7 +830,6 @@ private:
   boost::shared_ptr<VectorDouble> phiPtr;
 };
 
-
 /**
  * @brief Explict term for IMEX method
  *
@@ -848,7 +892,6 @@ private:
   boost::shared_ptr<MatrixDouble> uPtr;
   boost::shared_ptr<MatrixDouble> gradUPtr;
 };
-
 
 /**
  * @brief Explict term for IMEX method
@@ -995,6 +1038,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->addDomainField("U", H1, DEMKOWICZ_JACOBI_BASE, U_FIELD_DIM);
   CHKERR simple->addDomainField("P", L2, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addDomainField("H", H1, DEMKOWICZ_JACOBI_BASE, 1);
+  CHKERR simple->addDomainField("G", H1, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, DEMKOWICZ_JACOBI_BASE, U_FIELD_DIM);
   CHKERR simple->addBoundaryField("L", H1, DEMKOWICZ_JACOBI_BASE, 1);
 
@@ -1002,6 +1046,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("P", order - 2);
   CHKERR simple->setFieldOrder("H", order);
+  CHKERR simple->setFieldOrder("G", order);
   CHKERR simple->setFieldOrder("L", order);
   CHKERR simple->setUp();
 
@@ -1276,10 +1321,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
     fe->getOpPtrVector().push_back(new OpDomainMassU(
         "U", "U", [&](double r, double, double) { return 1; }));
-    fe->getOpPtrVector().push_back(
-        new OpDomainMassH("H", "H", [&](double r, double, double) {
-          return 1;
-        }));
+    fe->getOpPtrVector().push_back(new OpDomainMassH(
+        "H", "H", [&](double r, double, double) { return 1; }));
     fe->getRuleHook = integration_rule;
 
     // Set values on diagonal
