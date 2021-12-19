@@ -434,7 +434,7 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Boundary condition]
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
-  
+
   PetscBool is_restart = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_restart", &is_restart,
                              PETSC_NULL);
@@ -524,7 +524,7 @@ MoFEMErrorCode Example::boundaryCondition() {
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       pipeline.push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
       pipeline.push_back(new OpCalculateHOCoords("HO_POSITIONS"));
-      pipeline.push_back(new OpSetHOWeigthsOnFace());
+      pipeline.push_back(new OpSetHOWeightsOnFace());
     };
 
     auto set_domain_rhs = [&](auto &pipeline) {
@@ -641,7 +641,7 @@ MoFEMErrorCode Example::assembleSystem() {
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline.push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
     pipeline.push_back(new OpCalculateHOCoords("HO_POSITIONS"));
-    pipeline.push_back(new OpSetHOWeigthsOnFace());
+    pipeline.push_back(new OpSetHOWeightsOnFace());
     pipeline.push_back(new OpCalculateHOJacForFaceEmbeddedIn3DSpace(jac_ptr));
     pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(inv_jac_ptr));
@@ -718,6 +718,12 @@ MoFEMErrorCode Example::assembleSystem() {
   domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
   domianRhsFEPtr = pipeline_mng->getDomainRhsFE();
 
+  if (!is_implicit_solver) {
+    // Rhd for implicit is the same, almost, what is for implicit. So I copy FE
+    // with the pipeline for explict TS solver.
+    pipeline_mng->getDomainExplicitRhsFE() = domianRhsFEPtr;
+  }
+
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
@@ -777,7 +783,7 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR MatZeroEntries(M);
     fe->getOpPtrVector().push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
     fe->getOpPtrVector().push_back(new OpCalculateHOCoords("HO_POSITIONS"));
-    fe->getOpPtrVector().push_back(new OpSetHOWeigthsOnFace());
+    fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
     fe->getOpPtrVector().push_back(
         new OpMassUU("U", "U", [&](double, double, double) { return 1; }));
     fe->getOpPtrVector().push_back(
@@ -886,7 +892,6 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR set_mass_ksp(ksp, M);
 
     auto solve_rhs = [&]() {
-
       MoFEMFunctionBegin;
       if (domianRhsFEPtr->vecAssembleSwitch) {
         CHKERR VecGhostUpdateBegin(domianRhsFEPtr->ts_F, ADD_VALUES,

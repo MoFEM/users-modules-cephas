@@ -1580,7 +1580,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         new MonitorPostProc(*this, post_process, flux_integrate, frequency));
     TsCtx *ts_ctx;
     DMMoFEMGetTsCtx(dM, &ts_ctx);
-    ts_ctx->get_postProcess_to_do_Monitor().push_back(tsMonitor);
+    ts_ctx->getPostProcessMonitor().push_back(tsMonitor);
     MoFEMFunctionReturn(0);
   }
 
