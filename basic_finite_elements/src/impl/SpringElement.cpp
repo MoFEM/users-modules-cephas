@@ -269,9 +269,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs_dX::doWork(int row_side, int col_side,
   FTensor::Index<'k', 3> k;
   FTensor::Index<'l', 3> l;
 
-  auto make_vec_der = [&](FTensor::Tensor1<double *, 2> t_N,
-                          FTensor::Tensor1<double *, 3> t_1,
-                          FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [&](auto t_N, auto t_1, auto t_2) {
     FTensor::Tensor2<double, 3, 3> t_n;
     t_n(i, j) = 0;
     t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
@@ -279,9 +277,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs_dX::doWork(int row_side, int col_side,
     return t_n;
   };
 
-  auto make_vec_der_2 = [&](FTensor::Tensor1<double *, 2> t_N,
-                            FTensor::Tensor1<double *, 3> t_1,
-                            FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der_2 = [&](auto t_N, auto t_1, auto t_2) {
     FTensor::Tensor1<double, 3> t_normal;
     t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
     const double normal_norm = sqrt(t_normal(i) * t_normal(i));
@@ -667,9 +663,7 @@ MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::iNtegrate(EntData &row_data,
         &m(r + 2, c + 2));
   };
 
-  auto make_vec_der = [&](FTensor::Tensor1<double *, 2> t_N,
-                          FTensor::Tensor1<double *, 3> t_1,
-                          FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [&](auto t_N, auto t_1, auto t_2) {
     FTensor::Tensor2<double, 3, 3> t_n;
     t_n(i, j) = 0;
     t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
@@ -677,9 +671,7 @@ MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::iNtegrate(EntData &row_data,
     return t_n;
   };
 
-  auto make_vec_der_2 = [&](FTensor::Tensor1<double *, 2> t_N,
-                            FTensor::Tensor1<double *, 3> t_1,
-                            FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der_2 = [&](auto t_N, auto t_1, auto t_2) {
     FTensor::Tensor1<double, 3> t_normal;
     t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
     const double normal_norm = sqrt(t_normal(i) * t_normal(i));

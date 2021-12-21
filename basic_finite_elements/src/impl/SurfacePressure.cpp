@@ -308,9 +308,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
         &m(r + 2, c + 2));
   };
 
-  auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
-                         FTensor::Tensor1<double *, 3> t_1,
-                         FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [](auto t_N, auto t_1, auto t_2) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
@@ -586,9 +584,7 @@ NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
         &m(r + 2, c + 2));
   };
 
-  auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
-                         FTensor::Tensor1<double *, 3> t_1,
-                         FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [](auto t_N, auto t_1, auto t_2) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
