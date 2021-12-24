@@ -434,7 +434,7 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Boundary condition]
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
-  
+
   PetscBool is_restart = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_restart", &is_restart,
                              PETSC_NULL);
@@ -718,6 +718,12 @@ MoFEMErrorCode Example::assembleSystem() {
   domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
   domianRhsFEPtr = pipeline_mng->getDomainRhsFE();
 
+  if (!is_implicit_solver) {
+    // Rhd for implicit is the same, almost, what is for implicit. So I copy FE
+    // with the pipeline for explict TS solver.
+    pipeline_mng->getDomainExplicitRhsFE() = domianRhsFEPtr;
+  }
+
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
@@ -886,7 +892,6 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR set_mass_ksp(ksp, M);
 
     auto solve_rhs = [&]() {
-
       MoFEMFunctionBegin;
       if (domianRhsFEPtr->vecAssembleSwitch) {
         CHKERR VecGhostUpdateBegin(domianRhsFEPtr->ts_F, ADD_VALUES,

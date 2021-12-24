@@ -486,6 +486,13 @@ struct ConvectiveMassElement {
                                   int gg);
   };
 
+  /**
+   * @brief Set fields DOT_
+   *
+   * \note This is old solution, to keep rates calculate by TS as a fields. This
+   * is not memory efficient solution.
+   *
+   */
   struct UpdateAndControl : public FEMethod {
 
     MoFEM::Interface &mField;
@@ -498,7 +505,14 @@ struct ConvectiveMassElement {
                      const std::string velocity_field,
                      const std::string spatial_position_field);
 
+    /**
+     * @brief Scatter values from t_u_dt on the fields
+     * 
+     * @return MoFEMErrorCode 
+     */
     MoFEMErrorCode preProcess();
+
+    // This is empty fun cions does nothing
     MoFEMErrorCode postProcess();
   };
 
@@ -767,9 +781,14 @@ struct ConvectiveMassElement {
     // variables bellow need to be set by user
     MatShellCtx *shellMatCtx; ///< pointer to shell matrix
 
+    /**
+     * @brief Calculate inconsistency between approximation of velocities and
+     * velocities calculated from displacements
+     *
+     * @return MoFEMErrorCode
+     */
     MoFEMErrorCode preProcess();
 
-    MoFEMErrorCode postProcess();
   };
 
 #ifdef __DIRICHLET_HPP__

@@ -465,7 +465,6 @@ int main(int argc, char *argv[]) {
     CHKERR elastic_materials.setBlocks(inertia.setOfBlocks);
     CHKERR inertia.addConvectiveMassElement("MASS_ELEMENT", "VELOCITY",
                                             "DISPLACEMENT");
-    CHKERR inertia.addHOOpsVol();
     CHKERR inertia.addVelocityElement("VELOCITY_ELEMENT", "VELOCITY",
                                       "DISPLACEMENT");
 
@@ -651,6 +650,7 @@ int main(int argc, char *argv[]) {
         ConvectiveMassElement::ShellMatrixElement::PairNameFEMethodPtr(
             "ELASTIC", &damper.feLhs));
 
+    CHKERR inertia.addHOOpsVol();
     CHKERR inertia.setShellMatrixMassOperators("VELOCITY", "DISPLACEMENT",
                                                "MESH_NODE_POSITIONS", linear);
     // element name "ELASTIC" is used, therefore M matrix is assembled as K
@@ -739,9 +739,9 @@ int main(int argc, char *argv[]) {
     // preprocess
     ts_ctx.getPreProcessIFunction().push_back(&update_and_control);
     ts_ctx.getPreProcessIFunction().push_back(&my_dirichlet_bc);
+
     // fe looops
-    TsCtx::FEMethodsSequence &loops_to_do_Rhs =
-        ts_ctx.getLoopsIFunction();
+    auto &loops_to_do_Rhs = ts_ctx.getLoopsIFunction();
 
     auto add_static_rhs = [&](auto &loops_to_do_Rhs) {
       MoFEMFunctionBegin;
@@ -776,11 +776,11 @@ int main(int argc, char *argv[]) {
     loops_to_do_Rhs.push_back(
         PairNameFEMethodPtr("MASS_ELEMENT", &inertia.getLoopFeMassRhs()));
 
-    ts_ctx.getPreProcessIFunction().push_back(&shell_matrix_residual);
-
-    // postproc
+    // preporcess
+    // calculate residual for velocities
+    ts_ctx.getPreProcessIFunction().push_back(&shell_matrix_residual); 
+    // postprocess
     ts_ctx.getPostProcessIFunction().push_back(&my_dirichlet_bc);
-    ts_ctx.getPostProcessIFunction().push_back(&shell_matrix_residual);
 
     // left hand side
     // preprocess

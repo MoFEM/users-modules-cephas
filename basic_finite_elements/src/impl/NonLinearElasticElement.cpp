@@ -239,9 +239,8 @@ NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::calculateStress(
     const int gg) {
   MoFEMFunctionBegin;
 
-  ierr = dAta.materialAdoublePtr->calculateP_PiolaKirchhoffI(
+  CHKERR dAta.materialAdoublePtr->calculateP_PiolaKirchhoffI(
       dAta, getNumeredEntFiniteElementPtr());
-  CHKERRG(ierr);
   if (aLe) {
     dAta.materialAdoublePtr->P =
         dAta.materialAdoublePtr->detH *

@@ -54,28 +54,6 @@ MoFEMErrorCode ConvectiveMassElement::MyVolumeFE::preProcess() {
 
   CHKERR VolumeElementForcesAndSourcesCore::preProcess();
 
-  switch (snes_ctx) {
-  case CTX_SNESSETFUNCTION: {
-    ts_ctx = CTX_TSSETIFUNCTION;
-    ts_F = snes_f;
-    break;
-  }
-  case CTX_SNESSETJACOBIAN: {
-    ts_ctx = CTX_TSSETIJACOBIAN;
-    ts_B = snes_B;
-  }
-  default:
-    break;
-  }
-
-  if (A != PETSC_NULL) {
-    ts_B = A;
-  }
-
-  if (F != PETSC_NULL) {
-    ts_F = F;
-  }
-
   int ghosts[] = {0};
   int rank;
   MPI_Comm_rank(mField.get_comm(), &rank);
@@ -277,7 +255,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
     const std::vector<VectorDouble> &meshpos_vel =
         commonData.dataAtGaussPts["DOT_" + commonData.meshPositions];
 
-    const std::vector<MatrixDouble> &mesh_positions_val =
+    const std::vector<MatrixDouble> &mesh_positions_gradient =
         commonData.gradAtGaussPts[commonData.meshPositions];
 
     int nb_active_vars = 0;
@@ -321,7 +299,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
           for (int nn1 = 0; nn1 < 3; nn1++) { // 3+9+9+3=24
             for (int nn2 = 0; nn2 < 3; nn2++) {
               // commonData.gradAtGaussPts[commonData.meshPositions][gg]
-              H(nn1, nn2) <<= mesh_positions_val[gg](nn1, nn2);
+              H(nn1, nn2) <<= mesh_positions_gradient[gg](nn1, nn2);
               nb_active_vars++;
             }
           }
@@ -381,7 +359,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
         }
         for (int nn1 = 0; nn1 < 3; nn1++) { // 3+9+9+3=24
           for (int nn2 = 0; nn2 < 3; nn2++) {
-            active[aa++] = mesh_positions_val[gg](nn1, nn2);
+            active[aa++] = mesh_positions_gradient[gg](nn1, nn2);
           }
         }
       }
@@ -1773,9 +1751,8 @@ MoFEMErrorCode ConvectiveMassElement::setBlocks() {
            mField, BLOCKSET | BODYFORCESSET, it)) {
     int id = it->getMeshsetId();
     EntityHandle meshset = it->getMeshset();
-    rval = mField.get_moab().get_entities_by_type(meshset, MBTET,
+    CHKERR mField.get_moab().get_entities_by_type(meshset, MBTET,
                                                   setOfBlocks[id].tEts, true);
-    CHKERRG(rval);
     added_tets.merge(setOfBlocks[id].tEts);
     Block_BodyForces mydata;
     CHKERR it->getAttributeDataStructure(mydata);
@@ -1795,8 +1772,7 @@ MoFEMErrorCode ConvectiveMassElement::setBlocks() {
       continue;
     Range tets;
     EntityHandle meshset = it->getMeshset();
-    rval = mField.get_moab().get_entities_by_type(meshset, MBTET, tets, true);
-    CHKERRG(rval);
+    CHKERR mField.get_moab().get_entities_by_type(meshset, MBTET, tets, true);
     tets = subtract(tets, added_tets);
     if (tets.empty())
       continue;
@@ -2425,6 +2401,7 @@ MoFEMErrorCode ConvectiveMassElement::ShellResidualElement::preProcess() {
   if (!shellMatCtx->iNitialized) {
     CHKERR shellMatCtx->iNit();
   }
+  // Note velocities calculate from displacements are stroed in shellMatCtx->u
   CHKERR VecScatterBegin(shellMatCtx->scatterU, ts_u_t, shellMatCtx->u,
                          INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecScatterEnd(shellMatCtx->scatterU, ts_u_t, shellMatCtx->u,
@@ -2443,10 +2420,6 @@ MoFEMErrorCode ConvectiveMassElement::ShellResidualElement::preProcess() {
   MoFEMFunctionReturnHot(0);
 }
 
-MoFEMErrorCode ConvectiveMassElement::ShellResidualElement::postProcess() {
-  MoFEMFunctionBeginHot;
-  MoFEMFunctionReturnHot(0);
-}
 
 #ifdef __DIRICHLET_HPP__
 
