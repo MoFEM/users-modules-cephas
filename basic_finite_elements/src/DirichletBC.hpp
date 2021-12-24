@@ -266,14 +266,14 @@ struct DirichletFixFieldAtEntitiesBc : public DirichletDisplacementBc {
   Range eNts;
   std::vector<std::string> fieldNames;
   DirichletFixFieldAtEntitiesBc(MoFEM::Interface &m_field,
-                                const std::string &field_name, Mat aij, Vec x,
+                                const std::string field_name, Mat aij, Vec x,
                                 Vec f, Range &ents)
       : DirichletDisplacementBc(m_field, field_name, aij, x, f), eNts(ents) {
     fieldNames.push_back(fieldName);
   }
 
   DirichletFixFieldAtEntitiesBc(MoFEM::Interface &m_field,
-                                const std::string &field_name, Range &ents)
+                                const std::string field_name, Range &ents)
       : DirichletDisplacementBc(m_field, field_name), eNts(ents) {
     fieldNames.push_back(fieldName);
   }
