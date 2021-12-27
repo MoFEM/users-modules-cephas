@@ -210,22 +210,22 @@ struct OpRhsU : public AssemblyDomainEleOp {
       auto t_D = get_D(2 * mu);
       auto t_J = get_J(t_h, t_grad_g);
 
-      t_inertia_force(i) = rho * (t_dot_u(i) + t_a0(i));
-      t_stress(i, j) = (t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p);
-      t_phase_force(i) = (t_J(i) - kappa * t_g * t_grad_h(i));
+      t_inertia_force(i) = (rho * alpha) * (t_dot_u(i) - t_a0(i));
+      t_stress(i, j) =
+          alpha * (t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p);
+      t_phase_force(i) = 0;//alpha * (t_J(i) - kappa * t_g * t_grad_h(i));
 
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
 
       int bb = 0;
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
 
-        t_nf(i) += (t_base * alpha) * (t_inertia_force(i) + t_phase_force(i));
-        t_nf(i) += (t_diff_base(j) * alpha) * t_stress(i, j);
+        t_nf(i) += t_base * (t_inertia_force(i) + t_phase_force(i));
+        t_nf(i) += t_diff_base(j) * t_stress(i, j);
 
         // When we move to C++17 add if constexpr()
-        if (coord_type == CYLINDRICAL) {
-          t_nf(0) +=
-              (t_base * (alpha / t_coords(0))) * ((2 * mu) * t_u(0) + t_p);
+        if constexpr (coord_type == CYLINDRICAL) {
+          t_nf(0) += (t_base * (alpha / t_coords(0))) * (2 * mu * t_u(0) + t_p);
         }
 
         ++t_base;
@@ -244,6 +244,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
       ++t_h;
       ++t_grad_h;
       ++t_g;
+      ++t_grad_g;
       ++t_p;
 
       ++t_w;
@@ -308,8 +309,8 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       const double rho = phase_function(t_h, rho_p, rho_m);
       const double mu = phase_function(t_h, mu_p, mu_m);
 
-      const double beta = alpha * rho * ts_a;
-      auto t_D = get_D(2 * mu);
+      const double beta = alpha * ts_a;
+      auto t_D = get_D(alpha * 2 * mu);
 
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
@@ -322,17 +323,17 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
         // I mix up the indices here so that it behaves like a
         // Dg.  That way I don't have to have a separate wrapper
         // class Christof_Expr, which simplifies things.
-        t_d_stress(l, j, k) = t_D(i, j, k, l) * (alpha * t_row_diff_base(i));
+        t_d_stress(l, j, k) = t_D(i, j, k, l) * t_row_diff_base(i);
 
         for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
 
           const double bb = t_row_base * t_col_base;
 
-          t_mat(i, j) += beta * bb;
+          t_mat(i, j) += (beta * bb) * t_kd(i, j);
           t_mat(i, j) += t_d_stress(i, j, k) * t_col_diff_base(k);
 
           // When we move to C++17 add if constexpr()
-          if (coord_type == CYLINDRICAL) {
+          if constexpr (coord_type == CYLINDRICAL) {
             t_mat(0, 0) += (bb * (alpha / t_coords(0))) * (2 * mu);
           }
 
@@ -418,14 +419,14 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      auto rho_dh = d_phase_function_h(t_h, rho_p, rho_m);
-      auto mu_dh = d_phase_function_h(t_h, mu_p, mu_m);
+      const double rho_dh = d_phase_function_h(t_h, rho_p, rho_m);
+      const double mu_dh = d_phase_function_h(t_h, mu_p, mu_m);
 
-      auto t_D_dh = get_D(2 * mu_dh);
+      auto t_D_dh = get_D(alpha * mu_dh);
       auto t_J_dh = get_J_dh(t_h, t_grad_g);
 
-      t_inertia_force_dh(i) = alpha * (rho_dh * (t_dot_u(i) + t_a0(i)));
-      t_stress_dh(i, j) = alpha * (t_D_dh(i, j, k, l) * t_grad_u(k, l));
+      t_inertia_force_dh(i) = (alpha * rho_dh) * (t_dot_u(i) - t_a0(i));
+      t_stress_dh(i, j) = t_D_dh(i, j, k, l) * t_grad_u(k, l);
       t_phase_force_dh(i) = alpha * t_J_dh(i);
       const double t_phase_force_d_diff_h = alpha * kappa * t_g;
 
@@ -442,11 +443,11 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
           const double bb = t_row_base * t_col_base;
           t_mat(i) += t_inertia_force_dh(i) * bb;
           t_mat(i) += (t_row_diff_base(j) * t_col_base) * t_stress_dh(i, j);
-          t_mat(i) += t_phase_force_dh(i) * t_col_base;
-          t_mat(i) += t_phase_force_d_diff_h * t_col_diff_base(i);
+          // t_mat(i) += t_phase_force_dh(i) * t_col_base;
+          // t_mat(i) += t_phase_force_d_diff_h * t_col_diff_base(i);
 
           // When we move to C++17 add if constexpr()
-          if (coord_type == CYLINDRICAL) {
+          if constexpr (coord_type == CYLINDRICAL) {
             t_mat(0) += (bb * (alpha / t_coords(0))) * (2 * mu_dh * t_u(0));
           }
 
@@ -525,8 +526,8 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      auto rho = phase_function(t_h, rho_p, rho_m);
-      auto mu = phase_function(t_h, mu_p, mu_m);
+      const double rho = phase_function(t_h, rho_p, rho_m);
+      const double mu = phase_function(t_h, mu_p, mu_m);
 
       const double t_phase_force_dg = alpha * get_J_dg(t_h, t_grad_g);
       t_phase_force_d_g(i) = alpha * kappa * t_grad_h(i);
@@ -542,8 +543,8 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
         for (int cc = 0; cc != nbCols; ++cc) {
 
           const double bb = t_row_base * t_col_base;
-          t_mat(i) += t_phase_force_d_g(i) * bb;
-          t_mat(i) += t_phase_force_dg * t_col_diff_base(i);
+          // t_mat(i) += t_phase_force_d_g(i) * bb;
+          // t_mat(i) += (t_row_base * t_phase_force_dg) * t_col_diff_base(i);
 
           ++t_mat;
           ++t_col_base;
@@ -740,6 +741,7 @@ struct OpLhsH_dG : public AssemblyDomainEleOp {
                             AssemblyDomainEleOp::OPROWCOL),
         hPtr(h_ptr) {
     sYmm = false;
+    assembleTranspose = false;
   }
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
@@ -752,7 +754,6 @@ struct OpLhsH_dG : public AssemblyDomainEleOp {
     auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
     auto t_w = getFTensor0IntegrationWeight();
     auto t_coords = getFTensor1CoordsAtGaussPts();
-    auto ts_a = getTSa();
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -763,11 +764,9 @@ struct OpLhsH_dG : public AssemblyDomainEleOp {
 
       int rr = 0;
       for (; rr != nbRows; ++rr) {
-
         auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
         for (int cc = 0; cc != nbCols; ++cc) {
-
           locMat(rr, cc) +=
               (t_row_diff_base(i) * t_col_diff_base(i)) * m;
 
@@ -818,13 +817,12 @@ struct OpRhsG : public AssemblyDomainEleOp {
 
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
-
-      const double f = get_F(t_h);
+      const double f =  get_F(t_h);
 
       int bb = 0;
       for (; bb != nbRows; ++bb) {
         locF[bb] += (t_base * alpha) * (t_g - f);
-        locF[bb] -= (t_diff_base(i) * eta * eta) * t_grad_h(i);
+        locF[bb] -= (t_diff_base(i) * (eta2 * alpha)) * t_grad_h(i);
         ++t_base;
         ++t_diff_base;
       }
@@ -863,6 +861,7 @@ struct OpLhsG_dH : public AssemblyDomainEleOp {
                             AssemblyDomainEleOp::OPROWCOL),
         hPtr(h_ptr) {
     sYmm = false;
+    assembleTranspose = false;
   }
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
@@ -883,7 +882,7 @@ struct OpLhsG_dH : public AssemblyDomainEleOp {
       const double alpha = t_w * vol * cylindrical(r);
 
       const double f_dh = get_F_dh(t_h) * alpha;
-      const double beta = eta * eta * alpha;
+      const double beta = eta2 * alpha;
 
       int rr = 0;
       for (; rr != nbRows; ++rr) {
@@ -893,7 +892,7 @@ struct OpLhsG_dH : public AssemblyDomainEleOp {
 
         for (int cc = 0; cc != nbCols; ++cc) {
 
-          locMat(rr, cc) -= (t_row_base * t_col_base * alpha) * f_dh;
+          locMat(rr, cc) -= (t_row_base * t_col_base) * f_dh;
           locMat(rr, cc) -= (t_row_diff_base(i) * beta) * t_col_diff_base(i);
 
           ++t_col_base;
@@ -927,7 +926,7 @@ private:
  */
 struct OpLhsG_dG : public AssemblyDomainEleOp {
 
-  OpLhsG_dG(const std::string field_name, boost::shared_ptr<VectorDouble> h_ptr)
+  OpLhsG_dG(const std::string field_name)
       : AssemblyDomainEleOp(field_name, field_name,
                             AssemblyDomainEleOp::OPROWCOL) {
     sYmm = false;
@@ -940,7 +939,6 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
     const double vol = getMeasure();
 
     auto t_row_base = row_data.getFTensor0N();
-    auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
     auto t_w = getFTensor0IntegrationWeight();
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
@@ -949,29 +947,20 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      const double beta = eta * eta * alpha;
-
       int rr = 0;
       for (; rr != nbRows; ++rr) {
-
         auto t_col_base = col_data.getFTensor0N(gg, 0);
-        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
         for (int cc = 0; cc != nbCols; ++cc) {
-
           locMat(rr, cc) += (t_row_base * t_col_base * alpha);
-
           ++t_col_base;
-          ++t_col_diff_base;
         }
 
         ++t_row_base;
-        ++t_row_diff_base;
       }
 
       for (; rr < nbRowBaseFunctions; ++rr) {
         ++t_row_base;
-        ++t_row_diff_base;
       }
 
       ++t_w;

@@ -33,7 +33,7 @@ constexpr int BASE_DIM = 1;
 constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
 constexpr int H_FIELD_DIM = 1;
-constexpr CoordinateTypes coord_type = CYLINDRICAL;
+constexpr CoordinateTypes coord_type = CARTESIAN;//CYLINDRICAL;
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -91,7 +91,7 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // Physical parameters
-constexpr double a0 = 1;
+constexpr double a0 = 1e-2;
 constexpr double rho_p = 1;
 constexpr double rho_m = 1;
 constexpr double mu_p = 1;
@@ -101,6 +101,7 @@ constexpr double W = 1;
 
 // Model parameters
 constexpr double eta = 2.5e-2;
+constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
 constexpr double md = 1;
@@ -117,7 +118,7 @@ auto integration_rule = [](int, int, int approx_order) {
 
 auto cylindrical = [](const double r) {
   // When we move to C++17 add if constexpr()
-  if (coord_type == CYLINDRICAL)
+  if constexpr (coord_type == CYLINDRICAL)
     return 2 * M_PI * r;
   else
     return 1.;
@@ -125,12 +126,13 @@ auto cylindrical = [](const double r) {
 
 auto my_max = [](const double x) { return (x - 1 + std::abs(x + 1)) / 2; };
 auto my_min = [](const double x) { return (x + 1 - std::abs(x - 1)) / 2; };
-auto cut_off = [](const double h) { return my_max(my_min(h)); };
+auto cut_off = [](const double h) { return h;/*my_max(my_min(h));*/ };
 auto d_cut_off = [](const double h) {
-  if (h >= -1 && h < 1)
-    return 1.;
-  else
-    return 0.;
+  return 1.;
+  // if (h >= -1 && h < 1)
+  //   return 1.;
+  // else
+  //   return 0.;
 };
 
 auto phase_function = [](const double h, const double p, const double m) {
@@ -142,7 +144,7 @@ auto d_phase_function_h = [](const double h, const double p, const double m) {
 };
 
 auto get_F = [](const double h) { return W * pow(1 - h * h, 2); };
-auto get_F_dh = [](const double h) { return -4 * W * (1 - h * h); };
+auto get_F_dh = [](const double h) { return -4 * W * h * (1 - h * h); };
 
 auto get_M2 = [](auto h) { return md * (1 - cut_off(h) * cut_off(h)); };
 auto get_M2_dh = [](auto h) { return -md * 2 * cut_off(h) * d_cut_off(h); };
@@ -396,9 +398,9 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
     pipeline.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
-    pipeline.push_back(new OpCalculateScalarFieldValues("H", g_ptr));
+    pipeline.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
     pipeline.push_back(
-        new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_g_ptr));
+        new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
     pipeline.push_back(new OpCalculateScalarFieldValues("P", p_ptr));
     pipeline.push_back(
         new OpCalculateDivergenceVectorFieldValues<SPACE_DIM, coord_type>(
@@ -407,7 +409,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
 
   auto set_domain_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr,
-                                  grad_h_ptr, g_ptr, grad_h_ptr, p_ptr));
+                                  grad_h_ptr, g_ptr, grad_g_ptr, p_ptr));
     pipeline.push_back(new OpRhsH("H", dot_h_ptr, h_ptr, grad_g_ptr));
     pipeline.push_back(new OpRhsG("G", h_ptr, grad_h_ptr, g_ptr));
     pipeline.push_back(new OpBaseTimesScalarField(
@@ -431,7 +433,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(new OpLhsH_dG("H", "G", h_ptr));
 
     pipeline.push_back(new OpLhsG_dH("G", "H", h_ptr));
-    pipeline.push_back(new OpLhsG_dG("G", h_ptr));
+    pipeline.push_back(new OpLhsG_dG("G"));
 
     pipeline.push_back(new OpMixScalarTimesDiv(
         "P", "U",
@@ -607,11 +609,11 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto M = smartCreateDMMatrix(dm);
   auto ksi_ptr = boost::make_shared<double>();
   auto ksp = createKSP(mField.get_comm());
-  auto phi_ptr = boost::make_shared<VectorDouble>();
+  auto h_ptr = boost::make_shared<VectorDouble>();
 
   auto fe_global_terms = boost::make_shared<DomainEle>(mField);
   fe_global_terms->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldValues("H", phi_ptr));
+      new OpCalculateScalarFieldValues("H", h_ptr));
   fe_global_terms->getRuleHook = integration_rule;
 
   CHKERR assemble_mass_mat(M);
@@ -650,8 +652,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     pipeline.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
 
-    pipeline.push_back(new OpRhsExplicitTermU("U", u_ptr, grad_u_ptr, h_ptr));
-    pipeline.push_back(new OpRhsExplicitTermH("H", u_ptr, grad_h_ptr));
+    // pipeline.push_back(new OpRhsExplicitTermU("U", u_ptr, grad_u_ptr, h_ptr));
+    // pipeline.push_back(new OpRhsExplicitTermH("H", u_ptr, grad_h_ptr));
   };
 
   set_domain_rhs_explicit(pipeline_mng->getOpDomainExplicitRhsPipeline());
@@ -686,6 +688,18 @@ MoFEMErrorCode FreeSurface::solveSystem() {
         snes,
         (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal, void *))SNESMonitorFields,
         vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
+
+    auto section = mField.getInterface<ISManager>()->sectionCreate(
+        simple->getProblemName());
+    PetscInt num_fields;
+    CHKERR PetscSectionGetNumFields(section, &num_fields);
+    for (int f = 0; f < num_fields; ++f) {
+      const char *field_name;
+      CHKERR PetscSectionGetFieldName(section, f, &field_name);
+      MOFEM_LOG("FS", Sev::inform)
+          << "Field " << f << " " << std::string(field_name);
+    }
+
     MoFEMFunctionReturn(0);
   };
 
