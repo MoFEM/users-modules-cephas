@@ -493,17 +493,12 @@ private:
 struct OpLhsU_dG : public AssemblyDomainEleOp {
 
   OpLhsU_dG(const std::string field_name_u, const std::string field_name_h,
-            boost::shared_ptr<MatrixDouble> dot_u_ptr,
-            boost::shared_ptr<MatrixDouble> u_ptr,
-            boost::shared_ptr<MatrixDouble> grad_u_ptr,
             boost::shared_ptr<VectorDouble> h_ptr,
             boost::shared_ptr<MatrixDouble> grad_h_ptr,
-            boost::shared_ptr<VectorDouble> g_ptr,
             boost::shared_ptr<MatrixDouble> grad_g_ptr)
       : AssemblyDomainEleOp(field_name_u, field_name_h,
                             AssemblyDomainEleOp::OPROWCOL),
-        dotUPtr(dot_u_ptr), uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr),
-        gradHPtr(grad_h_ptr), gPtr(g_ptr), gradGPtr(grad_g_ptr) {
+        hPtr(h_ptr), gradHPtr(grad_h_ptr), gradGPtr(grad_g_ptr) {
     sYmm = false;
     assembleTranspose = false;
   }
@@ -513,12 +508,8 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
-    auto t_dot_u = getFTensor1FromMat<U_FIELD_DIM>(*dotUPtr);
-    auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
-    auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
     auto t_h = getFTensor0FromVec(*hPtr);
     auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
-    auto t_g = getFTensor0FromVec(*gPtr);
     auto t_grad_g = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
@@ -568,11 +559,8 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
         ++t_row_base;
       }
 
-      ++t_dot_u;
-      ++t_u;
-      ++t_grad_u;
       ++t_h;
-      ++t_g;
+      ++t_grad_h;
       ++t_grad_g;
       ++t_coords;
       ++t_w;
@@ -582,12 +570,8 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
   }
 
 private:
-  boost::shared_ptr<MatrixDouble> dotUPtr;
-  boost::shared_ptr<MatrixDouble> uPtr;
-  boost::shared_ptr<MatrixDouble> gradUPtr;
   boost::shared_ptr<VectorDouble> hPtr;
   boost::shared_ptr<MatrixDouble> gradHPtr;
-  boost::shared_ptr<VectorDouble> gPtr;
   boost::shared_ptr<MatrixDouble> gradGPtr;
 };
 
@@ -744,20 +728,85 @@ private:
   boost::shared_ptr<MatrixDouble> gradGPtr;
 };
 
+/**
+ * @brief Lhs for H dH
+ *
+ */
+struct OpLhsH_dG : public AssemblyDomainEleOp {
+
+  OpLhsH_dG(const std::string field_name_h, const std::string field_name_g,
+            boost::shared_ptr<VectorDouble> h_ptr)
+      : AssemblyDomainEleOp(field_name_h, field_name_g,
+                            AssemblyDomainEleOp::OPROWCOL),
+        hPtr(h_ptr) {
+    sYmm = false;
+  }
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    const double vol = getMeasure();
+    auto t_h = getFTensor0FromVec(*hPtr);
+
+    auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
+    auto ts_a = getTSa();
+
+    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+
+      const double r = t_coords(0);
+      const double alpha = t_w * vol * cylindrical(r);
+
+      auto m = get_M(t_h) * alpha;
+
+      int rr = 0;
+      for (; rr != nbRows; ++rr) {
+
+        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
+
+        for (int cc = 0; cc != nbCols; ++cc) {
+
+          locMat(rr, cc) +=
+              (t_row_diff_base(i) * t_col_diff_base(i)) * m;
+
+          ++t_col_diff_base;
+        }
+
+        ++t_row_diff_base;
+      }
+
+      for (; rr < nbRowBaseFunctions; ++rr) {
+        ++t_row_diff_base;
+      }
+
+      ++t_h;
+      ++t_w;
+      ++t_coords;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<VectorDouble> hPtr;
+};
+
 struct OpRhsG : public AssemblyDomainEleOp {
 
   OpRhsG(const std::string field_name, boost::shared_ptr<VectorDouble> h_ptr,
          boost::shared_ptr<MatrixDouble> grad_h_ptr,
-         boost::shared_ptr<VectorDouble> g_ptr, )
+         boost::shared_ptr<VectorDouble> g_ptr)
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
-        dotHPtr(dot_h_ptr), hPtr(h_ptr), gradGPtr(grad_g_ptr) {}
+        hPtr(h_ptr), gradHPtr(grad_h_ptr), gPtr(g_ptr) {}
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
     auto t_h = getFTensor0FromVec(*hPtr);
-    auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
+    auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
     auto t_g = getFTensor0FromVec(*gPtr);
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
@@ -774,7 +823,7 @@ struct OpRhsG : public AssemblyDomainEleOp {
 
       int bb = 0;
       for (; bb != nbRows; ++bb) {
-        locF[bb] += (t_base * alpha) * (t_g + h);
+        locF[bb] += (t_base * alpha) * (t_g - f);
         locF[bb] -= (t_diff_base(i) * eta * eta) * t_grad_h(i);
         ++t_base;
         ++t_diff_base;
@@ -785,9 +834,9 @@ struct OpRhsG : public AssemblyDomainEleOp {
         ++t_diff_base;
       }
 
-      ++t_dot_h;
       ++t_h;
-      ++t_grad_g;
+      ++t_grad_h;
+      ++t_g;
 
       ++t_coords;
       ++t_w;
@@ -797,9 +846,9 @@ struct OpRhsG : public AssemblyDomainEleOp {
   }
 
 private:
-  boost::shared_ptr<VectorDouble> dotHPtr;
   boost::shared_ptr<VectorDouble> hPtr;
-  boost::shared_ptr<MatrixDouble> gradGPtr;
+  boost::shared_ptr<MatrixDouble> gradHPtr;
+  boost::shared_ptr<VectorDouble> gPtr;
 };
 
 /**
@@ -808,9 +857,9 @@ private:
  */
 struct OpLhsG_dH : public AssemblyDomainEleOp {
 
-  OpLhsH_dH(const std::string field_name,
-            boost::shared_ptr<VectorDouble> h_ptrr)
-      : AssemblyDomainEleOp(field_name, field_name,
+  OpLhsG_dH(const std::string field_name_g, const std::string field_name_h,
+            boost::shared_ptr<VectorDouble> h_ptr)
+      : AssemblyDomainEleOp(field_name_g, field_name_h,
                             AssemblyDomainEleOp::OPROWCOL),
         hPtr(h_ptr) {
     sYmm = false;
@@ -844,7 +893,7 @@ struct OpLhsG_dH : public AssemblyDomainEleOp {
 
         for (int cc = 0; cc != nbCols; ++cc) {
 
-          locMat(rr, cc) += (t_row_base * t_col_base * alpha) * f_dh;
+          locMat(rr, cc) -= (t_row_base * t_col_base * alpha) * f_dh;
           locMat(rr, cc) -= (t_row_diff_base(i) * beta) * t_col_diff_base(i);
 
           ++t_col_base;
@@ -861,7 +910,6 @@ struct OpLhsG_dH : public AssemblyDomainEleOp {
       }
 
       ++t_h;
-      ++t_grad_g;
       ++t_w;
       ++t_coords;
     }
@@ -879,11 +927,9 @@ private:
  */
 struct OpLhsG_dG : public AssemblyDomainEleOp {
 
-  OpLhsH_dH(const std::string field_name,
-            boost::shared_ptr<VectorDouble> h_ptrr)
+  OpLhsG_dG(const std::string field_name, boost::shared_ptr<VectorDouble> h_ptr)
       : AssemblyDomainEleOp(field_name, field_name,
-                            AssemblyDomainEleOp::OPROWCOL),
-        hPtr(h_ptr) {
+                            AssemblyDomainEleOp::OPROWCOL) {
     sYmm = false;
   }
 
@@ -892,7 +938,6 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
-    auto t_h = getFTensor0FromVec(*hPtr);
 
     auto t_row_base = row_data.getFTensor0N();
     auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
@@ -904,7 +949,6 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      const double f_dh = get_F_dh(t_h) * alpha;
       const double beta = eta * eta * alpha;
 
       int rr = 0;
@@ -930,8 +974,6 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
         ++t_row_diff_base;
       }
 
-      ++t_h;
-      ++t_grad_g;
       ++t_w;
       ++t_coords;
     }
@@ -940,7 +982,6 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
   }
 
 private:
-  boost::shared_ptr<VectorDouble> hPtr;
 };
 
 /**
@@ -951,9 +992,10 @@ struct OpRhsExplicitTermU : public AssemblyDomainEleOp {
 
   OpRhsExplicitTermU(const std::string field_name,
                      boost::shared_ptr<MatrixDouble> u_ptr,
-                     boost::shared_ptr<MatrixDouble> grad_u_ptr)
+                     boost::shared_ptr<MatrixDouble> grad_u_ptr,
+                     boost::shared_ptr<VectorDouble> h_ptr)
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
-        uPtr(u_ptr), gradUPtr(grad_u_ptr) {}
+        uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr) {}
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
@@ -962,6 +1004,7 @@ struct OpRhsExplicitTermU : public AssemblyDomainEleOp {
     auto t_coords = getFTensor1CoordsAtGaussPts();
     auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
     auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
+    auto t_h = getFTensor0FromVec(*hPtr);
 
     auto t_base = data.getFTensor0N();
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
@@ -973,8 +1016,10 @@ struct OpRhsExplicitTermU : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
+      const double rho = phase_function(t_h, rho_p, rho_m);
+
       FTensor::Tensor1<double, U_FIELD_DIM> t_convection;
-      t_convection(i) = t_u(j) * t_grad_u(i, j);
+      t_convection(i) = t_u(j) * t_grad_u(i, j) / rho;
 
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
 
@@ -993,6 +1038,7 @@ struct OpRhsExplicitTermU : public AssemblyDomainEleOp {
 
       ++t_u;
       ++t_grad_u;
+      ++t_h;
 
       ++t_w;
       ++t_coords;
@@ -1004,6 +1050,7 @@ struct OpRhsExplicitTermU : public AssemblyDomainEleOp {
 private:
   boost::shared_ptr<MatrixDouble> uPtr;
   boost::shared_ptr<MatrixDouble> gradUPtr;
+  boost::shared_ptr<VectorDouble> hPtr;
 };
 
 /**
@@ -1013,10 +1060,10 @@ private:
 struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
 
   OpRhsExplicitTermH(const std::string field_name,
-                     boost::shared_ptr<VectorDouble> phi_ptr,
-                     boost::shared_ptr<double> ksi_ptr)
+                     boost::shared_ptr<MatrixDouble> u_ptr,
+                     boost::shared_ptr<MatrixDouble> grad_h_ptr)
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
-        phiPtr(phi_ptr), ksiPtr(ksi_ptr) {}
+        uPtr(u_ptr), gradHPtr(grad_h_ptr) {}
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
@@ -1025,8 +1072,9 @@ struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
     auto t_w = getFTensor0IntegrationWeight();
     auto t_coords = getFTensor1CoordsAtGaussPts();
     auto t_base = data.getFTensor0N();
-    auto t_phi = getFTensor0FromVec(*phiPtr);
-    const double ksi = *ksiPtr;
+
+    auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
+    auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -1037,13 +1085,14 @@ struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
       int rr = 0;
       for (; rr != nbRows; ++rr) {
 
-        (*nf_ptr) += (alpha * lambda) * (ksi * t_base);
+        (*nf_ptr) += (alpha * t_base) * t_u(i) * t_grad_h(i);
 
         ++nf_ptr;
         ++t_base;
       }
 
-      ++t_phi;
+      ++t_u;
+      ++t_grad_h;
       ++t_w;
       ++t_coords;
     }
@@ -1052,8 +1101,8 @@ struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
   }
 
 private:
-  boost::shared_ptr<VectorDouble> phiPtr;
-  boost::shared_ptr<double> ksiPtr;
+  boost::shared_ptr<MatrixDouble> uPtr;
+  boost::shared_ptr<MatrixDouble> gradHPtr;
 };
 
 
