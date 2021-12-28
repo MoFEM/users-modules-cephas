@@ -33,7 +33,7 @@ constexpr int BASE_DIM = 1;
 constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
 constexpr int H_FIELD_DIM = 1;
-constexpr CoordinateTypes coord_type = CARTESIAN;//CYLINDRICAL;
+constexpr CoordinateTypes coord_type = CARTESIAN; // CYLINDRICAL;
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -91,20 +91,21 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // Physical parameters
-constexpr double a0 = 1e-2;
-constexpr double rho_p = 1;
-constexpr double rho_m = 1;
-constexpr double mu_p = 1;
-constexpr double mu_m = 1;
-constexpr double lambda = 0.01;
-constexpr double W = 1;
+constexpr double a0 = -980;
+constexpr double rho_p = 0.998;
+constexpr double rho_m = 0.0012;
+constexpr double mu_p = 0.01001;
+constexpr double mu_m = 0.000182;
+constexpr double lambda = 73;
+constexpr double W = 0.25;
 
 // Model parameters
-constexpr double eta = 2.5e-2;
+constexpr double h = 1. / 16.; // mesh size
+constexpr double eta = 2 * h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
-constexpr double md = 1;
+constexpr double md = 1e-3;
 constexpr double eps = 1e-10;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
@@ -126,13 +127,12 @@ auto cylindrical = [](const double r) {
 
 auto my_max = [](const double x) { return (x - 1 + std::abs(x + 1)) / 2; };
 auto my_min = [](const double x) { return (x + 1 - std::abs(x - 1)) / 2; };
-auto cut_off = [](const double h) { return h;/*my_max(my_min(h));*/ };
+auto cut_off = [](const double h) { return my_max(my_min(h)); };
 auto d_cut_off = [](const double h) {
-  return 1.;
-  // if (h >= -1 && h < 1)
-  //   return 1.;
-  // else
-  //   return 0.;
+  if (h >= -1 && h < 1)
+    return 1.;
+  else
+    return 0.;
 };
 
 auto phase_function = [](const double h, const double p, const double m) {
@@ -143,14 +143,36 @@ auto d_phase_function_h = [](const double h, const double p, const double m) {
   return 0.5 * (p - m) * d_cut_off(h);
 };
 
-auto get_F = [](const double h) { return W * pow(1 - h * h, 2); };
-auto get_F_dh = [](const double h) { return -4 * W * h * (1 - h * h); };
+auto get_f = [](const double h) { return -4 * W * (h * h * h - h); };
+auto get_f_dh = [](const double h) { return -4 * W * (3 * h * h - 1); };
 
+auto get_M0 = [](auto h) { return md; };
+auto get_M0_dh = [](auto h) { return 0; };
 auto get_M2 = [](auto h) { return md * (1 - cut_off(h) * cut_off(h)); };
 auto get_M2_dh = [](auto h) { return -md * 2 * cut_off(h) * d_cut_off(h); };
+auto get_M3 = [](auto h) {
+  if (h >= -1 && h < 1)
+    return 0.;
+  const double h2 = h * h;
+  const double h3 = h2 * h;
+  if (h >= 0)
+    return md * (-2 * h3 - 3 * h2 + 1);
+  else
+    return md * (-2 * h3 - 3 * h2 + 1);
+    
+};
+auto get_M3_dh = [](auto h) {
+  if (h >= -1 && h < 1)
+    return 0.;
+  const double h2 = h * h;
+  if (h >= 0)
+    return md * (6 * h2 - 6 * h + 1);
+  else
+    return md * (-6 * h2 - 6 * h + 1);
+};
 
-auto get_M = [](auto h) { return get_M2(h); };
-auto get_M_dh = [](auto h) { return get_M2_dh(h); };
+auto get_M = [](auto h) { return get_M3(h); };
+auto get_M_dh = [](auto h) { return get_M3_dh(h); };
 
 auto get_J = [](auto h, auto &t_g) {
   FTensor::Tensor1<double, U_FIELD_DIM> t_J;
@@ -162,9 +184,7 @@ auto get_J_dh = [](auto h, auto &t_g) {
   t_J_dh(i) = -rho_diff * get_M_dh(h) * t_g(i);
   return t_J_dh;
 };
-auto get_J_dg = [](auto h, auto &t_g) {
-  return -rho_diff * get_M(h);
-};
+auto get_J_dg = [](auto h, auto &t_g) { return -rho_diff * get_M(h); };
 
 auto get_D = [](const double A) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
@@ -227,9 +247,10 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->addDomainField("H", H1, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addDomainField("G", H1, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, DEMKOWICZ_JACOBI_BASE, U_FIELD_DIM);
+  CHKERR simple->addBoundaryField("H", H1, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addBoundaryField("L", H1, DEMKOWICZ_JACOBI_BASE, 1);
 
-  constexpr int order = 2;
+  constexpr int order = 3;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("P", order - 2);
   CHKERR simple->setFieldOrder("H", order);
@@ -423,10 +444,12 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   };
 
   auto set_domain_lhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpLhsU_dU("U", u_ptr, grad_u_ptr, h_ptr));
+    pipeline.push_back(
+        new OpLhsU_dU("U", u_ptr, grad_u_ptr, h_ptr, grad_g_ptr));
     pipeline.push_back(new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr,
                                      h_ptr, g_ptr, grad_g_ptr));
-    pipeline.push_back(new OpLhsU_dG("U", "G", h_ptr, grad_h_ptr, grad_g_ptr));
+    pipeline.push_back(
+        new OpLhsU_dG("U", "G", grad_u_ptr, h_ptr, grad_h_ptr, grad_g_ptr));
 
     pipeline.push_back(new OpLhsH_dU("H", "U"));
     pipeline.push_back(new OpLhsH_dH("H", h_ptr, grad_g_ptr));
@@ -626,6 +649,18 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
   auto solve_explicit_rhs = [&]() {
     MoFEMFunctionBegin;
+    MOFEM_LOG("FS", Sev::verbose) << "Solve explicit term -> Start";
+    if (fe_explicit_rhs->vecAssembleSwitch) {
+      CHKERR VecGhostUpdateBegin(fe_explicit_rhs->ts_F, ADD_VALUES,
+                                 SCATTER_REVERSE);
+      CHKERR VecGhostUpdateEnd(fe_explicit_rhs->ts_F, ADD_VALUES,
+                               SCATTER_REVERSE);
+      CHKERR VecAssemblyBegin(fe_explicit_rhs->ts_F);
+      CHKERR VecAssemblyEnd(fe_explicit_rhs->ts_F);
+      CHKERR KSPSolve(ksp, fe_explicit_rhs->ts_F, fe_explicit_rhs->ts_F);
+      *fe_explicit_rhs->vecAssembleSwitch = false;
+    }
+    MOFEM_LOG("FS", Sev::verbose) << "Solve explicit term <- Done";
     MoFEMFunctionReturn(0);
   };
 
@@ -652,8 +687,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     pipeline.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
 
-    // pipeline.push_back(new OpRhsExplicitTermU("U", u_ptr, grad_u_ptr, h_ptr));
-    // pipeline.push_back(new OpRhsExplicitTermH("H", u_ptr, grad_h_ptr));
+    pipeline.push_back(new OpRhsExplicitTermU("U", u_ptr, grad_u_ptr, h_ptr));
+    pipeline.push_back(new OpRhsExplicitTermH("H", u_ptr, grad_h_ptr));
   };
 
   set_domain_rhs_explicit(pipeline_mng->getOpDomainExplicitRhsPipeline());

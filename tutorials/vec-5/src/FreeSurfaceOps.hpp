@@ -213,7 +213,8 @@ struct OpRhsU : public AssemblyDomainEleOp {
       t_inertia_force(i) = (rho * alpha) * (t_dot_u(i) - t_a0(i));
       t_stress(i, j) =
           alpha * (t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p);
-      t_phase_force(i) = 0;//alpha * (t_J(i) - kappa * t_g * t_grad_h(i));
+      t_phase_force(i) =
+          alpha * (/*t_J(j) * t_grad_u(j, i)*/ -kappa * t_g * t_grad_h(i));
 
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
 
@@ -273,10 +274,11 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
 
   OpLhsU_dU(const std::string field_name, boost::shared_ptr<MatrixDouble> u_ptr,
             boost::shared_ptr<MatrixDouble> grad_u_ptr,
-            boost::shared_ptr<VectorDouble> h_ptr)
+            boost::shared_ptr<VectorDouble> h_ptr,
+            boost::shared_ptr<MatrixDouble> grad_g_ptr)
       : AssemblyDomainEleOp(field_name, field_name,
                             AssemblyDomainEleOp::OPROWCOL),
-        uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr) {
+        uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr), gradGPtr(grad_g_ptr) {
     sYmm = false;
     assembleTranspose = false;
   }
@@ -289,6 +291,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
     auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
     auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
     auto t_h = getFTensor0FromVec(*hPtr);
+    auto t_grad_g = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
     auto t_row_base = row_data.getFTensor0N();
@@ -309,8 +312,12 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       const double rho = phase_function(t_h, rho_p, rho_m);
       const double mu = phase_function(t_h, mu_p, mu_m);
 
-      const double beta = alpha * ts_a;
+      const double beta = alpha * rho * ts_a;
       auto t_D = get_D(alpha * 2 * mu);
+      auto t_J = get_J(t_h, t_grad_g);
+
+      FTensor::Tensor1<double, SPACE_DIM> t_phase_force_du;
+      t_phase_force_du(i) = alpha * t_J(i);
 
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
@@ -330,6 +337,8 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
           const double bb = t_row_base * t_col_base;
 
           t_mat(i, j) += (beta * bb) * t_kd(i, j);
+          t_mat(i, j) +=
+              (t_row_base * t_phase_force_du(j)) * t_col_diff_base(i);
           t_mat(i, j) += t_d_stress(i, j, k) * t_col_diff_base(k);
 
           // When we move to C++17 add if constexpr()
@@ -354,6 +363,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       ++t_u;
       ++t_grad_u;
       ++t_h;
+      ++t_grad_g;
 
       ++t_coords;
       ++t_w;
@@ -366,6 +376,7 @@ private:
   boost::shared_ptr<MatrixDouble> uPtr;
   boost::shared_ptr<MatrixDouble> gradUPtr;
   boost::shared_ptr<VectorDouble> hPtr;
+  boost::shared_ptr<MatrixDouble> gradGPtr;
 };
 
 /**
@@ -427,7 +438,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
 
       t_inertia_force_dh(i) = (alpha * rho_dh) * (t_dot_u(i) - t_a0(i));
       t_stress_dh(i, j) = t_D_dh(i, j, k, l) * t_grad_u(k, l);
-      t_phase_force_dh(i) = alpha * t_J_dh(i);
+      t_phase_force_dh(i) = alpha * t_J_dh(j) * t_grad_u(j, i);
       const double t_phase_force_d_diff_h = alpha * kappa * t_g;
 
       int rr = 0;
@@ -443,8 +454,8 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
           const double bb = t_row_base * t_col_base;
           t_mat(i) += t_inertia_force_dh(i) * bb;
           t_mat(i) += (t_row_diff_base(j) * t_col_base) * t_stress_dh(i, j);
-          // t_mat(i) += t_phase_force_dh(i) * t_col_base;
-          // t_mat(i) += t_phase_force_d_diff_h * t_col_diff_base(i);
+          t_mat(i) += t_phase_force_dh(i) * t_col_base;
+          t_mat(i) += t_phase_force_d_diff_h * t_col_diff_base(i);
 
           // When we move to C++17 add if constexpr()
           if constexpr (coord_type == CYLINDRICAL) {
@@ -494,12 +505,14 @@ private:
 struct OpLhsU_dG : public AssemblyDomainEleOp {
 
   OpLhsU_dG(const std::string field_name_u, const std::string field_name_h,
+            boost::shared_ptr<MatrixDouble> grad_u_ptr,
             boost::shared_ptr<VectorDouble> h_ptr,
             boost::shared_ptr<MatrixDouble> grad_h_ptr,
             boost::shared_ptr<MatrixDouble> grad_g_ptr)
       : AssemblyDomainEleOp(field_name_u, field_name_h,
                             AssemblyDomainEleOp::OPROWCOL),
-        hPtr(h_ptr), gradHPtr(grad_h_ptr), gradGPtr(grad_g_ptr) {
+        gradUPtr(grad_u_ptr), hPtr(h_ptr), gradHPtr(grad_h_ptr),
+        gradGPtr(grad_g_ptr) {
     sYmm = false;
     assembleTranspose = false;
   }
@@ -509,6 +522,7 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
+    auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
     auto t_h = getFTensor0FromVec(*hPtr);
     auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
     auto t_grad_g = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
@@ -519,8 +533,6 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
 
     auto t_w = getFTensor0IntegrationWeight();
 
-    FTensor::Tensor1<double, U_FIELD_DIM> t_phase_force_d_g;
-
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
       const double r = t_coords(0);
@@ -529,8 +541,9 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
       const double rho = phase_function(t_h, rho_p, rho_m);
       const double mu = phase_function(t_h, mu_p, mu_m);
 
-      const double t_phase_force_dg = alpha * get_J_dg(t_h, t_grad_g);
-      t_phase_force_d_g(i) = alpha * kappa * t_grad_h(i);
+      const double J_dg = alpha * get_J_dg(t_h, t_grad_g);
+      FTensor::Tensor1<double, 3> t_phase_force_dg;
+      t_phase_force_dg(i) = alpha * kappa * t_grad_h(i);
 
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
@@ -543,8 +556,9 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
         for (int cc = 0; cc != nbCols; ++cc) {
 
           const double bb = t_row_base * t_col_base;
-          // t_mat(i) += t_phase_force_d_g(i) * bb;
-          // t_mat(i) += (t_row_base * t_phase_force_dg) * t_col_diff_base(i);
+          t_mat(i) += t_phase_force_dg(i) * bb;
+          t_mat(i) +=
+              (t_row_base * J_dg) * (t_col_diff_base(j) * t_grad_u(j, i));
 
           ++t_mat;
           ++t_col_base;
@@ -560,6 +574,7 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
         ++t_row_base;
       }
 
+      ++t_grad_u;
       ++t_h;
       ++t_grad_h;
       ++t_grad_g;
@@ -571,6 +586,7 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
   }
 
 private:
+  boost::shared_ptr<MatrixDouble> gradUPtr;
   boost::shared_ptr<VectorDouble> hPtr;
   boost::shared_ptr<MatrixDouble> gradHPtr;
   boost::shared_ptr<MatrixDouble> gradGPtr;
@@ -598,7 +614,7 @@ struct OpRhsH : public AssemblyDomainEleOp {
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
     auto t_w = getFTensor0IntegrationWeight();
 
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+    for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
@@ -813,11 +829,11 @@ struct OpRhsG : public AssemblyDomainEleOp {
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
     auto t_w = getFTensor0IntegrationWeight();
 
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+    for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
-      const double f =  get_F(t_h);
+      const double f =  get_f(t_h);
 
       int bb = 0;
       for (; bb != nbRows; ++bb) {
@@ -881,7 +897,7 @@ struct OpLhsG_dH : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      const double f_dh = get_F_dh(t_h) * alpha;
+      const double f_dh = get_f_dh(t_h) * alpha;
       const double beta = eta2 * alpha;
 
       int rr = 0;
@@ -942,7 +958,7 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
     auto t_w = getFTensor0IntegrationWeight();
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+    for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
