@@ -34,6 +34,7 @@ constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
 constexpr int H_FIELD_DIM = 1;
 constexpr CoordinateTypes coord_type = CARTESIAN; // CYLINDRICAL;
+constexpr bool explict_convection = false;
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -94,18 +95,18 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 constexpr double a0 = 980;
 constexpr double rho_p = 0.998;
 constexpr double rho_m = 0.0012;
-constexpr double mu_p = 0.01001*1e1;
-constexpr double mu_m = 0.000182*1e1;
-constexpr double lambda = 0;
+constexpr double mu_p = 0.01001 * 1e1;
+constexpr double mu_m = 0.000182 * 1e1;
+constexpr double lambda = 0.73;
 constexpr double W = 0.25;
 
 // Model parameters
 constexpr double h = 1. / 20.; // mesh size
-constexpr double eta = 8 * h;
+constexpr double eta = 2 * h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
-constexpr double md = 1e4;
+constexpr double md = 1;
 constexpr double eps = 1e-10;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
@@ -127,7 +128,9 @@ auto cylindrical = [](const double r) {
 
 auto my_max = [](const double x) { return (x - 1 + std::abs(x + 1)) / 2; };
 auto my_min = [](const double x) { return (x + 1 - std::abs(x - 1)) / 2; };
-auto cut_off = [](const double h) { return my_max(my_min(h)); };
+auto cut_off = [](const double h) {
+  return my_max(my_min(h));
+};
 auto d_cut_off = [](const double h) {
   if (h >= -1 && h < 1)
     return 1.;
@@ -148,11 +151,9 @@ auto get_f_dh = [](const double h) { return 4 * W * (3 * h * h - 1); };
 
 auto get_M0 = [](auto h) { return md; };
 auto get_M0_dh = [](auto h) { return 0; };
-auto get_M2 = [](auto h) { return md * (1 - cut_off(h) * cut_off(h)); };
-auto get_M2_dh = [](auto h) { return -md * 2 * cut_off(h) * d_cut_off(h); };
+auto get_M2 = [](auto h) { return md * (1 - h * h); };
+auto get_M2_dh = [](auto h) { return -md * 2 * h *h; };
 auto get_M3 = [](auto h) {
-  if (std::abs(h) > 1)
-    return 0.;
   const double h2 = h * h;
   const double h3 = h2 * h;
   if (h >= 0)
@@ -161,16 +162,14 @@ auto get_M3 = [](auto h) {
     return md * (-2 * h3 - 3 * h2 + 1);
 };
 auto get_M3_dh = [](auto h) {
-  if (std::abs(h) > 1)
-    return 0.;
   if (h >= 0)
     return md * (6 * h * (h - 1));
   else
     return md * (-6 * h * (h + 1));
 };
 
-auto get_M = [](auto h) { return get_M3(h); };
-auto get_M_dh = [](auto h) { return get_M3_dh(h); };
+auto get_M = [](auto h) { return get_M0(h); };
+auto get_M_dh = [](auto h) { return get_M0_dh(h); };
 
 auto get_J = [](auto h, auto &t_g) {
   FTensor::Tensor1<double, U_FIELD_DIM> t_J;
@@ -248,7 +247,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->addBoundaryField("H", H1, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addBoundaryField("L", H1, DEMKOWICZ_JACOBI_BASE, 1);
 
-  constexpr int order = 3;
+  constexpr int order = 2;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("P", order - 2);
   CHKERR simple->setFieldOrder("H", order);
@@ -268,16 +267,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     return (y - 0.5) * (1. / eta);
   };
 
-  auto aux = [](const double h) {
-    if (std::abs(h) > 1)
-      return 0.;
-    const double h2 = h * h;
-    const double h3 = h2 * h;
-    if (h >= 0)
-      return (2 * h3 - 3 * h2 + 1);
-    else
-      return (-2 * h3 - 3 * h2 + 1);
-  };
+  auto aux = [](const double h) { return my_max(my_min(h)); };
 
   auto init_h = [&](double r, double y, double theta) {
     return aux(kernel(r, y, theta));
@@ -523,7 +513,7 @@ struct Monitor : public FEMethod {
       : dM(dm), postProc(post_proc){};
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    constexpr int save_every_nth_step = 1;
+    constexpr int save_every_nth_step = 10;
     if (ts_step % save_every_nth_step == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
                                       this->getCacheWeakPtr());

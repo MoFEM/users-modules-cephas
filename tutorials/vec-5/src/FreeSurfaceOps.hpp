@@ -212,11 +212,14 @@ struct OpRhsU : public AssemblyDomainEleOp {
       auto t_J = get_J(t_h, t_grad_g);
 
       t_inertia_force(i) = (rho * alpha) * (t_dot_u(i) - t_a0(i));
-      t_convection(i) = (rho * alpha) * (t_u(j) * t_grad_u(i, j));
+      if constexpr (!explict_convection)
+        t_convection(i) = (rho * alpha) * (t_u(j) * t_grad_u(i, j));
+      else
+        t_convection(i) = 0;
       t_stress(i, j) =
           alpha * (t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p);
       t_phase_force(i) =
-          alpha * (t_J(j) * t_grad_u(j, i) - kappa * t_g * t_grad_h(i));
+          -alpha * (t_J(j) * t_grad_u(j, i) + kappa * t_g * t_grad_h(i));
 
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
 
@@ -321,7 +324,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       auto t_J = get_J(t_h, t_grad_g);
 
       FTensor::Tensor1<double, SPACE_DIM> t_phase_force_du;
-      t_phase_force_du(i) = alpha * t_J(i);
+      t_phase_force_du(i) = -alpha * t_J(i);
 
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
@@ -341,8 +344,10 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
           const double bb = t_row_base * t_col_base;
 
           t_mat(i, j) += (beta1 * bb) * t_kd(i, j);
-          t_mat(i, j) += (beta0 * bb) * t_grad_u(i, j);
-          t_mat(i, j) += (beta0 * t_row_base) * (t_col_diff_base(k) * t_u(k));
+          if constexpr (!explict_convection) {
+            t_mat(i, j) += (beta0 * bb) * t_grad_u(i, j);
+            t_mat(i, j) += (beta0 * t_row_base) * (t_col_diff_base(k) * t_u(k));
+          }
           t_mat(i, j) +=
               (t_row_base * t_phase_force_du(j)) * t_col_diff_base(i);
           t_mat(i, j) += t_d_stress(i, j, k) * t_col_diff_base(k);
@@ -442,11 +447,13 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
 
       auto t_D_dh = get_D(alpha * mu_dh);
       auto t_J_dh = get_J_dh(t_h, t_grad_g);
-
-      t_convection(i) = (rho_dh * alpha) * (t_u(j) * t_grad_u(i, j));
+      if constexpr (!explict_convection)
+        t_convection(i) = (rho_dh * alpha) * (t_u(j) * t_grad_u(i, j));
+      else
+        t_convection(i) = 0;
       t_inertia_force_dh(i) = (alpha * rho_dh) * (t_dot_u(i) - t_a0(i));
       t_stress_dh(i, j) = t_D_dh(i, j, k, l) * t_grad_u(k, l);
-      t_phase_force_dh(i) = alpha * t_J_dh(j) * t_grad_u(j, i);
+      t_phase_force_dh(i) = -alpha * t_J_dh(j) * t_grad_u(j, i);
       const double t_phase_force_g_dh = -alpha * kappa * t_g;
 
       int rr = 0;
@@ -548,7 +555,7 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
 
       const double rho = phase_function(t_h, rho_p, rho_m);
 
-      const double J_dg = alpha * get_J_dg(t_h);
+      const double J_dg = -alpha * get_J_dg(t_h);
       FTensor::Tensor1<double, SPACE_DIM> t_phase_force_dg;
       t_phase_force_dg(i) = -alpha * kappa * t_grad_h(i);
 
@@ -634,7 +641,9 @@ struct OpRhsH : public AssemblyDomainEleOp {
 
       int bb = 0;
       for (; bb != nbRows; ++bb) {
-        locF[bb] += (t_base * alpha) * (t_dot_h /*+ t_grad_h(i) * t_u(i)*/);
+        locF[bb] += (t_base * alpha) * (t_dot_h);
+        if constexpr (!explict_convection)
+          locF[bb] += (t_base * alpha) * (t_grad_h(i) * t_u(i));
         locF[bb] += (t_diff_base(i) * m) * t_grad_g(i);
         ++t_base;
         ++t_diff_base;
@@ -683,36 +692,39 @@ struct OpLhsH_dU : public AssemblyDomainEleOp {
                            DataForcesAndSourcesCore::EntData &col_data) {
     MoFEMFunctionBegin;
 
-    const double vol = getMeasure();
-    auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
-    auto t_coords = getFTensor1CoordsAtGaussPts();
+    if constexpr (!explict_convection) {
 
-    auto t_row_base = row_data.getFTensor0N();
-    auto t_w = getFTensor0IntegrationWeight();
+      const double vol = getMeasure();
+      auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
+      auto t_coords = getFTensor1CoordsAtGaussPts();
 
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+      auto t_row_base = row_data.getFTensor0N();
+      auto t_w = getFTensor0IntegrationWeight();
 
-      const double alpha = t_w * vol;
+      for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
-      int rr = 0;
-      for (; rr != nbRows; ++rr) {
-        auto t_mat = getFTensor1FromPtr<U_FIELD_DIM>(&locMat(rr, 0));
-        auto t_col_base = col_data.getFTensor0N(gg, 0);
-        for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
-          // t_mat(i) += (t_row_base * t_col_base * alpha) * t_grad_h(i);
-          ++t_mat;
-          ++t_col_base;
+        const double alpha = t_w * vol;
+
+        int rr = 0;
+        for (; rr != nbRows; ++rr) {
+          auto t_mat = getFTensor1FromPtr<U_FIELD_DIM>(&locMat(rr, 0));
+          auto t_col_base = col_data.getFTensor0N(gg, 0);
+          for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
+            t_mat(i) += (t_row_base * t_col_base * alpha) * t_grad_h(i);
+            ++t_mat;
+            ++t_col_base;
+          }
+          ++t_row_base;
         }
-        ++t_row_base;
+
+        for (; rr < nbRowBaseFunctions; ++rr)
+          ++t_row_base;
+
+        ++t_grad_h;
+        ++t_w;
       }
-
-      for (; rr < nbRowBaseFunctions; ++rr)
-        ++t_row_base;
-
-      ++t_grad_h;
-      ++t_w;
     }
-    
+
     MoFEMFunctionReturn(0);
   }
 
@@ -765,8 +777,10 @@ struct OpLhsH_dH : public AssemblyDomainEleOp {
         for (int cc = 0; cc != nbCols; ++cc) {
 
           locMat(rr, cc) += (t_row_base * t_col_base * alpha) * ts_a;
-          // locMat(rr, cc) +=
-          //     (t_row_base * alpha) * (t_col_diff_base(i) * t_u(i));
+          if constexpr (!explict_convection) {
+            locMat(rr, cc) +=
+                (t_row_base * alpha) * (t_col_diff_base(i) * t_u(i));
+          }
           locMat(rr, cc) +=
               (t_row_diff_base(i) * t_grad_g(i)) * (t_col_base * m_dh);
 
@@ -886,7 +900,7 @@ struct OpRhsG : public AssemblyDomainEleOp {
 
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
-      const double f = 0;//get_f(t_h);
+      const double f = get_f(t_h);
 
       int bb = 0;
       for (; bb != nbRows; ++bb) {
@@ -961,7 +975,7 @@ struct OpLhsG_dH : public AssemblyDomainEleOp {
 
         for (int cc = 0; cc != nbCols; ++cc) {
 
-          // locMat(rr, cc) -= (t_row_base * t_col_base) * f_dh;
+          locMat(rr, cc) -= (t_row_base * t_col_base) * f_dh;
           locMat(rr, cc) -= (t_row_diff_base(i) * beta) * t_col_diff_base(i);
 
           ++t_col_base;
@@ -1058,48 +1072,51 @@ struct OpRhsExplicitTermU : public AssemblyDomainEleOp {
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 
-    const double vol = getMeasure();
-    auto t_coords = getFTensor1CoordsAtGaussPts();
-    auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
-    auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
-    auto t_h = getFTensor0FromVec(*hPtr);
+    if constexpr (explict_convection) {
 
-    auto t_base = data.getFTensor0N();
-    auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
+      const double vol = getMeasure();
+      auto t_coords = getFTensor1CoordsAtGaussPts();
+      auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
+      auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
+      auto t_h = getFTensor0FromVec(*hPtr);
 
-    auto t_w = getFTensor0IntegrationWeight();
+      auto t_base = data.getFTensor0N();
+      auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
 
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+      auto t_w = getFTensor0IntegrationWeight();
 
-      const double r = t_coords(0);
-      const double alpha = t_w * vol * cylindrical(r);
+      for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
-      const double rho = phase_function(t_h, rho_p, rho_m);
+        const double r = t_coords(0);
+        const double alpha = t_w * vol * cylindrical(r);
 
-      FTensor::Tensor1<double, U_FIELD_DIM> t_convection;
-      t_convection(i) = t_u(j) * t_grad_u(i, j) / rho;
+        const double rho = phase_function(t_h, rho_p, rho_m);
 
-      auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
+        FTensor::Tensor1<double, U_FIELD_DIM> t_convection;
+        t_convection(i) = t_u(j) * t_grad_u(i, j) / rho;
 
-      int bb = 0;
-      for (; bb != nbRows / U_FIELD_DIM; ++bb) {
+        auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
 
-        // t_nf(i) -= (t_base * alpha) * t_convection(i);
+        int bb = 0;
+        for (; bb != nbRows / U_FIELD_DIM; ++bb) {
 
-        ++t_base;
-        ++t_nf;
+          t_nf(i) -= (t_base * alpha) * t_convection(i);
+
+          ++t_base;
+          ++t_nf;
+        }
+
+        for (; bb < nbRowBaseFunctions; ++bb) {
+          ++t_base;
+        }
+
+        ++t_u;
+        ++t_grad_u;
+        ++t_h;
+
+        ++t_w;
+        ++t_coords;
       }
-
-      for (; bb < nbRowBaseFunctions; ++bb) {
-        ++t_base;
-      }
-
-      ++t_u;
-      ++t_grad_u;
-      ++t_h;
-
-      ++t_w;
-      ++t_coords;
     }
 
     MoFEMFunctionReturn(0);
@@ -1126,33 +1143,36 @@ struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 
-    const double vol = getMeasure();
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_coords = getFTensor1CoordsAtGaussPts();
-    auto t_base = data.getFTensor0N();
+    if constexpr (explict_convection) {
 
-    auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
-    auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
+      const double vol = getMeasure();
+      auto t_w = getFTensor0IntegrationWeight();
+      auto t_coords = getFTensor1CoordsAtGaussPts();
+      auto t_base = data.getFTensor0N();
 
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+      auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
+      auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
 
-      const double r = t_coords(0);
-      const double alpha = t_w * vol * cylindrical(r);
-      auto nf_ptr = &locF[0];
+      for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
-      int rr = 0;
-      for (; rr != nbRows; ++rr) {
+        const double r = t_coords(0);
+        const double alpha = t_w * vol * cylindrical(r);
+        auto nf_ptr = &locF[0];
 
-        // (*nf_ptr) -= (alpha * t_base) * t_u(i) * t_grad_h(i);
+        int rr = 0;
+        for (; rr != nbRows; ++rr) {
 
-        ++nf_ptr;
-        ++t_base;
+          (*nf_ptr) -= (alpha * t_base) * t_u(i) * t_grad_h(i);
+
+          ++nf_ptr;
+          ++t_base;
+        }
+
+        ++t_u;
+        ++t_grad_h;
+        ++t_w;
+        ++t_coords;
       }
-
-      ++t_u;
-      ++t_grad_h;
-      ++t_w;
-      ++t_coords;
     }
 
     MoFEMFunctionReturn(0);
