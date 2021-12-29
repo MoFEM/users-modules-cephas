@@ -91,21 +91,21 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // Physical parameters
-constexpr double a0 = -980;
+constexpr double a0 = 980;
 constexpr double rho_p = 0.998;
 constexpr double rho_m = 0.0012;
-constexpr double mu_p = 0.01001;
-constexpr double mu_m = 0.000182;
-constexpr double lambda = 73;
+constexpr double mu_p = 0.01001*1e1;
+constexpr double mu_m = 0.000182*1e1;
+constexpr double lambda = 0;
 constexpr double W = 0.25;
 
 // Model parameters
-constexpr double h = 1. / 16.; // mesh size
-constexpr double eta = 2 * h;
+constexpr double h = 1. / 20.; // mesh size
+constexpr double eta = 8 * h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
-constexpr double md = 1e-3;
+constexpr double md = 1e4;
 constexpr double eps = 1e-10;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
@@ -143,32 +143,30 @@ auto d_phase_function_h = [](const double h, const double p, const double m) {
   return 0.5 * (p - m) * d_cut_off(h);
 };
 
-auto get_f = [](const double h) { return -4 * W * (h * h * h - h); };
-auto get_f_dh = [](const double h) { return -4 * W * (3 * h * h - 1); };
+auto get_f = [](const double h) { return 4 * W * h * (h * h - 1); };
+auto get_f_dh = [](const double h) { return 4 * W * (3 * h * h - 1); };
 
 auto get_M0 = [](auto h) { return md; };
 auto get_M0_dh = [](auto h) { return 0; };
 auto get_M2 = [](auto h) { return md * (1 - cut_off(h) * cut_off(h)); };
 auto get_M2_dh = [](auto h) { return -md * 2 * cut_off(h) * d_cut_off(h); };
 auto get_M3 = [](auto h) {
-  if (h >= -1 && h < 1)
+  if (std::abs(h) > 1)
     return 0.;
   const double h2 = h * h;
   const double h3 = h2 * h;
   if (h >= 0)
-    return md * (-2 * h3 - 3 * h2 + 1);
+    return md * (2 * h3 - 3 * h2 + 1);
   else
     return md * (-2 * h3 - 3 * h2 + 1);
-    
 };
 auto get_M3_dh = [](auto h) {
-  if (h >= -1 && h < 1)
+  if (std::abs(h) > 1)
     return 0.;
-  const double h2 = h * h;
   if (h >= 0)
-    return md * (6 * h2 - 6 * h + 1);
+    return md * (6 * h * (h - 1));
   else
-    return md * (-6 * h2 - 6 * h + 1);
+    return md * (-6 * h * (h + 1));
 };
 
 auto get_M = [](auto h) { return get_M3(h); };
@@ -184,7 +182,7 @@ auto get_J_dh = [](auto h, auto &t_g) {
   t_J_dh(i) = -rho_diff * get_M_dh(h) * t_g(i);
   return t_J_dh;
 };
-auto get_J_dg = [](auto h, auto &t_g) { return -rho_diff * get_M(h); };
+auto get_J_dg = [](auto h) { return -rho_diff * get_M(h); };
 
 auto get_D = [](const double A) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
@@ -267,11 +265,22 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   MoFEMFunctionBegin;
 
   auto kernel = [](double r, double y, double) {
-    return (y - 0.5) * (1 / eta);
+    return (y - 0.5) * (1. / eta);
+  };
+
+  auto aux = [](const double h) {
+    if (std::abs(h) > 1)
+      return 0.;
+    const double h2 = h * h;
+    const double h3 = h2 * h;
+    if (h >= 0)
+      return (2 * h3 - 3 * h2 + 1);
+    else
+      return (-2 * h3 - 3 * h2 + 1);
   };
 
   auto init_h = [&](double r, double y, double theta) {
-    return tanh(kernel(r, y, theta)) * cylindrical(r);
+    return aux(kernel(r, y, theta));
   };
 
   auto set_domain_general = [&](auto &pipeline) {
@@ -431,7 +440,8 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   auto set_domain_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr,
                                   grad_h_ptr, g_ptr, grad_g_ptr, p_ptr));
-    pipeline.push_back(new OpRhsH("H", dot_h_ptr, h_ptr, grad_g_ptr));
+    pipeline.push_back(
+        new OpRhsH("H", u_ptr, dot_h_ptr, h_ptr, grad_h_ptr, grad_g_ptr));
     pipeline.push_back(new OpRhsG("G", h_ptr, grad_h_ptr, g_ptr));
     pipeline.push_back(new OpBaseTimesScalarField(
         "P", div_u_ptr, [](const double r, const double, const double) {
@@ -451,8 +461,8 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(
         new OpLhsU_dG("U", "G", grad_u_ptr, h_ptr, grad_h_ptr, grad_g_ptr));
 
-    pipeline.push_back(new OpLhsH_dU("H", "U"));
-    pipeline.push_back(new OpLhsH_dH("H", h_ptr, grad_g_ptr));
+    pipeline.push_back(new OpLhsH_dU("H", "U", grad_h_ptr));
+    pipeline.push_back(new OpLhsH_dH("H", u_ptr, h_ptr, grad_g_ptr));
     pipeline.push_back(new OpLhsH_dG("H", "G", h_ptr));
 
     pipeline.push_back(new OpLhsG_dH("G", "H", h_ptr));
@@ -513,7 +523,7 @@ struct Monitor : public FEMethod {
       : dM(dm), postProc(post_proc){};
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    constexpr int save_every_nth_step = 10;
+    constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
                                       this->getCacheWeakPtr());
