@@ -32,9 +32,10 @@ static char help[] = "...\n\n";
 constexpr int BASE_DIM = 1;
 constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
-constexpr int H_FIELD_DIM = 1;
-constexpr CoordinateTypes coord_type = CARTESIAN; // CYLINDRICAL;
+constexpr CoordinateTypes coord_type =
+    CARTESIAN; ///< select coordinate system <CARTESIAN, CYLINDRICAL>;
 constexpr bool explict_convection = false;
+constexpr bool diffusive_flux_term = false; ///< add diffusive flux_term
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -70,13 +71,13 @@ using AssemblyBoundaryEleOp =
 using OpDomainMassU = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<BASE_DIM, U_FIELD_DIM>;
 using OpDomainMassH = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpMass<BASE_DIM, H_FIELD_DIM>;
+    PETSC>::BiLinearForm<GAUSS>::OpMass<BASE_DIM, 1>;
 using OpDomainMassP = OpDomainMassH;
 
 using OpDomainSourceU = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, U_FIELD_DIM>;
 using OpDomainSourceH = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, H_FIELD_DIM>;
+    PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, 1>;
 
 using OpBaseTimesScalarField = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1, 1>;
@@ -92,27 +93,27 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // Physical parameters
-constexpr double a0 = 980;
-constexpr double rho_p = 0.998;
-constexpr double rho_m = 0.0012;
-constexpr double mu_p = 0.01001 * 1e1;
-constexpr double mu_m = 0.000182 * 1e1;
-constexpr double lambda = 0.73;
+constexpr double a0 = 0;
+constexpr double rho_p = 1;
+constexpr double rho_m = 1;
+constexpr double mu_p = 1;
+constexpr double mu_m = 1;
+constexpr double lambda = 1;
 constexpr double W = 0.25;
 
 // Model parameters
-constexpr double h = 1. / 20.; // mesh size
+constexpr double h = 0.01; // mesh size
 constexpr double eta = 2 * h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
-constexpr double md = 1;
+constexpr double md = 1e-2;
 constexpr double eps = 1e-10;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
 constexpr double rho_ave = (rho_p + rho_m) / 2;
 constexpr double rho_diff = (rho_p - rho_m) / 2;
-const double kappa = (3 / (4 * sqrt(2 * W))) * (lambda / eta);
+const double kappa = (3. / (4. * sqrt(2. * W))) * (lambda / eta);
 
 auto integration_rule = [](int, int, int approx_order) {
   return 4 * approx_order;
@@ -139,11 +140,11 @@ auto d_cut_off = [](const double h) {
 };
 
 auto phase_function = [](const double h, const double p, const double m) {
-  return 0.5 * ((1 + cut_off(h)) * p + (1 - cut_off(h)) * m);
+  return rho_diff * cut_off(h) + rho_ave;
 };
 
 auto d_phase_function_h = [](const double h, const double p, const double m) {
-  return 0.5 * (p - m) * d_cut_off(h);
+  return rho_diff * d_cut_off(h);
 };
 
 auto get_f = [](const double h) { return 4 * W * h * (h * h - 1); };
@@ -161,6 +162,7 @@ auto get_M3 = [](auto h) {
   else
     return md * (-2 * h3 - 3 * h2 + 1);
 };
+
 auto get_M3_dh = [](auto h) {
   if (h >= 0)
     return md * (6 * h * (h - 1));
@@ -168,8 +170,8 @@ auto get_M3_dh = [](auto h) {
     return md * (-6 * h * (h + 1));
 };
 
-auto get_M = [](auto h) { return get_M0(h); };
-auto get_M_dh = [](auto h) { return get_M0_dh(h); };
+auto get_M = [](auto h) { return get_M3(h); };
+auto get_M_dh = [](auto h) { return get_M3_dh(h); };
 
 auto get_J = [](auto h, auto &t_g) {
   FTensor::Tensor1<double, U_FIELD_DIM> t_J;
@@ -240,7 +242,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
 
   auto simple = mField.getInterface<Simple>();
   CHKERR simple->addDomainField("U", H1, DEMKOWICZ_JACOBI_BASE, U_FIELD_DIM);
-  CHKERR simple->addDomainField("P", L2, DEMKOWICZ_JACOBI_BASE, 1);
+  CHKERR simple->addDomainField("P", H1, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addDomainField("H", H1, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addDomainField("G", H1, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addBoundaryField("U", H1, DEMKOWICZ_JACOBI_BASE, U_FIELD_DIM);
@@ -249,7 +251,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
 
   constexpr int order = 2;
   CHKERR simple->setFieldOrder("U", order);
-  CHKERR simple->setFieldOrder("P", order - 2);
+  CHKERR simple->setFieldOrder("P", order - 1);
   CHKERR simple->setFieldOrder("H", order);
   CHKERR simple->setFieldOrder("G", order);
   CHKERR simple->setFieldOrder("L", order);
@@ -263,14 +265,14 @@ MoFEMErrorCode FreeSurface::setupProblem() {
 MoFEMErrorCode FreeSurface::boundaryCondition() {
   MoFEMFunctionBegin;
 
+  constexpr double R = 0.25;
   auto kernel = [](double r, double y, double) {
-    return (y - 0.5) * (1. / eta);
+    const double d = sqrt(r * r + y * y);
+    return tanh((R - d) / (eta * sqrt(2)));
   };
 
-  auto aux = [](const double h) { return my_max(my_min(h)); };
-
   auto init_h = [&](double r, double y, double theta) {
-    return aux(kernel(r, y, theta));
+    return kernel(r, y, theta);
   };
 
   auto set_domain_general = [&](auto &pipeline) {

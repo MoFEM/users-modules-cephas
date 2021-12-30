@@ -218,9 +218,11 @@ struct OpRhsU : public AssemblyDomainEleOp {
         t_convection(i) = 0;
       t_stress(i, j) =
           alpha * (t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p);
-      t_phase_force(i) =
-          -alpha * (t_J(j) * t_grad_u(j, i) + kappa * t_g * t_grad_h(i));
-
+      if constexpr (diffusive_flux_term)
+        t_phase_force(i) =
+            -alpha * (t_J(j) * t_grad_u(i, j) + kappa * t_g * t_grad_h(i));
+      else
+        t_phase_force(i) = -alpha * kappa * t_g * t_grad_h(i);
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
 
       int bb = 0;
@@ -348,8 +350,9 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
             t_mat(i, j) += (beta0 * bb) * t_grad_u(i, j);
             t_mat(i, j) += (beta0 * t_row_base) * (t_col_diff_base(k) * t_u(k));
           }
-          t_mat(i, j) +=
-              (t_row_base * t_phase_force_du(j)) * t_col_diff_base(i);
+          if constexpr (diffusive_flux_term)
+            t_mat(i, j) += (t_row_base * t_phase_force_du(k)) *
+                           t_col_diff_base(k) * t_kd(i, j);
           t_mat(i, j) += t_d_stress(i, j, k) * t_col_diff_base(k);
 
           // When we move to C++17 add if constexpr()
@@ -453,7 +456,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
         t_convection(i) = 0;
       t_inertia_force_dh(i) = (alpha * rho_dh) * (t_dot_u(i) - t_a0(i));
       t_stress_dh(i, j) = t_D_dh(i, j, k, l) * t_grad_u(k, l);
-      t_phase_force_dh(i) = -alpha * t_J_dh(j) * t_grad_u(j, i);
+      t_phase_force_dh(i) = -alpha * t_J_dh(j) * t_grad_u(i, j);
       const double t_phase_force_g_dh = -alpha * kappa * t_g;
 
       int rr = 0;
@@ -469,7 +472,8 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
           const double bb = t_row_base * t_col_base;
           t_mat(i) += (t_inertia_force_dh(i) + t_convection(i)) * bb;
           t_mat(i) += (t_row_diff_base(j) * t_col_base) * t_stress_dh(i, j);
-          t_mat(i) += t_phase_force_dh(i) * t_col_base;
+          if constexpr (diffusive_flux_term)
+            t_mat(i) += t_phase_force_dh(i) * t_col_base;
           t_mat(i) += t_phase_force_g_dh * t_col_diff_base(i);
 
           // When we move to C++17 add if constexpr()
@@ -571,8 +575,9 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
 
           const double bb = t_row_base * t_col_base;
           t_mat(i) += t_phase_force_dg(i) * bb;
-          t_mat(i) +=
-              (t_row_base * J_dg) * (t_col_diff_base(j) * t_grad_u(j, i));
+          if constexpr (diffusive_flux_term)
+            t_mat(i) +=
+                (t_row_base * J_dg) * (t_col_diff_base(j) * t_grad_u(i, j));
 
           ++t_mat;
           ++t_col_base;
