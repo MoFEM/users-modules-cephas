@@ -46,8 +46,6 @@ struct ConvectiveMassElement {
 
     Mat A;
     Vec F;
-    bool initV; ///< check if ghost vector used to accumalte Kinetin energy is
-                ///< created
 
     MyVolumeFE(MoFEM::Interface &m_field);
 
@@ -68,7 +66,7 @@ struct ConvectiveMassElement {
      **/
     int getRule(int order);
 
-    Vec V;
+    SmartPetscObj<Vec> V;
     double eNergy;
 
     MoFEMErrorCode preProcess();
@@ -321,11 +319,11 @@ struct ConvectiveMassElement {
 
     BlockData &dAta;
     CommonData &commonData;
-    Vec *Vptr;
+    SmartPetscObj<Vec> V;
     bool &lInear;
 
     OpEnergy(const std::string field_name, BlockData &data,
-             CommonData &common_data, Vec *v_ptr);
+             CommonData &common_data, SmartPetscObj<Vec> v);
 
     MatrixDouble3by3 h, H, invH, F;
     VectorDouble3 v;

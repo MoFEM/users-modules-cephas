@@ -42,9 +42,19 @@ using namespace MoFEM;
 #endif
 
 ConvectiveMassElement::MyVolumeFE::MyVolumeFE(MoFEM::Interface &m_field)
-    : VolumeElementForcesAndSourcesCore(m_field), A(PETSC_NULL), F(PETSC_NULL),
-      initV(false) {
+    : VolumeElementForcesAndSourcesCore(m_field), A(PETSC_NULL), F(PETSC_NULL) {
   meshPositionsFieldName = "NoNE";
+
+  auto create_vec = [&]() {
+    constexpr int ghosts[] = {0};
+    if (mField.get_comm_rank() == 0) {
+      return createSmartVectorMPI(mField.get_comm(), 1,1);
+    } else {
+      return createSmartVectorMPI(mField.get_comm(), 0, 1);
+    }
+  };
+
+  V = create_vec();
 }
 
 int ConvectiveMassElement::MyVolumeFE::getRule(int order) { return 2 * order; };
@@ -54,23 +64,9 @@ MoFEMErrorCode ConvectiveMassElement::MyVolumeFE::preProcess() {
 
   CHKERR VolumeElementForcesAndSourcesCore::preProcess();
 
-  int ghosts[] = {0};
-  int rank;
-  MPI_Comm_rank(mField.get_comm(), &rank);
-
   switch (ts_ctx) {
   case CTX_TSNONE:
-    if (!initV) {
-      if (rank == 0) {
-        CHKERR VecCreateGhost(mField.get_comm(), 1, 1, 1, ghosts, &V);
-      } else {
-        CHKERR VecCreateGhost(mField.get_comm(), 0, 1, 1, ghosts, &V);
-      }
-      initV = true;
-    }
     CHKERR VecZeroEntries(V);
-    CHKERR VecGhostUpdateBegin(V, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(V, INSERT_VALUES, SCATTER_FORWARD);
     break;
   default:
     break;
@@ -84,22 +80,12 @@ MoFEMErrorCode ConvectiveMassElement::MyVolumeFE::postProcess() {
 
   CHKERR VolumeElementForcesAndSourcesCore::postProcess();
 
-  double *array;
+  const double *array;
   switch (ts_ctx) {
   case CTX_TSNONE:
     CHKERR VecAssemblyBegin(V);
     CHKERR VecAssemblyEnd(V);
-    CHKERR VecGhostUpdateBegin(V, ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateEnd(V, ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateBegin(V, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(V, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGetArray(V, &array);
-    eNergy = array[0];
-    CHKERR VecRestoreArray(V, &array);
-    if (initV) {
-      CHKERR VecDestroy(&V);
-      initV = false;
-    }
+    CHKERR VecSum(V, &eNergy);
     break;
   default:
     break;
@@ -746,10 +732,11 @@ MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dX::getJac(
 
 ConvectiveMassElement::OpEnergy::OpEnergy(const std::string field_name,
                                           BlockData &data,
-                                          CommonData &common_data, Vec *v_ptr)
+                                          CommonData &common_data,
+                                          SmartPetscObj<Vec> v)
     : VolumeElementForcesAndSourcesCore::UserDataOperator(
           field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
-      dAta(data), commonData(common_data), Vptr(v_ptr),
+      dAta(data), commonData(common_data), V(v, true),
       lInear(commonData.lInear) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
@@ -766,7 +753,7 @@ MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
   }
 
   {
-
+    double energy = 0;
     for (unsigned int gg = 0; gg < row_data.getN().size1(); gg++) {
       double val = getVolume() * getGaussPts()(3, gg);
       double rho0 = dAta.rho0;
@@ -798,9 +785,9 @@ MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
       }
       v.resize(3);
       noalias(v) = commonData.dataAtGaussPts[commonData.spatialVelocities][gg];
-      double energy = 0.5 * rho * inner_prod(v, v);
-      CHKERR VecSetValue(*Vptr, 0, val * energy, ADD_VALUES);
+      energy += 0.5 * (rho * val) * inner_prod(v, v);
     }
+    CHKERR VecSetValue(V, 0, energy, ADD_VALUES);
   }
 
   MoFEMFunctionReturnHot(0);
@@ -2079,7 +2066,7 @@ MoFEMErrorCode ConvectiveMassElement::setConvectiveMassOperators(
   sit = setOfBlocks.begin();
   for (; sit != setOfBlocks.end(); sit++) {
     feEnergy.getOpPtrVector().push_back(new OpEnergy(
-        spatial_position_field_name, sit->second, commonData, &feEnergy.V));
+        spatial_position_field_name, sit->second, commonData, feEnergy.V));
   }
 
   MoFEMFunctionReturnHot(0);
@@ -2319,7 +2306,7 @@ MoFEMErrorCode ConvectiveMassElement::setShellMatrixMassOperators(
   sit = setOfBlocks.begin();
   for (; sit != setOfBlocks.end(); sit++) {
     feEnergy.getOpPtrVector().push_back(new OpEnergy(
-        spatial_position_field_name, sit->second, commonData, &feEnergy.V));
+        spatial_position_field_name, sit->second, commonData, feEnergy.V));
   }
 
   MoFEMFunctionReturnHot(0);

@@ -49,7 +49,7 @@ struct NonlinearElasticElement {
     int addToRule;
 
     MyVolumeFE(MoFEM::Interface &m_field);
-    virtual ~MyVolumeFE();
+    virtual ~MyVolumeFE() = default;
 
     /** \brief it is used to calculate nb. of Gauss integration points
      *
@@ -68,7 +68,7 @@ struct NonlinearElasticElement {
      **/
     int getRule(int order);
 
-    Vec V;
+    SmartPetscObj<Vec> V;
     double eNergy;
 
     MoFEMErrorCode preProcess();
@@ -586,12 +586,12 @@ struct NonlinearElasticElement {
 
     BlockData &dAta;
     CommonData &commonData;
-    Vec ghostVec;
+    SmartPetscObj<Vec> ghostVec;
     bool fieldDisp;
 
     OpEnergy(const std::string field_name, BlockData &data,
-             CommonData &common_data, Vec ghost_vec, bool field_disp);
-    ~OpEnergy();
+             CommonData &common_data, SmartPetscObj<Vec> ghost_vec,
+             bool field_disp);
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
                           DataForcesAndSourcesCore::EntData &row_data);

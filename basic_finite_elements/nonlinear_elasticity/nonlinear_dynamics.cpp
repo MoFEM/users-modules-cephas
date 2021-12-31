@@ -75,22 +75,19 @@ struct MonitorPostProc : public FEMethod {
         "_TsStep_", 1, MB_TYPE_INTEGER, th_step,
         MB_TAG_CREAT | MB_TAG_EXCL | MB_TAG_MESH, &def_t_val);
     if (rval == MB_ALREADY_ALLOCATED) {
-      rval = m_field.get_moab().tag_get_by_ptr(th_step, &root_meshset, 1,
-                                               (const void **)&step);
-      MOAB_THROW(rval);
+      MOAB_THROW(m_field.get_moab().tag_get_by_ptr(th_step, &root_meshset, 1,
+                                               (const void **)&step));
     } else {
-      rval = m_field.get_moab().tag_set_data(th_step, &root_meshset, 1,
-                                             &def_t_val);
-      MOAB_THROW(rval);
-      rval = m_field.get_moab().tag_get_by_ptr(th_step, &root_meshset, 1,
-                                               (const void **)&step);
-      MOAB_THROW(rval);
+      MOAB_THROW(m_field.get_moab().tag_set_data(th_step, &root_meshset, 1,
+                                                 &def_t_val));
+      MOAB_THROW(m_field.get_moab().tag_get_by_ptr(th_step, &root_meshset, 1,
+                                                   (const void **)&step));
     }
 
     PetscBool flg = PETSC_TRUE;
-    ierr = PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-my_output_prt", &pRT,
-                              &flg);
-    CHKERRABORT(PETSC_COMM_WORLD, ierr);
+    CHK_THROW_MESSAGE(PetscOptionsGetInt(PETSC_NULL, PETSC_NULL,
+                                         "-my_output_prt", &pRT, &flg),
+                      "Can not get option");
     if (flg != PETSC_TRUE) {
       pRT = 10;
     }
@@ -130,6 +127,7 @@ struct MonitorPostProc : public FEMethod {
     feElasticEnergy.ts_ctx = TSMethod::CTX_TSNONE;
     feElasticEnergy.snes_ctx = SnesMethod::CTX_SNESNONE;
     CHKERR mField.loop_finite_elements("DYNAMICS", "ELASTIC", feElasticEnergy);
+
     feKineticEnergy.ts_ctx = TSMethod::CTX_TSNONE;
     CHKERR mField.loop_finite_elements("DYNAMICS", "MASS_ELEMENT",
                                        feKineticEnergy);
