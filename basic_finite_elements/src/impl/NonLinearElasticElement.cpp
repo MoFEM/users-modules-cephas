@@ -32,18 +32,17 @@ using namespace MoFEM;
 NonlinearElasticElement::MyVolumeFE::MyVolumeFE(MoFEM::Interface &m_field)
     : VolumeElementForcesAndSourcesCore(m_field), A(PETSC_NULL), F(PETSC_NULL),
       addToRule(1) {
-  int ghosts[] = {0};
-  if (mField.get_comm_rank() == 0) {
-    ierr = VecCreateGhost(mField.get_comm(), 1, 1, 0, ghosts, &V);
-  } else {
-    ierr = VecCreateGhost(mField.get_comm(), 0, 1, 1, ghosts, &V);
-  }
-  CHKERRABORT(PETSC_COMM_SELF, ierr);
-}
 
-NonlinearElasticElement::MyVolumeFE::~MyVolumeFE() { 
-  ierr = VecDestroy(&V);
-  CHKERRABORT(PETSC_COMM_SELF, ierr);
+  auto create_vec = [&]() {
+    constexpr int ghosts[] = {0};
+    if (mField.get_comm_rank() == 0) {
+      return createSmartVectorMPI(mField.get_comm(), 1, 1);
+    } else {
+      return createSmartVectorMPI(mField.get_comm(), 0, 1);
+    }
+  };
+
+  V = create_vec();
 }
 
 int NonlinearElasticElement::MyVolumeFE::getRule(int order) {
@@ -66,8 +65,6 @@ MoFEMErrorCode NonlinearElasticElement::MyVolumeFE::preProcess() {
   switch (snes_ctx) {
   case CTX_SNESNONE:
     CHKERR VecZeroEntries(V);
-    CHKERR VecGhostUpdateBegin(V, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(V, INSERT_VALUES, SCATTER_FORWARD);
     break;
   default:
     break;
@@ -79,19 +76,13 @@ MoFEMErrorCode NonlinearElasticElement::MyVolumeFE::preProcess() {
 MoFEMErrorCode NonlinearElasticElement::MyVolumeFE::postProcess() {
   MoFEMFunctionBegin;
 
-  double *array;
+  const double *array;
 
   switch (snes_ctx) {
   case CTX_SNESNONE:
     CHKERR VecAssemblyBegin(V);
     CHKERR VecAssemblyEnd(V);
-    CHKERR VecGhostUpdateBegin(V, ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateEnd(V, ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateBegin(V, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(V, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGetArray(V, &array);
-    eNergy = array[0];
-    CHKERR VecRestoreArray(V, &array);
+    CHKERR VecSum(V, &eNergy);
     break;
   default:
     break;
@@ -690,19 +681,13 @@ MoFEMErrorCode NonlinearElasticElement::OpRhsPiolaKirchhoff::doWork(
 
 NonlinearElasticElement::OpEnergy::OpEnergy(const std::string field_name,
                                             BlockData &data,
-                                            CommonData &common_data, Vec ghost_vec,
+                                            CommonData &common_data,
+                                            SmartPetscObj<Vec> ghost_vec,
                                             bool field_disp)
     : VolumeElementForcesAndSourcesCore::UserDataOperator(
           field_name, UserDataOperator::OPROW),
-      dAta(data), commonData(common_data), ghostVec(ghost_vec), fieldDisp(field_disp) {
-  ierr = PetscObjectReference((PetscObject)ghostVec);
-  CHKERRABORT(PETSC_COMM_SELF, ierr);
-}
-
-NonlinearElasticElement::OpEnergy::~OpEnergy() { 
-  ierr = VecDestroy(&ghostVec);
-  CHKERRABORT(PETSC_COMM_SELF, ierr);
-}
+      dAta(data), commonData(common_data), ghostVec(ghost_vec, true),
+      fieldDisp(field_disp) {}
 
 MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
     int row_side, EntityType row_type,
@@ -720,8 +705,7 @@ MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
       (commonData.gradAtGaussPts[commonData.spatialPositions]);
   dAta.materialDoublePtr->F.resize(3, 3, false);
 
-  double *energy_ptr;
-  CHKERR VecGetArray(ghostVec, &energy_ptr);
+  double energy = 0;
 
   for (unsigned int gg = 0; gg != row_data.getN().size1(); ++gg) {
     double val = getVolume() * getGaussPts()(3, gg);
@@ -731,15 +715,14 @@ MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
         dAta.materialDoublePtr->F(dd, dd) += 1;
       }
     }
-
     int nb_active_variables = 0;
     CHKERR dAta.materialDoublePtr->setUserActiveVariables(nb_active_variables);
     CHKERR dAta.materialDoublePtr->calculateElasticEnergy(
         dAta, getNumeredEntFiniteElementPtr());
-    energy_ptr[0] += val * dAta.materialDoublePtr->eNergy;
+    energy += val * dAta.materialDoublePtr->eNergy;
   }
-  CHKERR VecRestoreArray(ghostVec, &energy_ptr);
 
+  CHKERR VecSetValue(ghostVec, 0, energy, ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
 
@@ -763,7 +746,7 @@ static MoFEMErrorCode get_jac(DataForcesAndSourcesCore::EntData &col_data,
       const_cast<double *>(&(col_data.getDiffN(gg, nb_col / 3)(0, 0)));
   // First two indices 'i','j' derivatives of 1st Piola-stress, third index 'k'
   // is displacement component
-  FTensor::Tensor3<FTensor::PackPtr<double *,3>, 3, 3, 3> t3_1_0(
+  FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_0(
       &jac_stress(3 * 0 + 0, S + 0), &jac_stress(3 * 0 + 0, S + 1),
       &jac_stress(3 * 0 + 0, S + 2), &jac_stress(3 * 0 + 1, S + 0),
       &jac_stress(3 * 0 + 1, S + 1), &jac_stress(3 * 0 + 1, S + 2),
@@ -778,7 +761,7 @@ static MoFEMErrorCode get_jac(DataForcesAndSourcesCore::EntData &col_data,
       &jac_stress(3 * 2 + 1, S + 1), &jac_stress(3 * 2 + 1, S + 2),
       &jac_stress(3 * 2 + 2, S + 0), &jac_stress(3 * 2 + 2, S + 1),
       &jac_stress(3 * 2 + 2, S + 2));
-  FTensor::Tensor3<FTensor::PackPtr<double *,3>, 3, 3, 3> t3_1_1(
+  FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_1(
       &jac_stress(3 * 0 + 0, S + 3), &jac_stress(3 * 0 + 0, S + 4),
       &jac_stress(3 * 0 + 0, S + 5), &jac_stress(3 * 0 + 1, S + 3),
       &jac_stress(3 * 0 + 1, S + 4), &jac_stress(3 * 0 + 1, S + 5),
@@ -793,7 +776,7 @@ static MoFEMErrorCode get_jac(DataForcesAndSourcesCore::EntData &col_data,
       &jac_stress(3 * 2 + 1, S + 4), &jac_stress(3 * 2 + 1, S + 5),
       &jac_stress(3 * 2 + 2, S + 3), &jac_stress(3 * 2 + 2, S + 4),
       &jac_stress(3 * 2 + 2, S + 5));
-  FTensor::Tensor3<FTensor::PackPtr<double *,3>, 3, 3, 3> t3_1_2(
+  FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_2(
       &jac_stress(3 * 0 + 0, S + 6), &jac_stress(3 * 0 + 0, S + 7),
       &jac_stress(3 * 0 + 0, S + 8), &jac_stress(3 * 0 + 1, S + 6),
       &jac_stress(3 * 0 + 1, S + 7), &jac_stress(3 * 0 + 1, S + 8),
