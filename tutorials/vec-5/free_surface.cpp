@@ -102,12 +102,12 @@ constexpr double lambda = 1;
 constexpr double W = 0.25;
 
 // Model parameters
-constexpr double h = 0.01; // mesh size
+constexpr double h = 0.02; // mesh size
 constexpr double eta = 2 * h;
-constexpr double eta2 = eta * eta;
+constexpr double eta2 = 1;//eta * eta;
 
 // Numerical parameteres
-constexpr double md = 1e-2;
+constexpr double md = 0;//1e-2;
 constexpr double eps = 1e-10;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
@@ -170,8 +170,8 @@ auto get_M3_dh = [](auto h) {
     return md * (-6 * h * (h + 1));
 };
 
-auto get_M = [](auto h) { return get_M3(h); };
-auto get_M_dh = [](auto h) { return get_M3_dh(h); };
+auto get_M = [](auto h) { return get_M2(h); };
+auto get_M_dh = [](auto h) { return get_M2_dh(h); };
 
 auto get_J = [](auto h, auto &t_g) {
   FTensor::Tensor1<double, U_FIELD_DIM> t_J;
@@ -189,6 +189,16 @@ auto get_D = [](const double A) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
   t_D(i, j, k, l) = A * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
   return t_D;
+};
+
+constexpr double R = 0.25;
+auto kernel = [](double r, double y, double) {
+  const double d = sqrt(r * r + y * y);
+  return tanh((R - d) / (eta * sqrt(2)));
+};
+
+auto init_h = [](double r, double y, double theta) {
+  return kernel(r, y, theta);
 };
 
 #include <FreeSurfaceOps.hpp>
@@ -218,8 +228,8 @@ MoFEMErrorCode FreeSurface::runProblem() {
   CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR boundaryCondition();
-  CHKERR assembleSystem();
-  CHKERR solveSystem();
+  // CHKERR assembleSystem();
+  // CHKERR solveSystem();
   MoFEMFunctionReturn(0);
 }
 //! [Run programme]
@@ -265,38 +275,18 @@ MoFEMErrorCode FreeSurface::setupProblem() {
 MoFEMErrorCode FreeSurface::boundaryCondition() {
   MoFEMFunctionBegin;
 
-  constexpr double R = 0.25;
-  auto kernel = [](double r, double y, double) {
-    const double d = sqrt(r * r + y * y);
-    return tanh((R - d) / (eta * sqrt(2)));
-  };
+  auto simple = mField.getInterface<Simple>();
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  auto bc_mng = mField.getInterface<BcManager>();
+  auto dm = simple->getDM();
 
-  auto init_h = [&](double r, double y, double theta) {
-    return kernel(r, y, theta);
-  };
-
-  auto set_domain_general = [&](auto &pipeline) {
-    pipeline.push_back(new OpSetHOWeightsOnFace());
-  };
-
-  auto set_domain_rhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpDomainSourceH("H", init_h));
-  };
-
-  auto set_domain_lhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpDomainMassU(
-        "U", "U", [](double r, double, double) { return cylindrical(r); }));
-    pipeline.push_back(new OpDomainMassH(
-        "H", "H", [](double r, double, double) { return cylindrical(r); }));
-    pipeline.push_back(new OpDomainMassH(
-        "G", "G", [](double r, double, double) { return cylindrical(r); }));
-  };
+  auto h_ptr = boost::make_shared<VectorDouble>();
+  auto grad_h_ptr = boost::make_shared<MatrixDouble>();
+  auto g_ptr = boost::make_shared<VectorDouble>();
+  auto grad_g_ptr = boost::make_shared<MatrixDouble>();
 
   auto post_proc = [&]() {
     MoFEMFunctionBegin;
-    auto simple = mField.getInterface<Simple>();
-    auto dm = simple->getDM();
-
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
     post_proc_fe->generateReferenceElementMesh();
 
@@ -304,9 +294,10 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
-    post_proc_fe->addFieldValuesPostProc("U");
     post_proc_fe->addFieldValuesPostProc("H");
     post_proc_fe->addFieldValuesPostProc("G");
+    post_proc_fe->addFieldValuesGradientPostProc("G", 2);
+    post_proc_fe->addFieldValuesGradientPostProc("H", 2);
 
     CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
     CHKERR post_proc_fe->writeFile("out_init.h5m");
@@ -316,62 +307,111 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
   auto solve_init = [&]() {
     MoFEMFunctionBegin;
-    auto simple = mField.getInterface<Simple>();
-    auto pipeline_mng = mField.getInterface<PipelineManager>();
-    auto bc_mng = mField.getInterface<BcManager>();
 
-    auto solver = pipeline_mng->createKSP();
-    CHKERR KSPSetFromOptions(solver);
-    PC pc;
-    CHKERR KSPGetPC(solver, &pc);
-    PetscBool is_pcfs = PETSC_FALSE;
-    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
-    if (is_pcfs == PETSC_TRUE) {
-      auto bc_mng = mField.getInterface<BcManager>();
-      auto name_prb = simple->getProblemName();
-      SmartPetscObj<IS> is_u;
-      CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-          name_prb, ROW, "U", 0, 3, is_u);
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
-      CHKERR PCFieldSplitSetType(pc, PC_COMPOSITE_ADDITIVE);
-    }
+    auto set_generic = [&](auto &pipeline) {
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      pipeline.push_back(new OpSetHOWeightsOnFace());
+      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+      pipeline.push_back(
+          new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
 
-    CHKERR KSPSetUp(solver);
+      pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
+      pipeline.push_back(
+          new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
 
-    auto dm = simple->getDM();
-    auto D = smartCreateDMVector(dm);
-    auto F = smartVectorDuplicate(D);
+      pipeline.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
+      pipeline.push_back(
+          new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
+    };
 
-    CHKERR KSPSolve(solver, F, D);
+    auto set_domain_rhs = [&](auto &pipeline) {
+      pipeline.push_back(new OpRhsH<true>("H", nullptr, nullptr, h_ptr,
+                                          grad_h_ptr, grad_g_ptr));
+      pipeline.push_back(new OpRhsG("G", h_ptr, grad_h_ptr, g_ptr));
+    };
+
+    auto set_domain_lhs = [&](auto &pipeline) {
+      pipeline.push_back(new OpLhsH_dH<true>("H", nullptr, h_ptr, grad_g_ptr));
+      pipeline.push_back(new OpLhsH_dG("H", "G", h_ptr));
+      pipeline.push_back(new OpLhsG_dH("G", "H", h_ptr));
+      pipeline.push_back(new OpLhsG_dG("G"));
+    };
+
+    auto create_subdm = [&]() {
+      DM subdm;
+      CHKERR DMCreate(mField.get_comm(), &subdm);
+      CHKERR DMSetType(subdm, "DMMOFEM");
+      CHKERR DMMoFEMCreateSubDM(subdm, dm, "SUB");
+      CHKERR DMMoFEMAddElement(subdm, simple->getDomainFEName().c_str());
+      CHKERR DMMoFEMSetSquareProblem(subdm, PETSC_TRUE);
+      CHKERR DMMoFEMAddSubFieldRow(subdm, "H");
+      CHKERR DMMoFEMAddSubFieldRow(subdm, "G");
+      CHKERR DMMoFEMAddSubFieldCol(subdm, "H");
+      CHKERR DMMoFEMAddSubFieldCol(subdm, "G");
+      CHKERR DMSetUp(subdm);
+      return SmartPetscObj<DM>(subdm);
+    };
+
+    auto subdm = create_subdm();
+    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+
+    set_generic(pipeline_mng->getOpDomainRhsPipeline());
+    set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline());
+    set_generic(pipeline_mng->getOpDomainLhsPipeline());
+    set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline());
+
+    auto D = smartCreateDMVector(subdm);
+    auto snes = pipeline_mng->createSNES(subdm);
+
+    auto set_section_monitor = [&](auto solver) {
+      MoFEMFunctionBegin;
+      PetscViewerAndFormat *vf;
+      CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
+                                        PETSC_VIEWER_DEFAULT, &vf);
+      CHKERR SNESMonitorSet(
+          solver,
+          (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
+                             void *))SNESMonitorFields,
+          vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
+      auto section = mField.getInterface<ISManager>()->sectionCreate("SUB");
+      PetscInt num_fields;
+      CHKERR PetscSectionGetNumFields(section, &num_fields);
+      for (int f = 0; f < num_fields; ++f) {
+        const char *field_name;
+        CHKERR PetscSectionGetFieldName(section, f, &field_name);
+        MOFEM_LOG("FS", Sev::inform)
+            << "Field " << f << " " << std::string(field_name);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR set_section_monitor(snes);
+
+    CHKERR SNESSetFromOptions(snes);
+    CHKERR SNESSolve(snes, PETSC_NULL, D);
+
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                             "SYMETRY", "U", 0, 0);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                             "SYMETRY", "L", 0, 0);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
-                                             "U", 0, SPACE_DIM);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
-                                             "L", 0, 0);
+    CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
 
     MoFEMFunctionReturn(0);
   };
 
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
-
-  set_domain_general(pipeline_mng->getOpDomainRhsPipeline());
-  set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline());
-  set_domain_general(pipeline_mng->getOpDomainLhsPipeline());
-  set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline());
-
   CHKERR solve_init();
   CHKERR post_proc();
 
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "SYMETRY", "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "SYMETRY", "L", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
+                                           "U", 0, SPACE_DIM);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
+                                           "L", 0, 0);
   // Clear pipelines
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainLhsPipeline().clear();
