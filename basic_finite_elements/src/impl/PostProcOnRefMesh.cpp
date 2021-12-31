@@ -237,7 +237,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
 
   auto dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
-  
+
   FieldSpace space = dof_ptr->getSpace();
   int space_dim = spaceDim;
   if (space == HCURL || space == HDIV)
@@ -280,39 +280,18 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
       return x;
   };
 
-  switch (space) {
-  case H1:
-    commonData.gradMap[rowFieldName].resize(nb_gauss_pts);
-    if (type == MBVERTEX) {
-      for (int gg = 0; gg < nb_gauss_pts; gg++) {
-        CHKERR postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1, def_VAL);
-        (commonData.gradMap[rowFieldName])[gg].resize(rank, space_dim);
-        (commonData.gradMap[rowFieldName])[gg].clear();
-      }
-    }
-    CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0], mapGaussPts.size(),
-                                       tags_ptr);
+  auto clear_vals = [&]() {
+    MoFEMFunctionBeginHot;
     for (int gg = 0; gg < nb_gauss_pts; gg++) {
-      for (int rr = 0; rr < rank; rr++) {
-        for (int dd = 0; dd < space_dim; dd++) {
-          for (unsigned int dof = 0; dof < (vAluesPtr->size() / rank); dof++) {
-            const double val =
-                data.getDiffN(gg)(dof, dd) * (*vAluesPtr)[rank * dof + rr];
-            (commonData.gradMap[rowFieldName])[gg](rr, dd) =
-                ((double *)tags_ptr[gg])[rank * rr + dd] +=
-                set_float_precision(val);
-          }
-        }
-      }
-    }
-    break;
-  case L2:
-    commonData.gradMap[rowFieldName].resize(nb_gauss_pts);
-    for (int gg = 0; gg < nb_gauss_pts; gg++) {
-      CHKERR postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1, def_VAL);
       (commonData.gradMap[rowFieldName])[gg].resize(rank, space_dim);
       (commonData.gradMap[rowFieldName])[gg].clear();
+      CHKERR postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1, def_VAL);
     }
+    MoFEMFunctionReturnHot(0);
+  };
+
+  auto set_vals = [&]() {
+    MoFEMFunctionBeginHot;
     CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0], mapGaussPts.size(),
                                        tags_ptr);
     for (int gg = 0; gg < nb_gauss_pts; gg++) {
@@ -321,13 +300,27 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
           for (unsigned int dof = 0; dof < (vAluesPtr->size() / rank); dof++) {
             const double val =
                 data.getDiffN(gg)(dof, dd) * (*vAluesPtr)[rank * dof + rr];
-            (commonData.gradMap[rowFieldName])[gg](rr, dd) =
-                ((double *)tags_ptr[gg])[rank * rr + dd] +=
-                set_float_precision(val);
+            (commonData.gradMap[rowFieldName])[gg](rr, dd) += val;
           }
+          ((double *)tags_ptr[gg])[rank * rr + dd] =
+              (commonData.gradMap[rowFieldName])[gg](rr, dd);
         }
       }
     }
+    MoFEMFunctionReturnHot(0);
+  };
+
+  commonData.gradMap[rowFieldName].resize(nb_gauss_pts);
+
+  switch (space) {
+  case H1:
+    if (type == MBVERTEX) 
+      clear_vals();
+    CHKERR set_vals();
+    break;
+  case L2:
+    clear_vals();
+    CHKERR set_vals();
     break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
@@ -538,8 +531,7 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::postProcess() {
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    wrapRefMeshComm =
-        boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
     pcomm_post_proc_mesh =
         new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
@@ -963,7 +955,7 @@ PostProcFaceOnRefinedMesh::OpGetFieldValuesOnSkinImpl<RANK>::doWork(
   // FieldSpace space = dof_ptr->getSpace();
 
   int full_size = rank * RANK;
-  if(space == HDIV)
+  if (space == HDIV)
     full_size *= 3;
   // for paraview
   int tag_length = full_size > 3 && full_size < 9 ? 9 : full_size;
@@ -1016,13 +1008,13 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
 
   if (!grad_mat_ptr)
     grad_mat_ptr = boost::make_shared<MatrixDouble>();
-  
+
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
 
   if (mField.check_field("MESH_NODE_POSITIONS"))
     CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *my_side_fe, true, false, false,
-                    false);
+                       false);
 
   // check number of coefficients
   auto field_ptr = mField.get_field_structure(field_name);
@@ -1054,7 +1046,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
 
   MoFEMFunctionReturn(0);
 }
-
 
 MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
     const std::string field_name, const std::string vol_fe_name,
@@ -1111,20 +1102,19 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
       SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
               "field with that number of coefficients is not implemented");
     }
-  break;
+    break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
             "field with that space is not implemented.");
   }
 
   FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
-      new OpGetFieldValuesOnSkinImpl<1>(
-          postProcMesh, mapGaussPts, field_name, field_name,
-          my_side_fe, vol_fe_name, mat_ptr, save_on_tag));
+      new OpGetFieldValuesOnSkinImpl<1>(postProcMesh, mapGaussPts, field_name,
+                                        field_name, my_side_fe, vol_fe_name,
+                                        mat_ptr, save_on_tag));
 
   MoFEMFunctionReturn(0);
 }
-
 
 MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
   return opSwitch<0>();
