@@ -476,9 +476,9 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   auto set_domain_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr,
                                   grad_h_ptr, g_ptr, grad_g_ptr, p_ptr));
-    pipeline.push_back(
-        new OpRhsH("H", u_ptr, dot_h_ptr, h_ptr, grad_h_ptr, grad_g_ptr));
-    pipeline.push_back(new OpRhsG("G", h_ptr, grad_h_ptr, g_ptr));
+    pipeline.push_back(new OpRhsH<false>("H", u_ptr, dot_h_ptr, h_ptr,
+                                         grad_h_ptr, grad_g_ptr));
+    pipeline.push_back(new OpRhsG<false>("G", h_ptr, grad_h_ptr, g_ptr));
     pipeline.push_back(new OpBaseTimesScalarField(
         "P", div_u_ptr, [](const double r, const double, const double) {
           return cylindrical(r);
@@ -498,10 +498,10 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         new OpLhsU_dG("U", "G", grad_u_ptr, h_ptr, grad_h_ptr, grad_g_ptr));
 
     pipeline.push_back(new OpLhsH_dU("H", "U", grad_h_ptr));
-    pipeline.push_back(new OpLhsH_dH("H", u_ptr, h_ptr, grad_g_ptr));
-    pipeline.push_back(new OpLhsH_dG("H", "G", h_ptr));
+    pipeline.push_back(new OpLhsH_dH<false>("H", u_ptr, h_ptr, grad_g_ptr));
+    pipeline.push_back(new OpLhsH_dG<false>("H", "G", h_ptr));
 
-    pipeline.push_back(new OpLhsG_dH("G", "H", h_ptr));
+    pipeline.push_back(new OpLhsG_dH<false>("G", "H", h_ptr));
     pipeline.push_back(new OpLhsG_dG("G"));
 
     pipeline.push_back(new OpMixScalarTimesDiv(
