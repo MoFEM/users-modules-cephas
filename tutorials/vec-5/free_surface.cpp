@@ -34,7 +34,7 @@ constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
 constexpr CoordinateTypes coord_type =
     CARTESIAN; ///< select coordinate system <CARTESIAN, CYLINDRICAL>;
-constexpr bool explict_convection = false;
+constexpr bool explict_convection = true;
 constexpr bool diffusive_flux_term = false; ///< add diffusive flux_term
 
 template <int DIM> struct ElementsAndOps {};
@@ -94,10 +94,10 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // Physical parameters
 constexpr double a0 = 0;
-constexpr double rho_p = 1;
-constexpr double rho_m = 1;
-constexpr double mu_p = 1;
-constexpr double mu_m = 1;
+constexpr double rho_p = 0.998;
+constexpr double rho_m = 0.0012;
+constexpr double mu_p = 0.0101;
+constexpr double mu_m = 0.000182;
 constexpr double lambda = 1;
 constexpr double W = 0.25;
 
@@ -191,10 +191,14 @@ auto get_D = [](const double A) {
   return t_D;
 };
 
+constexpr int n = 2;
 constexpr double R = 0.25;
 auto kernel = [](double r, double y, double) {
+  const double A = R * 0.2;
+  const double theta = atan2(r, y);
+  const double w = R + A * cos(n * theta);
   const double d = sqrt(r * r + y * y);
-  return tanh((R - d) / (eta * sqrt(2)));
+  return tanh((w - d) / (eta * sqrt(2)));
 };
 
 auto init_h = [](double r, double y, double theta) {
