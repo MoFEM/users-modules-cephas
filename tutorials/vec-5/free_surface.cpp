@@ -35,7 +35,6 @@ constexpr int U_FIELD_DIM = SPACE_DIM;
 constexpr CoordinateTypes coord_type =
     CARTESIAN; ///< select coordinate system <CARTESIAN, CYLINDRICAL>;
 constexpr bool explict_convection = true;
-constexpr bool diffusive_flux_term = false; ///< add diffusive flux_term
 
 template <int DIM> struct ElementsAndOps {};
 
