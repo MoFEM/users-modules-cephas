@@ -641,12 +641,12 @@ template <bool I = false> struct OpRhsH : public AssemblyDomainEleOp {
         const double r = t_coords(0);
         const double alpha = t_w * vol * cylindrical(r);
 
-        const double m = get_M(t_h) * alpha;
+        const double set_h = init_h(t_coords(0), t_coords(1), t_coords(2));
+        const double m = get_M(set_h) * alpha;
 
         int bb = 0;
         for (; bb != nbRows; ++bb) {
-          locF[bb] += (t_base * alpha) *
-                      (t_h - init_h(t_coords(0), t_coords(1), t_coords(2)));
+          locF[bb] += (t_base * alpha) * (t_h - set_h);
           locF[bb] += (t_diff_base(i) * m) * t_grad_g(i);
           ++t_base;
           ++t_diff_base;
@@ -808,7 +808,6 @@ template <bool I = false> struct OpLhsH_dH : public AssemblyDomainEleOp {
         const double r = t_coords(0);
         const double alpha = t_w * vol * cylindrical(r);
 
-        auto m_dh = get_M_dh(t_h) * alpha;
         int rr = 0;
         for (; rr != nbRows; ++rr) {
 
@@ -818,8 +817,6 @@ template <bool I = false> struct OpLhsH_dH : public AssemblyDomainEleOp {
           for (int cc = 0; cc != nbCols; ++cc) {
 
             locMat(rr, cc) += (t_row_base * t_col_base * alpha);
-            locMat(rr, cc) +=
-                (t_row_diff_base(i) * t_grad_g(i)) * (t_col_base * m_dh);
 
             ++t_col_base;
             ++t_col_diff_base;
@@ -904,6 +901,7 @@ private:
  * @brief Lhs for H dH
  *
  */
+template <bool I = false>
 struct OpLhsH_dG : public AssemblyDomainEleOp {
 
   OpLhsH_dG(const std::string field_name_h, const std::string field_name_g,
@@ -931,7 +929,13 @@ struct OpLhsH_dG : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      auto m = get_M(t_h) * alpha;
+      double set_h;
+      if constexpr (I)
+        set_h = init_h(t_coords(0), t_coords(1), t_coords(2));
+      else
+        set_h = t_h;
+
+      auto m = get_M(set_h) * alpha;
 
       int rr = 0;
       for (; rr != nbRows; ++rr) {
@@ -962,7 +966,7 @@ private:
   boost::shared_ptr<VectorDouble> hPtr;
 };
 
-struct OpRhsG : public AssemblyDomainEleOp {
+template <bool I = false> struct OpRhsG : public AssemblyDomainEleOp {
 
   OpRhsG(const std::string field_name, boost::shared_ptr<VectorDouble> h_ptr,
          boost::shared_ptr<MatrixDouble> grad_h_ptr,
@@ -987,11 +991,18 @@ struct OpRhsG : public AssemblyDomainEleOp {
 
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
-      const double f = get_f(t_h);
+
+      double set_h;
+      if constexpr (I)
+        set_h = init_h(t_coords(0), t_coords(1), t_coords(2));
+      else
+        set_h = t_h;
+
+      const double f = get_f(set_h);
 
       int bb = 0;
       for (; bb != nbRows; ++bb) {
-        locF[bb] += (t_base * alpha) * (t_g /*- f*/);
+        locF[bb] += (t_base * alpha) * (t_g - f);
         locF[bb] -= (t_diff_base(i) * (eta2 * alpha)) * t_grad_h(i);
         ++t_base;
         ++t_diff_base;
@@ -1023,7 +1034,7 @@ private:
  * @brief Lhs for H dH
  *
  */
-struct OpLhsG_dH : public AssemblyDomainEleOp {
+template <bool I = false> struct OpLhsG_dH : public AssemblyDomainEleOp {
 
   OpLhsG_dH(const std::string field_name_g, const std::string field_name_h,
             boost::shared_ptr<VectorDouble> h_ptr)
@@ -1062,7 +1073,8 @@ struct OpLhsG_dH : public AssemblyDomainEleOp {
 
         for (int cc = 0; cc != nbCols; ++cc) {
 
-          // locMat(rr, cc) -= (t_row_base * t_col_base) * f_dh;
+          if constexpr (I == false)
+            locMat(rr, cc) -= (t_row_base * t_col_base) * f_dh;
           locMat(rr, cc) -= (t_row_diff_base(i) * beta) * t_col_diff_base(i);
 
           ++t_col_base;

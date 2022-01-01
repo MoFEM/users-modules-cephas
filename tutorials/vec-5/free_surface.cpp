@@ -104,11 +104,11 @@ constexpr double W = 0.25;
 // Model parameters
 constexpr double h = 0.02; // mesh size
 constexpr double eta = 2 * h;
-constexpr double eta2 = 1;//eta * eta;
+constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
-constexpr double md = 0;//1e-2;
-constexpr double eps = 1e-10;
+constexpr double md = 1e-2;
+constexpr double eps = 1e-12;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
 constexpr double rho_ave = (rho_p + rho_m) / 2;
@@ -153,7 +153,7 @@ auto get_f_dh = [](const double h) { return 4 * W * (3 * h * h - 1); };
 auto get_M0 = [](auto h) { return md; };
 auto get_M0_dh = [](auto h) { return 0; };
 auto get_M2 = [](auto h) { return md * (1 - h * h); };
-auto get_M2_dh = [](auto h) { return -md * 2 * h *h; };
+auto get_M2_dh = [](auto h) { return -md * 2 * h; };
 auto get_M3 = [](auto h) {
   const double h2 = h * h;
   const double h3 = h2 * h;
@@ -170,8 +170,8 @@ auto get_M3_dh = [](auto h) {
     return md * (-6 * h * (h + 1));
 };
 
-auto get_M = [](auto h) { return get_M2(h); };
-auto get_M_dh = [](auto h) { return get_M2_dh(h); };
+auto get_M = [](auto h) { return get_M0(h); };
+auto get_M_dh = [](auto h) { return get_M0_dh(h); };
 
 auto get_J = [](auto h, auto &t_g) {
   FTensor::Tensor1<double, U_FIELD_DIM> t_J;
@@ -228,8 +228,8 @@ MoFEMErrorCode FreeSurface::runProblem() {
   CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR boundaryCondition();
-  // CHKERR assembleSystem();
-  // CHKERR solveSystem();
+  CHKERR assembleSystem();
+  CHKERR solveSystem();
   MoFEMFunctionReturn(0);
 }
 //! [Run programme]
@@ -259,7 +259,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->addBoundaryField("H", H1, DEMKOWICZ_JACOBI_BASE, 1);
   CHKERR simple->addBoundaryField("L", H1, DEMKOWICZ_JACOBI_BASE, 1);
 
-  constexpr int order = 2;
+  constexpr int order = 3;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("P", order - 1);
   CHKERR simple->setFieldOrder("H", order);
@@ -330,13 +330,13 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     auto set_domain_rhs = [&](auto &pipeline) {
       pipeline.push_back(new OpRhsH<true>("H", nullptr, nullptr, h_ptr,
                                           grad_h_ptr, grad_g_ptr));
-      pipeline.push_back(new OpRhsG("G", h_ptr, grad_h_ptr, g_ptr));
+      pipeline.push_back(new OpRhsG<true>("G", h_ptr, grad_h_ptr, g_ptr));
     };
 
     auto set_domain_lhs = [&](auto &pipeline) {
       pipeline.push_back(new OpLhsH_dH<true>("H", nullptr, h_ptr, grad_g_ptr));
-      pipeline.push_back(new OpLhsH_dG("H", "G", h_ptr));
-      pipeline.push_back(new OpLhsG_dH("G", "H", h_ptr));
+      pipeline.push_back(new OpLhsH_dG<true>("H", "G", h_ptr));
+      pipeline.push_back(new OpLhsG_dH<true>("G", "H", h_ptr));
       pipeline.push_back(new OpLhsG_dG("G"));
     };
 
@@ -481,7 +481,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         }));
     pipeline.push_back(new OpBaseTimesScalarField(
         "P", p_ptr, [](const double r, const double, const double) {
-          return eps * cylindrical(r);
+          return eps * cylindrical(r) ;
         }));
   };
 
