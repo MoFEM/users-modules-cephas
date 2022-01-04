@@ -98,12 +98,12 @@ constexpr double rho_p = 0.998;
 constexpr double rho_m = 0.0012;
 constexpr double mu_p = 0.0101;
 constexpr double mu_m = 0.000182;
-constexpr double lambda = 1;
+constexpr double lambda = 73;
 constexpr double W = 0.25;
 
 // Model parameters
-constexpr double h = 0.02; // mesh size
-constexpr double eta = 2 * h;
+constexpr double h = 0.0005; // mesh size
+constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
