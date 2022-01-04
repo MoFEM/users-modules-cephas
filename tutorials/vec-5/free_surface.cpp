@@ -35,7 +35,6 @@ constexpr int U_FIELD_DIM = SPACE_DIM;
 constexpr CoordinateTypes coord_type =
     CARTESIAN; ///< select coordinate system <CARTESIAN, CYLINDRICAL>;
 constexpr bool explict_convection = true;
-constexpr bool diffusive_flux_term = false; ///< add diffusive flux_term
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -113,6 +112,9 @@ constexpr double tol = std::numeric_limits<float>::epsilon();
 
 constexpr double rho_ave = (rho_p + rho_m) / 2;
 constexpr double rho_diff = (rho_p - rho_m) / 2;
+constexpr double mu_ave = (mu_p + mu_m) / 2;
+constexpr double mu_diff = (mu_p - mu_m) / 2;
+
 const double kappa = (3. / (4. * sqrt(2. * W))) * (lambda / eta);
 
 auto integration_rule = [](int, int, int approx_order) {
@@ -139,12 +141,12 @@ auto d_cut_off = [](const double h) {
     return 0.;
 };
 
-auto phase_function = [](const double h, const double p, const double m) {
-  return rho_diff * cut_off(h) + rho_ave;
+auto phase_function = [](const double h, const double diff, const double ave) {
+  return diff * cut_off(h) + ave;
 };
 
-auto d_phase_function_h = [](const double h, const double p, const double m) {
-  return rho_diff * d_cut_off(h);
+auto d_phase_function_h = [](const double h, const double diff) {
+  return diff * d_cut_off(h);
 };
 
 auto get_f = [](const double h) { return 4 * W * h * (h * h - 1); };
@@ -172,18 +174,6 @@ auto get_M3_dh = [](auto h) {
 
 auto get_M = [](auto h) { return get_M0(h); };
 auto get_M_dh = [](auto h) { return get_M0_dh(h); };
-
-auto get_J = [](auto h, auto &t_g) {
-  FTensor::Tensor1<double, U_FIELD_DIM> t_J;
-  t_J(i) = -rho_diff * get_M(h) * t_g(i);
-  return t_J;
-};
-auto get_J_dh = [](auto h, auto &t_g) {
-  FTensor::Tensor1<double, U_FIELD_DIM> t_J_dh;
-  t_J_dh(i) = -rho_diff * get_M_dh(h) * t_g(i);
-  return t_J_dh;
-};
-auto get_J_dg = [](auto h) { return -rho_diff * get_M(h); };
 
 auto get_D = [](const double A) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
@@ -595,11 +585,11 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     CHKERR MatZeroEntries(M);
     fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
     fe->getOpPtrVector().push_back(new OpDomainMassU(
-        "U", "U", [&](double r, double, double) { return 1; }));
+        "U", "U", [&](double r, double, double) constexpr { return 1; }));
     fe->getOpPtrVector().push_back(new OpDomainMassH(
-        "H", "H", [&](double r, double, double) { return 1; }));
+        "H", "H", [&](double r, double, double) constexpr { return 1; }));
     fe->getOpPtrVector().push_back(new OpDomainMassH(
-        "G", "G", [&](double r, double, double) { return 1; }));
+        "G", "G", [&](double r, double, double) constexpr { return 1; }));
     fe->getRuleHook = integration_rule;
 
     // Set values on diagonal
