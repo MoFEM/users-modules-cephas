@@ -205,8 +205,8 @@ struct OpRhsU : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      const double rho = phase_function(t_h, rho_p, rho_m);
-      const double mu = phase_function(t_h, mu_p, mu_m);
+      const double rho = phase_function(t_h, rho_diff, rho_ave);
+      const double mu = phase_function(t_h, mu_diff, mu_ave);
 
       auto t_D = get_D(2 * mu);
 
@@ -314,8 +314,8 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
 
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
-      const double rho = phase_function(t_h, rho_p, rho_m);
-      const double mu = phase_function(t_h, mu_p, mu_m);
+      const double rho = phase_function(t_h, rho_diff, rho_ave);
+      const double mu = phase_function(t_h, mu_diff, mu_ave);
 
       const double beta0 = alpha * rho;
       const double beta1 = beta0 * ts_a;
@@ -435,8 +435,8 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      const double rho_dh = d_phase_function_h(t_h, rho_p, rho_m);
-      const double mu_dh = d_phase_function_h(t_h, mu_p, mu_m);
+      const double rho_dh = d_phase_function_h(t_h, rho_diff);
+      const double mu_dh = d_phase_function_h(t_h, mu_diff);
 
       auto t_D_dh = get_D(alpha * mu_dh);
 
@@ -546,7 +546,7 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      const double rho = phase_function(t_h, rho_p, rho_m);
+      const double rho = phase_function(t_h, rho_diff, rho_ave);
 
       FTensor::Tensor1<double, SPACE_DIM> t_phase_force_dg;
       t_phase_force_dg(i) = -alpha * kappa * t_grad_h(i);
@@ -1173,7 +1173,7 @@ struct OpRhsExplicitTermU : public AssemblyDomainEleOp {
         const double r = t_coords(0);
         const double alpha = t_w * vol * cylindrical(r);
 
-        const double rho = phase_function(t_h, rho_p, rho_m);
+        const double rho = phase_function(t_h, rho_diff, rho_ave);
 
         FTensor::Tensor1<double, U_FIELD_DIM> t_convection;
         t_convection(i) = t_u(j) * t_grad_u(i, j) / rho;

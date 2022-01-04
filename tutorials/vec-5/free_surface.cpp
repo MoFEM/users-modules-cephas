@@ -112,6 +112,9 @@ constexpr double tol = std::numeric_limits<float>::epsilon();
 
 constexpr double rho_ave = (rho_p + rho_m) / 2;
 constexpr double rho_diff = (rho_p - rho_m) / 2;
+constexpr double mu_ave = (mu_p + mu_m) / 2;
+constexpr double mu_diff = (mu_p - mu_m) / 2;
+
 const double kappa = (3. / (4. * sqrt(2. * W))) * (lambda / eta);
 
 auto integration_rule = [](int, int, int approx_order) {
@@ -138,12 +141,12 @@ auto d_cut_off = [](const double h) {
     return 0.;
 };
 
-auto phase_function = [](const double h, const double p, const double m) {
-  return rho_diff * cut_off(h) + rho_ave;
+auto phase_function = [](const double h, const double diff, const double ave) {
+  return diff * cut_off(h) + ave;
 };
 
-auto d_phase_function_h = [](const double h, const double p, const double m) {
-  return rho_diff * d_cut_off(h);
+auto d_phase_function_h = [](const double h, const double diff) {
+  return diff * d_cut_off(h);
 };
 
 auto get_f = [](const double h) { return 4 * W * h * (h * h - 1); };
@@ -582,11 +585,11 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     CHKERR MatZeroEntries(M);
     fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
     fe->getOpPtrVector().push_back(new OpDomainMassU(
-        "U", "U", [&](double r, double, double) { return 1; }));
+        "U", "U", [&](double r, double, double) constexpr { return 1; }));
     fe->getOpPtrVector().push_back(new OpDomainMassH(
-        "H", "H", [&](double r, double, double) { return 1; }));
+        "H", "H", [&](double r, double, double) constexpr { return 1; }));
     fe->getOpPtrVector().push_back(new OpDomainMassH(
-        "G", "G", [&](double r, double, double) { return 1; }));
+        "G", "G", [&](double r, double, double) constexpr { return 1; }));
     fe->getRuleHook = integration_rule;
 
     // Set values on diagonal
