@@ -209,16 +209,17 @@ struct OpRhsU : public AssemblyDomainEleOp {
       const double mu = phase_function(t_h, mu_p, mu_m);
 
       auto t_D = get_D(2 * mu);
-      auto t_J = get_J(t_h, t_grad_g);
 
       t_inertia_force(i) = (rho * alpha) * (t_dot_u(i) - t_a0(i));
+      t_stress(i, j) =
+          alpha * (t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p);
+      t_phase_force(i) = -alpha * kappa * t_g * t_grad_h(i);
+
       if constexpr (!explict_convection)
         t_convection(i) = (rho * alpha) * (t_u(j) * t_grad_u(i, j));
       else
         t_convection(i) = 0;
-      t_stress(i, j) =
-          alpha * (t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p);
-      t_phase_force(i) = -alpha * kappa * t_g * t_grad_h(i);
+
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
 
       int bb = 0;
@@ -283,7 +284,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       : AssemblyDomainEleOp(field_name, field_name,
                             AssemblyDomainEleOp::OPROWCOL),
         uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr), gradGPtr(grad_g_ptr) {
-    sYmm = false;
+    sYmm = true;
     assembleTranspose = false;
   }
 
@@ -319,10 +320,6 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       const double beta0 = alpha * rho;
       const double beta1 = beta0 * ts_a;
       auto t_D = get_D(alpha * 2 * mu);
-      auto t_J = get_J(t_h, t_grad_g);
-
-      FTensor::Tensor1<double, SPACE_DIM> t_phase_force_du;
-      t_phase_force_du(i) = -alpha * t_J(i);
 
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
@@ -442,14 +439,15 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double mu_dh = d_phase_function_h(t_h, mu_p, mu_m);
 
       auto t_D_dh = get_D(alpha * mu_dh);
-      auto t_J_dh = get_J_dh(t_h, t_grad_g);
+
+      t_inertia_force_dh(i) = (alpha * rho_dh) * (t_dot_u(i) - t_a0(i));
+      t_stress_dh(i, j) = t_D_dh(i, j, k, l) * t_grad_u(k, l);
+
       if constexpr (!explict_convection)
         t_convection(i) = (rho_dh * alpha) * (t_u(j) * t_grad_u(i, j));
       else
         t_convection(i) = 0;
-      t_inertia_force_dh(i) = (alpha * rho_dh) * (t_dot_u(i) - t_a0(i));
-      t_stress_dh(i, j) = t_D_dh(i, j, k, l) * t_grad_u(k, l);
-      t_phase_force_dh(i) = -alpha * t_J_dh(j) * t_grad_u(i, j);
+
       const double t_phase_force_g_dh = -alpha * kappa * t_g;
 
       int rr = 0;
@@ -550,7 +548,6 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
 
       const double rho = phase_function(t_h, rho_p, rho_m);
 
-      const double J_dg = -alpha * get_J_dg(t_h);
       FTensor::Tensor1<double, SPACE_DIM> t_phase_force_dg;
       t_phase_force_dg(i) = -alpha * kappa * t_grad_h(i);
 
@@ -566,7 +563,7 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
 
           const double bb = t_row_base * t_col_base;
           t_mat(i) += t_phase_force_dg(i) * bb;
-          
+
           ++t_mat;
           ++t_col_base;
           ++t_col_diff_base;
@@ -773,7 +770,7 @@ template <bool I = false> struct OpLhsH_dH : public AssemblyDomainEleOp {
       : AssemblyDomainEleOp(field_name, field_name,
                             AssemblyDomainEleOp::OPROWCOL),
         uPtr(u_ptr), hPtr(h_ptr), gradGPtr(grad_g_ptr) {
-    sYmm = false;
+    sYmm = true;
   }
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
@@ -889,8 +886,7 @@ private:
  * @brief Lhs for H dH
  *
  */
-template <bool I = false>
-struct OpLhsH_dG : public AssemblyDomainEleOp {
+template <bool I = false> struct OpLhsH_dG : public AssemblyDomainEleOp {
 
   OpLhsH_dG(const std::string field_name_h, const std::string field_name_g,
             boost::shared_ptr<VectorDouble> h_ptr)
@@ -1099,7 +1095,7 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
   OpLhsG_dG(const std::string field_name)
       : AssemblyDomainEleOp(field_name, field_name,
                             AssemblyDomainEleOp::OPROWCOL) {
-    sYmm = false;
+    sYmm = true;
   }
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,

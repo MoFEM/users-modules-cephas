@@ -172,18 +172,6 @@ auto get_M3_dh = [](auto h) {
 auto get_M = [](auto h) { return get_M0(h); };
 auto get_M_dh = [](auto h) { return get_M0_dh(h); };
 
-auto get_J = [](auto h, auto &t_g) {
-  FTensor::Tensor1<double, U_FIELD_DIM> t_J;
-  t_J(i) = -rho_diff * get_M(h) * t_g(i);
-  return t_J;
-};
-auto get_J_dh = [](auto h, auto &t_g) {
-  FTensor::Tensor1<double, U_FIELD_DIM> t_J_dh;
-  t_J_dh(i) = -rho_diff * get_M_dh(h) * t_g(i);
-  return t_J_dh;
-};
-auto get_J_dg = [](auto h) { return -rho_diff * get_M(h); };
-
 auto get_D = [](const double A) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
   t_D(i, j, k, l) = A * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
