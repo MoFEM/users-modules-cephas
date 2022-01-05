@@ -94,10 +94,10 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 // Physical parameters
 constexpr double a0 = 0;
 constexpr double rho_p = 0.998;
-constexpr double rho_m = 0.0012;
 constexpr double mu_p = 0.0101;
+constexpr double rho_m = 0.0012;
 constexpr double mu_m = 0.000182;
-constexpr double lambda = 73;
+constexpr double lambda = 1;
 constexpr double W = 0.25;
 
 // Model parameters
@@ -181,8 +181,8 @@ auto get_D = [](const double A) {
   return t_D;
 };
 
-constexpr int n = 2;
-constexpr double R = 0.25;
+constexpr int n = 3;
+constexpr double R = 0.0125;
 auto kernel = [](double r, double y, double) {
   const double A = R * 0.2;
   const double theta = atan2(r, y);
