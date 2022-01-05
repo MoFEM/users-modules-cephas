@@ -596,11 +596,13 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     CHKERR MatZeroEntries(M);
     fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
     fe->getOpPtrVector().push_back(new OpDomainMassU(
-        "U", "U", [&](double r, double, double) constexpr { return 1; }));
+        "U", "U", [&](double r, double, double) {
+          return cylindrical(r);
+        }));
     fe->getOpPtrVector().push_back(new OpDomainMassH(
-        "H", "H", [&](double r, double, double) constexpr { return 1; }));
-    fe->getOpPtrVector().push_back(new OpDomainMassH(
-        "G", "G", [&](double r, double, double) constexpr { return 1; }));
+        "H", "H", [&](double r, double, double) {
+          return cylindrical(r);
+        }));
     fe->getRuleHook = integration_rule;
 
     // Set values on diagonal
@@ -610,7 +612,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     double *a;
     CHKERR VecGetArray(D, &a);
     auto dofs = problem_ptr->numeredRowDofsPtr;
-    auto fields = {"L", "P"};
+    auto fields = {"L", "P", "G"};
     for (auto f : fields) {
       const auto bit_number = mField.get_field_bit_number(f);
       auto it = dofs->get<Unique_mi_tag>().lower_bound(
@@ -618,13 +620,12 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       auto hi_it = dofs->get<Unique_mi_tag>().upper_bound(
           FieldEntity::getHiBitNumberUId(bit_number));
       for (; it != hi_it; ++it) {
-        const auto loc_idx = (*it)->getPetscLocalDofIdx();
-        a[loc_idx] = 1;
+        a[(*it)->getPetscLocalDofIdx()] = 1;
       }
     }
     CHKERR VecRestoreArray(D, &a);
 
-    CHKERR MatDiagonalSet(M, D, ADD_ALL_VALUES);
+    CHKERR MatDiagonalSet(M, D, ADD_VALUES);
     fe->B = M;
     CHKERR DMoFEMLoopFiniteElements(dm, "dFE", fe);
     CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
