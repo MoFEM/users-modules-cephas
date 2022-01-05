@@ -284,7 +284,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       : AssemblyDomainEleOp(field_name, field_name,
                             AssemblyDomainEleOp::OPROWCOL),
         uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr), gradGPtr(grad_g_ptr) {
-    sYmm = true;
+    sYmm = false;
     assembleTranspose = false;
   }
 
@@ -596,7 +596,7 @@ private:
   boost::shared_ptr<MatrixDouble> gradGPtr;
 };
 
-template <bool I = false> struct OpRhsH : public AssemblyDomainEleOp {
+template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
 
   OpRhsH(const std::string field_name, boost::shared_ptr<MatrixDouble> u_ptr,
          boost::shared_ptr<VectorDouble> dot_h_ptr,
@@ -762,7 +762,7 @@ private:
  * @brief Lhs for H dH
  *
  */
-template <bool I = false> struct OpLhsH_dH : public AssemblyDomainEleOp {
+template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
 
   OpLhsH_dH(const std::string field_name, boost::shared_ptr<MatrixDouble> u_ptr,
             boost::shared_ptr<VectorDouble> h_ptr,
@@ -886,7 +886,7 @@ private:
  * @brief Lhs for H dH
  *
  */
-template <bool I = false> struct OpLhsH_dG : public AssemblyDomainEleOp {
+template <bool I> struct OpLhsH_dG : public AssemblyDomainEleOp {
 
   OpLhsH_dG(const std::string field_name_h, const std::string field_name_g,
             boost::shared_ptr<VectorDouble> h_ptr)
@@ -950,7 +950,7 @@ private:
   boost::shared_ptr<VectorDouble> hPtr;
 };
 
-template <bool I = false> struct OpRhsG : public AssemblyDomainEleOp {
+template <bool I> struct OpRhsG : public AssemblyDomainEleOp {
 
   OpRhsG(const std::string field_name, boost::shared_ptr<VectorDouble> h_ptr,
          boost::shared_ptr<MatrixDouble> grad_h_ptr,
@@ -1018,7 +1018,7 @@ private:
  * @brief Lhs for H dH
  *
  */
-template <bool I = false> struct OpLhsG_dH : public AssemblyDomainEleOp {
+template <bool I> struct OpLhsG_dH : public AssemblyDomainEleOp {
 
   OpLhsG_dH(const std::string field_name_g, const std::string field_name_h,
             boost::shared_ptr<VectorDouble> h_ptr)

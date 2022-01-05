@@ -34,7 +34,7 @@ constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
 constexpr CoordinateTypes coord_type =
     CARTESIAN; ///< select coordinate system <CARTESIAN, CYLINDRICAL>;
-constexpr bool explict_convection = true;
+constexpr bool explict_convection = false;
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -745,10 +745,12 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   fe_explicit_rhs->postProcessHook = solve_explicit_rhs;
 
   MoFEM::SmartPetscObj<TS> ts;
-  ts = pipeline_mng->createTSIMEX();
+  // ts = pipeline_mng->createTSIMEX();
+  // CHKERR TSSetType(ts, TSARKIMEX);
+  // CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
 
-  CHKERR TSSetType(ts, TSARKIMEX);
-  CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
+  ts = pipeline_mng->createTSIM();
+  CHKERR TSSetType(ts, TSALPHA);
 
   auto set_post_proc_monitor = [&](auto dm) {
     MoFEMFunctionBegin;
