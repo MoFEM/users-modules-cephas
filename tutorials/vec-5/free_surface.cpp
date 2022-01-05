@@ -154,9 +154,19 @@ auto get_f_dh = [](const double h) { return 4 * W * (3 * h * h - 1); };
 
 auto get_M0 = [](auto h) { return md; };
 auto get_M0_dh = [](auto h) { return 0; };
-auto get_M2 = [](auto h) { return md * (1 - h * h); };
-auto get_M2_dh = [](auto h) { return -md * 2 * h; };
-auto get_M3 = [](auto h) {
+
+auto get_M2 = [](auto h_tmp) {
+  const double h = cut_off(h_tmp);
+  return md * (1 - h * h);
+};
+
+auto get_M2_dh = [](auto h_tmp) {
+  const double h = cut_off(h_tmp);
+  return -md * 2 * h * d_cut_off(h_tmp);
+};
+
+auto get_M3 = [](auto h_tmp) {
+  const double h = cut_off(h_tmp);
   const double h2 = h * h;
   const double h3 = h2 * h;
   if (h >= 0)
@@ -165,11 +175,12 @@ auto get_M3 = [](auto h) {
     return md * (-2 * h3 - 3 * h2 + 1);
 };
 
-auto get_M3_dh = [](auto h) {
+auto get_M3_dh = [](auto h_tmp) {
+  const double h = cut_off(h_tmp);
   if (h >= 0)
-    return md * (6 * h * (h - 1));
+    return md * (6 * h * (h - 1)) * d_cut_off(h_tmp);
   else
-    return md * (-6 * h * (h + 1));
+    return md * (-6 * h * (h + 1)) * d_cut_off(h_tmp);
 };
 
 auto get_M = [](auto h) { return get_M0(h); };
