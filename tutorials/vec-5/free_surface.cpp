@@ -34,7 +34,6 @@ constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
 constexpr CoordinateTypes coord_type =
     CARTESIAN; ///< select coordinate system <CARTESIAN, CYLINDRICAL>;
-constexpr bool explict_convection = false;
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -590,56 +589,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto dm = simple->getDM();
 
-  auto assemble_mass_mat = [&](auto M) {
-    MoFEMFunctionBegin;
-    auto fe = boost::make_shared<DomainEle>(mField);
-    CHKERR MatZeroEntries(M);
-    fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
-    fe->getOpPtrVector().push_back(new OpDomainMassU(
-        "U", "U", [&](double r, double, double) {
-          return cylindrical(r);
-        }));
-    fe->getOpPtrVector().push_back(new OpDomainMassH(
-        "H", "H", [&](double r, double, double) {
-          return cylindrical(r);
-        }));
-    fe->getRuleHook = integration_rule;
 
-    // Set values on diagonal
-    auto D = smartCreateDMVector(dm);
-    const MoFEM::Problem *problem_ptr;
-    CHKERR DMMoFEMGetProblemPtr(dm, &problem_ptr);
-    double *a;
-    CHKERR VecGetArray(D, &a);
-    auto dofs = problem_ptr->numeredRowDofsPtr;
-    auto fields = {"L", "P", "G"};
-    for (auto f : fields) {
-      const auto bit_number = mField.get_field_bit_number(f);
-      auto it = dofs->get<Unique_mi_tag>().lower_bound(
-          FieldEntity::getLoBitNumberUId(bit_number));
-      auto hi_it = dofs->get<Unique_mi_tag>().upper_bound(
-          FieldEntity::getHiBitNumberUId(bit_number));
-      for (; it != hi_it; ++it) {
-        a[(*it)->getPetscLocalDofIdx()] = 1;
-      }
-    }
-    CHKERR VecRestoreArray(D, &a);
-
-    CHKERR MatDiagonalSet(M, D, ADD_VALUES);
-    fe->B = M;
-    CHKERR DMoFEMLoopFiniteElements(dm, "dFE", fe);
-    CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
-    MoFEMFunctionReturn(0);
-  };
-
-  auto set_mass_ksp = [&](auto ksp, auto M) {
-    MoFEMFunctionBegin;
-    CHKERR KSPSetOperators(ksp, M, M);
-    CHKERR KSPSetFromOptions(ksp);
-    CHKERR KSPSetUp(ksp);
-    MoFEMFunctionReturn(0);
-  };
 
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
@@ -674,82 +624,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR pipeline_mng->setDomainExplicitRhsIntegrationRule(integration_rule);
-  auto fe_explicit_rhs = pipeline_mng->getDomainExplicitRhsFE();
 
-  auto M = smartCreateDMMatrix(dm);
-  auto ksi_ptr = boost::make_shared<double>();
-  auto ksp = createKSP(mField.get_comm());
-  auto h_ptr = boost::make_shared<VectorDouble>();
-
-  auto fe_global_terms = boost::make_shared<DomainEle>(mField);
-  fe_global_terms->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldValues("H", h_ptr));
-  fe_global_terms->getRuleHook = integration_rule;
-
-  CHKERR assemble_mass_mat(M);
-  CHKERR set_mass_ksp(ksp, M);
-
-  auto caluclate_global_terms = [&]() {
-    MoFEMFunctionBegin;
-    MoFEMFunctionReturn(0);
-  };
-
-  auto solve_explicit_rhs = [&]() {
-    MoFEMFunctionBegin;
-    MOFEM_LOG("FS", Sev::verbose) << "Solve explicit term -> Start";
-    if (fe_explicit_rhs->vecAssembleSwitch) {
-      CHKERR VecGhostUpdateBegin(fe_explicit_rhs->ts_F, ADD_VALUES,
-                                 SCATTER_REVERSE);
-      CHKERR VecGhostUpdateEnd(fe_explicit_rhs->ts_F, ADD_VALUES,
-                               SCATTER_REVERSE);
-      CHKERR VecAssemblyBegin(fe_explicit_rhs->ts_F);
-      CHKERR VecAssemblyEnd(fe_explicit_rhs->ts_F);
-      CHKERR KSPSolve(ksp, fe_explicit_rhs->ts_F, fe_explicit_rhs->ts_F);
-      *fe_explicit_rhs->vecAssembleSwitch = false;
-    }
-    MOFEM_LOG("FS", Sev::verbose) << "Solve explicit term <- Done";
-    MoFEMFunctionReturn(0);
-  };
-
-  auto set_domain_rhs_explicit = [&](auto &pipeline) {
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpSetHOWeightsOnFace());
-    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
-    pipeline.push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-
-    auto h_ptr = boost::make_shared<VectorDouble>();
-    auto grad_h_ptr = boost::make_shared<MatrixDouble>();
-    auto u_ptr = boost::make_shared<MatrixDouble>();
-    auto grad_u_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(
-        new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
-    pipeline.push_back(
-        new OpCalculateVectorFieldGradient<U_FIELD_DIM, SPACE_DIM>("U",
-                                                                   grad_u_ptr));
-    pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
-    pipeline.push_back(
-        new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
-
-    pipeline.push_back(new OpRhsExplicitTermU("U", u_ptr, grad_u_ptr, h_ptr));
-    pipeline.push_back(new OpRhsExplicitTermH("H", u_ptr, grad_h_ptr));
-  };
-
-  set_domain_rhs_explicit(pipeline_mng->getOpDomainExplicitRhsPipeline());
-
-  fe_explicit_rhs->preProcessHook = caluclate_global_terms;
-  fe_explicit_rhs->postProcessHook = solve_explicit_rhs;
-
-  MoFEM::SmartPetscObj<TS> ts;
-  // ts = pipeline_mng->createTSIMEX();
-  // CHKERR TSSetType(ts, TSARKIMEX);
-  // CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
-
-  ts = pipeline_mng->createTSIM();
+  auto ts = pipeline_mng->createTSIM();
   CHKERR TSSetType(ts, TSALPHA);
 
   auto set_post_proc_monitor = [&](auto dm) {
