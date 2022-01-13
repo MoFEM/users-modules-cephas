@@ -497,7 +497,7 @@ MoFEMErrorCode Example::boundaryCondition() {
       auto montain = [&](const double lambda, const double fi) {
         if (lambda > -M_PI && lambda < M_PI)
           return h_hat * cos(fi) * exp(-pow(lambda / alpha, 2)) *
-                 exp(-pow((phi_2 - fi) / beta, 2));
+                 exp(-pow((phi_2 - fi) / ::beta, 2));
         else
           return 0.;
       };
