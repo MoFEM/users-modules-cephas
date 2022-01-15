@@ -962,23 +962,23 @@ int main(int argc, char *argv[]) {
     // save on mesh
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
-    Vec v_energy;
+    SmartPetscObj<Vec> v_energy;
     CHKERR HookeElement::calculateEnergy(dm, block_sets_ptr, "SPATIAL_POSITION",
                                          "MESH_NODE_POSITIONS", false, false,
-                                         &v_energy);
-    const double *eng_ptr;
-    CHKERR VecGetArrayRead(v_energy, &eng_ptr);
+                                         v_energy);
+    double energy;
+    CHKERR VecSum(v_energy, &energy);
     // Print elastic energy
-    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy: %8.8e\n", *eng_ptr);
+    MOFEM_LOG_C("WORLD", Sev::inform, "Elastic energy: %8.8e", energy);
 
     {
-      PetscPrintf(PETSC_COMM_WORLD, "Loop post proc on the skin\n");
+      MOFEM_LOG("WORLD", Sev::inform) << "Loop post proc on the skin";
       CHKERR DMoFEMLoopFiniteElements(dm, "SKIN", &post_proc_skin);
       ostringstream stm;
       string out_file_name;
       stm << "out_skin.h5m";
       out_file_name = stm.str();
-      PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name.c_str());
+      MOFEM_LOG_C("WORLD", Sev::inform, "Write file %s", out_file_name.c_str());
       CHKERR post_proc_skin.writeFile(stm.str());
     }
 
