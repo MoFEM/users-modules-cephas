@@ -89,7 +89,9 @@ if(ADOL-C_LIBRARY)
       -my_file ${CMAKE_CURRENT_SOURCE_DIR}/rod.h5m
       -ksp_type gmres -pc_type lu -pc_factor_mat_solver_type mumps 
       -ksp_monitor -ksp_atol 1e-12 -ksp_rtol 1e-12
-      -st_ksp_type preonly -st_pc_type cholesky -st_pc_factor_mat_solver_type mumps
+      -st_ksp_type preonly -st_pc_type cholesky 
+      -st_pc_factor_mat_solver_type mumps
+      -st_mat_mumps_icntl_20 0
       -eps_monitor -eps_tol 1e-12
       -eps_nev 2 -eps_ncv 10  -eps_smalest_real -eps_gen_no_hermitian
       -my_max_post_proc_ref_level 0 -st_ksp_atol 1e-12 -st_ksp_rtol 1e-12 -my_order 2)
