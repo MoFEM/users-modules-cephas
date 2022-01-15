@@ -38,6 +38,18 @@ tutorials_copy_and_install("README" "${permissions_execute}")
 tutorials_build_and_install(
   h_adaptive_transport ${CMAKE_CURRENT_SOURCE_DIR}/h_adaptive_transport.cpp)
 
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/run_uf.sh.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/run_uf.sh"
+  @ONLY
+)
+
+install(FILES 
+  ${CMAKE_CURRENT_BINARY_DIR}/run_uf.sh 
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/${TUTORIALS_MOD_DIR}
+  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
+
+
 if(ADOL-C_LIBRARY)
 
   tutorials_build_and_install(
