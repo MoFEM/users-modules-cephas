@@ -286,7 +286,7 @@ MoFEMErrorCode Example::checkResults() {
   const double *array;
   CHKERR VecGetArrayRead(commonDataPtr->L2Vec, &array);
   if (mField.get_comm_rank() == 0)
-    PetscPrintf(PETSC_COMM_SELF, "Error %6.4e Vec norm %6.4e\n", sqrt(array[0]),
+    PetscPrintf(PETSC_COMM_SELF, "Error %6.4e Vec norm %6.4e\n", std::sqrt(array[0]),
                 nrm2);
   CHKERR VecRestoreArrayRead(commonDataPtr->L2Vec, &array);
   constexpr double eps = 1e-8;

@@ -1254,7 +1254,7 @@ int main(int argc, char *argv[]) {
 
       double frequency;
       double pi = 3.14159265359;
-      frequency = sqrt(mode_stiffness / mode_mass) / (2 * pi);
+      frequency = std::sqrt(mode_stiffness / mode_mass) / (2 * pi);
       MOFEM_LOG_C("ELASTIC", Sev::inform, "Frequency  %6.4e", frequency);
     }
 

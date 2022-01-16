@@ -126,7 +126,7 @@ struct OpURhs : public AssemblyDomainEleOp {
       FTensor::Tensor1<double, 3> t_rhs;
       FTensor::Tensor2<double, 3, 3> t_rhs_grad;
 
-      const auto a = sqrt(t_coords(i) * t_coords(i));
+      const auto a = std::sqrt(t_coords(i) * t_coords(i));
       const auto sin_fi = t_coords(2) / a;
       const auto f = 2 * omega * sin_fi;
 
@@ -218,7 +218,7 @@ struct OpULhs_dU : public AssemblyDomainEleOp {
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
-      const auto a = sqrt(t_coords(i) * t_coords(i));
+      const auto a = std::sqrt(t_coords(i) * t_coords(i));
       const auto sin_fi = t_coords(2) / a;
       const auto f = 2 * omega * sin_fi;
 
@@ -462,7 +462,7 @@ MoFEMErrorCode Example::boundaryCondition() {
 
     auto get_phi = [&](const double x, const double y, const double z) {
       FTensor::Tensor1<double, 3> t_r{x, y, 0.};
-      const double r = sqrt(t_r(i) * t_r(i));
+      const double r = std::sqrt(t_r(i) * t_r(i));
       return atan2(z, r);
     };
 
@@ -486,7 +486,7 @@ MoFEMErrorCode Example::boundaryCondition() {
     };
 
     auto init_h = [&](const double x, const double y, const double z) {
-      const double a = sqrt(x * x + y * y + z * z);
+      const double a = std::sqrt(x * x + y * y + z * z);
 
       auto integral = [&](const double fi) {
         const double u_phi = init_u_phi(fi);

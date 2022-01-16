@@ -114,7 +114,7 @@ constexpr double rho_diff = (rho_p - rho_m) / 2;
 constexpr double mu_ave = (mu_p + mu_m) / 2;
 constexpr double mu_diff = (mu_p - mu_m) / 2;
 
-const double kappa = (3. / (4. * sqrt(2. * W))) * (lambda / eta);
+const double kappa = (3. / (4. * std::sqrt(2. * W))) * (lambda / eta);
 
 auto integration_rule = [](int, int, int approx_order) {
   return 4 * approx_order;
@@ -197,8 +197,8 @@ auto kernel = [](double r, double y, double) {
   const double A = R * 0.2;
   const double theta = atan2(r, y);
   const double w = R + A * cos(n * theta);
-  const double d = sqrt(r * r + y * y);
-  return tanh((w - d) / (eta * sqrt(2)));
+  const double d = std::sqrt(r * r + y * y);
+  return tanh((w - d) / (eta * std::sqrt(2)));
 };
 
 auto init_h = [](double r, double y, double theta) {

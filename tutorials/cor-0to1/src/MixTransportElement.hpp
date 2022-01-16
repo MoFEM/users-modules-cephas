@@ -1399,7 +1399,7 @@ struct MixTransportElement {
       *error_jump_ptr = 0;
 
       /// characteristic size of the element
-      const double h = pow(getVolume() * 12 / sqrt(2), (double)1 / 3);
+      const double h = pow(getVolume() * 12 / std::sqrt(2), (double)1 / 3);
 
       for (int ff = 0; ff != 4; ff++) {
         EntityHandle face;
@@ -1411,7 +1411,7 @@ struct MixTransportElement {
         *error_face_jump_ptr = pow(*error_face_jump_ptr, 2);
         *error_jump_ptr += *error_face_jump_ptr;
       }
-
+       
       *error_flux_ptr = 0;
       *error_div_ptr = 0;
       deltaFlux.resize(3, false);

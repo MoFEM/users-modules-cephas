@@ -461,7 +461,7 @@ MoFEMErrorCode Example::OpFluxRhs::iNtegrate(EntData &row_data) {
     // Cylinder radius
     const double r_cylinder = t_coords(0);
 
-    const double r = sqrt(t_coords(i) * t_coords(i));
+    const double r = std::sqrt(t_coords(i) * t_coords(i));
     const double s = std::abs(t_coords(1)) / r;
 
     // take into account Jacobean

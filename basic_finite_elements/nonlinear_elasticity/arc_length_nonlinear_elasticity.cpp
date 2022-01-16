@@ -768,7 +768,7 @@ int main(int argc, char *argv[]) {
 
         CHKERR arc_ctx->setAlphaBeta(1, 0);
         CHKERR arc_method.calculateDxAndDlambda(D);
-        step_size = sqrt(arc_method.calculateLambdaInt());
+        step_size = std::sqrt(arc_method.calculateLambdaInt());
         step_size0 = step_size;
         CHKERR arc_ctx->setS(step_size);
         double dlambda = arc_ctx->dLambda;

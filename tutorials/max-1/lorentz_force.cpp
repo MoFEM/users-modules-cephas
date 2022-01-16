@@ -197,7 +197,7 @@ int main(int argc, char *argv[]) {
         FTensor::Tensor1<double, 3> t_velocity;
         for (auto ii : {0, 1, 2})
           t_velocity(ii) = (rand() / static_cast<double>(RAND_MAX) - 0.5);
-        t_velocity(i) /= sqrt(t_velocity(i) * t_velocity(i));
+        t_velocity(i) /= std::sqrt(t_velocity(i) * t_velocity(i));
         t_init_coords(i) = t_coords(i) + dt * velocity_scale * t_velocity(i);
 
         ++t_coords;
