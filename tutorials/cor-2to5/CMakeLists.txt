@@ -58,7 +58,7 @@ add_test(analytical_poisson
 add_test(analytical_poisson_field_split
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   ${CMAKE_CURRENT_BINARY_DIR}/analytical_poisson_field_split
-  -file_name ${CMAKE_CURRENT_SOURCE_DIR}/cube_2part.h5m -order 3cte 
+  -file_name ${CMAKE_CURRENT_SOURCE_DIR}/cube_2part.h5m -order 3 
   -pc_type fieldsplit
   -test 1)
 
