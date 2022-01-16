@@ -58,12 +58,11 @@ struct NeoHookean
     this->J = determinantTensor3by3(this->F);
 
     logJ = log(sqrt(this->J * this->J));
-    for (int i = 0; i < 3; i++) {
-      for (int j = 0; j < 3; j++) {
-        this->S(i, j) = this->mu * (((i == j) ? 1 : 0) - invC(i, j)) +
-                        this->lambda * logJ * invC(i, j);
-      }
-    }
+    constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
+    auto t_invC = getFTensor2FromArray3by3(invC, FTensor::Number<0>(), 0);
+
+    this->t_S(i, j) = this->mu * (t_kd(i, j) - t_invC(i, j)) +
+                      (this->lambda * logJ) * t_invC(i, j);
 
     MoFEMFunctionReturnHot(0);
   }

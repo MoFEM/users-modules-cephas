@@ -178,28 +178,16 @@ struct NonlinearElasticElement {
 
     MoFEMErrorCode calculateE_GreenStrain() {
       MoFEMFunctionBeginHot;
-      E.resize(3, 3);
-      noalias(E) = C;
-      for (int dd = 0; dd < 3; dd++) {
-        E(dd, dd) -= 1;
-      }
-      E *= 0.5;
+      constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
+      t_E(i, j) = 0.5 * (t_C(i, j) - t_kd(i, j));
       MoFEMFunctionReturnHot(0);
     }
 
     // St. Venant–Kirchhoff Material
     MoFEMErrorCode calculateS_PiolaKirchhoffII() {
       MoFEMFunctionBegin;
-      TYPE trE = 0;
-      for (int dd = 0; dd < 3; dd++) {
-        trE += E(dd, dd);
-      }
-      S.resize(3, 3);
-      S.clear();
-      for (int dd = 0; dd < 3; dd++) {
-        S(dd, dd) = trE * lambda;
-      }
-      S += 2 * mu * E;
+      constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
+      t_S(i, j) = (2 * mu) * t_E(i, j) + (lambda * t_E(k, k)) * t_kd(i, j);
       MoFEMFunctionReturn(0);
     }
 
@@ -343,7 +331,7 @@ struct NonlinearElasticElement {
       MoFEMFunctionBegin;
       CHKERR calculateP_PiolaKirchhoffI(block_data, fe_ptr);
       CHKERR calculateElasticEnergy(block_data, fe_ptr);
-      constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<double>();
+      constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
       t_sIGma(i, j) = t_kd(i, j) * eNergy - t_F(k, i) * t_P(k, j);
       MoFEMFunctionReturn(0);
     }
