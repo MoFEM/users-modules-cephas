@@ -25,12 +25,6 @@ using namespace MoFEM;
 
 #include <Projection10NodeCoordsOnField.hpp>
 
-#include <boost/numeric/ublas/vector_proxy.hpp>
-#include <boost/numeric/ublas/matrix.hpp>
-
-#include <boost/numeric/ublas/matrix_proxy.hpp>
-#include <boost/numeric/ublas/vector.hpp>
-
 #include <adolc/adolc.h>
 #include <MethodForForceScaling.hpp>
 #include <DirichletBC.hpp>
@@ -205,7 +199,6 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
     if (a.size() != 3) {
       a.resize(3, false);
       dot_W.resize(3, false);
-      dp_dt.resize(3, false);
       a_res.resize(3, false);
       g.resize(3, 3, false);
       G.resize(3, 3, false);
@@ -213,7 +206,6 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
       H.resize(3, 3, false);
       invH.resize(3, 3, false);
       F.resize(3, 3, false);
-      a_res.resize(3);
     }
 
     dot_W.clear();
@@ -290,25 +282,42 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
             }
           }
         }
-        adouble detH;
-        CHKERR dEterminant(H, detH);
-        CHKERR iNvert(detH, H, invH);
-        noalias(G) = prod(g, invH);
-        double rho0 = dAta.rho0;
-        VectorDouble a0 = dAta.a0;
+
+        auto &a0 = dAta.a0;
         CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, a0);
+
+        auto t_a_res =
+            FTensor::Tensor1<adouble *, 3>{&a_res[0], &a_res[1], &a_res[2]};
+        auto t_a = FTensor::Tensor1<adouble *, 3>{&a[0], &a[1], &a[2]};
+        auto t_a0 = FTensor::Tensor1<double *, 3>{&a0[0], &a0[1], &a0[2]};
+        auto t_dotW =
+            FTensor::Tensor1<adouble *, 3>{&dot_W[0], &dot_W[1], &dot_W[2]};
+        auto t_g = getFTensor2FromArray3by3(g, FTensor::Number<0>(), 0);
+        auto t_G = getFTensor2FromArray3by3(G, FTensor::Number<0>(), 0);
+        auto t_invH = getFTensor2FromArray3by3(invH, FTensor::Number<0>(), 0);
+        auto t_F = getFTensor2FromArray3by3(F, FTensor::Number<0>(), 0);
+        auto t_h = getFTensor2FromArray3by3(h, FTensor::Number<0>(), 0);
+
+        double rho0 = dAta.rho0;
+
+        adouble detH = determinantTensor3by3(H);
+        CHKERR invertTensor3by3(H, detH, invH);
+
+        t_G(i, j) = t_g(i, k) * t_invH(k, j);
+        t_a_res(i) = t_a(i) - t_a0(i) + t_G(i, j) * t_dotW(j);
+
         if (!lInear) {
-          noalias(F) = prod(h, invH);
-          adouble detF;
-          CHKERR dEterminant(F, detF);
-          // calculate current density
-          adouble rho = rho0 * detF;
-          // momentum rate
-          noalias(dp_dt) = rho * (-a0 + a + prod(G, dot_W));
+
+          t_F(i,j) = t_h(i,k)*t_invH(k,j);
+          t_a_res(i) *= rho0 * detH;
+          t_a_res(i) *= determinantTensor3by3(t_F);
+
         } else {
-          noalias(dp_dt) = rho0 * (-a0 + a + prod(G, dot_W));
+
+          t_a_res(i) *= rho0 * detH;
+
         }
-        noalias(a_res) = dp_dt * detH;
+
         // dependant
         VectorDouble &res = commonData.valMass[gg];
         res.resize(3);
@@ -769,18 +778,16 @@ MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
           H.resize(3, 3);
           noalias(H) =
               (commonData.gradAtGaussPts[commonData.meshPositions][gg]);
-          double detH;
-          CHKERR dEterminant(H, detH);
+          auto detH = determinantTensor3by3(H);
           invH.resize(3, 3);
-          CHKERR iNvert(detH, H, invH);
+          CHKERR invertTensor3by3(H, detH, invH);
           F.resize(3, 3);
           noalias(F) = prod(h, invH);
         } else {
           F.resize(3, 3);
           noalias(F) = h;
         }
-        double detF;
-        CHKERR dEterminant(F, detF);
+        double detF = determinantTensor3by3(F);
         rho = detF * rho0;
       }
       v.resize(3);
@@ -895,15 +902,37 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityJacobian::doWork(
           }
         }
         detH = 1;
+
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        FTensor::Index<'k', 3> k;
+
+        auto t_F = getFTensor2FromArray3by3(F, FTensor::Number<0>(), 0);
+        auto t_h = getFTensor2FromArray3by3(h, FTensor::Number<0>(), 0);
+        auto t_H = getFTensor2FromArray3by3(H, FTensor::Number<0>(), 0);
+        auto t_invH = getFTensor2FromArray3by3(invH, FTensor::Number<0>(), 0);
+        auto t_dot_u =
+            FTensor::Tensor1<adouble *, 3>{&dot_u[0], &dot_u[1], &dot_u[2]};
+        auto t_dot_w =
+            FTensor::Tensor1<adouble *, 3>{&dot_w[0], &dot_w[1], &dot_w[2]};
+        auto t_dot_W =
+            FTensor::Tensor1<adouble *, 3>{&dot_W[0], &dot_W[1], &dot_W[2]};
+        auto t_v = FTensor::Tensor1<adouble *, 3>{&v[0], &v[1], &v[2]};
+        auto t_a_res =
+            FTensor::Tensor1<adouble *, 3>{&a_res[0], &a_res[1], &a_res[2]};
+
         if (commonData.gradAtGaussPts[commonData.meshPositions].size() > 0) {
-          CHKERR dEterminant(H, detH);
-          CHKERR iNvert(detH, H, invH);
-          noalias(F) = prod(h, invH);
+          detH = determinantTensor3by3(H);
+          CHKERR invertTensor3by3(H, detH, invH);
+          t_F(i, j) = t_h(i, k) * t_invH(k, j);
         } else {
-          noalias(F) = h;
+          t_F(i, j) = t_h(i, j);
         }
-        noalias(dot_u) = dot_w - prod(F, dot_W);
-        noalias(a_res) = (v - dot_u) * detH;
+
+        t_dot_u(i) = t_dot_w(i) + t_F(i, j) * t_dot_W(j);
+        t_a_res(i) = t_v(i) - t_dot_u(i);
+        t_a_res(i) *= detH;
+
         // dependant
         VectorDouble &res = commonData.valVel[gg];
         res.resize(3);
@@ -1322,14 +1351,30 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumJacobian::doWork(
         adouble detH;
         detH = 1;
         if (commonData.gradAtGaussPts[commonData.meshPositions].size() > 0) {
-          CHKERR dEterminant(H, detH);
+          detH = determinantTensor3by3(H);
         }
-        CHKERR iNvert(detH, H, invH);
-        noalias(F) = prod(h, invH);
-        noalias(G) = prod(g, invH);
-        double rho0 = dAta.rho0;
+        CHKERR invertTensor3by3(H, detH, invH);
+
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        FTensor::Index<'k', 3> k;
+
         a_T.resize(3);
-        noalias(a_T) = -rho0 * (prod(trans(F), a) + prod(trans(G), v)) * detH;
+
+        auto t_h = getFTensor2FromArray3by3(h, FTensor::Number<0>(), 0);
+        auto t_invH = getFTensor2FromArray3by3(invH, FTensor::Number<0>(), 0);
+        auto t_F = getFTensor2FromArray3by3(F, FTensor::Number<0>(), 0);
+        auto t_g = getFTensor2FromArray3by3(g, FTensor::Number<0>(), 0);
+        auto t_G = getFTensor2FromArray3by3(G, FTensor::Number<0>(), 0);
+
+        auto t_a = FTensor::Tensor1<adouble *, 3>{&a[0], &a[1], &a[2]};
+        auto t_v = FTensor::Tensor1<adouble *, 3>{&v[0], &v[1], &v[2]};
+        auto t_a_T = FTensor::Tensor1<adouble *, 3>{&a_T[0], &a_T[1], &a_T[2]};
+
+        t_F(i, j) = t_h(i, k) * t_invH(k, j);
+        t_g(i, j) = t_G(i, k) * t_invH(k, j);
+        t_a_T(i) = t_F(k, i) * t_a(k) + t_G(k, i) * t_v(k);
+
         commonData.valT[gg].resize(3);
         for (int nn = 0; nn < 3; nn++) {
           a_T[nn] >>= (commonData.valT[gg])[nn];

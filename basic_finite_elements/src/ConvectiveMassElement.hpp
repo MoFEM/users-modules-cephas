@@ -186,51 +186,7 @@ struct ConvectiveMassElement {
                               CommonData &common_data);
   };
 
-  struct CommonFunctions {
-
-    template <typename TYPE>
-    MoFEMErrorCode dEterminant(
-        ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>> &a,
-        TYPE &det) {
-      MoFEMFunctionBeginHot;
-      // a11a22a33
-      //+a21a32a13
-      //+a31a12a23
-      //-a11a32a23
-      //-a31a22a13
-      //-a21a12a33
-      // http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
-      // http://mathworld.wolfram.com/MatrixInverse.html
-      det = a(0, 0) * a(1, 1) * a(2, 2) + a(1, 0) * a(2, 1) * a(0, 2) +
-            a(2, 0) * a(0, 1) * a(1, 2) - a(0, 0) * a(2, 1) * a(1, 2) -
-            a(2, 0) * a(1, 1) * a(0, 2) - a(1, 0) * a(0, 1) * a(2, 2);
-      MoFEMFunctionReturnHot(0);
-    }
-
-    template <typename TYPE>
-    MoFEMErrorCode iNvert(
-        TYPE det,
-        ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>> &a,
-        ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>>
-            &inv_a) {
-      MoFEMFunctionBeginHot;
-      //
-      inv_a.resize(3, 3);
-      // http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
-      // http://mathworld.wolfram.com/MatrixInverse.html
-      inv_a(0, 0) = a(1, 1) * a(2, 2) - a(1, 2) * a(2, 1);
-      inv_a(0, 1) = a(0, 2) * a(2, 1) - a(0, 1) * a(2, 2);
-      inv_a(0, 2) = a(0, 1) * a(1, 2) - a(0, 2) * a(1, 1);
-      inv_a(1, 0) = a(1, 2) * a(2, 0) - a(1, 0) * a(2, 2);
-      inv_a(1, 1) = a(0, 0) * a(2, 2) - a(0, 2) * a(2, 0);
-      inv_a(1, 2) = a(0, 2) * a(1, 0) - a(0, 0) * a(1, 2);
-      inv_a(2, 0) = a(1, 0) * a(2, 1) - a(1, 1) * a(2, 0);
-      inv_a(2, 1) = a(0, 1) * a(2, 0) - a(0, 0) * a(2, 1);
-      inv_a(2, 2) = a(0, 0) * a(1, 1) - a(0, 1) * a(1, 0);
-      inv_a /= det;
-      MoFEMFunctionReturnHot(0);
-    }
-  };
+  struct CommonFunctions {};
 
   struct OpMassJacobian
       : public VolumeElementForcesAndSourcesCore::UserDataOperator,
@@ -250,14 +206,16 @@ struct ConvectiveMassElement {
                    boost::ptr_vector<MethodForForceScaling> &methods_op,
                    int tag, bool linear = false);
 
-    ublas::vector<adouble, ublas::bounded_array<adouble, 3>> a, dot_W, dp_dt,
-        a_res;
-    ublas::matrix<adouble, ublas::row_major, ublas::bounded_array<adouble, 9>>
-        h, H, invH, F, g, G;
-    std::vector<double> active;
+   FTensor::Index<'i', 3> i;
+   FTensor::Index<'j', 3> j;
+   FTensor::Index<'k', 3> k;
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+   VectorBoundedArray<adouble, 3> a, dot_W, dp_dt, a_res;
+   MatrixBoundedArray<adouble, 9> h, H, invH, F, g, G;
+   std::vector<double> active;
+
+   MoFEMErrorCode doWork(int row_side, EntityType row_type,
+                         DataForcesAndSourcesCore::EntData &row_data);
   };
 
   struct OpMassRhs : public VolumeElementForcesAndSourcesCore::UserDataOperator,
@@ -344,11 +302,8 @@ struct ConvectiveMassElement {
     OpVelocityJacobian(const std::string field_name, BlockData &data,
                        CommonData &common_data, int tag, bool jacobian = true);
 
-    ublas::vector<adouble, ublas::bounded_array<adouble, 3>> a_res;
-    ublas::vector<adouble, ublas::bounded_array<adouble, 3>> v, dot_w, dot_W;
-    ublas::matrix<adouble, ublas::row_major, ublas::bounded_array<adouble, 9>>
-        h, H, invH, F;
-    ublas::vector<adouble, ublas::bounded_array<adouble, 3>> dot_u;
+    VectorBoundedArray<adouble, 3> a_res, v, dot_w, dot_W, dot_u;
+    MatrixBoundedArray<adouble, 9> h, H, invH, F;
     adouble detH;
 
     std::vector<double> active;
@@ -418,9 +373,8 @@ struct ConvectiveMassElement {
                                              CommonData &common_data, int tag,
                                              bool jacobian = true);
 
-    ublas::vector<adouble, ublas::bounded_array<adouble, 3>> a, v, a_T;
-    ublas::matrix<adouble, ublas::row_major, ublas::bounded_array<adouble, 9>>
-        g, H, invH, h, F, G;
+    VectorBoundedArray<adouble, 3> a, v, a_T;
+    MatrixBoundedArray<adouble, 9> g, H, invH, h, F, G;
     VectorDouble active;
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,

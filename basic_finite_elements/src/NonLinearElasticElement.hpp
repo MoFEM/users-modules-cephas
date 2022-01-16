@@ -133,61 +133,35 @@ struct NonlinearElasticElement {
   };
   CommonData commonData;
 
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+
   /** \brief Implementation of elastic (non-linear) St. Kirchhoff equation
    * \ingroup nonlinear_elastic_elem
    */
   template <typename TYPE> struct FunctionsToCalculatePiolaKirchhoffI {
 
-    virtual ~FunctionsToCalculatePiolaKirchhoffI() {}
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
 
-    /** \brief Calculate determinant of 3x3 matrix
-     */
-    MoFEMErrorCode dEterminant(
-        ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>> &a,
-        TYPE &det) {
-      MoFEMFunctionBeginHot;
-      // a11a22a33
-      //+a21a32a13
-      //+a31a12a23
-      //-a11a32a23
-      //-a31a22a13
-      //-a21a12a33
-      // http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
-      // http://mathworld.wolfram.com/MatrixInverse.html
-      det = a(0, 0) * a(1, 1) * a(2, 2) + a(1, 0) * a(2, 1) * a(0, 2) +
-            a(2, 0) * a(0, 1) * a(1, 2) - a(0, 0) * a(2, 1) * a(1, 2) -
-            a(2, 0) * a(1, 1) * a(0, 2) - a(1, 0) * a(0, 1) * a(2, 2);
-      MoFEMFunctionReturnHot(0);
+    FunctionsToCalculatePiolaKirchhoffI()
+        : t_F(resizeAndSet(F)), t_C(resizeAndSet(C)), t_E(resizeAndSet(E)),
+          t_S(resizeAndSet(S)), t_invF(resizeAndSet(invF)),
+          t_P(resizeAndSet(P)), t_sIGma(resizeAndSet(sIGma)),
+          t_h(resizeAndSet(h)), t_H(resizeAndSet(H)),
+          t_invH(resizeAndSet(invH)), t_sigmaCauchy(resizeAndSet(sigmaCauchy)) {
     }
 
-    /** \brief Calculate inverse of 3x3 matrix
-     */
-    MoFEMErrorCode iNvert(
-        TYPE det,
-        ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>> &a,
-        ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>>
-            &inv_a) {
-      MoFEMFunctionBeginHot;
-      //
-      inv_a.resize(3, 3);
-      // http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
-      // http://mathworld.wolfram.com/MatrixInverse.html
-      inv_a(0, 0) = a(1, 1) * a(2, 2) - a(1, 2) * a(2, 1);
-      inv_a(0, 1) = a(0, 2) * a(2, 1) - a(0, 1) * a(2, 2);
-      inv_a(0, 2) = a(0, 1) * a(1, 2) - a(0, 2) * a(1, 1);
-      inv_a(1, 0) = a(1, 2) * a(2, 0) - a(1, 0) * a(2, 2);
-      inv_a(1, 1) = a(0, 0) * a(2, 2) - a(0, 2) * a(2, 0);
-      inv_a(1, 2) = a(0, 2) * a(1, 0) - a(0, 0) * a(1, 2);
-      inv_a(2, 0) = a(1, 0) * a(2, 1) - a(1, 1) * a(2, 0);
-      inv_a(2, 1) = a(0, 1) * a(2, 0) - a(0, 0) * a(2, 1);
-      inv_a(2, 2) = a(0, 0) * a(1, 1) - a(0, 1) * a(1, 0);
-      inv_a /= det;
-      MoFEMFunctionReturnHot(0);
-    }
+    virtual ~FunctionsToCalculatePiolaKirchhoffI() = default;
 
     double lambda, mu;
-    ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>> F, C,
-        E, S, invF, P, SiGma, h, H, invH, sigmaCauchy;
+    MatrixBoundedArray<TYPE, 9> F, C, E, S, invF, P, sIGma, h, H, invH,
+        sigmaCauchy;
+    FTensor::Tensor2<FTensor::PackPtr<TYPE *, 0>, 3, 3> t_F, t_C, t_E, t_S,
+        t_invF, t_P, t_sIGma, t_h, t_H, t_invH, t_sigmaCauchy;
+
     TYPE J, eNergy, detH, detF;
 
     int gG;                    ///< Gauss point number
@@ -198,8 +172,7 @@ struct NonlinearElasticElement {
 
     MoFEMErrorCode calculateC_CauchyDeformationTensor() {
       MoFEMFunctionBeginHot;
-      C.resize(3, 3);
-      noalias(C) = prod(trans(F), F);
+      t_C(i, j) = t_F(k, i) * t_F(k, j);
       MoFEMFunctionReturnHot(0);
     }
 
@@ -262,8 +235,7 @@ struct NonlinearElasticElement {
       CHKERR calculateC_CauchyDeformationTensor();
       CHKERR calculateE_GreenStrain();
       CHKERR calculateS_PiolaKirchhoffII();
-      P.resize(3, 3);
-      noalias(P) = prod(F, S);
+      t_P(i, j) = t_F(i, k) * t_S(k, j);
       MoFEMFunctionReturn(0);
     }
 
@@ -295,10 +267,8 @@ struct NonlinearElasticElement {
         boost::shared_ptr<const NumeredEntFiniteElement> fe_ptr) {
       MoFEMFunctionBegin;
       sigmaCauchy.resize(3, 3);
-      dEterminant(F, detF);
-      noalias(sigmaCauchy) = prod(P, trans(F));
-      sigmaCauchy /= detF;
-
+      t_sigmaCauchy(i, j) = t_P(i, k) * t_F(j, k);
+      t_sigmaCauchy(i, j) /= determinantTensor3by3(t_F);
       MoFEMFunctionReturn(0);
     }
 
@@ -367,17 +337,14 @@ struct NonlinearElasticElement {
 
     /** \brief Calculate Eshelby stress
      */
-    virtual MoFEMErrorCode calculateSiGma_EshelbyStress(
+    virtual MoFEMErrorCode calculatesIGma_EshelbyStress(
         const BlockData block_data,
         boost::shared_ptr<const NumeredEntFiniteElement> fe_ptr) {
       MoFEMFunctionBegin;
       CHKERR calculateP_PiolaKirchhoffI(block_data, fe_ptr);
       CHKERR calculateElasticEnergy(block_data, fe_ptr);
-      SiGma.resize(3, 3, false);
-      noalias(SiGma) = -prod(trans(F), P);
-      for (int dd = 0; dd < 3; dd++) {
-        SiGma(dd, dd) += eNergy;
-      }
+      constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<double>();
+      t_sIGma(i, j) = t_kd(i, j) * eNergy - t_F(k, i) * t_P(k, j);
       MoFEMFunctionReturn(0);
     }
 
@@ -389,6 +356,12 @@ struct NonlinearElasticElement {
       MoFEMFunctionBeginHot;
       MoFEMFunctionReturnHot(0);
     }
+
+    protected:
+      inline static auto resizeAndSet(MatrixBoundedArray<TYPE, 9> &m) {
+        m.resize(3, 3, false);
+        return getFTensor2FromArray3by3(m, FTensor::Number<0>(), 0);
+      };
   };
 
   struct OpGetDataAtGaussPts
@@ -459,6 +432,10 @@ struct NonlinearElasticElement {
     std::vector<MatrixDouble> *ptrh;
     std::vector<MatrixDouble> *ptrH;
 
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+
     /**
      * \brief Calculate Paola-Kirchhoff I stress
      * @return error code
@@ -527,6 +504,10 @@ struct NonlinearElasticElement {
 
     std::vector<MatrixDouble> *ptrh;
     std::vector<MatrixDouble> *ptrH;
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
 
     /**
      * \brief Check if tape is recorded for given integration point

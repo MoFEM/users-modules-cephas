@@ -18,13 +18,9 @@
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
 #include <MoFEM.hpp>
+
 using namespace MoFEM;
 #include <Projection10NodeCoordsOnField.hpp>
-
-#include <boost/numeric/ublas/vector_proxy.hpp>
-#include <boost/numeric/ublas/matrix.hpp>
-#include <boost/numeric/ublas/matrix_proxy.hpp>
-#include <boost/numeric/ublas/vector.hpp>
 
 #include <adolc/adolc.h>
 #include <NonLinearElasticElement.hpp>
@@ -232,11 +228,14 @@ NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::calculateStress(
 
   CHKERR dAta.materialAdoublePtr->calculateP_PiolaKirchhoffI(
       dAta, getNumeredEntFiniteElementPtr());
+
   if (aLe) {
-    dAta.materialAdoublePtr->P =
-        dAta.materialAdoublePtr->detH *
-        prod(dAta.materialAdoublePtr->P, trans(dAta.materialAdoublePtr->invH));
+    auto &t_P = dAta.materialAdoublePtr->t_P;
+    auto &t_invH = dAta.materialAdoublePtr->t_invH;
+    t_P(i, j) = t_P(i, k) * t_invH(j, k);
+    t_P(i, j) *= dAta.materialAdoublePtr->detH;
   }
+
   commonData.sTress[gg].resize(3, 3, false);
   for (int dd1 = 0; dd1 < 3; dd1++) {
     for (int dd2 = 0; dd2 < 3; dd2++) {
@@ -292,14 +291,18 @@ NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::recordTag(
       }
     }
 
-    CHKERR dAta.materialAdoublePtr->dEterminant(dAta.materialAdoublePtr->H,
-                                                dAta.materialAdoublePtr->detH);
+    dAta.materialAdoublePtr->detH = determinantTensor3by3(dAta.materialAdoublePtr->H);
     dAta.materialAdoublePtr->invH.resize(3, 3, false);
-    CHKERR dAta.materialAdoublePtr->iNvert(dAta.materialAdoublePtr->detH,
-                                           dAta.materialAdoublePtr->H,
-                                           dAta.materialAdoublePtr->invH);
-    noalias(dAta.materialAdoublePtr->F) =
-        prod(dAta.materialAdoublePtr->h, dAta.materialAdoublePtr->invH);
+    CHKERR invertTensor3by3(dAta.materialAdoublePtr->H,
+                            dAta.materialAdoublePtr->detH,
+                            dAta.materialAdoublePtr->invH);
+
+    auto &t_F = dAta.materialAdoublePtr->t_F;
+    auto &t_h = dAta.materialAdoublePtr->t_h;
+    auto &t_invH = dAta.materialAdoublePtr->t_invH;
+
+    t_F(i, j) = t_h(i, k) * t_invH(k, j);
+
   }
 
   CHKERR dAta.materialAdoublePtr->setUserActiveVariables(nbActiveVariables);
@@ -479,14 +482,18 @@ NonlinearElasticElement::OpJacobianEnergy::recordTag(const int gg) {
       }
     }
 
-    CHKERR dAta.materialAdoublePtr->dEterminant(dAta.materialAdoublePtr->H,
-                                                dAta.materialAdoublePtr->detH);
+    dAta.materialAdoublePtr->detH = determinantTensor3by3(dAta.materialAdoublePtr->H);
     dAta.materialAdoublePtr->invH.resize(3, 3, false);
-    CHKERR dAta.materialAdoublePtr->iNvert(dAta.materialAdoublePtr->detH,
-                                           dAta.materialAdoublePtr->H,
-                                           dAta.materialAdoublePtr->invH);
-    noalias(dAta.materialAdoublePtr->F) =
-        prod(dAta.materialAdoublePtr->h, dAta.materialAdoublePtr->invH);
+    CHKERR invertTensor3by3(dAta.materialAdoublePtr->H,
+                            dAta.materialAdoublePtr->detH,
+                            dAta.materialAdoublePtr->invH);
+
+    auto &t_F = dAta.materialAdoublePtr->t_F;
+    auto &t_h = dAta.materialAdoublePtr->t_h;
+    auto &t_invH = dAta.materialAdoublePtr->t_invH;
+
+    t_F(i, j) = t_h(i, k) * t_invH(k, j);
+
   }
 
   CHKERR dAta.materialAdoublePtr->setUserActiveVariables(nbActiveVariables);
@@ -1053,17 +1060,19 @@ NonlinearElasticElement::OpJacobianEshelbyStress::calculateStress(
     const int gg) {
   MoFEMFunctionBeginHot;
 
-  CHKERR dAta.materialAdoublePtr->calculateSiGma_EshelbyStress(
+  CHKERR dAta.materialAdoublePtr->calculatesIGma_EshelbyStress(
       dAta, getNumeredEntFiniteElementPtr());
   if (aLe) {
-    dAta.materialAdoublePtr->SiGma = dAta.materialAdoublePtr->detH *
-                                     prod(dAta.materialAdoublePtr->SiGma,
-                                          trans(dAta.materialAdoublePtr->invH));
+    auto &t_sIGma = dAta.materialAdoublePtr->t_sIGma;
+    auto &t_invH = dAta.materialAdoublePtr->t_invH;
+    t_sIGma(i, j) = t_sIGma(i, k) * t_invH(j, k);
+    t_sIGma(i, j) *= dAta.materialAdoublePtr->detH;
+
   }
   commonData.sTress[gg].resize(3, 3, false);
   for (int dd1 = 0; dd1 < 3; dd1++) {
     for (int dd2 = 0; dd2 < 3; dd2++) {
-      dAta.materialAdoublePtr->SiGma(dd1, dd2) >>=
+      dAta.materialAdoublePtr->sIGma(dd1, dd2) >>=
           (commonData.sTress[gg])(dd1, dd2);
     }
   }
