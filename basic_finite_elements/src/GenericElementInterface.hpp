@@ -36,6 +36,7 @@ struct GenericElementInterface {
   virtual MoFEMErrorCode addElementFields() = 0;
   virtual MoFEMErrorCode createElements() = 0;
   virtual BitRefLevel &getElementBitRefLevel() = 0;
+  virtual MoFEMErrorCode setOperators() = 0;
   virtual MoFEMErrorCode addElementsToDM(SmartPetscObj<DM> dm) = 0;
 
   // virtual MoFEMErrorCode setupSolverKSP() = 0;

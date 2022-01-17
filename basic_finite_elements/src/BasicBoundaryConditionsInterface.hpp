@@ -87,6 +87,11 @@ struct BasicBoundaryConditionsInterface {
     MoFEMFunctionReturnHot(0);
   };
 
+  MoFEMErrorCode setOperators() {
+    MoFEMFunctionBeginHot;
+    MoFEMFunctionReturnHot(0);
+  };
+
   BitRefLevel &getElementBitRefLevel() { return bIt; };
   MoFEMErrorCode addElementsToDM(SmartPetscObj<DM> dm) {
     MoFEMFunctionBeginHot;

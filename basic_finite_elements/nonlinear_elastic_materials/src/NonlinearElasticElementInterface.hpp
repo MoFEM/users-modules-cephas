@@ -97,12 +97,18 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
                        true, false, false, false);
     CHKERR elasticElementPtr->addElement("ELASTIC", positionField,
                                          meshNodeField, false);
-    CHKERR elasticElementPtr->setOperators(positionField, meshNodeField, false,
-                                           isDisplacementField);
+
 
     MoFEMFunctionReturnHot(0);
   };
 
+  MoFEMErrorCode setOperators() {
+    MoFEMFunctionBegin;
+    CHKERR elasticElementPtr->setOperators(positionField, meshNodeField, false,
+                                           isDisplacementField);
+    MoFEMFunctionReturn(0);
+  }
+  
   BitRefLevel &getElementBitRefLevel() { return bIt; };
   MoFEMErrorCode addElementsToDM(SmartPetscObj<DM> dm) {
     MoFEMFunctionBeginHot;
