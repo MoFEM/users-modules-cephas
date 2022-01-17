@@ -445,8 +445,6 @@ NonlinearElasticElement::OpJacobianEnergy::recordTag(const int gg) {
 
   trace_on(tAg, 0);
 
-  dAta.materialAdoublePtr->F.resize(3, 3, false);
-
   if (!aLe) {
 
     nbActiveVariables = 0;
@@ -839,14 +837,6 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::aSemble(
 
   int *row_indices_ptr = &row_data.getIndices()[0];
   int *col_indices_ptr = &col_data.getIndices()[0];
-
-  /*for(int dd1 = 0;dd1<k.size1();dd1++) {
-    for(int dd2 = 0;dd2<k.size2();dd2++) {
-      if(k(dd1,dd2)!=k(dd1,dd2)) {
-        SETERRQ(PETSC_COMM_SELF,1,"Wrong result");
-      }
-    }
-  }*/
 
   if (!dAta.forcesOnlyOnEntitiesRow.empty()) {
     rowIndices.resize(nb_row, false);
