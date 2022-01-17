@@ -84,8 +84,8 @@ constexpr double u_max = 80;
 constexpr double phi_0 = M_PI / 7;
 constexpr double phi_1 = M_PI / 2 - phi_0;
 constexpr double phi_2 = M_PI / 4;
-constexpr double alpha = 1. / 3.;
-constexpr double beta = 1. / 15.;
+constexpr double alpha_montain = 1. / 3.;
+constexpr double beta_montain = 1. / 15.;
 
 constexpr double penalty = 1;
 
@@ -496,8 +496,8 @@ MoFEMErrorCode Example::boundaryCondition() {
 
       auto montain = [&](const double lambda, const double fi) {
         if (lambda > -M_PI && lambda < M_PI)
-          return h_hat * cos(fi) * exp(-pow(lambda / alpha, 2)) *
-                 exp(-pow((phi_2 - fi) / ::beta, 2));
+          return h_hat * cos(fi) * exp(-pow(lambda / alpha_montain, 2)) *
+                 exp(-pow((phi_2 - fi) / beta_montain, 2));
         else
           return 0.;
       };
