@@ -28,6 +28,7 @@
 #include <MatrixFunction.hpp>
 #include <IntegrationRules.hpp>
 
+
 using namespace MoFEM;
 
 template <int DIM> struct ElementsAndOps {};
@@ -98,6 +99,9 @@ using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
 //! [Essential boundary conditions]
 using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 
+using OpBaseDivU = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpMixScalarTimesDiv<SPACE_DIM>;
+
 // Thermal operators
 /**
  * @brief Integrate Lhs base of flux (1/k) base of flux (FLUX x FLUX)
@@ -111,7 +115,7 @@ using OpHdivHdiv = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
  * and transpose of it, i.e. (T x FLAX)
  *
  */
-using OpHdivT = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+using OpHdivQ = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMixDivTimesScalar<SPACE_DIM>;
 
 /**
@@ -163,6 +167,7 @@ double capacity = 1;
 double fluid_density = 1;
 
 #include <OpPostProcElastic.hpp>
+#include <SeepageOps.hpp>
 
 struct Monitor : public FEMethod {
 
@@ -270,7 +275,7 @@ private:
   struct BcHFun {
     BcHFun(double v, FEMethod &fe) : valH(v), fE(fe) {}
     double operator()(const double x, const double y, const double z) {
-      return valH;// - y; // * fE.ts_t;
+      return valH * y;// - y; // * fE.ts_t;
     }
 
   private:
@@ -368,6 +373,12 @@ MoFEMErrorCode Example::createCommonData() {
     mDPtr_Axiator = boost::make_shared<MatrixDouble>();
     mDPtr_Deviator = boost::make_shared<MatrixDouble>();
     
+    constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+    mDPtr->resize(size_symm * size_symm, 1);
+    mDPtr_Axiator->resize(size_symm * size_symm, 1);
+    mDPtr_Deviator->resize(size_symm * size_symm, 1);
+  
+
     auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mDPtr);
     auto t_D_axiator =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mDPtr_Axiator);
@@ -412,7 +423,7 @@ MoFEMErrorCode Example::bC() {
                                            "ZERO_FLUX", "FLUX", 0, 1);
 
   // undrained means that there will be no fluid flow on the boundaries, essentially all boundaries are fixed...
-  PetscBool zero_fix_skin_flux = PETSC_TRUE;
+  PetscBool zero_fix_skin_flux = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-undrained", &zero_fix_skin_flux,
                              PETSC_NULL);
   if (zero_fix_skin_flux) {
@@ -525,14 +536,17 @@ MoFEMErrorCode Example::OPs() {
         "U", u_grad_ptr));
     pipeline.push_back(
         new OpSymmetrizeTensor<SPACE_DIM>("U", u_grad_ptr, strain_ptr));
-    pipeline.getOpDomainRhsPipeline().push_back(
+    pipeline.push_back(
         new OpCalculateVectorFieldGradientDot<SPACE_DIM, SPACE_DIM>(
             "U", dot_u_grad_ptr));
-    pipeline.getOpDomainRhsPipeline().push_back(
+    pipeline.push_back(
         new OpCalculateTraceFromMat<SPACE_DIM>(dot_u_grad_ptr,
                                                trace_dot_u_grad_ptr));
+                                               
     pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
+
     // pipeline.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
+
     pipeline.push_back(new OpCalculateHVecVectorField<3>("FLUX", flux_ptr));
     pipeline.push_back(new OpCalculateHdivVectorDivergence<3, SPACE_DIM>(
         "FLUX", div_flux_ptr));
@@ -542,10 +556,14 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    // pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
-    // pipeline_mng->getOpDomainLhsPipeline().push_back(
-    //     new OpK("U", "U", m_D_ptr));
-    // pipeline.push_back(new OpUnSetBc("U"));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpKCauchy("U", "U", mDPtr));
+    pipeline.push_back(new OpUnSetBc("U"));
+    pipeline.push_back(new OpBaseDivU(
+        "H", "U", []() { return -9.81; }, true, true));
+    
+    
     MoFEMFunctionReturn(0);
   };
 
@@ -585,29 +603,32 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpBodyForce("U", get_body_force));
 
     // Calculate internal forece
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
+    pipeline.push_back(
         new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
             "U", strain_ptr, stress_ptr, mDPtr));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
+    pipeline.push_back(
         new OpInternalForceCauchy("U", stress_ptr));
 
-    pipeline.push_back(new OpUnSetBc("U"));
+    pipeline.push_back(
+        new SeepageOps::OpDomainRhsHydrostaticStress<SPACE_DIM>("U", h_ptr));
+
+    // pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
   auto add_boundary_ops_lhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-  //   auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
-  //   for (auto bc : bc_map) {
-  //     if (bc_mng->checkBlock(bc, "FIX_")) {
-  //       pipeline.push_back(
-  //           new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
-  //       pipeline.push_back(new OpBoundaryMass(
-  //           "U", "U", [](double, double, double) { return 1.; },
-  //           bc.second->getBcEntsPtr()));
-  //       pipeline.push_back(new OpUnSetBc("U"));
-  //     }
-  //   }
+    auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
+    for (auto bc : bc_map) {
+      if (bc_mng->checkBlock(bc, "FIX_")) {
+        pipeline.push_back(
+            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
+        pipeline.push_back(new OpBoundaryMass(
+            "U", "U", [](double, double, double) { return 1.; },
+            bc.second->getBcEntsPtr()));
+        pipeline.push_back(new OpUnSetBc("U"));
+      }
+    }
     MoFEMFunctionReturn(0);
   };
 
@@ -694,17 +715,21 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_lhs_seepage = [&](auto &pipeline) {
+  auto add_domain_ops_lhs_seepage = [&](auto &pipeline, auto &fe) {
     MoFEMFunctionBegin;
-    // auto resistance = [](const double, const double, const double) {
-    //   return (1. / conductivity);
-    // };
-    // auto capacity = [&](const double, const double, const double) {
-    //   return -capacity * fe.ts_a;
-    // };
-    // auto unity = []() { return 1; };
-    // pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
-    // pipeline.push_back(new OpHdivT("FLUX", "T", unity, true));
+    auto resistance = [](const double, const double, const double) {
+      return (1. / conductivity);
+    };
+    auto time_pass = [&]() {
+      return  -fe->ts_a;
+    };
+
+    auto unity = []() { return -1; };
+    pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
+    pipeline.push_back(new OpHdivQ("FLUX", "H", unity, true));
+    pipeline.push_back(new OpBaseDivU(
+        "H", "U", time_pass, false, false));
+
     // pipeline.push_back(new OpCapacity("T", "T", capacity));
     MoFEMFunctionReturn(0);
   };
@@ -720,6 +745,10 @@ MoFEMErrorCode Example::OPs() {
     auto minus_one = [](const double, const double, const double) {
       return -1;
     };
+    auto plus_one = [](const double, const double, const double) {
+      return 1;
+    };
+    
     // 1
     pipeline.push_back(new OpHdivFlux("FLUX", flux_ptr, resistance));
     
@@ -744,11 +773,13 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpHOSetCovariantPiolaTransformOnFace3D(HDIV));
     }
 
-    std::vector<Range> tmp_edges_vec;
+    std::vector<Range> tmp_edges_vec; // Create storage/container for
+                                      // edges/facses on which natural boundary
+                                      // condition is applied on pressure head.
     bcHFunctions.clear();
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      const std::string block_name = "H";
+      const std::string block_name = "H_";
       if (it->getName().compare(0, block_name.size(), block_name) == 0) {
         Range temp_edges;
         std::vector<double> attr_vec;
@@ -759,12 +790,15 @@ MoFEMErrorCode Example::OPs() {
           SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
                   "Should be one attribute");
         MOFEM_LOG("EXAMPLE", Sev::inform)
-            << "Set temerature " << attr_vec[0] << " on ents:\n"
+            << "Set hydraulic head " << attr_vec[0] << " on ents:\n"
             << temp_edges;
         bcHFunctions.push_back(BcHFun(attr_vec[0], *fe));
-        tmp_edges_vec.push_back(temp_edges);
+        tmp_edges_vec.push_back(temp_edges); // Add range to storage.
       }
     }
+
+    if(bcHFunctions.size()!=tmp_edges_vec.size())
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Data inconstency");
 
     for (int v = 0; v != bcHFunctions.size(); ++v) {
       pipeline.push_back(
@@ -777,20 +811,21 @@ MoFEMErrorCode Example::OPs() {
   // LHS
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_ops_lhs_mechanical(pipeline_mng->getOpDomainLhsPipeline());
-  CHKERR add_domain_ops_lhs_seepage(pipeline_mng->getOpDomainLhsPipeline());
+  CHKERR add_domain_ops_lhs_seepage(pipeline_mng->getOpDomainLhsPipeline(), pipeline_mng->getDomainLhsFE());
   CHKERR add_boundary_ops_lhs_mechanical(
       pipeline_mng->getOpBoundaryLhsPipeline());
 
   // RHS
-  CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_domain_ops_rhs_mechanical(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_domain_ops_rhs_seepage(pipeline_mng->getOpDomainRhsPipeline());
-
   CHKERR add_boundary_ops_rhs_mechanical(
       pipeline_mng->getOpBoundaryRhsPipeline());
   CHKERR add_boundary_ops_rhs_seepage(pipeline_mng->getOpBoundaryRhsPipeline(),
                                       pipeline_mng->getBoundaryRhsFE());
 
+  CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
+  CHKERR add_domain_ops_rhs_mechanical(pipeline_mng->getOpDomainRhsPipeline());
+  CHKERR add_domain_ops_rhs_seepage(pipeline_mng->getOpDomainRhsPipeline());
+
+  
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
@@ -870,6 +905,10 @@ MoFEMErrorCode Example::tsSolve() {
           new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
       postProcFe->getOpPtrVector().push_back(
           new OpSetInvJacH1ForFace(inv_jac_ptr));
+          postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
+      postProcFe->getOpPtrVector().push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacL2ForFace(inv_jac_ptr));
     }
 
     auto u_grad_ptr = boost::make_shared<MatrixDouble>();
@@ -883,7 +922,7 @@ MoFEMErrorCode Example::tsSolve() {
                                                                  u_grad_ptr));
     postProcFe->getOpPtrVector().push_back(
         new OpSymmetrizeTensor<SPACE_DIM>("U", u_grad_ptr, strain_ptr));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
+    postProcFe->getOpPtrVector().push_back(
         new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
             "U", strain_ptr, stresses_ptr, mDPtr));
                                                                  
