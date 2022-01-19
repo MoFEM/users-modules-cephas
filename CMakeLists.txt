@@ -118,6 +118,7 @@ endif(MoFEM_BOOST_INCLUDE_DIR)
 if(MoFEM_CBLAS_INCLUDE_DIR) 
   include_directories(${MoFEM_CBLAS_INCLUDE_DIR})
 endif(MoFEM_CBLAS_INCLUDE_DIR)
+add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
 
 link_directories(${MoFEM_INSTALL_DIR}/lib)
 
