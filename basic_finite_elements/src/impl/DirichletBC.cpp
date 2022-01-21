@@ -109,8 +109,8 @@ inline auto get_rotation_from_vector(FTensor1 &t_omega) {
   constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
   t_R(i, j) = t_kd(i, j);
 
-  const double angle = sqrt(t_omega(i) * t_omega(i));
-  if (std::abs(angle) < 1e-18)
+  const double angle = std::sqrt(t_omega(i) * t_omega(i));
+  if (std::abs(angle) <  1e-18)  
     return t_R;
 
   FTensor::Tensor2<double, 3, 3> t_Omega;
@@ -132,7 +132,7 @@ inline auto get_displacement(VectorDouble3 &coords, FTensor1 t_centr,
 
   FTensor1 t_omega;
   FTensor1 t_coords(coords[0], coords[1], coords[2]);
-  const double a = sqrt(t_normal(i) * t_normal(i));
+  const double a = std::sqrt(t_normal(i) * t_normal(i));
   t_omega(i) = t_normal(i) * (theta / a);
   auto t_R = get_rotation_from_vector(t_omega);
   FTensor1 t_delta, t_disp;

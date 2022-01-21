@@ -40,7 +40,7 @@ struct MyTransport : public MixTransportElement {
   MoFEMErrorCode getSource(EntityHandle ent, const double x, const double y,
                            const double z, double &flux) {
     MoFEMFunctionBeginHot;
-    // double d = sqrt(x*x+y*y+z*z);
+    // double d = std::sqrt(x*x+y*y+z*z);
     flux = 1; //-pow(d,5./4.);
     MoFEMFunctionReturnHot(0);
   }

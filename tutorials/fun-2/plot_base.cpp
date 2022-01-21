@@ -277,7 +277,7 @@ MoFEMErrorCode Example::outputResults() {
       double v = 0;
       for (int d = 0; d != length; ++d)
         v += pow(data[length * i + d], 2);
-      v = sqrt(v);
+      v = std::sqrt(v);
       max_v = std::max(max_v, v);
     }
     for (auto &v : data)

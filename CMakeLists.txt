@@ -73,7 +73,7 @@ include(${MoFEM_INSTALL_DIR}/lib/cmake/mofem/ExportFile.cmake)
 
 set(CMAKE_C_COMPILER ${MoFEM_CMAKE_C_COMPILER})
 set(CMAKE_CXX_COMPILER ${MoFEM_CMAKE_CXX_COMPILER})
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add options unique to compilation with Spack
@@ -118,6 +118,7 @@ endif(MoFEM_BOOST_INCLUDE_DIR)
 if(MoFEM_CBLAS_INCLUDE_DIR) 
   include_directories(${MoFEM_CBLAS_INCLUDE_DIR})
 endif(MoFEM_CBLAS_INCLUDE_DIR)
+add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
 
 link_directories(${MoFEM_INSTALL_DIR}/lib)
 

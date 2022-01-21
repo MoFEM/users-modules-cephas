@@ -19,3 +19,5 @@
 
 #-ts_monitor
 #-ts_adapt_monitor
+
+-mat_mumps_icntl_20 0

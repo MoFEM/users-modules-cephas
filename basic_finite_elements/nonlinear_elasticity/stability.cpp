@@ -39,9 +39,11 @@ struct MyMat_double
   MyMat_double() : doAotherwiseB(true){};
 
   MatrixDouble D_lambda, D_mu, D;
-  ublas::vector<TYPE, ublas::bounded_array<TYPE, 6>> sTrain, sTrain0, sTress;
-  ublas::matrix<adouble, ublas::row_major, ublas::bounded_array<adouble, 9>>
-      invF, CauchyStress;
+  VectorBoundedArray<TYPE, 6> sTrain, sTrain0, sTress;
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
 
   virtual MoFEMErrorCode calculateP_PiolaKirchhoffI(
       const NonlinearElasticElement::BlockData block_data,
@@ -70,37 +72,49 @@ struct MyMat_double
 
     if (doAotherwiseB) {
       sTrain.resize(6);
+      sTress.resize(6);
+
       sTrain[0] = this->F(0, 0) - 1;
       sTrain[1] = this->F(1, 1) - 1;
       sTrain[2] = this->F(2, 2) - 1;
       sTrain[3] = this->F(0, 1) + this->F(1, 0);
       sTrain[4] = this->F(1, 2) + this->F(2, 1);
       sTrain[5] = this->F(0, 2) + this->F(2, 0);
-      sTress.resize(6);
-      noalias(sTress) = prod(D, sTrain);
-      this->P.resize(3, 3);
+
+      sTress.clear();
+      for (int ii = 0; ii != 6; ++ii)
+        for (int jj = 0; jj != 6; ++jj)
+          sTress(ii) += D(ii, jj) * sTrain(jj);
+
       this->P(0, 0) = sTress[0];
       this->P(1, 1) = sTress[1];
       this->P(2, 2) = sTress[2];
       this->P(0, 1) = this->P(1, 0) = sTress[3];
       this->P(1, 2) = this->P(2, 1) = sTress[4];
       this->P(0, 2) = this->P(2, 0) = sTress[5];
-      // std::cerr << this->P << std::endl;
+
     } else {
-      adouble J;
-      CHKERR this->dEterminant(this->F, J);
-      invF.resize(3, 3);
-      CHKERR this->iNvert(J, this->F, invF);
+
       sTrain0.resize(6, 0);
-      noalias(sTress) = prod(D, sTrain0);
-      CauchyStress.resize(3, 3);
-      CauchyStress(0, 0) = sTress[0];
-      CauchyStress(1, 1) = sTress[1];
-      CauchyStress(2, 2) = sTress[2];
-      CauchyStress(0, 1) = CauchyStress(1, 0) = sTress[3];
-      CauchyStress(1, 2) = CauchyStress(2, 1) = sTress[4];
-      CauchyStress(0, 2) = CauchyStress(2, 0) = sTress[5];
-      noalias(this->P) = J * prod(CauchyStress, trans(invF));
+
+      sTress.clear();
+      for (int ii = 0; ii != 6; ++ii)
+        for (int jj = 0; jj != 6; ++jj)
+          sTress(ii) += D(ii, jj) * sTrain(jj);
+
+      // noalias(sTress) = prod(D, sTrain0);
+      this->sigmaCauchy(0, 0) = sTress[0];
+      this->sigmaCauchy(1, 1) = sTress[1];
+      this->sigmaCauchy(2, 2) = sTress[2];
+      this->sigmaCauchy(0, 1) = this->sigmaCauchy(1, 0) = sTress[3];
+      this->sigmaCauchy(1, 2) = this->sigmaCauchy(2, 1) = sTress[4];
+      this->sigmaCauchy(0, 2) = this->sigmaCauchy(2, 0) = sTress[5];
+
+      auto J = determinantTensor3by3(this->F);
+      CHKERR invertTensor3by3(this->F, J, this->invF);
+
+      this->t_P(i, j) = this->t_sigmaCauchy(i, k) * this->t_invF(j, k);
+      this->t_P(i, j) *= J;
     }
 
     MoFEMFunctionReturn(0);
@@ -167,6 +181,7 @@ int main(int argc, char *argv[]) {
   const string default_options = "-ksp_type fgmres \n"
                                  "-pc_type lu \n"
                                  "-pc_factor_mat_solver_type mumps \n"
+                                 "-mat_mumps_icntl_20 0 \n"
                                  "-ksp_atol 1e-10 \n"
                                  "-ksp_rtol 1e-10 \n"
                                  "-snes_monitor \n"

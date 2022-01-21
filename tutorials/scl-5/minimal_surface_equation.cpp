@@ -67,7 +67,7 @@ public:
     for (int gg = 0; gg != nb_integration_points; gg++) {
 
       const double a = t_w * area;
-      const double an = 1. / sqrt(1 + t_field_grad(i) * t_field_grad(i));
+      const double an = 1. / std::sqrt(1 + t_field_grad(i) * t_field_grad(i));
 
       for (int rr = 0; rr != AssemblyDomainEleOp::nbRows; ++rr) {
         // get derivatives of base functions on column
@@ -146,7 +146,7 @@ public:
     for (int gg = 0; gg != nb_integration_points; gg++) {
 
       const double a = t_w * area;
-      const double an = 1. / sqrt(1 + t_field_grad(i) * t_field_grad(i));
+      const double an = 1. / std::sqrt(1 + t_field_grad(i) * t_field_grad(i));
 
       for (int rr = 0; rr != AssemblyDomainEleOp::nbRows; rr++) {
 
