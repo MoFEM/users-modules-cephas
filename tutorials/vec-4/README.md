@@ -2,8 +2,8 @@
 
 
 ```
-./approx_sphere \                      
--file_name ~/tmp/sphere.cub \
+./approx_sphere \
+-file_name sphere.cub \
 -snes_stol 0 \
 -ksp_monitor \ 
 -ts_type beuler -ts_dt 1 -ts_max_steps 1 \
@@ -11,7 +11,7 @@
 ```
 
 ```
- mofem_part \
+ ../../tools/mofem_part \
  -my_file out_ho_mesh.h5m \
  -output_file ab.h5m \
  -my_nparts 6 \
