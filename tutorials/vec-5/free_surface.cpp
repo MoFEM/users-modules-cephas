@@ -91,11 +91,11 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // Physical parameters
-constexpr double a0 = 0.90;
-constexpr double rho_p = 0.998;
-constexpr double mu_p = 0.0101;
-constexpr double rho_m = 0.0012;
-constexpr double mu_m = 0.000182;
+constexpr double a0 = -0.98;
+constexpr double rho_m = 0.998;
+constexpr double mu_m = 0.0101;
+constexpr double rho_p = 0.0012;
+constexpr double mu_p = 0.000182;
 constexpr double lambda = 7.4;
 constexpr double W = 0.25;
 
@@ -272,7 +272,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->addBoundaryField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  constexpr int order = 3;
+  constexpr int order = 2;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("P", order - 1);
   CHKERR simple->setFieldOrder("H", order);
@@ -484,7 +484,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
 
   auto set_domain_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr,
-                                  grad_h_ptr, g_ptr, grad_g_ptr, p_ptr));
+                                  grad_h_ptr, g_ptr, p_ptr));
     pipeline.push_back(new OpRhsH<false>("H", u_ptr, dot_h_ptr, h_ptr,
                                          grad_h_ptr, grad_g_ptr));
     pipeline.push_back(new OpRhsG<false>("G", h_ptr, grad_h_ptr, g_ptr));
@@ -499,12 +499,10 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   };
 
   auto set_domain_lhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpLhsU_dU("U", u_ptr, grad_u_ptr, h_ptr));
     pipeline.push_back(
-        new OpLhsU_dU("U", u_ptr, grad_u_ptr, h_ptr, grad_g_ptr));
-    pipeline.push_back(new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr,
-                                     h_ptr, g_ptr, grad_g_ptr));
-    pipeline.push_back(
-        new OpLhsU_dG("U", "G", grad_u_ptr, h_ptr, grad_h_ptr, grad_g_ptr));
+        new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr, g_ptr));
+    pipeline.push_back(new OpLhsU_dG("U", "G", grad_h_ptr));
 
     pipeline.push_back(new OpLhsH_dU("H", "U", grad_h_ptr));
     pipeline.push_back(new OpLhsH_dH<false>("H", u_ptr, h_ptr, grad_g_ptr));
