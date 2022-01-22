@@ -304,6 +304,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
     };
 
     auto ts_a = getTSa();
+    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<double>();
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -315,7 +316,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       const double beta0 = alpha * rho;
       const double beta1 = beta0 * ts_a;
       auto t_D = get_D(2 * mu);
-
+      
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
 
@@ -335,7 +336,8 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
 
           t_mat(i, j) += (beta1 * bb) * t_kd(i, j);
           t_mat(i, j) += (beta0 * bb) * t_grad_u(i, j);
-          t_mat(i, j) += (beta0 * t_row_base) * (t_col_diff_base(k) * t_u(k));
+          t_mat(i, j) +=
+              (beta0 * t_row_base) * t_kd(i, j) * (t_col_diff_base(k) * t_u(k));
           t_mat(i, j) += t_d_stress(i, j, k) * t_col_diff_base(k);
 
           // When we move to C++17 add if constexpr()
@@ -451,7 +453,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
 
           const double bb = t_row_base * t_col_base;
           t_mat(i) += t_forces_dh(i) * bb;
-          t_mat(i) += t_phase_force_g_dh * t_col_diff_base(i);
+          t_mat(i) += (t_phase_force_g_dh * t_row_base) * t_col_diff_base(i);
           t_mat(i) += (t_row_diff_base(j) * t_col_base) * t_stress_dh(i, j);
 
           // When we move to C++17 add if constexpr()
