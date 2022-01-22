@@ -29,12 +29,17 @@ struct NeoHookean
     : public NonlinearElasticElement::FunctionsToCalculatePiolaKirchhoffI<
           TYPE> {
 
+  using PiolaKirchoffI =
+      NonlinearElasticElement::FunctionsToCalculatePiolaKirchhoffI<TYPE>;
+
   NeoHookean()
-      : NonlinearElasticElement::FunctionsToCalculatePiolaKirchhoffI<TYPE>() {}
+      : NonlinearElasticElement::FunctionsToCalculatePiolaKirchhoffI<TYPE>(),
+        t_invC(PiolaKirchoffI::resizeAndSet(invC)) {}
 
   TYPE detC;
   TYPE logJ;
   MatrixBoundedArray<TYPE, 9> invC;
+  FTensor::Tensor2<FTensor::PackPtr<TYPE *, 0>, 3, 3> t_invC;
 
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
@@ -59,7 +64,6 @@ struct NeoHookean
 
     logJ = log(sqrt(this->J * this->J));
     constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
-    auto t_invC = getFTensor2FromArray3by3(invC, FTensor::Number<0>(), 0);
 
     this->t_S(i, j) = this->mu * (t_kd(i, j) - t_invC(i, j)) +
                       (this->lambda * logJ) * t_invC(i, j);
