@@ -761,24 +761,6 @@ MoFEMErrorCode Example::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  auto assemble_mass_mat = [&](auto M) {
-    MoFEMFunctionBegin;
-    auto fe = boost::make_shared<DomainEle>(mField);
-    CHKERR MatZeroEntries(M);
-    fe->getOpPtrVector().push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
-    fe->getOpPtrVector().push_back(new OpCalculateHOCoords("HO_POSITIONS"));
-    fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
-    fe->getOpPtrVector().push_back(
-        new OpMassUU("U", "U", [&](double, double, double) { return 1; }));
-    fe->getOpPtrVector().push_back(
-        new OpMassHH("H", "H", [&](double, double, double) { return 1; }));
-    fe->B = M;
-    CHKERR DMoFEMLoopFiniteElements(dm, "dFE", fe);
-    CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
-    MoFEMFunctionReturn(0);
-  };
-
   auto set_fieldsplit_preconditioner_ksp = [&](auto ksp) {
     MoFEMFunctionBeginHot;
     PC pc;
@@ -794,15 +776,6 @@ MoFEMErrorCode Example::solveSystem() {
       CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
     }
     MoFEMFunctionReturnHot(0);
-  };
-
-  auto set_mass_ksp = [&](auto ksp, auto M) {
-    MoFEMFunctionBegin;
-    CHKERR KSPSetOperators(ksp, M, M);
-    CHKERR KSPSetFromOptions(ksp);
-    CHKERR set_fieldsplit_preconditioner_ksp(ksp);
-    CHKERR KSPSetUp(ksp);
-    MoFEMFunctionReturn(0);
   };
 
   // Setup postprocessing
