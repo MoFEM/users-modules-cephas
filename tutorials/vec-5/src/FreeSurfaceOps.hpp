@@ -14,6 +14,53 @@
 
 namespace FreeSurfaceOps {
 
+struct OpCalculateLift : public BoundaryEleOp {
+  OpCalculateLift(const std::string field_name,
+                  boost::shared_ptr<VectorDouble> p_ptr,
+                  boost::shared_ptr<VectorDouble> lift_ptr,
+                  boost::shared_ptr<Range> ents_ptr)
+      : BoundaryEleOp(field_name, field_name, BoundaryEleOp::OPROW),
+        pPtr(p_ptr), liftPtr(lift_ptr), entsPtr(ents_ptr) {
+    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+    doEntities[MBEDGE] = true;
+  }
+
+  MoFEMErrorCode doWork(int row_side, EntityType row_type,
+                        HookeElement::EntData &data) {
+    MoFEMFunctionBegin;
+
+    const auto fe_ent = getFEEntityHandle();
+    if (entsPtr->find(fe_ent) != entsPtr->end()) {
+
+      auto t_w = getFTensor0IntegrationWeight();
+      auto t_p = getFTensor0FromVec(*pPtr);
+      auto t_normal = getFTensor1Normal();
+      auto t_coords = getFTensor1CoordsAtGaussPts();
+      auto t_lift = getFTensor1FromArray<SPACE_DIM, SPACE_DIM>(*liftPtr);
+
+      const auto nb_int_points = getGaussPts().size2();
+
+      for (int gg = 0; gg != nb_int_points; gg++) {
+        
+        const double r = t_coords(0);
+        const double alpha = cylindrical(r) * t_w;
+        t_lift(i) -= t_normal(i) * (t_p * alpha);
+
+        ++t_w;
+        ++t_p;
+        ++t_coords;
+      }
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<VectorDouble> pPtr;
+  boost::shared_ptr<VectorDouble> liftPtr;
+  boost::shared_ptr<Range> entsPtr;
+};
+
 struct OpNormalConstrainRhs : public AssemblyBoundaryEleOp {
   OpNormalConstrainRhs(const std::string field_name,
                        boost::shared_ptr<MatrixDouble> u_ptr)
@@ -196,7 +243,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
     FTensor::Tensor1<double, U_FIELD_DIM> t_convection;
     FTensor::Tensor1<double, U_FIELD_DIM> t_buoyancy;
     FTensor::Tensor1<double, U_FIELD_DIM> t_forces;
-    
+
     t_buoyancy(i) = 0;
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
@@ -316,7 +363,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       const double beta0 = alpha * rho;
       const double beta1 = beta0 * ts_a;
       auto t_D = get_D(2 * mu);
-      
+
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
 

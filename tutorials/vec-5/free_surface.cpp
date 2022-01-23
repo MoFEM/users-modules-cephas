@@ -561,8 +561,11 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
  * to output results to the hard drive.
  */
 struct Monitor : public FEMethod {
-  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc)
-      : dM(dm), postProc(post_proc){};
+  Monitor(
+      SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc,
+      std::pair<boost::shared_ptr<BoundaryEle>, boost::shared_ptr<VectorDouble>>
+          p)
+      : dM(dm), postProc(post_proc), liftFE(p.first), liftVec(p.second) {}
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
     constexpr int save_every_nth_step = 1;
@@ -571,6 +574,17 @@ struct Monitor : public FEMethod {
                                       this->getCacheWeakPtr());
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+
+      liftVec->resize(SPACE_DIM, false);
+      liftVec->clear();
+      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", liftFE,
+                                      this->getCacheWeakPtr());
+      MPI_Allreduce(&(*liftVec)[0], &(*liftVec)[0], SPACE_DIM, MPI_DOUBLE,
+                    MPI_SUM, MPI_COMM_WORLD);
+      MOFEM_LOG("FS", Sev::inform)
+          << "Time " << ts_t << " lift vec x: " << (*liftVec)[0]
+          << " y: " << (*liftVec)[1];
+
       // MOFEM_LOG("FS", Sev::verbose)
       //     << "writing vector in binary to vector.dat ...";
       // PetscViewer viewer;
@@ -585,6 +599,8 @@ struct Monitor : public FEMethod {
 private:
   SmartPetscObj<DM> dM;
   boost::shared_ptr<PostProcEle> postProc;
+  boost::shared_ptr<BoundaryEle> liftFE;
+  boost::shared_ptr<VectorDouble> liftVec;
 };
 
 //! [Solve]
@@ -619,6 +635,33 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     return post_proc_fe;
   };
 
+  auto get_lift_fe = [&]() {
+    auto fe = boost::make_shared<BoundaryEle>(mField);
+    auto lift_ptr = boost::make_shared<VectorDouble>();
+    auto p_ptr = boost::make_shared<VectorDouble>();
+    auto ents_ptr = boost::make_shared<Range>();
+
+    std::vector<const CubitMeshSets *> vec_ptr;
+    CHKERR mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
+        std::regex("LIFT"), vec_ptr);
+    for (auto m_ptr : vec_ptr) {
+      auto meshset = m_ptr->getMeshset();
+      Range ents;
+      CHKERR mField.get_moab().get_entities_by_dimension(meshset, SPACE_DIM - 1,
+                                                         ents, true);
+      ents_ptr->merge(ents);
+    }
+
+    MOFEM_LOG("FS", Sev::inform) << "Lift ents " << (*ents_ptr);
+
+    fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("P", p_ptr));
+    fe->getOpPtrVector().push_back(
+        new OpCalculateLift("P", p_ptr, lift_ptr, ents_ptr));
+
+    return std::make_pair(fe, lift_ptr);
+  };
+
   auto set_ts = [&](auto solver) {
     MoFEMFunctionBegin;
     SNES snes;
@@ -634,7 +677,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto set_post_proc_monitor = [&](auto dm) {
     MoFEMFunctionBegin;
     boost::shared_ptr<FEMethod> null_fe;
-    auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
+    auto monitor_ptr =
+        boost::make_shared<Monitor>(dm, get_fe_post_proc(), get_lift_fe());
     CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                                null_fe, monitor_ptr);
     MoFEMFunctionReturn(0);
