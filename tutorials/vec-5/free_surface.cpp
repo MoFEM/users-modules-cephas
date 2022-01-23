@@ -579,7 +579,7 @@ struct Monitor : public FEMethod {
       liftVec->clear();
       CHKERR DMoFEMLoopFiniteElements(dM, "bFE", liftFE,
                                       this->getCacheWeakPtr());
-      MPI_Allreduce(&(*liftVec)[0], &(*liftVec)[0], SPACE_DIM, MPI_DOUBLE,
+      MPI_Allreduce(MPI_IN_PLACE, &(*liftVec)[0], SPACE_DIM, MPI_DOUBLE,
                     MPI_SUM, MPI_COMM_WORLD);
       MOFEM_LOG("FS", Sev::inform)
           << "Time " << ts_t << " lift vec x: " << (*liftVec)[0]
