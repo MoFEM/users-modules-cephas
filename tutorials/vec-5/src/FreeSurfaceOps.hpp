@@ -210,7 +210,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
       auto t_D = get_D(2 * mu);
 
       t_inertia_force(i) = (rho * alpha) * (t_dot_u(i));
-      t_buoyancy(SPACE_DIM - 1) = -alpha * rho_diff * a0 * t_h;
+      t_buoyancy(SPACE_DIM - 1) = -(alpha * rho * a0) * t_h;
       t_phase_force(i) = -alpha * kappa * t_g * t_grad_h(i);
       t_convection(i) = (rho * alpha) * (t_u(j) * t_grad_u(i, j));
 
@@ -427,13 +427,14 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
+      const double rho = phase_function(t_h, rho_diff, rho_ave);
       const double rho_dh = d_phase_function_h(t_h, rho_diff);
       const double mu_dh = d_phase_function_h(t_h, mu_diff);
 
       auto t_D_dh = get_D(2 * mu_dh);
 
       t_inertia_force_dh(i) = (alpha * rho_dh) * t_dot_u(i);
-      t_buoyancy_dh(SPACE_DIM - 1) = -alpha * rho_diff * a0;
+      t_buoyancy_dh(SPACE_DIM - 1) = -(alpha * a0) * (rho + rho_dh * t_h);
       t_convection_dh(i) = (rho_dh * alpha) * (t_u(j) * t_grad_u(i, j));
       const double t_phase_force_g_dh = -alpha * kappa * t_g;
       t_forces_dh(i) =

@@ -101,7 +101,7 @@ constexpr double W = 0.25;
 
 // Model parameters
 constexpr double h = 0.02; // mesh size
-constexpr double eta = 2*h;
+constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
@@ -202,9 +202,8 @@ auto kernel_oscillation = [](double r, double y, double) {
 };
 
 auto kernel_eye = [](double r, double y, double) {
-  constexpr double y0 = 0.4;
-  constexpr double R = 0.3;
-  const double A = R * 0.2;
+  constexpr double y0 = 0.5;
+  constexpr double R = 0.4;
   y -= y0;
   const double d = std::sqrt(r * r + y * y);
   return tanh((R - d) / (eta * std::sqrt(2)));
@@ -272,7 +271,7 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->addBoundaryField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  constexpr int order = 2;
+  constexpr int order = 3;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("P", order - 1);
   CHKERR simple->setFieldOrder("H", order);
@@ -566,7 +565,7 @@ struct Monitor : public FEMethod {
       : dM(dm), postProc(post_proc){};
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    constexpr int save_every_nth_step = 10;
+    constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
                                       this->getCacheWeakPtr());
@@ -595,8 +594,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto *simple = mField.getInterface<Simple>();
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto dm = simple->getDM();
-
-
 
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
@@ -630,7 +627,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     CHKERR SNESGetKSP(snes, &ksp);
     MoFEMFunctionReturn(0);
   };
-
 
   auto ts = pipeline_mng->createTSIM();
   CHKERR TSSetType(ts, TSALPHA);
