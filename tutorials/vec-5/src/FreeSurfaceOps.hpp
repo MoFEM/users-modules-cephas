@@ -634,7 +634,7 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
         for (; bb != nbRows; ++bb) {
           locF[bb] += (t_base * alpha) * (t_dot_h);
           locF[bb] += (t_base * alpha) * (t_grad_h(i) * t_u(i));
-          locF[bb] += (t_diff_base(i) * m) * t_grad_g(i);
+          locF[bb] += (t_diff_base(i) * t_grad_g(i)) * m;
           ++t_base;
           ++t_diff_base;
         }
@@ -693,10 +693,10 @@ struct OpLhsH_dU : public AssemblyDomainEleOp {
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
       const double alpha = t_w * vol;
+      auto t_mat = getFTensor1FromPtr<U_FIELD_DIM>(&locMat(0, 0));
 
       int rr = 0;
       for (; rr != nbRows; ++rr) {
-        auto t_mat = getFTensor1FromPtr<U_FIELD_DIM>(&locMat(rr, 0));
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
           t_mat(i) += (t_row_base * t_col_base * alpha) * t_grad_h(i);
@@ -732,7 +732,7 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
       : AssemblyDomainEleOp(field_name, field_name,
                             AssemblyDomainEleOp::OPROWCOL),
         uPtr(u_ptr), hPtr(h_ptr), gradGPtr(grad_g_ptr) {
-    sYmm = true;
+    sYmm = false;
   }
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,

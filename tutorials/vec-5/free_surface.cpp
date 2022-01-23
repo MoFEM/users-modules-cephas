@@ -91,7 +91,7 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // Physical parameters
-constexpr double a0 = -0.98;
+constexpr double a0 = 0.98;
 constexpr double rho_m = 0.998;
 constexpr double mu_m = 0.0101;
 constexpr double rho_p = 0.0012;
@@ -105,7 +105,7 @@ constexpr double eta = 2*h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
-constexpr double md = 1e-3;
+constexpr double md = 1e-2;
 constexpr double eps = 1e-12;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
