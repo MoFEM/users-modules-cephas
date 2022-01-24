@@ -41,9 +41,9 @@ struct OpCalculateLift : public BoundaryEleOp {
       const auto nb_int_points = getGaussPts().size2();
 
       for (int gg = 0; gg != nb_int_points; gg++) {
-        
+
         const double r = t_coords(0);
-        const double alpha = cylindrical(r) * t_w;
+        const double alpha = cylindrical(r) * t_w / 2;
         t_lift(i) -= t_normal(i) * (t_p * alpha);
 
         ++t_w;

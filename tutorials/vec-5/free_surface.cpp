@@ -575,15 +575,6 @@ struct Monitor : public FEMethod {
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
 
-      liftVec->resize(SPACE_DIM, false);
-      liftVec->clear();
-      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", liftFE,
-                                      this->getCacheWeakPtr());
-      MPI_Allreduce(MPI_IN_PLACE, &(*liftVec)[0], SPACE_DIM, MPI_DOUBLE,
-                    MPI_SUM, MPI_COMM_WORLD);
-      MOFEM_LOG("FS", Sev::inform)
-          << "Time " << ts_t << " lift vec x: " << (*liftVec)[0]
-          << " y: " << (*liftVec)[1];
 
       // MOFEM_LOG("FS", Sev::verbose)
       //     << "writing vector in binary to vector.dat ...";
@@ -593,6 +584,16 @@ struct Monitor : public FEMethod {
       // VecView(ts_u, viewer);
       // PetscViewerDestroy(&viewer);
     }
+
+    liftVec->resize(SPACE_DIM, false);
+    liftVec->clear();
+    CHKERR DMoFEMLoopFiniteElements(dM, "bFE", liftFE, this->getCacheWeakPtr());
+    MPI_Allreduce(MPI_IN_PLACE, &(*liftVec)[0], SPACE_DIM, MPI_DOUBLE, MPI_SUM,
+                  MPI_COMM_WORLD);
+    MOFEM_LOG("FS", Sev::inform)
+        << "Step " ts_step << " time " << ts_t
+        << " lift vec x: " << (*liftVec)[0] << " y: " << (*liftVec)[1];
+
     MoFEMFunctionReturn(0);
   }
 
