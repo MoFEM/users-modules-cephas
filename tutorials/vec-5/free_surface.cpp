@@ -91,21 +91,21 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // Physical parameters
-constexpr double a0 = 0;
+constexpr double a0 = 0.90;
 constexpr double rho_p = 0.998;
 constexpr double mu_p = 0.0101;
 constexpr double rho_m = 0.0012;
 constexpr double mu_m = 0.000182;
-constexpr double lambda = 1;
+constexpr double lambda = 7.4;
 constexpr double W = 0.25;
 
 // Model parameters
-constexpr double h = 0.0005; // mesh size
-constexpr double eta = h;
+constexpr double h = 0.02; // mesh size
+constexpr double eta = 2*h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
-constexpr double md = 1e-2;
+constexpr double md = 1e-3;
 constexpr double eps = 1e-12;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
@@ -117,7 +117,7 @@ constexpr double mu_diff = (mu_p - mu_m) / 2;
 const double kappa = (3. / (4. * std::sqrt(2. * W))) * (lambda / eta);
 
 auto integration_rule = [](int, int, int approx_order) {
-  return 4 * approx_order;
+  return 2 * approx_order;
 };
 
 auto cylindrical = [](const double r) {
@@ -191,18 +191,27 @@ auto get_D = [](const double A) {
   return t_D;
 };
 
-constexpr int n = 3;
-constexpr double R = 0.0125;
-auto kernel = [](double r, double y, double) {
-  const double A = R * 0.2;
+auto kernel_oscillation = [](double r, double y, double) {
+  constexpr int n = 3;
+  constexpr double R = 0.0125;
+  constexpr double A = R * 0.2;
   const double theta = atan2(r, y);
   const double w = R + A * cos(n * theta);
   const double d = std::sqrt(r * r + y * y);
   return tanh((w - d) / (eta * std::sqrt(2)));
 };
 
+auto kernel_eye = [](double r, double y, double) {
+  constexpr double y0 = 0.4;
+  constexpr double R = 0.3;
+  const double A = R * 0.2;
+  y -= y0;
+  const double d = std::sqrt(r * r + y * y);
+  return tanh((R - d) / (eta * std::sqrt(2)));
+};
+
 auto init_h = [](double r, double y, double theta) {
-  return kernel(r, y, theta);
+  return kernel_eye(r, y, theta);
 };
 
 #include <FreeSurfaceOps.hpp>
@@ -255,13 +264,13 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   MoFEMFunctionBegin;
 
   auto simple = mField.getInterface<Simple>();
-  CHKERR simple->addDomainField("U", H1, DEMKOWICZ_JACOBI_BASE, U_FIELD_DIM);
-  CHKERR simple->addDomainField("P", H1, DEMKOWICZ_JACOBI_BASE, 1);
-  CHKERR simple->addDomainField("H", H1, DEMKOWICZ_JACOBI_BASE, 1);
-  CHKERR simple->addDomainField("G", H1, DEMKOWICZ_JACOBI_BASE, 1);
-  CHKERR simple->addBoundaryField("U", H1, DEMKOWICZ_JACOBI_BASE, U_FIELD_DIM);
-  CHKERR simple->addBoundaryField("H", H1, DEMKOWICZ_JACOBI_BASE, 1);
-  CHKERR simple->addBoundaryField("L", H1, DEMKOWICZ_JACOBI_BASE, 1);
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
+  CHKERR simple->addDomainField("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addDomainField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addDomainField("G", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
+  CHKERR simple->addBoundaryField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
   constexpr int order = 3;
   CHKERR simple->setFieldOrder("U", order);
