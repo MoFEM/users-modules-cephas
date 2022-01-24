@@ -22,7 +22,7 @@
 /** \brief Set of functions declaring elements and setting operators
  * for generic element interface
  */
-struct BasicBoundaryConditionsInterface {
+struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
   MoFEM::Interface &mField;
   SmartPetscObj<DM> dM;
@@ -79,16 +79,18 @@ struct BasicBoundaryConditionsInterface {
   MoFEMErrorCode createElements() {
     MoFEMFunctionBeginHot;
 
-    CHKERR MetaNeumannForces::setMomentumFluxOperators(mField, neumann_forces,
-                                                       PETSC_NULL, "U");
-    CHKERR MetaNodalForces::setOperators(mField, nodal_forces, PETSC_NULL, "U");
-    CHKERR MetaEdgeForces::setOperators(mField, edge_forces, PETSC_NULL, "U");
-    
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(
+        mField, neumann_forces, PETSC_NULL, postion_field);
+
     MoFEMFunctionReturnHot(0);
   };
 
   MoFEMErrorCode setOperators() {
     MoFEMFunctionBeginHot;
+    CHKERR MetaNodalForces::setOperators(mField, nodal_forces, PETSC_NULL,
+                                         postion_field);
+    CHKERR MetaEdgeForces::setOperators(mField, edge_forces, PETSC_NULL,
+                                        postion_field);
     MoFEMFunctionReturnHot(0);
   };
 

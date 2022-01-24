@@ -116,7 +116,14 @@
   </tr>
 
   <tr valign="top">
-        <td width="350px">RUN-6: \subpage um_bone_remodelling_readnme</td>
+        <td width="350px">RUN-6: \subpage um_topology_optimization_readme</td>
+        <td> Topology optimization
+        <br/> *Keywords:* topology optimization, optimality criteria, anisotropic filtering
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">RUN-7: \subpage um_bone_remodelling_readnme</td>
         <td> Bone remodelling
         <br/> *Keywords:* bone, nonlinear elasticity
         </td>
