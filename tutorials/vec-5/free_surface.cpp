@@ -1,6 +1,6 @@
 /**
- * \file approximation.cpp
- * \FreeSurface approximation.cpp
+ * \file free_surface.cpp
+ * \FreeSurface free_surface.cpp
  *
  * Using PipelineManager interface calculate the divergence of base functions,
  * and integral of flux on the boundary. Since the h-div space is used, volume
@@ -263,12 +263,22 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   MoFEMFunctionBegin;
 
   auto simple = mField.getInterface<Simple>();
+
+  // Fields on domain
+  
+  // Velocity field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
+  // Pressure field
   CHKERR simple->addDomainField("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  // Order/phase fild
   CHKERR simple->addDomainField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  //Chemical potential
   CHKERR simple->addDomainField("G", H1, AINSWORTH_LEGENDRE_BASE, 1);
+
+  // Field on boundary
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
   CHKERR simple->addBoundaryField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  // Lagrange multiplier which constrains slip conditions
   CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
   constexpr int order = 3;
