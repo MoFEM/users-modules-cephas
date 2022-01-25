@@ -601,7 +601,7 @@ struct Monitor : public FEMethod {
     MPI_Allreduce(MPI_IN_PLACE, &(*liftVec)[0], SPACE_DIM, MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
     MOFEM_LOG("FS", Sev::inform)
-        << "Step " ts_step << " time " << ts_t
+        << "Step " << ts_step << " time " << ts_t
         << " lift vec x: " << (*liftVec)[0] << " y: " << (*liftVec)[1];
 
     MoFEMFunctionReturn(0);
