@@ -83,19 +83,11 @@ MoFEMErrorCode HookeElement::OpCalculateStrainAle::doWork(int row_side,
 
 HookeElement::OpCalculateEnergy::OpCalculateEnergy(
     const std::string row_field, const std::string col_field,
-    boost::shared_ptr<DataAtIntegrationPts> data_at_pts, Vec ghost_vec)
+    boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+    SmartPetscObj<Vec> ghost_vec)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
-      dataAtPts(data_at_pts), ghostVec(ghost_vec) {
+      dataAtPts(data_at_pts), ghostVec(ghost_vec, true) {
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
-  if (ghostVec != PETSC_NULL) {
-    ierr = PetscObjectReference((PetscObject)ghostVec);
-    CHKERRABORT(PETSC_COMM_SELF, ierr);
-  }
-}
-
-HookeElement::OpCalculateEnergy::~OpCalculateEnergy() {
-  ierr = VecDestroy(&ghostVec);
-  CHKERRABORT(PETSC_COMM_SELF, ierr);
 }
 
 MoFEMErrorCode HookeElement::OpCalculateEnergy::doWork(int row_side,
@@ -122,7 +114,7 @@ MoFEMErrorCode HookeElement::OpCalculateEnergy::doWork(int row_side,
     ++t_energy;
   }
 
-  if (ghostVec != PETSC_NULL) {
+  if (ghostVec.get()) {
     // get element volume
     double vol = getVolume();
     // get intergrayion weights
@@ -130,19 +122,18 @@ MoFEMErrorCode HookeElement::OpCalculateEnergy::doWork(int row_side,
     auto &det_H = *dataAtPts->detHVec;
     auto t_energy = FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(
         &*(dataAtPts->energyVec->data().begin()));
-    double *energy_ptr;
-    CHKERR VecGetArray(ghostVec, &energy_ptr);
+    double energy = 0;
     for (int gg = 0; gg != nb_integration_pts; ++gg) {
       // calculate scalar weight times element volume
       double a = t_w * vol;
       if (det_H.size()) {
         a *= det_H[gg];
       }
-      energy_ptr[0] += a * t_energy;
+      energy += a * t_energy;
       ++t_energy;
       ++t_w;
     }
-    CHKERR VecRestoreArray(ghostVec, &energy_ptr);
+    CHKERR VecSetValue(ghostVec, 0, energy, ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -710,20 +701,13 @@ MoFEMErrorCode HookeElement::setOperators(
 MoFEMErrorCode HookeElement::calculateEnergy(
     DM dm, boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
     const std::string x_field, const std::string X_field, const bool ale,
-    const bool field_disp, Vec *v_energy_ptr) {
+    const bool field_disp, SmartPetscObj<Vec> &v_energy) {
   MoFEMFunctionBegin;
 
   MoFEM::Interface *m_field_ptr;
   CHKERR DMoFEMGetInterfacePtr(dm, &m_field_ptr);
 
-  int ghosts[] = {0};
-  if (m_field_ptr->get_comm_rank() == 0) {
-    CHKERR VecCreateGhost(m_field_ptr->get_comm(), 1, 1, 0, ghosts,
-                          v_energy_ptr);
-  } else {
-    CHKERR VecCreateGhost(m_field_ptr->get_comm(), 0, 1, 1, ghosts,
-                          v_energy_ptr);
-  }
+  v_energy = createSmartVectorMPI(m_field_ptr->get_comm(), PETSC_DECIDE, 1);
 
   boost::shared_ptr<DataAtIntegrationPts> data_at_pts(
       new DataAtIntegrationPts());
@@ -773,7 +757,7 @@ MoFEMErrorCode HookeElement::calculateEnergy(
       fe_ptr->getOpPtrVector().push_back(
           new OpCalculateStress<0>(x_field, x_field, data_at_pts));
       fe_ptr->getOpPtrVector().push_back(
-          new OpCalculateEnergy(X_field, X_field, data_at_pts, *v_energy_ptr));
+          new OpCalculateEnergy(X_field, X_field, data_at_pts, v_energy));
     } else {
       if (type == MBPRISM) {
         fe_ptr->getOpPtrVector().push_back(
@@ -792,7 +776,7 @@ MoFEMErrorCode HookeElement::calculateEnergy(
       fe_ptr->getOpPtrVector().push_back(
           new OpCalculateStress<0>(x_field, x_field, data_at_pts));
       fe_ptr->getOpPtrVector().push_back(
-          new OpCalculateEnergy(X_field, X_field, data_at_pts, *v_energy_ptr));
+          new OpCalculateEnergy(X_field, X_field, data_at_pts, v_energy));
     }
     MoFEMFunctionReturnHot(0);
   };
@@ -800,22 +784,14 @@ MoFEMErrorCode HookeElement::calculateEnergy(
   CHKERR push_ops(fe_ptr, MBTET);
   CHKERR push_ops(prism_fe_ptr, MBPRISM);
 
-  CHKERR VecZeroEntries(*v_energy_ptr);
-  CHKERR VecGhostUpdateBegin(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecZeroEntries(v_energy);
 
   fe_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
-  // PetscPrintf(PETSC_COMM_WORLD, "Calculate elastic energy  ...");
   CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_ptr);
   CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", prism_fe_ptr);
-  // PetscPrintf(PETSC_COMM_WORLD, " done\n");
 
-  CHKERR VecAssemblyBegin(*v_energy_ptr);
-  CHKERR VecAssemblyEnd(*v_energy_ptr);
-  CHKERR VecGhostUpdateBegin(*v_energy_ptr, ADD_VALUES, SCATTER_REVERSE);
-  CHKERR VecGhostUpdateEnd(*v_energy_ptr, ADD_VALUES, SCATTER_REVERSE);
-  CHKERR VecGhostUpdateBegin(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecAssemblyBegin(v_energy);
+  CHKERR VecAssemblyEnd(v_energy);
 
   MoFEMFunctionReturn(0);
 }

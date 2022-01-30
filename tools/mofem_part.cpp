@@ -41,6 +41,7 @@ int main(int argc, char *argv[]) {
     PetscBool flg_file = PETSC_FALSE;
     PetscBool flg_n_part = PETSC_FALSE;
     PetscBool flg_part = PETSC_FALSE;
+    PetscBool only_tags = PETSC_FALSE;
     PetscInt n_partas = 1;
     PetscBool create_lower_dim_ents = PETSC_TRUE;
     PetscInt dim = 3;
@@ -93,7 +94,9 @@ int main(int argc, char *argv[]) {
                            PETSC_NULL);
     CHKERR PetscOptionsBool(
         "-my_create_lower_dim_ents", "if tru create lower dimension entireties",
-        "", create_lower_dim_ents, &create_lower_dim_ents, NULL);
+        "", create_lower_dim_ents, &create_lower_dim_ents, PETSC_NULL);
+    CHKERR PetscOptionsBool("-block_tags", "obly block and meshsests tags", "",
+                            only_tags, &only_tags, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -109,7 +112,7 @@ int main(int argc, char *argv[]) {
     MOFEM_LOG_TAG("WORLD", "mofem_part")
     for (CubitMeshSet_multiIndex::iterator cit =
              meshsets_interface_ptr->getBegin();
-         cit != meshsets_interface_ptr->getEnd(); cit++) 
+         cit != meshsets_interface_ptr->getEnd(); cit++)
       MOFEM_LOG("WORLD", Sev::inform) << *cit;
     MOFEM_LOG_CHANNEL("WORLD");
 
@@ -134,8 +137,38 @@ int main(int argc, char *argv[]) {
                                         nullptr, nullptr, nullptr, VERBOSE);
     }
 
-    if (m_field.get_comm_rank() == 0) 
-      CHKERR moab.write_file(mesh_out_file);
+    auto get_tag_list = [&]() {
+      std::vector<Tag> tags_list;
+      auto meshsets_mng = m_field.getInterface<MeshsetsManager>();
+      auto &list = meshsets_mng->getMeshsetsMultindex();
+      for (auto &m : list) {
+        auto meshset = m.getMeshset();
+        std::vector<Tag> tmp_tags_list;
+        CHKERR m_field.get_moab().tag_get_tags_on_entity(meshset,
+                                                         tmp_tags_list);
+        for (auto t : tmp_tags_list) {
+          tags_list.push_back(t);
+        }
+      }
+
+      return tags_list;
+    };
+
+    EntityHandle root_mesh = 0;
+    if (m_field.get_comm_rank() == 0) {
+      if (only_tags) {
+        auto tags_list = get_tag_list();
+        std::sort(tags_list.begin(), tags_list.end());
+        auto new_end = std::unique(tags_list.begin(), tags_list.end());
+        tags_list.resize(std::distance(tags_list.begin(), new_end));
+        tags_list.push_back(pcomm->part_tag());
+        // tags_list.push_back(m_field.get_moab().globalId_tag());
+        CHKERR moab.write_file(mesh_out_file, "MOAB", "", &root_mesh, 1,
+                               &*tags_list.begin(), tags_list.size());
+      } else {
+        CHKERR moab.write_file(mesh_out_file, "MOAB", "");
+      }
+    }
   }
   CATCH_ERRORS;
 

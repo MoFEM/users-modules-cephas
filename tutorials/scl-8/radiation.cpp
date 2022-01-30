@@ -199,14 +199,18 @@ MoFEMErrorCode Example::OPs() {
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeightsOnFace());
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateHOJacForFace(jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpSetInvJacH1ForFace(inv_jac_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpDomainGradGrad("T", "T", beta));
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integrationRule);
 
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateHOJacForFace(jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -461,7 +465,7 @@ MoFEMErrorCode Example::OpFluxRhs::iNtegrate(EntData &row_data) {
     // Cylinder radius
     const double r_cylinder = t_coords(0);
 
-    const double r = sqrt(t_coords(i) * t_coords(i));
+    const double r = std::sqrt(t_coords(i) * t_coords(i));
     const double s = std::abs(t_coords(1)) / r;
 
     // take into account Jacobean

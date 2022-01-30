@@ -31,3 +31,6 @@
 ## Line search (applicable for both fieldsplit and non-fieldsplit solver) 
 -snes_linesearch_type cp  
 -snes_linesearch_monitor 
+
+
+-mat_mumps_icntl_20 0

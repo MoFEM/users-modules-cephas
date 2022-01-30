@@ -84,13 +84,10 @@ constexpr double u_max = 80;
 constexpr double phi_0 = M_PI / 7;
 constexpr double phi_1 = M_PI / 2 - phi_0;
 constexpr double phi_2 = M_PI / 4;
-constexpr double alpha = 1. / 3.;
-constexpr double beta = 1. / 15.;
+constexpr double alpha_montain = 1. / 3.;
+constexpr double beta_montain = 1. / 15.;
 
 constexpr double penalty = 1;
-
-// Explict splver is faster !!!
-constexpr bool is_implicit_solver = true;
 
 FTensor::Index<'i', 3> i;
 FTensor::Index<'j', 3> j;
@@ -114,10 +111,6 @@ struct OpURhs : public AssemblyDomainEleOp {
     auto t_w = getFTensor0IntegrationWeight();
     auto t_row_base = row_data.getFTensor0N();
     auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-    if (!is_implicit_solver) {
-      uDotPtr->resize(3, nbIntegrationPts, false);
-      uDotPtr->clear();
-    }
     auto t_dot_u = getFTensor1FromMat<3>(*uDotPtr);
     auto t_u = getFTensor1FromMat<3>(*uPtr);
     auto t_grad_u = getFTensor2FromMat<3, 3>(*uGradPtr);
@@ -133,7 +126,7 @@ struct OpURhs : public AssemblyDomainEleOp {
       FTensor::Tensor1<double, 3> t_rhs;
       FTensor::Tensor2<double, 3, 3> t_rhs_grad;
 
-      const auto a = sqrt(t_coords(i) * t_coords(i));
+      const auto a = std::sqrt(t_coords(i) * t_coords(i));
       const auto sin_fi = t_coords(2) / a;
       const auto f = 2 * omega * sin_fi;
 
@@ -225,7 +218,7 @@ struct OpULhs_dU : public AssemblyDomainEleOp {
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
-      const auto a = sqrt(t_coords(i) * t_coords(i));
+      const auto a = std::sqrt(t_coords(i) * t_coords(i));
       const auto sin_fi = t_coords(2) / a;
       const auto f = 2 * omega * sin_fi;
 
@@ -469,7 +462,7 @@ MoFEMErrorCode Example::boundaryCondition() {
 
     auto get_phi = [&](const double x, const double y, const double z) {
       FTensor::Tensor1<double, 3> t_r{x, y, 0.};
-      const double r = sqrt(t_r(i) * t_r(i));
+      const double r = std::sqrt(t_r(i) * t_r(i));
       return atan2(z, r);
     };
 
@@ -493,7 +486,7 @@ MoFEMErrorCode Example::boundaryCondition() {
     };
 
     auto init_h = [&](const double x, const double y, const double z) {
-      const double a = sqrt(x * x + y * y + z * z);
+      const double a = std::sqrt(x * x + y * y + z * z);
 
       auto integral = [&](const double fi) {
         const double u_phi = init_u_phi(fi);
@@ -503,8 +496,8 @@ MoFEMErrorCode Example::boundaryCondition() {
 
       auto montain = [&](const double lambda, const double fi) {
         if (lambda > -M_PI && lambda < M_PI)
-          return h_hat * cos(fi) * exp(-pow(lambda / alpha, 2)) *
-                 exp(-pow((phi_2 - fi) / beta, 2));
+          return h_hat * cos(fi) * exp(-pow(lambda / alpha_montain, 2)) *
+                 exp(-pow((phi_2 - fi) / beta_montain, 2));
         else
           return 0.;
       };
@@ -655,11 +648,8 @@ MoFEMErrorCode Example::assembleSystem() {
     auto dot_h_ptr = boost::make_shared<VectorDouble>();
     auto grad_h_ptr = boost::make_shared<MatrixDouble>();
 
-    if (is_implicit_solver) {
-      pipeline.push_back(
-          new OpCalculateVectorFieldValuesDot<3>("U", dot_u_ptr));
-      pipeline.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
-    }
+    pipeline.push_back(new OpCalculateVectorFieldValuesDot<3>("U", dot_u_ptr));
+    pipeline.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
 
     pipeline.push_back(new OpCalculateVectorFieldValues<3>("U", u_ptr));
     pipeline.push_back(
@@ -668,9 +658,8 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpCalculateDivergenceVectorFieldValues<3>("U", div_u_ptr));
     pipeline.push_back(new OpCalculateScalarFieldGradient<3>("H", grad_h_ptr));
 
-    if (is_implicit_solver)
-      pipeline.push_back(new OpBaseTimesDotH(
-          "H", dot_h_ptr, [](double, double, double) { return 1.; }));
+    pipeline.push_back(new OpBaseTimesDotH(
+        "H", dot_h_ptr, [](double, double, double) { return 1.; }));
     pipeline.push_back(new OpBaseTimesDivU(
         "H", div_u_ptr, [](double, double, double) { return h0; }));
     pipeline.push_back(new OpConvectiveH("H", u_ptr, grad_h_ptr));
@@ -692,7 +681,8 @@ MoFEMErrorCode Example::assembleSystem() {
       return domianLhsFEPtr->ts_a;
     }));
     pipeline.push_back(new OpBaseDivU(
-        "H", "U", []() { return h0; }, false, false));
+        "H", "U", [](const double, const double, const double) { return h0; },
+        false, false));
     pipeline.push_back(
         new OpConvectiveH_dU("H", "U", grad_h_ptr, []() { return 1; }));
     pipeline.push_back(
@@ -717,12 +707,6 @@ MoFEMErrorCode Example::assembleSystem() {
 
   domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
   domianRhsFEPtr = pipeline_mng->getDomainRhsFE();
-
-  if (!is_implicit_solver) {
-    // Rhd for implicit is the same, almost, what is for implicit. So I copy FE
-    // with the pipeline for explict TS solver.
-    pipeline_mng->getDomainExplicitRhsFE() = domianRhsFEPtr;
-  }
 
   MoFEMFunctionReturn(0);
 }
@@ -777,24 +761,6 @@ MoFEMErrorCode Example::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  auto assemble_mass_mat = [&](auto M) {
-    MoFEMFunctionBegin;
-    auto fe = boost::make_shared<DomainEle>(mField);
-    CHKERR MatZeroEntries(M);
-    fe->getOpPtrVector().push_back(new OpGetHONormalsOnFace("HO_POSITIONS"));
-    fe->getOpPtrVector().push_back(new OpCalculateHOCoords("HO_POSITIONS"));
-    fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
-    fe->getOpPtrVector().push_back(
-        new OpMassUU("U", "U", [&](double, double, double) { return 1; }));
-    fe->getOpPtrVector().push_back(
-        new OpMassHH("H", "H", [&](double, double, double) { return 1; }));
-    fe->B = M;
-    CHKERR DMoFEMLoopFiniteElements(dm, "dFE", fe);
-    CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
-    MoFEMFunctionReturn(0);
-  };
-
   auto set_fieldsplit_preconditioner_ksp = [&](auto ksp) {
     MoFEMFunctionBeginHot;
     PC pc;
@@ -810,15 +776,6 @@ MoFEMErrorCode Example::solveSystem() {
       CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
     }
     MoFEMFunctionReturnHot(0);
-  };
-
-  auto set_mass_ksp = [&](auto ksp, auto M) {
-    MoFEMFunctionBegin;
-    CHKERR KSPSetOperators(ksp, M, M);
-    CHKERR KSPSetFromOptions(ksp);
-    CHKERR set_fieldsplit_preconditioner_ksp(ksp);
-    CHKERR KSPSetUp(ksp);
-    MoFEMFunctionReturn(0);
   };
 
   // Setup postprocessing
@@ -848,92 +805,39 @@ MoFEMErrorCode Example::solveSystem() {
     return post_proc_fe;
   };
 
-  if (is_implicit_solver) {
+  auto set_fieldsplit_preconditioner_ts = [&](auto solver) {
+    MoFEMFunctionBeginHot;
+    SNES snes;
+    CHKERR TSGetSNES(solver, &snes);
+    KSP ksp;
+    CHKERR SNESGetKSP(snes, &ksp);
+    CHKERR set_fieldsplit_preconditioner_ksp(ksp);
+    MoFEMFunctionReturnHot(0);
+  };
 
-    auto set_fieldsplit_preconditioner_ts = [&](auto solver) {
-      MoFEMFunctionBeginHot;
-      SNES snes;
-      CHKERR TSGetSNES(solver, &snes);
-      KSP ksp;
-      CHKERR SNESGetKSP(snes, &ksp);
-      CHKERR set_fieldsplit_preconditioner_ksp(ksp);
-      MoFEMFunctionReturnHot(0);
-    };
+  MoFEM::SmartPetscObj<TS> ts;
+  ts = pipeline_mng->createTSIM();
 
-    MoFEM::SmartPetscObj<TS> ts;
-    ts = pipeline_mng->createTSIM();
+  boost::shared_ptr<FEMethod> null_fe;
+  auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
+  CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
+                             null_fe, monitor_ptr);
 
-    boost::shared_ptr<FEMethod> null_fe;
-    auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
-    CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
-                               null_fe, monitor_ptr);
+  // Add monitor to time solver
+  double ftime = 1;
+  // CHKERR TSSetMaxTime(ts, ftime);
+  CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
-    // Add monitor to time solver
-    double ftime = 1;
-    // CHKERR TSSetMaxTime(ts, ftime);
-    CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
-
-    auto T = smartCreateDMVector(simple->getDM());
-    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
-                                   SCATTER_FORWARD);
-    CHKERR TSSetSolution(ts, T);
-    CHKERR TSSetFromOptions(ts);
-    CHKERR set_fieldsplit_preconditioner_ts(ts);
-    CHKERR TSSetUp(ts);
-    CHKERR set_initial_step(ts);
-    CHKERR TSSolve(ts, NULL);
-    CHKERR TSGetTime(ts, &ftime);
-  } else {
-
-    auto M = smartCreateDMMatrix(dm);
-    auto ksp = createKSP(mField.get_comm());
-
-    CHKERR assemble_mass_mat(M);
-    CHKERR set_mass_ksp(ksp, M);
-
-    auto solve_rhs = [&]() {
-      MoFEMFunctionBegin;
-      if (domianRhsFEPtr->vecAssembleSwitch) {
-        CHKERR VecGhostUpdateBegin(domianRhsFEPtr->ts_F, ADD_VALUES,
-                                   SCATTER_REVERSE);
-        CHKERR VecGhostUpdateEnd(domianRhsFEPtr->ts_F, ADD_VALUES,
-                                 SCATTER_REVERSE);
-        CHKERR VecAssemblyBegin(domianRhsFEPtr->ts_F);
-        CHKERR VecAssemblyEnd(domianRhsFEPtr->ts_F);
-        CHKERR KSPSolve(ksp, domianRhsFEPtr->ts_F, domianRhsFEPtr->ts_F);
-        CHKERR VecScale(domianRhsFEPtr->ts_F, -1);
-        *domianRhsFEPtr->vecAssembleSwitch = false;
-      }
-      MoFEMFunctionReturn(0);
-    };
-
-    domianRhsFEPtr->postProcessHook = solve_rhs;
-
-    MoFEM::SmartPetscObj<TS> ts;
-    ts = pipeline_mng->createTSEX();
-
-    boost::shared_ptr<FEMethod> null_fe;
-    auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
-    CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
-                               null_fe, monitor_ptr);
-
-    // Add monitor to time solver
-    double ftime = 1;
-    // CHKERR TSSetMaxTime(ts, ftime);
-    CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
-
-    auto T = smartCreateDMVector(simple->getDM());
-    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
-                                   SCATTER_FORWARD);
-
-    CHKERR TSSetSolution(ts, T);
-    CHKERR TSSetFromOptions(ts);
-    CHKERR set_initial_step(ts);
-    CHKERR TSSetUp(ts);
-
-    CHKERR TSSolve(ts, NULL);
-    CHKERR TSGetTime(ts, &ftime);
-  }
+  auto T = smartCreateDMVector(simple->getDM());
+  CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
+                                 SCATTER_FORWARD);
+  CHKERR TSSetSolution(ts, T);
+  CHKERR TSSetFromOptions(ts);
+  CHKERR set_fieldsplit_preconditioner_ts(ts);
+  CHKERR TSSetUp(ts);
+  CHKERR set_initial_step(ts);
+  CHKERR TSSolve(ts, NULL);
+  CHKERR TSGetTime(ts, &ftime);
 
   MoFEMFunctionReturn(0);
 }

@@ -78,7 +78,7 @@ EdgeForce::OpEdgeForce::doWork(int side, EntityType type,
         for (int dd = 0; dd < 3; dd++) {
           wEights[gg] += pow(getTangetAtGaussPts()(gg, dd), 2);
         }
-        wEights[gg] = sqrt(wEights[gg]);
+        wEights[gg] = std::sqrt(wEights[gg]);
         wEights[gg] *= getGaussPts()(1, gg);
       }
 

@@ -409,7 +409,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(int side,
   for (int ii = 0; ii != 3; ++ii)
     t_normal(ii) = normal_slave_ptr[ii];
 
-  const double normal_length = sqrt(t_normal(i) * t_normal(i));
+  const double normal_length = std::sqrt(t_normal(i) * t_normal(i));
   t_normal(i) = t_normal(i) / normal_length;
 
   commonDataSimpleContact->areaSlave = 0.5 * normal_length;
@@ -443,7 +443,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(int side,
   for (int ii = 0; ii != 3; ++ii)
     t_normal(ii) = normal_master_ptr[ii];
 
-  const double normal_length = sqrt(t_normal(i) * t_normal(i));
+  const double normal_length = std::sqrt(t_normal(i) * t_normal(i));
   t_normal(i) = t_normal(i) / normal_length;
   commonDataSimpleContact->areaMaster = 0.5 * normal_length;
 
@@ -3367,7 +3367,7 @@ SimpleContactProblem::OpGetNormalSlaveALE::doWork(int side, EntityType type,
       FTensor::levi_civita(i, j, k) * tangent_0_slave(j) * tangent_1_slave(k);
 
   const double normal_length =
-      sqrt(normal_original_slave(i) * normal_original_slave(i));
+      std::sqrt(normal_original_slave(i) * normal_original_slave(i));
   normal_original_slave(i) = normal_original_slave(i) / normal_length;
 
   commonDataSimpleContact->areaSlave = 0.5 * normal_length;
@@ -3424,7 +3424,7 @@ SimpleContactProblem::OpGetNormalMasterALE::doWork(int side, EntityType type,
       FTensor::levi_civita(i, j, k) * tangent_0_master(j) * tangent_1_master(k);
 
   const double normal_length =
-      sqrt(normal_original_master(i) * normal_original_master(i));
+      std::sqrt(normal_original_master(i) * normal_original_master(i));
   normal_original_master(i) = normal_original_master(i) / normal_length;
 
   commonDataSimpleContact->areaMaster = 0.5 * normal_length;

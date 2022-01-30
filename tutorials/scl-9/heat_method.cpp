@@ -138,7 +138,7 @@ MoFEMErrorCode Example::readMesh() {
     l2 = std::max(l2, l2e);
   }
 
-  dt *= sqrt(l2);
+  dt *= std::sqrt(l2);
 
   MoFEMFunctionReturn(0);
 }
@@ -442,7 +442,7 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
       const auto l2 = t_grad(i) * t_grad(i);
       FTensor::Tensor1<double, 3> t_one;
       if (l2 > std::numeric_limits<double>::epsilon())
-        t_one(i) = t_grad(i) / sqrt(l2);
+        t_one(i) = t_grad(i) / std::sqrt(l2);
       else
         t_one(i) = 0;
 

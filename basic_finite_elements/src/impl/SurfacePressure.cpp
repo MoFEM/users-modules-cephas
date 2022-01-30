@@ -1012,7 +1012,7 @@ MoFEMErrorCode NeumannForcesSurface::addForce(const std::string field_name,
     strncpy(mapForce[ms_id].data.data.name, name.c_str(),
             name.size() > 5 ? 5 : name.size());
     double magnitude =
-        sqrt(force[0] * force[0] + force[1] * force[1] + force[2] * force[2]);
+        std::sqrt(force[0] * force[0] + force[1] * force[1] + force[2] * force[2]);
     mapForce[ms_id].data.data.value1 = -magnitude; //< Force magnitude
     mapForce[ms_id].data.data.value2 = 0;
     mapForce[ms_id].data.data.value3 =

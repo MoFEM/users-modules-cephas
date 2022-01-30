@@ -114,7 +114,7 @@ struct OpRhs : public AssemblyDomainEleOp {
 
       const double alpha = t_w;
       auto t_nf = getFTensor1FromArray<3, 3>(locF);
-      double l = sqrt(t_normal(i) * t_normal(i));
+      double l = std::sqrt(t_normal(i) * t_normal(i));
 
       FTensor::Tensor1<double, 3> t_res;
       t_res(i) =
@@ -191,7 +191,7 @@ struct OpLhs : public AssemblyDomainEleOp {
       t_Q(i, j) = t_kd(i, j) - t_P(i, j);
 
       auto t_J_lhs = lhs_J_dx2(t_x(0), t_x(1), t_x(2));
-      double l = sqrt(t_normal(i) * t_normal(i));
+      double l = std::sqrt(t_normal(i) * t_normal(i));
 
       const double alpha = t_w;
       FTensor::Tensor2<double, 3, 3> t_lhs;
@@ -254,7 +254,7 @@ struct OpError : public DomainEleOp {
 
     for (int gg = 0; gg != nb_integration_pts; gg++) {
 
-      double l = sqrt(t_normal(i) * t_normal(i));
+      double l = std::sqrt(t_normal(i) * t_normal(i));
       error += t_w * l * std::abs((t_x(i) * t_x(i) - A * A));
 
       ++t_w;
@@ -448,7 +448,7 @@ MoFEMErrorCode ApproxSphere::outputResults() {
     double error2;
     CHKERR VecSum(OpError::errorVec, &error2);
     MOFEM_LOG("EXAMPLE", Sev::inform)
-        << "Error " << sqrt(error2 / (4 * M_PI * A * A));
+        << "Error " << std::sqrt(error2 / (4 * M_PI * A * A));
     OpError::errorVec.reset();
     MoFEMFunctionReturn(0);
   };
