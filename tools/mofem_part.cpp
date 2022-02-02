@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
         CHKERR moab.write_file(mesh_out_file, "MOAB", "", &root_mesh, 1,
                                &*tags_list.begin(), tags_list.size());
       } else {
-        CHKERR moab.write_file(mesh_out_file, "MOAB", "", &root_mesh, 1);
+        CHKERR moab.write_file(mesh_out_file, "MOAB", "");
       }
     }
   }

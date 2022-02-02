@@ -1,6 +1,6 @@
 /**
- * \file approximation.cpp
- * \FreeSurface approximation.cpp
+ * \file free_surface.cpp
+ * \FreeSurface free_surface.cpp
  *
  * Using PipelineManager interface calculate the divergence of base functions,
  * and integral of flux on the boundary. Since the h-div space is used, volume
@@ -91,21 +91,21 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // Physical parameters
-constexpr double a0 = 0.90;
-constexpr double rho_p = 0.998;
-constexpr double mu_p = 0.0101;
-constexpr double rho_m = 0.0012;
-constexpr double mu_m = 0.000182;
+constexpr double a0 = 0.98;
+constexpr double rho_m = 0.998;
+constexpr double mu_m = 0.0101;
+constexpr double rho_p = 0.0012;
+constexpr double mu_p = 0.000182;
 constexpr double lambda = 7.4;
 constexpr double W = 0.25;
 
 // Model parameters
 constexpr double h = 0.02; // mesh size
-constexpr double eta = 2*h;
+constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameteres
-constexpr double md = 1e-3;
+constexpr double md = 1e-2;
 constexpr double eps = 1e-12;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
@@ -202,9 +202,8 @@ auto kernel_oscillation = [](double r, double y, double) {
 };
 
 auto kernel_eye = [](double r, double y, double) {
-  constexpr double y0 = 0.4;
-  constexpr double R = 0.3;
-  const double A = R * 0.2;
+  constexpr double y0 = 0.5;
+  constexpr double R = 0.4;
   y -= y0;
   const double d = std::sqrt(r * r + y * y);
   return tanh((R - d) / (eta * std::sqrt(2)));
@@ -264,12 +263,22 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   MoFEMFunctionBegin;
 
   auto simple = mField.getInterface<Simple>();
+
+  // Fields on domain
+  
+  // Velocity field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
+  // Pressure field
   CHKERR simple->addDomainField("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  // Order/phase fild
   CHKERR simple->addDomainField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  //Chemical potential
   CHKERR simple->addDomainField("G", H1, AINSWORTH_LEGENDRE_BASE, 1);
+
+  // Field on boundary
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
   CHKERR simple->addBoundaryField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  // Lagrange multiplier which constrains slip conditions
   CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
   constexpr int order = 3;
@@ -484,7 +493,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
 
   auto set_domain_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr,
-                                  grad_h_ptr, g_ptr, grad_g_ptr, p_ptr));
+                                  grad_h_ptr, g_ptr, p_ptr));
     pipeline.push_back(new OpRhsH<false>("H", u_ptr, dot_h_ptr, h_ptr,
                                          grad_h_ptr, grad_g_ptr));
     pipeline.push_back(new OpRhsG<false>("G", h_ptr, grad_h_ptr, g_ptr));
@@ -499,12 +508,10 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   };
 
   auto set_domain_lhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpLhsU_dU("U", u_ptr, grad_u_ptr, h_ptr));
     pipeline.push_back(
-        new OpLhsU_dU("U", u_ptr, grad_u_ptr, h_ptr, grad_g_ptr));
-    pipeline.push_back(new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr,
-                                     h_ptr, g_ptr, grad_g_ptr));
-    pipeline.push_back(
-        new OpLhsU_dG("U", "G", grad_u_ptr, h_ptr, grad_h_ptr, grad_g_ptr));
+        new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr, g_ptr));
+    pipeline.push_back(new OpLhsU_dG("U", "G", grad_h_ptr));
 
     pipeline.push_back(new OpLhsH_dU("H", "U", grad_h_ptr));
     pipeline.push_back(new OpLhsH_dH<false>("H", u_ptr, h_ptr, grad_g_ptr));
@@ -564,16 +571,21 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
  * to output results to the hard drive.
  */
 struct Monitor : public FEMethod {
-  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc)
-      : dM(dm), postProc(post_proc){};
+  Monitor(
+      SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc,
+      std::pair<boost::shared_ptr<BoundaryEle>, boost::shared_ptr<VectorDouble>>
+          p)
+      : dM(dm), postProc(post_proc), liftFE(p.first), liftVec(p.second) {}
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    constexpr int save_every_nth_step = 10;
+    constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
                                       this->getCacheWeakPtr());
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+
+
       // MOFEM_LOG("FS", Sev::verbose)
       //     << "writing vector in binary to vector.dat ...";
       // PetscViewer viewer;
@@ -582,12 +594,24 @@ struct Monitor : public FEMethod {
       // VecView(ts_u, viewer);
       // PetscViewerDestroy(&viewer);
     }
+
+    liftVec->resize(SPACE_DIM, false);
+    liftVec->clear();
+    CHKERR DMoFEMLoopFiniteElements(dM, "bFE", liftFE, this->getCacheWeakPtr());
+    MPI_Allreduce(MPI_IN_PLACE, &(*liftVec)[0], SPACE_DIM, MPI_DOUBLE, MPI_SUM,
+                  MPI_COMM_WORLD);
+    MOFEM_LOG("FS", Sev::inform)
+        << "Step " << ts_step << " time " << ts_t
+        << " lift vec x: " << (*liftVec)[0] << " y: " << (*liftVec)[1];
+
     MoFEMFunctionReturn(0);
   }
 
 private:
   SmartPetscObj<DM> dM;
   boost::shared_ptr<PostProcEle> postProc;
+  boost::shared_ptr<BoundaryEle> liftFE;
+  boost::shared_ptr<VectorDouble> liftVec;
 };
 
 //! [Solve]
@@ -597,8 +621,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto *simple = mField.getInterface<Simple>();
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto dm = simple->getDM();
-
-
 
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
@@ -624,6 +646,33 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     return post_proc_fe;
   };
 
+  auto get_lift_fe = [&]() {
+    auto fe = boost::make_shared<BoundaryEle>(mField);
+    auto lift_ptr = boost::make_shared<VectorDouble>();
+    auto p_ptr = boost::make_shared<VectorDouble>();
+    auto ents_ptr = boost::make_shared<Range>();
+
+    std::vector<const CubitMeshSets *> vec_ptr;
+    CHKERR mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
+        std::regex("LIFT"), vec_ptr);
+    for (auto m_ptr : vec_ptr) {
+      auto meshset = m_ptr->getMeshset();
+      Range ents;
+      CHKERR mField.get_moab().get_entities_by_dimension(meshset, SPACE_DIM - 1,
+                                                         ents, true);
+      ents_ptr->merge(ents);
+    }
+
+    MOFEM_LOG("FS", Sev::inform) << "Lift ents " << (*ents_ptr);
+
+    fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("P", p_ptr));
+    fe->getOpPtrVector().push_back(
+        new OpCalculateLift("P", p_ptr, lift_ptr, ents_ptr));
+
+    return std::make_pair(fe, lift_ptr);
+  };
+
   auto set_ts = [&](auto solver) {
     MoFEMFunctionBegin;
     SNES snes;
@@ -633,14 +682,14 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
-
   auto ts = pipeline_mng->createTSIM();
   CHKERR TSSetType(ts, TSALPHA);
 
   auto set_post_proc_monitor = [&](auto dm) {
     MoFEMFunctionBegin;
     boost::shared_ptr<FEMethod> null_fe;
-    auto monitor_ptr = boost::make_shared<Monitor>(dm, get_fe_post_proc());
+    auto monitor_ptr =
+        boost::make_shared<Monitor>(dm, get_fe_post_proc(), get_lift_fe());
     CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                                null_fe, monitor_ptr);
     MoFEMFunctionReturn(0);

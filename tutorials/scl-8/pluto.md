@@ -1,4 +1,4 @@
-<!-- #region -->
+
 ![](https://www.nasa.gov/sites/default/files/thumbnails/image/nh_pluto_10.png)
 
 *Source* [https://www.nasa.gov](https://www.nasa.gov)
@@ -10,9 +10,9 @@
 In this example, we focus on modelling the *partial differential equation* with a *nonlinear boundary conditions*. We choose the problem of thermal equilibrium of the Pluto planet.The planet model is oversimplified. However, it serves the purpose; this example shows how to linearize partial differential equations and apply the Newton method.  
 
 MoFEM is generic code, and other processes (chemical reactions, radioactive decay, etc.) can be included, to fit better reality. For example, an interesting modelling avenue would be to apply multi-scale analysis, with separate scales for space and time for processes on the surface and subsurface, or model extension to model transport phenomena with reaction-diffusion equation, or near surface convection diffusion problem.
-<!-- #endregion -->
 
-<!-- #region -->
++++
+
 # Part I
 
 ## Energy balance
@@ -155,16 +155,15 @@ When problem is expressed in that form, we call it that it is strong form. For c
 
 This is a nonlinear partial differential equation since radiation is a nonlinear function of unknown distribution of temperature. You can notice as well that time does not explicitly is involved in the equations. This is a consequence of the assumptions above. We are looking at long periods, like time over several Plutos years (Pluto orbit has ~248 years), where average values are our initial interest.
 
-<!-- #endregion -->
-
++++
 
 # Part II
 
-
++++
 
 ## Running code. 
 
-```python
+```{code-cell} ipython3
 # Running code
 
 # -ts_dt step size
@@ -204,7 +203,7 @@ wd='%s/um_view/tutorials/scl-8' % home_dir
 
 ## Creating VTK file
 
-```python
+```{code-cell} ipython3
 # Convert h5m file into VTK file
 !cd {wd} && /mofem_install/um_view/bin/mbconvert out_radiation.h5m out_radiation.vtk
 !ls {wd}
@@ -212,7 +211,7 @@ wd='%s/um_view/tutorials/scl-8' % home_dir
 
 ## Printing Newton iterations and time stepping
 
-```python
+```{code-cell} ipython3
 newton_log_file="newton_log_file.txt"
 !cd {wd} && grep "SNES Function norm" {log_file} > {newton_log_file} 
 
@@ -233,11 +232,11 @@ plt.show()
 
 ## Plotting solution on mesh and temperature distribution
 
-```python
+```{code-cell} ipython3
 import os
-os.system('/usr/bin/Xvfb :99 -screen 0 1024x768x24 &')
-os.environ['DISPLAY'] = ':99'
-os.environ['PYVISTA_USE_IPYVTK'] = 'true'
+from pyvirtualdisplay import Display
+display = Display(backend="xvfb", visible=False, size=(1200, 800))
+display.start()
 
 # Plot solution
 import pyvista as pv
@@ -264,7 +263,6 @@ mesh.plot(
 # plt.show()
 ```
 
-<!-- #region -->
 
 # Part III
 
@@ -479,7 +477,7 @@ and surface integral is
 \tag{23}
 \end{equation}
 
-<!-- #endregion -->
++++
 
 # Part IV
 
@@ -487,7 +485,7 @@ and surface integral is
 
 Now we will make loops for the Newton method and time stepping. First, we will start with an internal loop of Newton method:
 
-```python
+```{code-cell} ipython3
 # max_it - maximal number of iterations
 # snes_atol - absolut tolerance
 # snes_rtol - relative tolerance
@@ -553,13 +551,13 @@ def calc_rate(arr, k):
     return cal_log(arr, k)/cal_log(arr, k-1)
 
 print("Estimated order of convergence: %3.4e" % calc_rate(arr, len(arr)-2))
-
 ```
 
 This is how Newton method looks; it is evaluating residual $\mathbf{r}$, matrix $\mathbf{k}$, at every iteration.  Next, solve a linear system of equations, and finally, check if residual is small. To check convergence,  criteria to stop Newton iterations are set. One criterion checking absolute residual, other relative residual. In some other cases, criterion on the norm of $dT$ increment can be set, or change of system energy. The matrix  $\mathbf{k}$ is often called the tangent stiffness matrix (that term comes from structural analysis).
 
 Here we have a relatively simple function. In general, the key difficulty for more complex problems is to calculate correctly tangent matrix $\mathbf{k}$. That is essential to achieve a quadratic rate of convergence. The Newton method iterations are costly for big problems, and "quadratic" order of convergence allows to obtain solution fast.  
 
++++
 
 ## Substepping
 
@@ -569,7 +567,7 @@ If Pluto is not subjected to sun irradiation, then it is easy to guess the solut
 
 Algorithms can look as follows:
 
-```python
+```{code-cell} ipython3
 step_arr = []
 for t in np.arange(0.0, 1.25, 0.25):
     print("Psudo time %f" % t)
@@ -585,7 +583,7 @@ for t in np.arange(0.0, 1.25, 0.25):
     print()
 ```
 
-```python
+```{code-cell} ipython3
 plt.rcParams['figure.figsize'] = [15, 10]
 plt.plot(step_arr,'r^-')
 plt.title('Neton method convergence')

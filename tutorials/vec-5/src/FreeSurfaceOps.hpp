@@ -14,6 +14,53 @@
 
 namespace FreeSurfaceOps {
 
+struct OpCalculateLift : public BoundaryEleOp {
+  OpCalculateLift(const std::string field_name,
+                  boost::shared_ptr<VectorDouble> p_ptr,
+                  boost::shared_ptr<VectorDouble> lift_ptr,
+                  boost::shared_ptr<Range> ents_ptr)
+      : BoundaryEleOp(field_name, field_name, BoundaryEleOp::OPROW),
+        pPtr(p_ptr), liftPtr(lift_ptr), entsPtr(ents_ptr) {
+    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+    doEntities[MBEDGE] = true;
+  }
+
+  MoFEMErrorCode doWork(int row_side, EntityType row_type,
+                        HookeElement::EntData &data) {
+    MoFEMFunctionBegin;
+
+    const auto fe_ent = getFEEntityHandle();
+    if (entsPtr->find(fe_ent) != entsPtr->end()) {
+
+      auto t_w = getFTensor0IntegrationWeight();
+      auto t_p = getFTensor0FromVec(*pPtr);
+      auto t_normal = getFTensor1Normal();
+      auto t_coords = getFTensor1CoordsAtGaussPts();
+      auto t_lift = getFTensor1FromArray<SPACE_DIM, SPACE_DIM>(*liftPtr);
+
+      const auto nb_int_points = getGaussPts().size2();
+
+      for (int gg = 0; gg != nb_int_points; gg++) {
+
+        const double r = t_coords(0);
+        const double alpha = cylindrical(r) * t_w / 2;
+        t_lift(i) -= t_normal(i) * (t_p * alpha);
+
+        ++t_w;
+        ++t_p;
+        ++t_coords;
+      }
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<VectorDouble> pPtr;
+  boost::shared_ptr<VectorDouble> liftPtr;
+  boost::shared_ptr<Range> entsPtr;
+};
+
 struct OpNormalConstrainRhs : public AssemblyBoundaryEleOp {
   OpNormalConstrainRhs(const std::string field_name,
                        boost::shared_ptr<MatrixDouble> u_ptr)
@@ -166,11 +213,10 @@ struct OpRhsU : public AssemblyDomainEleOp {
          boost::shared_ptr<VectorDouble> h_ptr,
          boost::shared_ptr<MatrixDouble> grad_h_ptr,
          boost::shared_ptr<VectorDouble> g_ptr,
-         boost::shared_ptr<MatrixDouble> grad_g_ptr,
          boost::shared_ptr<VectorDouble> p_ptr)
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
         dotUPtr(dot_u_ptr), uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr),
-        gradHPtr(grad_h_ptr), gPtr(g_ptr), gradGPtr(grad_g_ptr), pPtr(p_ptr) {}
+        gradHPtr(grad_h_ptr), gPtr(g_ptr), pPtr(p_ptr) {}
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
@@ -183,7 +229,6 @@ struct OpRhsU : public AssemblyDomainEleOp {
     auto t_h = getFTensor0FromVec(*hPtr);
     auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
     auto t_g = getFTensor0FromVec(*gPtr);
-    auto t_grad_g = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
     auto t_base = data.getFTensor0N();
@@ -196,9 +241,10 @@ struct OpRhsU : public AssemblyDomainEleOp {
     FTensor::Tensor1<double, U_FIELD_DIM> t_phase_force;
     FTensor::Tensor1<double, U_FIELD_DIM> t_inertia_force;
     FTensor::Tensor1<double, U_FIELD_DIM> t_convection;
-    FTensor::Tensor1<double, U_FIELD_DIM> t_a0;
-    t_a0(i) = 0;
-    t_a0(SPACE_DIM - 1) = a0;
+    FTensor::Tensor1<double, U_FIELD_DIM> t_buoyancy;
+    FTensor::Tensor1<double, U_FIELD_DIM> t_forces;
+
+    t_buoyancy(i) = 0;
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -210,19 +256,23 @@ struct OpRhsU : public AssemblyDomainEleOp {
 
       auto t_D = get_D(2 * mu);
 
-      t_inertia_force(i) = (rho * alpha) * (t_dot_u(i) - t_a0(i));
-      t_stress(i, j) =
-          alpha * (t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p);
+      t_inertia_force(i) = (rho * alpha) * (t_dot_u(i));
+      t_buoyancy(SPACE_DIM - 1) = -(alpha * rho * a0) * t_h;
       t_phase_force(i) = -alpha * kappa * t_g * t_grad_h(i);
       t_convection(i) = (rho * alpha) * (t_u(j) * t_grad_u(i, j));
 
+      t_stress(i, j) =
+          alpha * (t_D(i, j, k, l) * t_grad_u(k, l) + t_kd(i, j) * t_p);
+
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
+
+      t_forces(i) = t_inertia_force(i) + t_buoyancy(i) + t_convection(i) +
+                    t_phase_force(i);
 
       int bb = 0;
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
 
-        t_nf(i) +=
-            t_base * (t_inertia_force(i) + t_convection(i) + t_phase_force(i));
+        t_nf(i) += t_base * t_forces(i);
         t_nf(i) += t_diff_base(j) * t_stress(i, j);
 
         // When we move to C++17 add if constexpr()
@@ -246,7 +296,6 @@ struct OpRhsU : public AssemblyDomainEleOp {
       ++t_h;
       ++t_grad_h;
       ++t_g;
-      ++t_grad_g;
       ++t_p;
 
       ++t_w;
@@ -263,7 +312,6 @@ private:
   boost::shared_ptr<VectorDouble> hPtr;
   boost::shared_ptr<MatrixDouble> gradHPtr;
   boost::shared_ptr<VectorDouble> gPtr;
-  boost::shared_ptr<MatrixDouble> gradGPtr;
   boost::shared_ptr<VectorDouble> pPtr;
 };
 
@@ -275,11 +323,10 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
 
   OpLhsU_dU(const std::string field_name, boost::shared_ptr<MatrixDouble> u_ptr,
             boost::shared_ptr<MatrixDouble> grad_u_ptr,
-            boost::shared_ptr<VectorDouble> h_ptr,
-            boost::shared_ptr<MatrixDouble> grad_g_ptr)
+            boost::shared_ptr<VectorDouble> h_ptr)
       : AssemblyDomainEleOp(field_name, field_name,
                             AssemblyDomainEleOp::OPROWCOL),
-        uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr), gradGPtr(grad_g_ptr) {
+        uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr) {
     sYmm = false;
     assembleTranspose = false;
   }
@@ -292,7 +339,6 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
     auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
     auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
     auto t_h = getFTensor0FromVec(*hPtr);
-    auto t_grad_g = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
     auto t_row_base = row_data.getFTensor0N();
@@ -305,6 +351,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
     };
 
     auto ts_a = getTSa();
+    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<double>();
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -315,7 +362,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
 
       const double beta0 = alpha * rho;
       const double beta1 = beta0 * ts_a;
-      auto t_D = get_D(alpha * 2 * mu);
+      auto t_D = get_D(2 * mu);
 
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
@@ -328,7 +375,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
         // I mix up the indices here so that it behaves like a
         // Dg.  That way I don't have to have a separate wrapper
         // class Christof_Expr, which simplifies things.
-        t_d_stress(l, j, k) = t_D(i, j, k, l) * t_row_diff_base(i);
+        t_d_stress(l, j, k) = t_D(i, j, k, l) * (alpha * t_row_diff_base(i));
 
         for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
 
@@ -336,7 +383,8 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
 
           t_mat(i, j) += (beta1 * bb) * t_kd(i, j);
           t_mat(i, j) += (beta0 * bb) * t_grad_u(i, j);
-          t_mat(i, j) += (beta0 * t_row_base) * (t_col_diff_base(k) * t_u(k));
+          t_mat(i, j) +=
+              (beta0 * t_row_base) * t_kd(i, j) * (t_col_diff_base(k) * t_u(k));
           t_mat(i, j) += t_d_stress(i, j, k) * t_col_diff_base(k);
 
           // When we move to C++17 add if constexpr()
@@ -361,7 +409,6 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
       ++t_u;
       ++t_grad_u;
       ++t_h;
-      ++t_grad_g;
 
       ++t_coords;
       ++t_w;
@@ -374,7 +421,6 @@ private:
   boost::shared_ptr<MatrixDouble> uPtr;
   boost::shared_ptr<MatrixDouble> gradUPtr;
   boost::shared_ptr<VectorDouble> hPtr;
-  boost::shared_ptr<MatrixDouble> gradGPtr;
 };
 
 /**
@@ -388,12 +434,11 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
             boost::shared_ptr<MatrixDouble> u_ptr,
             boost::shared_ptr<MatrixDouble> grad_u_ptr,
             boost::shared_ptr<VectorDouble> h_ptr,
-            boost::shared_ptr<VectorDouble> g_ptr,
-            boost::shared_ptr<MatrixDouble> grad_g_ptr)
+            boost::shared_ptr<VectorDouble> g_ptr)
       : AssemblyDomainEleOp(field_name_u, field_name_h,
                             AssemblyDomainEleOp::OPROWCOL),
         dotUPtr(dot_u_ptr), uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr),
-        gPtr(g_ptr), gradGPtr(grad_g_ptr) {
+        gPtr(g_ptr) {
     sYmm = false;
     assembleTranspose = false;
   }
@@ -408,7 +453,6 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
     auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
     auto t_h = getFTensor0FromVec(*hPtr);
     auto t_g = getFTensor0FromVec(*gPtr);
-    auto t_grad_g = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
     auto t_row_base = row_data.getFTensor0N();
@@ -419,26 +463,31 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
     FTensor::Tensor2_symmetric<double, SPACE_DIM> t_stress_dh;
     FTensor::Tensor1<double, U_FIELD_DIM> t_phase_force_dh;
     FTensor::Tensor1<double, U_FIELD_DIM> t_inertia_force_dh;
-    FTensor::Tensor1<double, SPACE_DIM> t_convection;
-    FTensor::Tensor1<double, U_FIELD_DIM> t_a0;
-    t_a0(i) = 0;
-    t_a0(SPACE_DIM - 1) = a0;
+    FTensor::Tensor1<double, U_FIELD_DIM> t_convection_dh;
+    FTensor::Tensor1<double, U_FIELD_DIM> t_buoyancy_dh;
+    FTensor::Tensor1<double, U_FIELD_DIM> t_forces_dh;
+
+    t_buoyancy_dh(i) = 0;
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
+      const double rho = phase_function(t_h, rho_diff, rho_ave);
       const double rho_dh = d_phase_function_h(t_h, rho_diff);
       const double mu_dh = d_phase_function_h(t_h, mu_diff);
 
-      auto t_D_dh = get_D(alpha * mu_dh);
+      auto t_D_dh = get_D(2 * mu_dh);
 
-      t_inertia_force_dh(i) = (alpha * rho_dh) * (t_dot_u(i) - t_a0(i));
-      t_stress_dh(i, j) = t_D_dh(i, j, k, l) * t_grad_u(k, l);
-      t_convection(i) = (rho_dh * alpha) * (t_u(j) * t_grad_u(i, j));
-
+      t_inertia_force_dh(i) = (alpha * rho_dh) * t_dot_u(i);
+      t_buoyancy_dh(SPACE_DIM - 1) = -(alpha * a0) * (rho + rho_dh * t_h);
+      t_convection_dh(i) = (rho_dh * alpha) * (t_u(j) * t_grad_u(i, j));
       const double t_phase_force_g_dh = -alpha * kappa * t_g;
+      t_forces_dh(i) =
+          t_inertia_force_dh(i) + t_buoyancy_dh(i) + t_convection_dh(i);
+
+      t_stress_dh(i, j) = alpha * (t_D_dh(i, j, k, l) * t_grad_u(k, l));
 
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
@@ -451,9 +500,9 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
         for (int cc = 0; cc != nbCols; ++cc) {
 
           const double bb = t_row_base * t_col_base;
-          t_mat(i) += (t_inertia_force_dh(i) + t_convection(i)) * bb;
+          t_mat(i) += t_forces_dh(i) * bb;
+          t_mat(i) += (t_phase_force_g_dh * t_row_base) * t_col_diff_base(i);
           t_mat(i) += (t_row_diff_base(j) * t_col_base) * t_stress_dh(i, j);
-          t_mat(i) += t_phase_force_g_dh * t_col_diff_base(i);
 
           // When we move to C++17 add if constexpr()
           if constexpr (coord_type == CYLINDRICAL) {
@@ -479,7 +528,6 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       ++t_grad_u;
       ++t_h;
       ++t_g;
-      ++t_grad_g;
       ++t_coords;
       ++t_w;
     }
@@ -493,7 +541,6 @@ private:
   boost::shared_ptr<MatrixDouble> gradUPtr;
   boost::shared_ptr<VectorDouble> hPtr;
   boost::shared_ptr<VectorDouble> gPtr;
-  boost::shared_ptr<MatrixDouble> gradGPtr;
 };
 
 /**
@@ -503,14 +550,10 @@ private:
 struct OpLhsU_dG : public AssemblyDomainEleOp {
 
   OpLhsU_dG(const std::string field_name_u, const std::string field_name_h,
-            boost::shared_ptr<MatrixDouble> grad_u_ptr,
-            boost::shared_ptr<VectorDouble> h_ptr,
-            boost::shared_ptr<MatrixDouble> grad_h_ptr,
-            boost::shared_ptr<MatrixDouble> grad_g_ptr)
+            boost::shared_ptr<MatrixDouble> grad_h_ptr)
       : AssemblyDomainEleOp(field_name_u, field_name_h,
                             AssemblyDomainEleOp::OPROWCOL),
-        gradUPtr(grad_u_ptr), hPtr(h_ptr), gradHPtr(grad_h_ptr),
-        gradGPtr(grad_g_ptr) {
+        gradHPtr(grad_h_ptr) {
     sYmm = false;
     assembleTranspose = false;
   }
@@ -520,15 +563,10 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
-    auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
-    auto t_h = getFTensor0FromVec(*hPtr);
     auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
-    auto t_grad_g = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
     auto t_row_base = row_data.getFTensor0N();
-    auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
-
     auto t_w = getFTensor0IntegrationWeight();
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
@@ -536,42 +574,31 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
       const double r = t_coords(0);
       const double alpha = t_w * vol * cylindrical(r);
 
-      const double rho = phase_function(t_h, rho_diff, rho_ave);
-
       FTensor::Tensor1<double, SPACE_DIM> t_phase_force_dg;
       t_phase_force_dg(i) = -alpha * kappa * t_grad_h(i);
 
       int rr = 0;
       for (; rr != nbRows / U_FIELD_DIM; ++rr) {
-
         auto t_mat =
             getFTensor1FromMat<U_FIELD_DIM, 1>(locMat, rr * U_FIELD_DIM);
         auto t_col_base = col_data.getFTensor0N(gg, 0);
-        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
         for (int cc = 0; cc != nbCols; ++cc) {
-
           const double bb = t_row_base * t_col_base;
           t_mat(i) += t_phase_force_dg(i) * bb;
 
           ++t_mat;
           ++t_col_base;
-          ++t_col_diff_base;
         }
 
         ++t_row_base;
-        ++t_row_diff_base;
       }
 
       for (; rr < nbRowBaseFunctions; ++rr) {
-        ++t_row_diff_base;
         ++t_row_base;
       }
 
-      ++t_grad_u;
-      ++t_h;
       ++t_grad_h;
-      ++t_grad_g;
       ++t_coords;
       ++t_w;
     }
@@ -580,10 +607,7 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
   }
 
 private:
-  boost::shared_ptr<MatrixDouble> gradUPtr;
-  boost::shared_ptr<VectorDouble> hPtr;
   boost::shared_ptr<MatrixDouble> gradHPtr;
-  boost::shared_ptr<MatrixDouble> gradGPtr;
 };
 
 template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
@@ -658,7 +682,7 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
         for (; bb != nbRows; ++bb) {
           locF[bb] += (t_base * alpha) * (t_dot_h);
           locF[bb] += (t_base * alpha) * (t_grad_h(i) * t_u(i));
-          locF[bb] += (t_diff_base(i) * m) * t_grad_g(i);
+          locF[bb] += (t_diff_base(i) * t_grad_g(i)) * m;
           ++t_base;
           ++t_diff_base;
         }
@@ -717,10 +741,10 @@ struct OpLhsH_dU : public AssemblyDomainEleOp {
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
       const double alpha = t_w * vol;
+      auto t_mat = getFTensor1FromPtr<U_FIELD_DIM>(&locMat(0, 0));
 
       int rr = 0;
       for (; rr != nbRows; ++rr) {
-        auto t_mat = getFTensor1FromPtr<U_FIELD_DIM>(&locMat(rr, 0));
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
           t_mat(i) += (t_row_base * t_col_base * alpha) * t_grad_h(i);
@@ -756,7 +780,7 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
       : AssemblyDomainEleOp(field_name, field_name,
                             AssemblyDomainEleOp::OPROWCOL),
         uPtr(u_ptr), hPtr(h_ptr), gradGPtr(grad_g_ptr) {
-    sYmm = true;
+    sYmm = false;
   }
 
   MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
@@ -1121,127 +1145,6 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
   }
 
 private:
-};
-
-/**
- * @brief Explict term for IMEX method
- *
- */
-struct OpRhsExplicitTermU : public AssemblyDomainEleOp {
-
-  OpRhsExplicitTermU(const std::string field_name,
-                     boost::shared_ptr<MatrixDouble> u_ptr,
-                     boost::shared_ptr<MatrixDouble> grad_u_ptr,
-                     boost::shared_ptr<VectorDouble> h_ptr)
-      : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
-        uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr) {}
-
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
-    MoFEMFunctionBegin;
-
-    const double vol = getMeasure();
-    auto t_coords = getFTensor1CoordsAtGaussPts();
-    auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
-    auto t_grad_u = getFTensor2FromMat<U_FIELD_DIM, SPACE_DIM>(*gradUPtr);
-    auto t_h = getFTensor0FromVec(*hPtr);
-
-    auto t_base = data.getFTensor0N();
-    auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
-
-    auto t_w = getFTensor0IntegrationWeight();
-
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
-
-      const double r = t_coords(0);
-      const double alpha = t_w * vol * cylindrical(r);
-
-      const double rho = phase_function(t_h, rho_diff, rho_ave);
-
-      FTensor::Tensor1<double, U_FIELD_DIM> t_convection;
-      t_convection(i) = t_u(j) * t_grad_u(i, j) / rho;
-
-      auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
-
-      int bb = 0;
-      for (; bb != nbRows / U_FIELD_DIM; ++bb) {
-
-        t_nf(i) -= (t_base * alpha) * t_convection(i);
-
-        ++t_base;
-        ++t_nf;
-      }
-
-      for (; bb < nbRowBaseFunctions; ++bb) {
-        ++t_base;
-      }
-
-      ++t_u;
-      ++t_grad_u;
-      ++t_h;
-
-      ++t_w;
-      ++t_coords;
-    }
-
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  boost::shared_ptr<MatrixDouble> uPtr;
-  boost::shared_ptr<MatrixDouble> gradUPtr;
-  boost::shared_ptr<VectorDouble> hPtr;
-};
-
-/**
- * @brief Explict term for IMEX method
- *
- */
-struct OpRhsExplicitTermH : public AssemblyDomainEleOp {
-
-  OpRhsExplicitTermH(const std::string field_name,
-                     boost::shared_ptr<MatrixDouble> u_ptr,
-                     boost::shared_ptr<MatrixDouble> grad_h_ptr)
-      : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
-        uPtr(u_ptr), gradHPtr(grad_h_ptr) {}
-
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
-    MoFEMFunctionBegin;
-
-    const double vol = getMeasure();
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_coords = getFTensor1CoordsAtGaussPts();
-    auto t_base = data.getFTensor0N();
-
-    auto t_u = getFTensor1FromMat<U_FIELD_DIM>(*uPtr);
-    auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
-
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
-
-      const double r = t_coords(0);
-      const double alpha = t_w * vol * cylindrical(r);
-      auto nf_ptr = &locF[0];
-
-      int rr = 0;
-      for (; rr != nbRows; ++rr) {
-
-        (*nf_ptr) -= (alpha * t_base) * t_u(i) * t_grad_h(i);
-
-        ++nf_ptr;
-        ++t_base;
-      }
-
-      ++t_u;
-      ++t_grad_h;
-      ++t_w;
-      ++t_coords;
-    }
-
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  boost::shared_ptr<MatrixDouble> uPtr;
-  boost::shared_ptr<MatrixDouble> gradHPtr;
 };
 
 } // namespace FreeSurfaceOps
