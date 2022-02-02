@@ -16,11 +16,11 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef __GENERICELEMENTINTERFACE_HPP__
-#define __GENERICELEMENTINTERFACE_HPP__
+#ifndef __BASICBOUNDARYCONDIONSINTERFACE_HPP__
+#define __BASICBOUNDARYCONDIONSINTERFACE_HPP__
 
 /** \brief Set of functions declaring elements and setting operators
- * for generic element interface
+ * for basic boundary conditions interface
  */
 struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
@@ -28,8 +28,22 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
   SmartPetscObj<DM> dM;
   PetscInt oRder;
 
+  double *snesLambdaLoadFactor;
+
+  struct LoadScale : public MethodForForceScaling {
+    double *lAmbda;
+    LoadScale(double *my_lambda) : lAmbda(my_lambda){};
+    MoFEMErrorCode scaleNf(const FEMethod *fe, VectorDouble &nf) {
+      MoFEMFunctionBegin;
+      nf *= *lAmbda;
+      MoFEMFunctionReturn(0);
+    }
+  };
+
   bool isDisplacementField;
   bool isQuasiStatic;
+  bool isPartitioned;
+
   BitRefLevel bIt;
 
   string positionField;
@@ -39,58 +53,71 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
   boost::ptr_map<std::string, NodalForce> nodal_forces;
   boost::ptr_map<std::string, EdgeForce> edge_forces;
 
-  boost::shared_ptr<FaceElementForcesAndSourcesCore> springRhsElPtr;
-  boost::shared_ptr<FaceElementForcesAndSourcesCore> springLhsElPtr;
+  boost::shared_ptr<FaceElementForcesAndSourcesCore> springRhsPtr;
+  boost::shared_ptr<FaceElementForcesAndSourcesCore> springLhsPtr;
+  boost::shared_ptr<FEMethod> dirichletBcPtr;
 
-  string elasticProblemName;
+  const string elasticProblemName;
   using BcDataTuple = std::tuple<VectorDouble, VectorDouble,
                                  boost::shared_ptr<MethodForForceScaling>>;
 
-  BasicBoundaryConditionsInterface(MoFEM::Interface &m_field,
-                                   string postion_field,
-                                   string mesh_posi_field_name = "MESH_NODE_POSITIONS",
-                                   bool is_displacement_field = true,
-                                   bool is_quasi_static = true)
+  std::map<int, BcDataTuple> bodyForceMap;
+  std::map<int, BcDataTuple> dispConstraintMap;
+
+  boost::shared_ptr<PostProcVolumeOnRefinedMesh> postProc;
+  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcSkin;
+
+  BasicBoundaryConditionsInterface(
+      MoFEM::Interface &m_field, string postion_field,
+      string mesh_pos_field_name = "MESH_NODE_POSITIONS",
+      string problem_name = "ELASTIC", bool is_displacement_field = true,
+      bool is_quasi_static = true, double *snes_load_factor = nullptr,
+      bool is_partitioned = true)
       : mField(m_field), positionField(postion_field),
-        meshNodeField(mesh_posi_field_name),
+        meshNodeField(mesh_pos_field_name), elasticProblemName(problem_name),
         isDisplacementField(is_displacement_field),
-        isQuasiStatic(is_quasi_static) {
+        isQuasiStatic(is_quasi_static), snesLambdaLoadFactor(snes_load_factor),
+        isPartitioned(is_partitioned) {
     oRder = 1;
   }
 
-  ~BasicBoundaryConditionsInterface() {}
+  ~BasicBoundaryConditionsInterface() { delete snesLambdaLoadFactor; }
 
   MoFEMErrorCode getCommandLineParameters() { return 0; };
 
   MoFEMErrorCode addElementFields() {
     MoFEMFunctionBeginHot;
-    auto simple = mField.getInterface<Simple>();
-
+    // Add spring boundary condition applied on surfaces.
+    CHKERR MetaSpringBC::addSpringElements(mField, positionField,
+                                           meshNodeField);
     CHKERR MetaNeumannForces::addNeumannBCElements(mField, positionField);
     CHKERR MetaNodalForces::addElement(mField, positionField);
     CHKERR MetaEdgeForces::addElement(mField, positionField);
 
-    // Add spring boundary condition applied on surfaces.
-    CHKERR MetaSpringBC::addSpringElements(m_field, positionField,
-                                           meshNodeField);
     MoFEMFunctionReturnHot(0);
   };
 
   MoFEMErrorCode createElements() {
     MoFEMFunctionBeginHot;
-
-    CHKERR MetaNeumannForces::setMomentumFluxOperators(
-        mField, neumann_forces, PETSC_NULL, postion_field);
-
     MoFEMFunctionReturnHot(0);
   };
 
   MoFEMErrorCode setOperators() {
     MoFEMFunctionBeginHot;
     CHKERR MetaNodalForces::setOperators(mField, nodal_forces, PETSC_NULL,
-                                         postion_field);
+                                         positionField);
     CHKERR MetaEdgeForces::setOperators(mField, edge_forces, PETSC_NULL,
-                                        postion_field);
+                                        positionField);
+
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(
+        mField, neumann_forces, PETSC_NULL, positionField);
+    springLhsPtr = boost::make_shared<FaceElementForcesAndSourcesCore>(mField);
+    springRhsPtr = boost::make_shared<FaceElementForcesAndSourcesCore>(mField);
+
+    CHKERR MetaSpringBC::setSpringOperators(mField, springLhsPtr, springRhsPtr,
+                                            positionField,
+                                            "MESH_NODE_POSITIONS");
+
     MoFEMFunctionReturnHot(0);
   };
 
@@ -107,26 +134,20 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
   MoFEMErrorCode setupSolverJacobianSNES() {
     MoFEMFunctionBegin;
-
-    auto set_neumann_methods = [&](auto &neumann_el, string hist_name) {
-      MoFEMFunctionBeginHot;
-      for (auto &&mit : neumann_el) {
-        mit->second->methodsOp.push_back(
-            new TimeForceScale(get_history_param(hist_name), false));
-        // CHKERR addHOOpsFace3D(meshNodeField, mit->second->getLoopFe(),
-        //                       false, false);
-        CHKERR push_methods(&mit->second->getLoopFe(), mit->first.c_str(),
-                            false, true);
-      }
-      MoFEMFunctionReturnHot(0);
-    };
-
+    // DMMoFEMSNESSetJacobian
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
     MoFEMFunctionReturn(0);
   };
+
   MoFEMErrorCode setupSolverFunctionSNES() {
     MoFEMFunctionBegin;
-    
-    
+    // DMMoFEMSNESSetFunction
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
+    if (!snesLambdaLoadFactor)
+      MOFEM_LOG("WORLD", Sev::error)
+          << "SNES Lambda factor not specified for this type of solver. (hint: "
+             "check constructor of the interface";
+
     MoFEMFunctionReturn(0);
   };
 
@@ -147,7 +168,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
   MoFEMErrorCode setupSolverFunctionTS(const TSType type) {
     MoFEMFunctionBegin;
-
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
     switch (type) {
     case IM:
       break;
@@ -157,16 +178,11 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
       SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
       break;
     }
-
     MoFEMFunctionReturn(0);
   };
 
   MoFEMErrorCode updateElementVariables() { return 0; };
-  MoFEMErrorCode postProcessElement(int step) {
-    MoFEMFunctionBegin;
-
-    MoFEMFunctionReturn(0);
-  };
+  MoFEMErrorCode postProcessElement(int step) { return 0; };
 };
 
-#endif //__GENERICELEMENTINTERFACE_HPP__
+#endif //__BASICBOUNDARYCONDIONSINTERFACE_HPP__

@@ -664,13 +664,17 @@ MoFEMErrorCode DirichletDisplacementRemoveDofsBc::iNitialize() {
   auto field_ptr = mField.get_field_structure(fieldName);
   const int nb_coefficients = field_ptr->getNbOfCoeffs();
 
+  bcDataPtr = boost::make_shared<vector<DataFromBc>>();
+  CHKERR getRotationBcFromBlock(*bcDataPtr);
+  CHKERR getBcDataFromSetsAndBlocks(*bcDataPtr);
+
   auto remove_dofs_from_dirichlet_data = [&]() {
     MoFEMFunctionBeginHot;
     for (auto &bc_it : *bcDataPtr)
       for (auto &ents : bc_it.bc_ents)
         for (int i = 0; i != nb_coefficients; i++)
           if (bc_it.bc_flags[i])
-            CHKERR prb_mng->removeDofsOnEntities(problemPtr->getName(),
+            CHKERR prb_mng->removeDofsOnEntities(problemName,
                                                  fieldName, ents, i, i);
 
     MoFEMFunctionReturnHot(0);
@@ -683,7 +687,7 @@ MoFEMErrorCode DirichletDisplacementRemoveDofsBc::iNitialize() {
         for (int i = 0; i != nb_coefficients; i++)
           if (bc_it.bc_flags[i])
             CHKERR prb_mng->removeDofsOnEntitiesNotDistributed(
-                problemPtr->getName(), fieldName, ents, i, i);
+                problemName, fieldName, ents, i, i);
 
     MoFEMFunctionReturnHot(0);
   };
@@ -698,12 +702,8 @@ MoFEMErrorCode DirichletDisplacementRemoveDofsBc::iNitialize() {
 
 MoFEMErrorCode DirichletDisplacementRemoveDofsBc::preProcess() {
   MoFEMFunctionBegin;
-  if (!bcDataPtr) {
-    bcDataPtr = boost::make_shared<vector<DataFromBc>>();
-    CHKERR getRotationBcFromBlock(*bcDataPtr);
-    CHKERR getBcDataFromSetsAndBlocks(*bcDataPtr);
+  if (!bcDataPtr) 
     CHKERR iNitialize();
-  }
 
   for (auto &bc_it : *bcDataPtr) {
     Range all_bc_ents;

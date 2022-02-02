@@ -58,7 +58,6 @@ struct NeoHookean
   MoFEMErrorCode NeoHooke_PiolaKirchhoffII() {
     MoFEMFunctionBeginHot;
 
-    invC.resize(3,3);
     detC = determinantTensor3by3(this->C);
     CHKERR invertTensor3by3(this->C, detC, invC);
     this->J = determinantTensor3by3(this->F);

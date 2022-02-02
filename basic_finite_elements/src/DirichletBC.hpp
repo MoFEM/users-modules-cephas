@@ -290,13 +290,15 @@ struct DirichletDisplacementRemoveDofsBc : public DirichletDisplacementBc {
 
   boost::shared_ptr<vector<DataFromBc>> bcDataPtr;
   bool isPartitioned;
+  string problemName;
 
   DirichletDisplacementRemoveDofsBc(MoFEM::Interface &m_field,
                                     const std::string &field_name,
+                                    const std::string &problem_name,
                                     string blockset_name = "DISPLACEMENT",
                                     bool is_partitioned = false)
       : DirichletDisplacementBc(m_field, field_name, blockset_name),
-        isPartitioned(is_partitioned) {}
+        problemName(problem_name), isPartitioned(is_partitioned) {}
 
   MoFEMErrorCode iNitialize();
 
@@ -318,9 +320,10 @@ struct DirichletSpatialRemoveDofsBc : public DirichletDisplacementRemoveDofsBc {
 
   DirichletSpatialRemoveDofsBc(
       MoFEM::Interface &m_field, const std::string &field_name,
+      const std::string &problem_name,
       const std::string material_positions = "MESH_NODE_POSITIONS",
       string blockset_name = "DISPLACEMENT", bool is_partitioned = false)
-      : DirichletDisplacementRemoveDofsBc(m_field, field_name, blockset_name,
+      : DirichletDisplacementRemoveDofsBc(m_field, field_name, problem_name, blockset_name,
                                           is_partitioned),
         materialPositions(material_positions) {}
 

@@ -26,8 +26,6 @@ struct GenericElementInterface {
 
   enum TSType { EX, IM, IM2, IMEX, DEFAULT };
 
-  // MoFEM::Interface &mField;
-  // GenericElementInterface(MoFEM::Interface &m_field) : mField(m_field) {}
   // GenericElementInterface() = delete;
   GenericElementInterface() {}
   virtual ~GenericElementInterface() {}

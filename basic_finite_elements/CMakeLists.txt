@@ -12,7 +12,6 @@
 
 set(BFE_DIRS 
   elasticity
-  multimaterial_dynamics
   nonlinear_elasticity
   thermal
   cohesive_interface)
