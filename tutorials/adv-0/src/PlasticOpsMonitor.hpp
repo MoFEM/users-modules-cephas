@@ -167,7 +167,8 @@ struct Monitor : public FEMethod {
     };
 
     CHKERR make_vtk();
-    CHKERR calculate_reaction();
+    if (reactionFe)
+      CHKERR calculate_reaction();
     CHKERR print_max_min(uXScatter, "Ux");
     CHKERR print_max_min(uYScatter, "Uy");
     if (SPACE_DIM == 3)
