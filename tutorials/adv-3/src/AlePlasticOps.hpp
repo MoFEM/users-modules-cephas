@@ -41,15 +41,12 @@ struct CommonData : public PlasticOps::CommonData {
   boost::shared_ptr<MatrixDouble> plasticGradStrainPtr;
 
   // data for skeleton computation
-  map<int, MatrixDouble> plastic_N_StrainSideMap;
-  map<int, MatrixDouble> plastic_N_TauSideMap;
+  map<int, EntData *> plasticDataStrainSideMap;
+  map<int, EntData *> plasticDataTauSideMap;
+
   map<int, MatrixDouble> plasticStrainSideMap;
   map<int, VectorDouble> plasticTauSideMap;
   map<int, MatrixDouble> velocityVecSideMap;
-
-  // MatrixDouble domainGaussPts;
-  map<int, VectorInt> indicesTauSideMap;
-  map<int, VectorInt> indicesStrainSideMap;
 };
 //! [Common data]
 
@@ -108,19 +105,27 @@ protected:
 };
 
 struct OpCalculateJumpOnSkeleton : public SkeletonEleOp {
+
   OpCalculateJumpOnSkeleton(const std::string field_name,
                             boost::shared_ptr<CommonData> common_data_ptr,
                             boost::shared_ptr<DomainSideEle> side_op_fe);
+  OpCalculateJumpOnSkeleton(const std::string row_field,
+                            const std::string col_field,
+                            boost::shared_ptr<CommonData> common_data_ptr,
+                            boost::shared_ptr<DomainSideEle> side_op_fe);
+
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<DomainSideEle> sideOpFe;
 };
 
-template <typename T>
-struct OpVolumeSideCalculateEP : public T::UserDataOperator {
-  using OP = typename T::UserDataOperator;
+struct OpVolumeSideCalculateEP : public DomainSideEleOp {
   OpVolumeSideCalculateEP(const std::string field_name,
                           boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -129,9 +134,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-template <typename T>
-struct OpVolumeSideCalculateTAU : public T::UserDataOperator {
-  using OP = typename T::UserDataOperator;
+struct OpVolumeSideCalculateTAU : public DomainSideEleOp {
   OpVolumeSideCalculateTAU(const std::string field_name,
                            boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -140,18 +143,20 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpCalculatePlasticFlowALE_Rhs : public AssemblySkeletonEleOp {
-  OpCalculatePlasticFlowALE_Rhs(const std::string field_name,
-                                boost::shared_ptr<CommonData> common_data_ptr);
+struct OpCalculatePlasticFlowPenalty_Rhs : public AssemblySkeletonEleOp {
+  OpCalculatePlasticFlowPenalty_Rhs(
+      const std::string field_name,
+      boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpCalculateConstraintALE_Rhs : public AssemblySkeletonEleOp {
-  OpCalculateConstraintALE_Rhs(const std::string field_name,
-                               boost::shared_ptr<CommonData> common_data_ptr);
+struct OpCalculateConstraintPenalty_Rhs : public AssemblySkeletonEleOp {
+  OpCalculateConstraintPenalty_Rhs(
+      const std::string field_name,
+      boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
@@ -292,22 +297,23 @@ MoFEMErrorCode OpCalculateVelocityOnSkeleton::doWork(int side, EntityType type,
 
   MoFEMFunctionReturn(0);
 }
-template <typename T>
-OpVolumeSideCalculateEP<T>::OpVolumeSideCalculateEP(
+
+OpVolumeSideCalculateEP::OpVolumeSideCalculateEP(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : OP(field_name, field_name, OP::OPROW), commonDataPtr(common_data_ptr) {
-  std::fill(&OP::doEntities[MBVERTEX], &OP::doEntities[MBMAXTYPE], false);
+    : DomainSideEleOp(field_name, field_name, DomainSideEleOp::OPROW),
+      commonDataPtr(common_data_ptr) {
+  std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
   if constexpr (SPACE_DIM == 3)
-    OP::doEntities[MBHEX] = OP::doEntities[MBTET] = true;
+    doEntities[MBHEX] = doEntities[MBTET] = true;
   else
-    OP::doEntities[MBTRI] = OP::doEntities[MBQUAD] = true;
-  // OP::doEntities[MBEDGE] = true;
+    doEntities[MBTRI] = doEntities[MBQUAD] = true;
+  // doEntities[MBEDGE] = true;
 }
-template <typename T>
-MoFEMErrorCode OpVolumeSideCalculateEP<T>::doWork(int side, EntityType type,
-                                                  EntData &data) {
+
+MoFEMErrorCode OpVolumeSideCalculateEP::doWork(int side, EntityType type,
+                                               EntData &data) {
   MoFEMFunctionBegin;
-  const int nb_gauss_pts = OP::getGaussPts().size2();
+  const int nb_gauss_pts = getGaussPts().size2();
   const int nb_base_functions = data.getN().size2();
 
   FTensor::Index<'i', SPACE_DIM> i;
@@ -325,33 +331,23 @@ MoFEMErrorCode OpVolumeSideCalculateEP<T>::doWork(int side, EntityType type,
   // if (side == getFaceSideNumber()) {
   if (nb_dofs) {
 
-    // for testing //FIXME:
-    // // MatrixDouble diff = OP::getCoordsAtGaussPts() -
-    // OP::getCoordsAtGaussPts(); const double eps = 1e-12; if (norm_inf(diff) >
-    // eps)
-    //   SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-    //           "coordinates at integration pts are different");
-
-    // const size_t nb_gauss_pts = data.getN().size1();
-
     auto base_function = data.getFTensor0N();
-    int nb_in_loop = OP::getFEMethod()->nInTheLoop;
+    int nb_in_loop = getFEMethod()->nInTheLoop;
 
     int sense = 0;
-    if constexpr (std::is_same<
-                      T, FaceElementForcesAndSourcesCoreOnSideSwitch<0>>::value)
-      sense = OP::getEdgeSense();
-    else
-      sense = OP::getFaceSense();
+    // if constexpr (std::is_same<
+    //                   T,
+    //                   FaceElementForcesAndSourcesCoreOnSideSwitch<0>>::value)
+    //   sense = getEdgeSense();
+    // else
+    //   sense = getFaceSense();
 
     auto &mat_ep = commonDataPtr->plasticStrainSideMap[nb_in_loop];
-    auto &mat_ep_N = commonDataPtr->plastic_N_StrainSideMap[nb_in_loop];
-    auto &vec_ep_Idx = commonDataPtr->indicesStrainSideMap[nb_in_loop];
+    commonDataPtr->plasticDataStrainSideMap[nb_in_loop] = &data;
+
     constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
     mat_ep.resize(size_symm, nb_gauss_pts, false);
     mat_ep.clear();
-    mat_ep_N = data.getN();
-    vec_ep_Idx = data.getIndices();
 
     auto values_at_gauss_pts = getFTensor2SymmetricFromMat<SPACE_DIM>(mat_ep);
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
@@ -369,43 +365,41 @@ MoFEMErrorCode OpVolumeSideCalculateEP<T>::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-template <typename T>
-OpVolumeSideCalculateTAU<T>::OpVolumeSideCalculateTAU(
+OpVolumeSideCalculateTAU::OpVolumeSideCalculateTAU(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : OP(field_name, field_name, OP::OPROW), commonDataPtr(common_data_ptr) {
-  std::fill(&OP::doEntities[MBVERTEX], &OP::doEntities[MBMAXTYPE], false);
+    : DomainSideEleOp(field_name, field_name, DomainSideEleOp::OPROW),
+      commonDataPtr(common_data_ptr) {
+  std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
   if constexpr (SPACE_DIM == 3)
-    OP::doEntities[MBHEX] = OP::doEntities[MBTET] = true;
+    doEntities[MBHEX] = doEntities[MBTET] = true;
   else
-    OP::doEntities[MBTRI] = OP::doEntities[MBQUAD] = true;
-  // OP::doEntities[MBEDGE] = true;
+    doEntities[MBTRI] = doEntities[MBQUAD] = true;
+  // doEntities[MBEDGE] = true;
 }
 
-template <typename T>
-MoFEMErrorCode OpVolumeSideCalculateTAU<T>::doWork(int side, EntityType type,
-                                                   EntData &data) {
+MoFEMErrorCode OpVolumeSideCalculateTAU::doWork(int side, EntityType type,
+                                                EntData &data) {
   MoFEMFunctionBegin;
 
   // FIXME: this is wrong, resize only on zero type
   const size_t nb_dofs = data.getIndices().size();
   // data.getFieldData().size()
   if (true) {
-    int nb_gauss_pts = OP::getGaussPts().size2();
-    int nb_in_loop = OP::getFEMethod()->nInTheLoop;
+    int nb_gauss_pts = getGaussPts().size2();
+    int nb_in_loop = getFEMethod()->nInTheLoop;
     int sense = 0;
-    if constexpr (std::is_same<
-                      T, FaceElementForcesAndSourcesCoreOnSideSwitch<0>>::value)
-      sense = OP::getEdgeSense();
-    else
-      sense = OP::getFaceSense();
+    // if constexpr (std::is_same<
+    //                   T,
+    //                   FaceElementForcesAndSourcesCoreOnSideSwitch<0>>::value)
+    //   sense = getEdgeSense();
+    // else
+    //   sense = getFaceSense();
 
     auto &vec_tau = commonDataPtr->plasticTauSideMap[nb_in_loop];
-    auto &vec_tau_N = commonDataPtr->plastic_N_TauSideMap[nb_in_loop];
-    auto &vec_tau_Idx = commonDataPtr->indicesTauSideMap[nb_in_loop];
+    commonDataPtr->plasticDataTauSideMap[nb_in_loop] = &data;
+
     vec_tau.resize(nb_gauss_pts, false);
     vec_tau.clear();
-    vec_tau_N = data.getN();
-    vec_tau_Idx = data.getIndices();
 
     for (int gg = 0; gg != nb_gauss_pts; gg++) {
       vec_tau(gg) = inner_prod(trans(data.getN(gg)), data.getFieldData());
@@ -437,7 +431,7 @@ MoFEMErrorCode OpCalculateJumpOnSkeleton::doWork(int side, EntityType type,
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
 
   // if (side == 0) {
-  if (true) { 
+  if (true) {
 
     const size_t nb_integration_pts = getGaussPts().size2();
     // const size_t nb_integration_pts = data.getN().size1();
@@ -477,13 +471,6 @@ MoFEMErrorCode OpCalculateJumpOnSkeleton::doWork(int side, EntityType type,
     auto t_base = data.getFTensor0N();
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
-    auto &plastic_N_strain_l =
-        commonDataPtr->plastic_N_StrainSideMap.at(LEFT_SIDE);
-    auto &plastic_N_strain_r =
-        commonDataPtr->plastic_N_StrainSideMap.at(RIGHT_SIDE);
-    auto &tau_N_l = commonDataPtr->plastic_N_TauSideMap.at(LEFT_SIDE);
-    auto &tau_N_r = commonDataPtr->plastic_N_TauSideMap.at(RIGHT_SIDE);
-
     // fl_L * jump
     // -fl_R * jump
 
@@ -493,13 +480,6 @@ MoFEMErrorCode OpCalculateJumpOnSkeleton::doWork(int side, EntityType type,
                                                 false);
 
     // shape funcs
-    auto &plastic_n_tau_j_mat = *commonDataPtr->plastic_N_TauJumpPtr;
-    auto &plastic_n_strain_j_mat = *commonDataPtr->plastic_N_StrainJumpPtr;
-    plastic_n_tau_j_mat.resize(tau_N_l.size1(), tau_N_l.size2(), false);
-
-    plastic_n_strain_j_mat.resize(plastic_N_strain_r.size1(),
-                                  plastic_N_strain_r.size2(), false);
-
     auto t_plastic_strain_jump = getFTensor2SymmetricFromMat<SPACE_DIM>(
         *commonDataPtr->plasticStrainJumpPtr);
     auto t_tau_jump = getFTensor0FromVec(*commonDataPtr->plasticTauJumpPtr);
@@ -524,16 +504,33 @@ MoFEMErrorCode OpCalculateJumpOnSkeleton::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-OpCalculatePlasticFlowALE_Rhs::OpCalculatePlasticFlowALE_Rhs(
+OpCalculateJumpOnSkeleton::OpCalculateJumpOnSkeleton(
+    const std::string row_field_name, const std::string col_field_name,
+    boost::shared_ptr<CommonData> common_data_ptr,
+    boost::shared_ptr<DomainSideEle> side_op_fe)
+    : SkeletonEleOp(row_field_name, col_field_name, SkeletonEleOp::OPROWCOL),
+      commonDataPtr(common_data_ptr), sideOpFe(side_op_fe) {
+  std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+  doEntities[MBVERTEX] = true;
+}
+
+MoFEMErrorCode
+OpCalculateJumpOnSkeleton::doWork(int row_side, int col_side,
+                                  EntityType row_type, EntityType col_type,
+                                  DataForcesAndSourcesCore::EntData &row_data,
+                                  DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMFunctionBegin;
+  SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "not implemented");
+
+  MoFEMFunctionReturn(0);
+}
+
+OpCalculatePlasticFlowPenalty_Rhs::OpCalculatePlasticFlowPenalty_Rhs(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
     : AssemblySkeletonEleOp(field_name, field_name,
                             AssemblySkeletonEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-  // if constexpr (SPACE_DIM == 3)
-  //   doEntities[MBTRI] = doEntities[MBQUAD] = true;
-  // else
-  //   doEntities[MBEDGE] = true;
   doEntities[MBVERTEX] = true;
 }
 
@@ -549,8 +546,9 @@ get_nf(VectorDouble &nf, FTensor::Number<3>) {
       &nf[0], &nf[1], &nf[2], &nf[1], &nf[3], &nf[4], &nf[2], &nf[4], &nf[5]};
 }
 
-MoFEMErrorCode OpCalculatePlasticFlowALE_Rhs::doWork(int side, EntityType type,
-                                                     EntData &data) {
+MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
+                                                         EntityType type,
+                                                         EntData &data) {
   MoFEMFunctionBegin;
 
   FTensor::Index<'i', SPACE_DIM> i;
@@ -565,11 +563,12 @@ MoFEMErrorCode OpCalculatePlasticFlowALE_Rhs::doWork(int side, EntityType type,
     auto tw_test = getCoordsAtGaussPts();
     auto t_base = data.getFTensor0N();
 
+    auto &data_map = commonDataPtr->plasticDataStrainSideMap;
     // shape funcs
-    auto &ep_N_l = commonDataPtr->plastic_N_StrainSideMap.at(LEFT_SIDE);
-    auto &ep_N_r = commonDataPtr->plastic_N_StrainSideMap.at(RIGHT_SIDE);
-    auto &vec_ep_Idx_l = commonDataPtr->indicesStrainSideMap.at(LEFT_SIDE);
-    auto &vec_ep_Idx_r = commonDataPtr->indicesStrainSideMap.at(RIGHT_SIDE);
+    auto &ep_N_l = data_map.at(LEFT_SIDE)->getN();
+    auto &ep_N_r = data_map.at(RIGHT_SIDE)->getN();
+    auto &vec_ep_Idx_l = data_map.at(LEFT_SIDE)->getIndices();
+    auto &vec_ep_Idx_r = data_map.at(RIGHT_SIDE)->getIndices();
 
     auto t_ep_base_l = FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(
         &*ep_N_l.data().begin());
@@ -634,7 +633,7 @@ MoFEMErrorCode OpCalculatePlasticFlowALE_Rhs::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-OpCalculateConstraintALE_Rhs::OpCalculateConstraintALE_Rhs(
+OpCalculateConstraintPenalty_Rhs::OpCalculateConstraintPenalty_Rhs(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
     : AssemblySkeletonEleOp(field_name, field_name,
                             AssemblySkeletonEleOp::OPROW),
@@ -647,8 +646,9 @@ OpCalculateConstraintALE_Rhs::OpCalculateConstraintALE_Rhs(
   doEntities[MBVERTEX] = true;
 }
 
-MoFEMErrorCode OpCalculateConstraintALE_Rhs::doWork(int side, EntityType type,
-                                                    EntData &data) {
+MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
+                                                        EntityType type,
+                                                        EntData &data) {
   MoFEMFunctionBegin;
 
   FTensor::Index<'i', SPACE_DIM> i;
@@ -662,12 +662,13 @@ MoFEMErrorCode OpCalculateConstraintALE_Rhs::doWork(int side, EntityType type,
     // auto t_w = FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(
     //     &(gg_mat(gg_mat.size1() - 1, 0)));
     auto t_w = getFTensor0IntegrationWeight();
+    auto &data_map = commonDataPtr->plasticDataTauSideMap;
 
     // shape funcs
-    auto &tau_N_l = commonDataPtr->plastic_N_TauSideMap.at(LEFT_SIDE);
-    auto &tau_N_r = commonDataPtr->plastic_N_TauSideMap.at(RIGHT_SIDE);
-    auto &vec_tau_Idx_l = commonDataPtr->indicesTauSideMap.at(LEFT_SIDE);
-    auto &vec_tau_Idx_r = commonDataPtr->indicesTauSideMap.at(RIGHT_SIDE);
+    auto &tau_N_l = data_map.at(LEFT_SIDE)->getN();
+    auto &tau_N_r = data_map.at(RIGHT_SIDE)->getN();
+    auto &vec_tau_Idx_l = data_map.at(LEFT_SIDE)->getIndices();
+    auto &vec_tau_Idx_r = data_map.at(RIGHT_SIDE)->getIndices();
 
     auto t_tau_base_l = FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(
         &*tau_N_l.data().begin());
@@ -721,6 +722,56 @@ MoFEMErrorCode OpCalculateConstraintALE_Rhs::doWork(int side, EntityType type,
                           &nf_tau_r[0], ADD_VALUES);
   }
 
+  MoFEMFunctionReturn(0);
+}
+
+struct OpCalculatePlasticFlowPenaltyLhs_dEP : public AssemblyDomainEleOp {
+  OpCalculatePlasticFlowPenaltyLhs_dEP(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data);
+
+protected:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+OpCalculatePlasticFlowPenaltyLhs_dEP::OpCalculatePlasticFlowPenaltyLhs_dEP(
+    const std::string row_field_name, const std::string col_field_name,
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : AssemblyDomainEleOp(row_field_name, col_field_name,
+                          DomainEleOp::OPROWCOL),
+      commonDataPtr(common_data_ptr) {
+  sYmm = false;
+}
+
+struct OpCalculateConstraintPenaltyLhs_dTAU
+    : public OpCalculatePlasticFlowPenaltyLhs_dEP {
+  using OpCalculatePlasticFlowPenaltyLhs_dEP::
+      OpCalculatePlasticFlowPenaltyLhs_dEP;
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data);
+};
+
+MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMFunctionBegin;
+  SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "not implemented");
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMFunctionBegin;
+  SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "not implemented");
   MoFEMFunctionReturn(0);
 }
 

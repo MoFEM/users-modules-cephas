@@ -466,7 +466,6 @@ MoFEMErrorCode Example::OPs() {
 
     // pipeline.push_back(new OpSetPiolaTransformOnBoundary());
 
-    domainSideFe = boost::make_shared<DomainSideEle>(mField);
     // domainSideFe->getRuleHook = [](double, double, double) { return -1; };
 
     // if (SPACE_DIM == 2) {
@@ -483,10 +482,11 @@ MoFEMErrorCode Example::OPs() {
     //   //     new OpSetInvJacL2ForFace(inv_jac_ptr));
     // }
 
+    domainSideFe = boost::make_shared<DomainSideEle>(mField);
     domainSideFe->getOpPtrVector().push_back(
-        new OpVolumeSideCalculateEP<DomainSideEle>("EP", commonDataPtr));
+        new OpVolumeSideCalculateEP("EP", commonDataPtr));
     domainSideFe->getOpPtrVector().push_back(
-        new OpVolumeSideCalculateTAU<DomainSideEle>("TAU", commonDataPtr));
+        new OpVolumeSideCalculateTAU("TAU", commonDataPtr));
 
     pipeline.push_back(
         new OpCalculateVelocityOnSkeleton("U", commonDataPtr));
@@ -500,8 +500,28 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBeginHot;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    pipeline.push_back(new OpCalculatePlasticFlowALE_Rhs("U", commonDataPtr));
-    pipeline.push_back(new OpCalculateConstraintALE_Rhs("U", commonDataPtr));
+    pipeline.push_back(
+        new OpCalculatePlasticFlowPenalty_Rhs("U", commonDataPtr));
+    pipeline.push_back(
+        new OpCalculateConstraintPenalty_Rhs("U", commonDataPtr));
+
+    pipeline.push_back(new OpUnSetBc("U"));
+
+    MoFEMFunctionReturnHot(0);
+  };
+
+  auto add_skeleton_lhs_ops = [&](auto &pipeline) {
+    MoFEMFunctionBeginHot;
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+
+    auto domain_side_fe = boost::make_shared<DomainSideEle>(mField);
+
+    pipeline.push_back(
+        new OpCalculateJumpOnSkeleton("U", "U", commonDataPtr, domain_side_fe));
+    pipeline.push_back(
+        new OpCalculatePlasticFlowPenaltyLhs_dEP("U", "U", commonDataPtr));
+    pipeline.push_back(
+        new OpCalculateConstraintPenaltyLhs_dTAU("U", "U", commonDataPtr));
 
     pipeline.push_back(new OpUnSetBc("U"));
 
@@ -845,6 +865,8 @@ MoFEMErrorCode Example::OPs() {
 
     if (!test_new_tangent) {
       CHKERR add_skeleton_rhs_ops(pipeline_mng->getOpSkeletonRhsPipeline());
+      if (false)
+        CHKERR add_skeleton_lhs_ops(pipeline_mng->getOpSkeletonLhsPipeline());
     }
 
     CHKERR
