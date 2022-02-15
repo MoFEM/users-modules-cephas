@@ -575,6 +575,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateContrainsRhs("TAU", commonPlasticDataPtr));
 
+    pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 

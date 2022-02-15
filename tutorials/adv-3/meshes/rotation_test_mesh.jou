@@ -7,11 +7,12 @@ delete body 2 3
 
 webcut body 1 with plane xplane offset 0 rotate 20 about z center 0 0 0
 webcut body 1 with plane xplane offset 0 rotate -20 about z center 0 0 0
+merge volume all
 merge surface all
 
 surface all scheme trimesh 
 #surface all scheme map
-surface all size 0.5
+surface all size 1
 mesh surface all
 
 block 1 add curve 14 18 12
@@ -23,8 +24,13 @@ block 2 name "FORCE_1"
 block 2 attribute count 3
 
 block 2 attribute index 1 0.                   
-block 2 attribute index 2 -100                  
+block 2 attribute index 2 400          
 block 2 attribute index 3 0.                
 
 save as "/Users/karollewandowski/mofem_install/mofem-cephas/mofem/users_modules/tutorials/adv-3/meshes/adv3_plast_2D.cub" overwrite
-#save as "/Users/karollewandowski/mofem_install/mofem-cephas/mofem/users_modules/tutorials/adv-3/meshes/adv3_plast_2D_quad.cub" overwrite
+delete mesh
+surface all scheme map
+surface all size 0.4
+mesh surface all
+
+save as "/Users/karollewandowski/mofem_install/mofem-cephas/mofem/users_modules/tutorials/adv-3/meshes/adv3_plast_2D_quad.cub" overwrite

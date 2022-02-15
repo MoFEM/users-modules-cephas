@@ -132,14 +132,17 @@ using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 
 PetscBool is_large_strains = PETSC_TRUE;
 PetscBool is_with_ALE = PETSC_TRUE; // TODO:
+PetscBool test_new_tangent = PETSC_TRUE;
 
+double petsc_time = 0;
 double scale = 1.;
+
 
 double young_modulus = 206913;
 double poisson_ratio = 0.29;
 double rho = 0;
 double sigmaY = 450;
-double H = 129;
+double H = 1290;
 double visH = 0;
 double cn = 1;
 double Qinf = 265;
@@ -147,7 +150,7 @@ double b_iso = 16.93;
 int order = 2;
 
 // for rotating body
-double penalty = 1e-6;
+double penalty = 1e5;
 double density = 1.0;
 array<double, 3> angular_velocity{0, 0, 1};
 
@@ -255,9 +258,6 @@ MoFEMErrorCode Example::setupProblem() {
   if (is_with_ALE)
     CHKERR simple->addSkeletonField("U", H1, base, order);
 
-  // CHKERR simple->addSkeletonField("TAU", L2, base, 1);
-  // CHKERR simple->addSkeletonField("EP", L2, base, size_symm);
-
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("TAU", order - 1);
@@ -292,6 +292,10 @@ MoFEMErrorCode Example::createCommonData() {
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_ale",
+                               &is_with_ALE, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_tangent",
+                               &test_new_tangent, PETSC_NULL);
 
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
@@ -463,23 +467,26 @@ MoFEMErrorCode Example::OPs() {
     // pipeline.push_back(new OpSetPiolaTransformOnBoundary());
 
     domainSideFe = boost::make_shared<DomainSideEle>(mField);
-    if (SPACE_DIM == 2) {
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      domainSideFe->getOpPtrVector().push_back(
-          new OpCalculateHOJacForFace(jac_ptr));
-      domainSideFe->getOpPtrVector().push_back(
-          new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      domainSideFe->getOpPtrVector().push_back(
-          new OpSetInvJacH1ForFace(inv_jac_ptr));
-      domainSideFe->getOpPtrVector().push_back(
-          new OpSetInvJacL2ForFace(inv_jac_ptr));
-      domainSideFe->getOpPtrVector().push_back(
-          new OpVolumeSideCalculateTAU<DomainSideEle>("TAU", commonDataPtr));
-      domainSideFe->getOpPtrVector().push_back(
-          new OpVolumeSideCalculateEP<DomainSideEle>("EP", commonDataPtr));
-    }
+    // domainSideFe->getRuleHook = [](double, double, double) { return -1; };
+
+    // if (SPACE_DIM == 2) {
+    //   auto det_ptr = boost::make_shared<VectorDouble>();
+    //   auto jac_ptr = boost::make_shared<MatrixDouble>();
+    //   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    //   domainSideFe->getOpPtrVector().push_back(
+    //       new OpCalculateHOJacForFace(jac_ptr));
+    //   domainSideFe->getOpPtrVector().push_back(
+    //       new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+    //   // domainSideFe->getOpPtrVector().push_back(
+    //   //     new OpSetInvJacH1ForFace(inv_jac_ptr));
+    //   // domainSideFe->getOpPtrVector().push_back(
+    //   //     new OpSetInvJacL2ForFace(inv_jac_ptr));
+    // }
+
+    domainSideFe->getOpPtrVector().push_back(
+        new OpVolumeSideCalculateEP<DomainSideEle>("EP", commonDataPtr));
+    domainSideFe->getOpPtrVector().push_back(
+        new OpVolumeSideCalculateTAU<DomainSideEle>("TAU", commonDataPtr));
 
     pipeline.push_back(
         new OpCalculateVelocityOnSkeleton("U", commonDataPtr));
@@ -491,9 +498,12 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_skeleton_rhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBeginHot;
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(new OpCalculatePlasticFlowALE_Rhs("U", commonDataPtr));
     pipeline.push_back(new OpCalculateConstraintALE_Rhs("U", commonDataPtr));
+
+    pipeline.push_back(new OpUnSetBc("U"));
 
     MoFEMFunctionReturnHot(0);
   };
@@ -656,6 +666,19 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(
         new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonDataPtr, m_D_ptr));
+
+    if (is_with_ALE && test_new_tangent) {
+      pipeline.push_back(new OpCalculatePlasticFlowLhs_dEP_ALE(
+          "EP", "EP", commonDataPtr, m_D_ptr,
+          commonDataPtr->guidingVelocityPtr));
+      pipeline.push_back(new OpCalculatePlasticFlowLhs_dTAU_ALE(
+          "EP", "TAU", commonDataPtr, m_D_ptr,
+          commonDataPtr->guidingVelocityPtr));
+      pipeline.push_back(new OpCalculateConstrainsLhs_dTAU_ALE(
+          "TAU", "TAU", commonDataPtr, m_D_ptr,
+          commonDataPtr->guidingVelocityPtr));
+    }
+
     pipeline.push_back(
         new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonDataPtr));
     pipeline.push_back(
@@ -674,6 +697,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
     pipeline.push_back(new OpCalculateContrainsRhs("TAU", commonDataPtr));
 
+    pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
@@ -705,7 +729,9 @@ MoFEMErrorCode Example::OPs() {
     auto get_time_scaled = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return fe_domain_rhs->ts_t * scale;
+      // return fe_domain_rhs->ts_t * scale;
+      return fe_domain_rhs->ts_t < 1.3 ? fe_domain_rhs->ts_t * scale
+                                        : 1.3 * scale;
     };
 
     auto get_minus_time = [&](double, double, double) {
@@ -815,12 +841,16 @@ MoFEMErrorCode Example::OPs() {
   if (is_with_ALE) {
 
     CHKERR add_skeleton_base_ops(pipeline_mng->getOpSkeletonRhsPipeline());
-    CHKERR add_skeleton_rhs_ops(pipeline_mng->getOpSkeletonRhsPipeline());
-    // CHKERR add_skeleton_base_ops(pipeline_mng->getOpSkeletonLhsPipeline());
+    CHKERR add_skeleton_base_ops(pipeline_mng->getOpSkeletonLhsPipeline());
+
+    if (!test_new_tangent) {
+      CHKERR add_skeleton_rhs_ops(pipeline_mng->getOpSkeletonRhsPipeline());
+    }
+
     CHKERR
-    pipeline_mng->setSkeletonLhsIntegrationRule(integration_rule_deviator);
+    pipeline_mng->setSkeletonLhsIntegrationRule(integration_rule_bc);
     CHKERR
-    pipeline_mng->setSkeletonRhsIntegrationRule(integration_rule_deviator);
+    pipeline_mng->setSkeletonRhsIntegrationRule(integration_rule_bc);
   }
 
   MoFEMFunctionReturn(0);
@@ -851,8 +881,9 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto create_post_process_skeleton_element = [&]() {
     MoFEMFunctionBeginHot;
-
-    // skeleton side element 
+    if(!is_with_ALE)
+      MoFEMFunctionReturnHot(0);
+    // skeleton side element
     postProcFeSkeletonFe = boost::make_shared<PostProcEleSkeleton>(mField);
     postProcFeSkeletonFe->generateReferenceElementMesh();
     postProcFeSkeletonFe->addFieldValuesPostProc("U");
@@ -963,8 +994,9 @@ MoFEMErrorCode Example::tsSolve() {
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
-    CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
-                               sk_monitor_ptr, null, null);
+    if (is_with_ALE)
+      CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
+                                 sk_monitor_ptr, null, null);
     MoFEMFunctionReturn(0);
   };
 
