@@ -69,7 +69,6 @@ template <> struct ElementsAndOps<3> {
 //< Space dimension of problem, mesh
 constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;
 
-#define DEBUG "@ DEBUG @"
 
 constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
 using EntData = DataForcesAndSourcesCore::EntData;
@@ -131,12 +130,12 @@ using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
 using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 
 PetscBool is_large_strains = PETSC_TRUE;
-PetscBool is_with_ALE = PETSC_TRUE; // TODO:
-PetscBool test_new_tangent = PETSC_TRUE;
+PetscBool is_with_ALE = PETSC_TRUE; 
+PetscBool test_convection = PETSC_TRUE; 
+PetscBool test_penalty = PETSC_TRUE;
 
 double petsc_time = 0;
 double scale = 1.;
-
 
 double young_modulus = 206913;
 double poisson_ratio = 0.29;
@@ -294,8 +293,10 @@ MoFEMErrorCode Example::createCommonData() {
                                &is_large_strains, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_ale",
                                &is_with_ALE, PETSC_NULL);
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_tangent",
-                               &test_new_tangent, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_penalty",
+                               &test_penalty, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_convection",
+                               &test_convection, PETSC_NULL);
 
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
@@ -394,8 +395,7 @@ MoFEMErrorCode Example::createCommonData() {
   // for ALE
   commonDataPtr->plasticTauJumpPtr = boost::make_shared<VectorDouble>();
   commonDataPtr->plasticStrainJumpPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->plastic_N_TauJumpPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->plastic_N_StrainJumpPtr = boost::make_shared<MatrixDouble>();
+
   commonDataPtr->guidingVelocityPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->velocityDotNormalPtr = boost::make_shared<VectorDouble>();
 
@@ -487,43 +487,62 @@ MoFEMErrorCode Example::OPs() {
         new OpVolumeSideCalculateEP("EP", commonDataPtr));
     domainSideFe->getOpPtrVector().push_back(
         new OpVolumeSideCalculateTAU("TAU", commonDataPtr));
-
     pipeline.push_back(
         new OpCalculateVelocityOnSkeleton("U", commonDataPtr));
-    pipeline.push_back(
-        new OpCalculateJumpOnSkeleton("U", commonDataPtr, domainSideFe));
 
     MoFEMFunctionReturnHot(0);
   };
 
   auto add_skeleton_rhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBeginHot;
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    // pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+
+    auto domain_side_fe_ep = boost::make_shared<DomainSideEle>(mField);
+    auto domain_side_fe_tau = boost::make_shared<DomainSideEle>(mField);
+    domain_side_fe_ep->getOpPtrVector().push_back(
+        new OpVolumeSideCalculateEP("EP", commonDataPtr));
+    domain_side_fe_tau->getOpPtrVector().push_back(
+        new OpVolumeSideCalculateTAU("TAU", commonDataPtr));
 
     pipeline.push_back(
+        new OpCalculateJumpOnEPSkeleton("U", commonDataPtr, domain_side_fe_ep));
+    pipeline.push_back(
         new OpCalculatePlasticFlowPenalty_Rhs("U", commonDataPtr));
+    pipeline.push_back(new OpCalculateJumpOnTAUSkeleton("U", commonDataPtr,
+                                                        domain_side_fe_tau));
     pipeline.push_back(
         new OpCalculateConstraintPenalty_Rhs("U", commonDataPtr));
 
-    pipeline.push_back(new OpUnSetBc("U"));
+    // pipeline.push_back(new OpUnSetBc("U"));
 
     MoFEMFunctionReturnHot(0);
   };
 
   auto add_skeleton_lhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBeginHot;
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    // pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    auto domain_side_fe = boost::make_shared<DomainSideEle>(mField);
+    auto domain_side_fe_ep = boost::make_shared<DomainSideEle>(mField);
+    auto domain_side_fe_tau = boost::make_shared<DomainSideEle>(mField);
+    domain_side_fe_ep->getOpPtrVector().push_back(
+        new OpVolumeSideCalculateEP("EP", commonDataPtr));
+    domain_side_fe_ep->getOpPtrVector().push_back(
+        new OpDomainSideGetColData("EP", "EP", commonDataPtr));
+    domain_side_fe_tau->getOpPtrVector().push_back(
+        new OpVolumeSideCalculateTAU("TAU", commonDataPtr));
+    domain_side_fe_tau->getOpPtrVector().push_back(
+        new OpDomainSideGetColData("TAU", "TAU", commonDataPtr));
 
     pipeline.push_back(
-        new OpCalculateJumpOnSkeleton("U", "U", commonDataPtr, domain_side_fe));
+        new OpCalculateJumpOnEPSkeleton("U", commonDataPtr, domain_side_fe_ep));
     pipeline.push_back(
         new OpCalculatePlasticFlowPenaltyLhs_dEP("U", "U", commonDataPtr));
+    pipeline.push_back(new OpCalculateJumpOnTAUSkeleton("U", commonDataPtr,
+                                                        domain_side_fe_tau));
     pipeline.push_back(
         new OpCalculateConstraintPenaltyLhs_dTAU("U", "U", commonDataPtr));
 
-    pipeline.push_back(new OpUnSetBc("U"));
+    // pipeline.push_back(new OpUnSetBc("U"));
 
     MoFEMFunctionReturnHot(0);
   };
@@ -552,7 +571,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateScalarFieldValues(
         "TAU", commonDataPtr->getPlasticTauPtr()));
 
-    if (is_with_ALE) {
+    if (is_with_ALE && test_convection) {
       pipeline.push_back(
           new OpCalculateTensor2SymmetricFieldGradient<SPACE_DIM, SPACE_DIM>(
               "EP", commonDataPtr->plasticGradStrainPtr));
@@ -687,7 +706,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonDataPtr, m_D_ptr));
 
-    if (is_with_ALE && test_new_tangent) {
+    if (is_with_ALE && test_convection) {
       pipeline.push_back(new OpCalculatePlasticFlowLhs_dEP_ALE(
           "EP", "EP", commonDataPtr, m_D_ptr,
           commonDataPtr->guidingVelocityPtr));
@@ -858,17 +877,14 @@ MoFEMErrorCode Example::OPs() {
 
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_bc);
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_bc);
-  if (is_with_ALE) {
 
+  if (is_with_ALE) {
     CHKERR add_skeleton_base_ops(pipeline_mng->getOpSkeletonRhsPipeline());
     CHKERR add_skeleton_base_ops(pipeline_mng->getOpSkeletonLhsPipeline());
-
-    if (!test_new_tangent) {
+    if (test_penalty) {
       CHKERR add_skeleton_rhs_ops(pipeline_mng->getOpSkeletonRhsPipeline());
-      if (false)
-        CHKERR add_skeleton_lhs_ops(pipeline_mng->getOpSkeletonLhsPipeline());
+      CHKERR add_skeleton_lhs_ops(pipeline_mng->getOpSkeletonLhsPipeline());
     }
-
     CHKERR
     pipeline_mng->setSkeletonLhsIntegrationRule(integration_rule_bc);
     CHKERR
@@ -903,7 +919,7 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto create_post_process_skeleton_element = [&]() {
     MoFEMFunctionBeginHot;
-    if(!is_with_ALE)
+    if (!is_with_ALE)
       MoFEMFunctionReturnHot(0);
     // skeleton side element
     postProcFeSkeletonFe = boost::make_shared<PostProcEleSkeleton>(mField);
@@ -915,7 +931,9 @@ MoFEMErrorCode Example::tsSolve() {
     auto &pipeline = postProcFeSkeletonFe->getOpPtrVector();
     pipeline.push_back(new OpCalculateVelocityOnSkeleton("U", commonDataPtr));
     pipeline.push_back(
-        new OpCalculateJumpOnSkeleton("U", commonDataPtr, domainSideFe));
+        new OpCalculateJumpOnEPSkeleton("U", commonDataPtr, domainSideFe));
+    pipeline.push_back(
+        new OpCalculateJumpOnTAUSkeleton("U", commonDataPtr, domainSideFe));
 
     pipeline.push_back(new OpPostProcAleSkeleton(
         "U", postProcFeSkeletonFe->postProcMesh,
@@ -1124,7 +1142,7 @@ int main(int argc, char *argv[]) {
     MoFEM::Interface &m_field = core; ///< finite element database insterface
                                       //! [Create MoFEM]
 #ifndef NDEBUG
-    if (DEBUG && m_field.get_comm_rank() == 1) {
+    if (m_field.get_comm_rank() == 1) {
       std::cout << "debug in parallel, attach the process and press any key "
                    "and ENTER to continue "
                 << std::endl;

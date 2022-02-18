@@ -48,10 +48,10 @@ tutorials_build_and_install(
 set_target_properties(
   ale_plastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
-set(DEBUG false)
-if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
-  set(DEBUG true)
-endif ()
+# set(DEBUG false)
+# if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
+#   set(DEBUG true)
+# endif ()
 
 # tutorials_build_and_install(
 #   thermo_plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
