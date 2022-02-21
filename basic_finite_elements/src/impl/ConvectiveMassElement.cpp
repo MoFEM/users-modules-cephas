@@ -283,7 +283,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
           }
         }
 
-        auto &a0 = dAta.a0;
+        auto a0 = dAta.a0;
         CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, a0);
 
         auto t_a_res =
@@ -298,7 +298,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
         auto t_F = getFTensor2FromArray3by3(F, FTensor::Number<0>(), 0);
         auto t_h = getFTensor2FromArray3by3(h, FTensor::Number<0>(), 0);
 
-        double rho0 = dAta.rho0;
+        const double rho0 = dAta.rho0;
 
         adouble detH = determinantTensor3by3(H);
         CHKERR invertTensor3by3(H, detH, invH);
@@ -1372,8 +1372,10 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumJacobian::doWork(
         auto t_a_T = FTensor::Tensor1<adouble *, 3>{&a_T[0], &a_T[1], &a_T[2]};
 
         t_F(i, j) = t_h(i, k) * t_invH(k, j);
-        t_g(i, j) = t_G(i, k) * t_invH(k, j);
+        t_G(i, j) = t_g(i, k) * t_invH(k, j);
         t_a_T(i) = t_F(k, i) * t_a(k) + t_G(k, i) * t_v(k);
+        const auto rho0 = dAta.rho0;
+        t_a_T(i) = -rho0 * detH;
 
         commonData.valT[gg].resize(3);
         for (int nn = 0; nn < 3; nn++) {
