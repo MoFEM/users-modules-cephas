@@ -136,12 +136,13 @@ PetscBool test_penalty = PETSC_TRUE;
 
 double petsc_time = 0;
 double scale = 1.;
+double max_load_time = 1.3;
 
 double young_modulus = 206913;
 double poisson_ratio = 0.29;
 double rho = 0;
 double sigmaY = 450;
-double H = 1290;
+double H = 129;
 double visH = 0;
 double cn = 1;
 double Qinf = 265;
@@ -149,7 +150,7 @@ double b_iso = 16.93;
 int order = 2;
 
 // for rotating body
-double penalty = 1e5;
+double penalty = 1e4;
 double density = 1.0;
 array<double, 3> angular_velocity{0, 0, 1};
 
@@ -291,12 +292,16 @@ MoFEMErrorCode Example::createCommonData() {
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_ale",
-                               &is_with_ALE, PETSC_NULL);
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_penalty",
-                               &test_penalty, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_ale", &is_with_ALE,
+                               PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_penalty", &test_penalty,
+                               PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_convection",
                                &test_convection, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-max_load_time",
+                                 &max_load_time, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &penalty,
+                                 PETSC_NULL);
 
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
@@ -484,9 +489,10 @@ MoFEMErrorCode Example::OPs() {
 
     domainSideFe = boost::make_shared<DomainSideEle>(mField);
     domainSideFe->getOpPtrVector().push_back(
-        new OpVolumeSideCalculateEP("EP", commonDataPtr));
-    domainSideFe->getOpPtrVector().push_back(
         new OpVolumeSideCalculateTAU("TAU", commonDataPtr));
+    domainSideFe->getOpPtrVector().push_back(
+        new OpVolumeSideCalculateEP("EP", commonDataPtr));
+
     pipeline.push_back(
         new OpCalculateVelocityOnSkeleton("U", commonDataPtr));
 
@@ -497,19 +503,10 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBeginHot;
     // pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    auto domain_side_fe_ep = boost::make_shared<DomainSideEle>(mField);
-    auto domain_side_fe_tau = boost::make_shared<DomainSideEle>(mField);
-    domain_side_fe_ep->getOpPtrVector().push_back(
-        new OpVolumeSideCalculateEP("EP", commonDataPtr));
-    domain_side_fe_tau->getOpPtrVector().push_back(
-        new OpVolumeSideCalculateTAU("TAU", commonDataPtr));
-
     pipeline.push_back(
-        new OpCalculateJumpOnEPSkeleton("U", commonDataPtr, domain_side_fe_ep));
+        new OpCalculateJumpOnSkeleton("U", commonDataPtr, domainSideFe));
     pipeline.push_back(
         new OpCalculatePlasticFlowPenalty_Rhs("U", commonDataPtr));
-    pipeline.push_back(new OpCalculateJumpOnTAUSkeleton("U", commonDataPtr,
-                                                        domain_side_fe_tau));
     pipeline.push_back(
         new OpCalculateConstraintPenalty_Rhs("U", commonDataPtr));
 
@@ -522,23 +519,20 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBeginHot;
     // pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    auto domain_side_fe_ep = boost::make_shared<DomainSideEle>(mField);
-    auto domain_side_fe_tau = boost::make_shared<DomainSideEle>(mField);
-    domain_side_fe_ep->getOpPtrVector().push_back(
-        new OpVolumeSideCalculateEP("EP", commonDataPtr));
-    domain_side_fe_ep->getOpPtrVector().push_back(
-        new OpDomainSideGetColData("EP", "EP", commonDataPtr));
-    domain_side_fe_tau->getOpPtrVector().push_back(
+    auto domain_side_fe = boost::make_shared<DomainSideEle>(mField);
+    domain_side_fe->getOpPtrVector().push_back(
         new OpVolumeSideCalculateTAU("TAU", commonDataPtr));
-    domain_side_fe_tau->getOpPtrVector().push_back(
+    domain_side_fe->getOpPtrVector().push_back(
+        new OpVolumeSideCalculateEP("EP", commonDataPtr));
+    domain_side_fe->getOpPtrVector().push_back(
         new OpDomainSideGetColData("TAU", "TAU", commonDataPtr));
+    domain_side_fe->getOpPtrVector().push_back(
+        new OpDomainSideGetColData("EP", "EP", commonDataPtr));
 
     pipeline.push_back(
-        new OpCalculateJumpOnEPSkeleton("U", commonDataPtr, domain_side_fe_ep));
+        new OpCalculateJumpOnSkeleton("U", commonDataPtr, domain_side_fe));
     pipeline.push_back(
         new OpCalculatePlasticFlowPenaltyLhs_dEP("U", "U", commonDataPtr));
-    pipeline.push_back(new OpCalculateJumpOnTAUSkeleton("U", commonDataPtr,
-                                                        domain_side_fe_tau));
     pipeline.push_back(
         new OpCalculateConstraintPenaltyLhs_dTAU("U", "U", commonDataPtr));
 
@@ -768,9 +762,14 @@ MoFEMErrorCode Example::OPs() {
     auto get_time_scaled = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      // return fe_domain_rhs->ts_t * scale;
-      return fe_domain_rhs->ts_t < 1.3 ? fe_domain_rhs->ts_t * scale
-                                        : 1.3 * scale;
+      double time = fe_domain_rhs->ts_t;
+      double load = time < max_load_time
+                        ? time * scale
+                        : std::max((2. * max_load_time - time), 0.) * scale;
+
+      // return time < max_load_time ? time * scale : max_load_time * scale;
+      return load;
+      return time * scale;
     };
 
     auto get_minus_time = [&](double, double, double) {
@@ -931,9 +930,7 @@ MoFEMErrorCode Example::tsSolve() {
     auto &pipeline = postProcFeSkeletonFe->getOpPtrVector();
     pipeline.push_back(new OpCalculateVelocityOnSkeleton("U", commonDataPtr));
     pipeline.push_back(
-        new OpCalculateJumpOnEPSkeleton("U", commonDataPtr, domainSideFe));
-    pipeline.push_back(
-        new OpCalculateJumpOnTAUSkeleton("U", commonDataPtr, domainSideFe));
+        new OpCalculateJumpOnSkeleton("U", commonDataPtr, domainSideFe));
 
     pipeline.push_back(new OpPostProcAleSkeleton(
         "U", postProcFeSkeletonFe->postProcMesh,
