@@ -152,7 +152,9 @@ int order = 2;
 // for rotating body
 double penalty = 1e4;
 double density = 1.0;
-array<double, 3> angular_velocity{0, 0, 0.0};
+array<double, 3> angular_velocity{0, 0, 0.1};
+
+PetscBool test_H1 = PETSC_FALSE;
 
 inline long double hardening(long double tau, double temp) {
   return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
@@ -251,13 +253,18 @@ MoFEMErrorCode Example::setupProblem() {
 
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
-  CHKERR simple->addDomainField("TAU", L2, base, 1);
-  CHKERR simple->addDomainField("EP", L2, base, size_symm);
+  if (test_H1) {
+    CHKERR simple->addDomainField("TAU", H1, base, 1);
+    CHKERR simple->addDomainField("EP", H1, base, size_symm);
+  } else {
+    CHKERR simple->addDomainField("TAU", L2, base, 1);
+    CHKERR simple->addDomainField("EP", L2, base, size_symm);
+  }
   CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
+
   // for ALE
   if (is_with_ALE)
     CHKERR simple->addSkeletonField("U", H1, base, order);
-
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("TAU", order - 1);
@@ -320,10 +327,14 @@ MoFEMErrorCode Example::createCommonData() {
                                PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_convection",
                                &test_convection, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_H1", &test_H1,
+                               PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-max_load_time",
                                  &max_load_time, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &penalty,
                                  PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-angular_velocity",
+                                 &angular_velocity[2], PETSC_NULL);
 
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
@@ -490,6 +501,10 @@ MoFEMErrorCode Example::OPs() {
     return 2 * approx_order;
   };
 
+  auto integration_rule_skeleton = [](int, int, int approx_order) {
+    return 2 * approx_order;
+  };
+
   auto add_skeleton_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBeginHot;
 
@@ -577,13 +592,15 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
       pipeline.push_back(new OpSetInvJacL2ForFace(inv_jac_ptr));
     }
-
+    
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
         "TAU", commonDataPtr->getPlasticTauDotPtr()));
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
-        "EP", commonDataPtr->getPlasticStrainPtr()));
+        "EP", commonDataPtr->getPlasticStrainPtr(),
+        test_H1 ? MBVERTEX : MBTRI));
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<SPACE_DIM>(
-        "EP", commonDataPtr->getPlasticStrainDotPtr()));
+        "EP", commonDataPtr->getPlasticStrainDotPtr(),
+        test_H1 ? MBVERTEX : MBTRI));
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mGradPtr));
     pipeline.push_back(new OpCalculateScalarFieldValues(
@@ -908,10 +925,8 @@ MoFEMErrorCode Example::OPs() {
       CHKERR add_skeleton_rhs_ops(pipeline_mng->getOpSkeletonRhsPipeline());
       CHKERR add_skeleton_lhs_ops(pipeline_mng->getOpSkeletonLhsPipeline());
     }
-    CHKERR
-    pipeline_mng->setSkeletonLhsIntegrationRule(integration_rule_bc);
-    CHKERR
-    pipeline_mng->setSkeletonRhsIntegrationRule(integration_rule_bc);
+    CHKERR pipeline_mng->setSkeletonLhsIntegrationRule(integration_rule_skeleton);
+    CHKERR pipeline_mng->setSkeletonRhsIntegrationRule(integration_rule_skeleton);
   }
 
   MoFEMFunctionReturn(0);

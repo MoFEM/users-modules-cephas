@@ -609,8 +609,8 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
         // t_nf_l(i, j) -=
         //     (t_base_r * alpha) * Is(i, j, k, l) * t_plastic_strain_jump(k, l);
         // FIXME: we are penalising off diagonals more than the rest
-        // t_nf_r(i, j) += (t_base_l * alpha) * t_plastic_strain_jump(i, j);
-        // t_nf_l(i, j) -= (t_base_r * alpha) * t_plastic_strain_jump(i, j);
+        t_nf_r(i, j) += (t_base_l * alpha) * t_plastic_strain_jump(i, j);
+        t_nf_l(i, j) -= (t_base_r * alpha) * t_plastic_strain_jump(i, j);
 
         ++t_nf_l;
         ++t_nf_r;
@@ -1110,10 +1110,10 @@ struct MonitorPostProcSkeleton : public FEMethod {
     MoFEMFunctionBegin;
     CHKERR TSGetTime(ts, &petsc_time);
     // FIXME: testing
-    double max_velocity = 0.04;
-    if (petsc_time >= max_load_time * 2)
-      angular_velocity[2] =
-          std::min(abs(max_velocity), (petsc_time - max_load_time * 2.));
+    // double max_velocity = 0.04;
+    // if (petsc_time >= max_load_time * 2)
+    //   angular_velocity[2] =
+    //       std::min(abs(max_velocity), (petsc_time - max_load_time * 2.));
 
     auto make_vtk = [&]() {
       MoFEMFunctionBegin;
