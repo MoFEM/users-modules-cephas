@@ -12,6 +12,13 @@
 - hyperbolic equation
 - approximation sphere with high-order polynomials
 
+\section tut_sw_solution Example solution
+
+\htmlonly
+<center>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/zfrkelKgE74" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+\endhtmlonly
+
 \section tut_sw_additional_resources Supplement lectures
 
 You can find many resources on the internet about shallow wave equations. We point to two of them, which has been used as a starting point for this tutorial.

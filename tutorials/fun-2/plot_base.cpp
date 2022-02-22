@@ -277,7 +277,7 @@ MoFEMErrorCode Example::outputResults() {
       double v = 0;
       for (int d = 0; d != length; ++d)
         v += pow(data[length * i + d], 2);
-      v = sqrt(v);
+      v = std::sqrt(v);
       max_v = std::max(max_v, v);
     }
     for (auto &v : data)
@@ -473,13 +473,20 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
             "Not implemented element type");
   }
 
+
   // Create physical nodes
+
+  // MoAB interface allowing for creating nodes and elements in the bulk
   ReadUtilIface *iface;
   CHKERR postProcMesh.query_interface(iface);
 
-  std::vector<double *> arrays;
-  EntityHandle startv;
+  std::vector<double *> arrays; /// pointers to memory allocated by MoAB for
+                                /// storing X, Y, and Z coordinates
+  EntityHandle startv; // Starting handle for vertex
+  // Allocate memory for num_nodes, and return starting handle, and access to
+  // memort.
   CHKERR iface->get_node_coords(3, num_nodes, 0, startv, arrays);
+
   mapGaussPts.resize(gaussPts.size2());
   for (int gg = 0; gg != num_nodes; ++gg)
     mapGaussPts[gg] = startv + gg;
@@ -495,9 +502,10 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   const int num_el = refEleMap.size1();
   const int num_nodes_on_ele = refEleMap.size2();
 
-  EntityHandle starte;
-  EntityHandle *conn;
-
+  EntityHandle starte; // Starting handle to first created element
+  EntityHandle *conn; // Access to MOAB memory with connectivity of elements 
+  
+  // Create tris/tets in the bulk in MoAB database
   if (SPACE_DIM == 2)
     CHKERR iface->get_element_connect(num_el, num_nodes_on_ele, MBTRI, 0,
                                       starte, conn);
@@ -508,11 +516,17 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
             "Dimension not implemented");
 
+  // At this point elements (memory for elements) is allocated, at code bellow
+  // actual connectivity of elements is set.
   for (unsigned int tt = 0; tt != refEleMap.size1(); ++tt) {
     for (int nn = 0; nn != num_nodes_on_ele; ++nn)
       conn[num_nodes_on_ele * tt + nn] = mapGaussPts[refEleMap(tt, nn)];
   }
+
+  // Finalise elements creation. At that point MOAB updates adjacency tables,
+  // and elements are ready to use.
   CHKERR iface->update_adjacencies(starte, num_el, num_nodes_on_ele, conn);
+  
   auto physical_elements = Range(starte, starte + num_el - 1);
   CHKERR postProcMesh.tag_clear_data(th, physical_elements, &(nInTheLoop));
 

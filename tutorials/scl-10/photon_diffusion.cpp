@@ -323,7 +323,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
-    pipeline.push_back(new OpSetHOWeigthsOnFace());
+    pipeline.push_back(new OpSetHOWeightsOnFace());
   };
 
   auto add_lhs_base_ops = [&](auto &pipeline) {

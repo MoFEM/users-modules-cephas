@@ -453,7 +453,7 @@ MoFEMErrorCode Example::outputResults() {
     CHKERR VecNorm(D, NORM_2, &nrm2r);
     MOFEM_LOG_C("EXAMPLE", Sev::inform,
                 " ncov = %d omega2 = %.8g omega = %.8g frequency  = %.8g", nn,
-                eigr, sqrt(std::abs(eigr)), sqrt(std::abs(eigr)) / (2 * M_PI));
+                eigr, std::sqrt(std::abs(eigr)), std::sqrt(std::abs(eigr)) / (2 * M_PI));
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR pipeline_mng->loopFiniteElements();
     post_proc_fe->writeFile("out_eig_" + boost::lexical_cast<std::string>(nn) +

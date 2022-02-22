@@ -75,22 +75,19 @@ struct MonitorPostProc : public FEMethod {
         "_TsStep_", 1, MB_TYPE_INTEGER, th_step,
         MB_TAG_CREAT | MB_TAG_EXCL | MB_TAG_MESH, &def_t_val);
     if (rval == MB_ALREADY_ALLOCATED) {
-      rval = m_field.get_moab().tag_get_by_ptr(th_step, &root_meshset, 1,
-                                               (const void **)&step);
-      MOAB_THROW(rval);
+      MOAB_THROW(m_field.get_moab().tag_get_by_ptr(th_step, &root_meshset, 1,
+                                               (const void **)&step));
     } else {
-      rval = m_field.get_moab().tag_set_data(th_step, &root_meshset, 1,
-                                             &def_t_val);
-      MOAB_THROW(rval);
-      rval = m_field.get_moab().tag_get_by_ptr(th_step, &root_meshset, 1,
-                                               (const void **)&step);
-      MOAB_THROW(rval);
+      MOAB_THROW(m_field.get_moab().tag_set_data(th_step, &root_meshset, 1,
+                                                 &def_t_val));
+      MOAB_THROW(m_field.get_moab().tag_get_by_ptr(th_step, &root_meshset, 1,
+                                                   (const void **)&step));
     }
 
     PetscBool flg = PETSC_TRUE;
-    ierr = PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-my_output_prt", &pRT,
-                              &flg);
-    CHKERRABORT(PETSC_COMM_WORLD, ierr);
+    CHK_THROW_MESSAGE(PetscOptionsGetInt(PETSC_NULL, PETSC_NULL,
+                                         "-my_output_prt", &pRT, &flg),
+                      "Can not get option");
     if (flg != PETSC_TRUE) {
       pRT = 10;
     }
@@ -130,6 +127,7 @@ struct MonitorPostProc : public FEMethod {
     feElasticEnergy.ts_ctx = TSMethod::CTX_TSNONE;
     feElasticEnergy.snes_ctx = SnesMethod::CTX_SNESNONE;
     CHKERR mField.loop_finite_elements("DYNAMICS", "ELASTIC", feElasticEnergy);
+
     feKineticEnergy.ts_ctx = TSMethod::CTX_TSNONE;
     CHKERR mField.loop_finite_elements("DYNAMICS", "MASS_ELEMENT",
                                        feKineticEnergy);
@@ -246,6 +244,7 @@ int main(int argc, char *argv[]) {
   const string default_options = "-ksp_type fgmres \n"
                                  "-pc_type lu \n"
                                  "-pc_factor_mat_solver_type mumps \n"
+                                 "-mat_mumps_icntl_20 0 \n"
                                  "-ksp_atol 1e-10 \n"
                                  "-ksp_rtol 1e-10 \n"
                                  "-snes_monitor \n"
@@ -468,7 +467,6 @@ int main(int argc, char *argv[]) {
     CHKERR elastic_materials.setBlocks(inertia.setOfBlocks);
     CHKERR inertia.addConvectiveMassElement("MASS_ELEMENT", "VELOCITY",
                                             "DISPLACEMENT");
-    CHKERR inertia.addHOOpsVol();
     CHKERR inertia.addVelocityElement("VELOCITY_ELEMENT", "VELOCITY",
                                       "DISPLACEMENT");
 
@@ -654,6 +652,7 @@ int main(int argc, char *argv[]) {
         ConvectiveMassElement::ShellMatrixElement::PairNameFEMethodPtr(
             "ELASTIC", &damper.feLhs));
 
+    CHKERR inertia.addHOOpsVol();
     CHKERR inertia.setShellMatrixMassOperators("VELOCITY", "DISPLACEMENT",
                                                "MESH_NODE_POSITIONS", linear);
     // element name "ELASTIC" is used, therefore M matrix is assembled as K
@@ -740,11 +739,11 @@ int main(int argc, char *argv[]) {
 
     // right hand side
     // preprocess
-    ts_ctx.get_preProcess_to_do_IFunction().push_back(&update_and_control);
-    ts_ctx.get_preProcess_to_do_IFunction().push_back(&my_dirichlet_bc);
+    ts_ctx.getPreProcessIFunction().push_back(&update_and_control);
+    ts_ctx.getPreProcessIFunction().push_back(&my_dirichlet_bc);
+
     // fe looops
-    TsCtx::FEMethodsSequence &loops_to_do_Rhs =
-        ts_ctx.get_loops_to_do_IFunction();
+    auto &loops_to_do_Rhs = ts_ctx.getLoopsIFunction();
 
     auto add_static_rhs = [&](auto &loops_to_do_Rhs) {
       MoFEMFunctionBegin;
@@ -779,23 +778,23 @@ int main(int argc, char *argv[]) {
     loops_to_do_Rhs.push_back(
         PairNameFEMethodPtr("MASS_ELEMENT", &inertia.getLoopFeMassRhs()));
 
-    ts_ctx.get_preProcess_to_do_IFunction().push_back(&shell_matrix_residual);
-
-    // postproc
-    ts_ctx.get_postProcess_to_do_IFunction().push_back(&my_dirichlet_bc);
-    ts_ctx.get_postProcess_to_do_IFunction().push_back(&shell_matrix_residual);
+    // preporcess
+    // calculate residual for velocities
+    ts_ctx.getPreProcessIFunction().push_back(&shell_matrix_residual); 
+    // postprocess
+    ts_ctx.getPostProcessIFunction().push_back(&my_dirichlet_bc);
 
     // left hand side
     // preprocess
-    ts_ctx.get_preProcess_to_do_IJacobian().push_back(&update_and_control);
-    ts_ctx.get_preProcess_to_do_IJacobian().push_back(&shell_matrix_element);
-    ts_ctx.get_postProcess_to_do_IJacobian().push_back(&update_and_control);
+    ts_ctx.getPreProcessIJacobian().push_back(&update_and_control);
+    ts_ctx.getPreProcessIJacobian().push_back(&shell_matrix_element);
+    ts_ctx.getPostProcessIJacobian().push_back(&update_and_control);
     // monitor
-    TsCtx::FEMethodsSequence &loops_to_do_Monitor =
-        ts_ctx.get_loops_to_do_Monitor();
-    loops_to_do_Monitor.push_back(
+    TsCtx::FEMethodsSequence &loopsMonitor =
+        ts_ctx.getLoopsMonitor();
+    loopsMonitor.push_back(
         TsCtx::PairNameFEMethodPtr("MASS_ELEMENT", &post_proc));
-    loops_to_do_Monitor.push_back(
+    loopsMonitor.push_back(
         TsCtx::PairNameFEMethodPtr("MASS_ELEMENT", &monitor_restart));
 
     CHKERR TSSetIFunction(ts, F, TsSetIFunction, &ts_ctx);

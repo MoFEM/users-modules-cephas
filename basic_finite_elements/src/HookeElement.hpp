@@ -178,15 +178,13 @@ struct HookeElement {
 
     OpCalculateEnergy(const std::string row_field, const std::string col_field,
                       boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
-                      Vec ghost_vec = PETSC_NULL);
-
-    ~OpCalculateEnergy();
+                      SmartPetscObj<Vec> ghost_vec = SmartPetscObj<Vec>());
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
 
   protected:
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
-    Vec ghostVec;
+    SmartPetscObj<Vec> ghostVec;
   };
 
   struct OpCalculateEshelbyStress : public VolUserDataOperator {
@@ -691,7 +689,8 @@ struct HookeElement {
   static MoFEMErrorCode
   calculateEnergy(DM dm, boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
                   const std::string x_field, const std::string X_field,
-                  const bool ale, const bool field_disp, Vec *v_energy_ptr);
+                  const bool ale, const bool field_disp,
+                  SmartPetscObj<Vec> &v_energy_ptr);
 
 private:
   MatrixDouble invJac;

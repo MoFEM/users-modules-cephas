@@ -123,6 +123,7 @@ int main(int argc, char *argv[]) {
   const string default_options = "-ksp_type fgmres \n"
                                  "-pc_type lu \n"
                                  "-pc_factor_mat_solver_type mumps \n"
+                                 "-mat_mumps_icntl_20 0 \n"
                                  "-ksp_monitor \n"
                                  "-snes_type newtonls \n"
                                  "-snes_linesearch_type basic \n"
@@ -523,8 +524,8 @@ int main(int argc, char *argv[]) {
   TsCtx *ts_ctx;
   DMMoFEMGetTsCtx(dm,&ts_ctx);
   //add monitor operator
-  ts_ctx->get_postProcess_to_do_Monitor().push_back(&monitor);
-  ts_ctx->get_postProcess_to_do_Monitor().push_back(&post_proc);
+  ts_ctx->getPostProcessMonitor().push_back(&monitor);
+  ts_ctx->getPostProcessMonitor().push_back(&post_proc);
 
   //create time solver
   TS ts;

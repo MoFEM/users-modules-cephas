@@ -72,7 +72,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringFs::doWork(int side, EntityType type,
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     t_normal(i) = t_normal_1(i);
 
-    const double normal_length = sqrt(t_normal(k) * t_normal(k));
+    const double normal_length = std::sqrt(t_normal(k) * t_normal(k));
     t_normal(i) = t_normal(i) / normal_length;
     t_normal_projection(i, j) = t_normal(i) * t_normal(j);
     t_tangent_projection(i, j) = t_normal_projection(i, j);
@@ -183,7 +183,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs::doWork(int row_side, int col_side,
   // loop over the Gauss points
   for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
     t_normal(i) = normal_original_slave(i);
-    const double normal_length = sqrt(t_normal(k) * t_normal(k));
+    const double normal_length = std::sqrt(t_normal(k) * t_normal(k));
     t_normal(i) = t_normal(i) / normal_length;
     t_normal_projection(i, j) = t_normal(i) * t_normal(j);
     t_tangent_projection(i, j) = t_normal_projection(i, j);
@@ -269,9 +269,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs_dX::doWork(int row_side, int col_side,
   FTensor::Index<'k', 3> k;
   FTensor::Index<'l', 3> l;
 
-  auto make_vec_der = [&](FTensor::Tensor1<double *, 2> t_N,
-                          FTensor::Tensor1<double *, 3> t_1,
-                          FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [&](auto t_N, auto t_1, auto t_2) {
     FTensor::Tensor2<double, 3, 3> t_n;
     t_n(i, j) = 0;
     t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
@@ -279,12 +277,10 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs_dX::doWork(int row_side, int col_side,
     return t_n;
   };
 
-  auto make_vec_der_2 = [&](FTensor::Tensor1<double *, 2> t_N,
-                            FTensor::Tensor1<double *, 3> t_1,
-                            FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der_2 = [&](auto t_N, auto t_1, auto t_2) {
     FTensor::Tensor1<double, 3> t_normal;
     t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
-    const double normal_norm = sqrt(t_normal(i) * t_normal(i));
+    const double normal_norm = std::sqrt(t_normal(i) * t_normal(i));
     FTensor::Tensor2<double, 3, 3> t_n;
     t_n(i, j) = 0;
     t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
@@ -324,7 +320,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs_dX::doWork(int row_side, int col_side,
   for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
     // get area and integration weight
     t_normal(i) = normal_at_gp(i);
-    const double normal_length = sqrt(t_normal(k) * t_normal(k));
+    const double normal_length = std::sqrt(t_normal(k) * t_normal(k));
     t_normal(i) = t_normal(i) / normal_length;
 
     t_normal_projection(i, j) = t_normal(i) * t_normal(j);
@@ -511,7 +507,7 @@ MoFEMErrorCode MetaSpringBC::SpringALEMaterialVolOnSideLhs_dX_dx::iNtegrate(
 
     t_normal(i) = t_normal_1(i);
 
-    const double normal_length = sqrt(t_normal(k) * t_normal(k));
+    const double normal_length = std::sqrt(t_normal(k) * t_normal(k));
     t_normal(i) = t_normal(i) / normal_length;
     t_normal_projection(i, j) = t_normal(i) * t_normal(j);
     t_tangent_projection(i, j) = t_normal_projection(i, j);
@@ -667,9 +663,7 @@ MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::iNtegrate(EntData &row_data,
         &m(r + 2, c + 2));
   };
 
-  auto make_vec_der = [&](FTensor::Tensor1<double *, 2> t_N,
-                          FTensor::Tensor1<double *, 3> t_1,
-                          FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [&](auto t_N, auto t_1, auto t_2) {
     FTensor::Tensor2<double, 3, 3> t_n;
     t_n(i, j) = 0;
     t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
@@ -677,12 +671,10 @@ MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::iNtegrate(EntData &row_data,
     return t_n;
   };
 
-  auto make_vec_der_2 = [&](FTensor::Tensor1<double *, 2> t_N,
-                            FTensor::Tensor1<double *, 3> t_1,
-                            FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der_2 = [&](auto t_N, auto t_1, auto t_2) {
     FTensor::Tensor1<double, 3> t_normal;
     t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
-    const double normal_norm = sqrt(t_normal(i) * t_normal(i));
+    const double normal_norm = std::sqrt(t_normal(i) * t_normal(i));
     FTensor::Tensor2<double, 3, 3> t_n;
     t_n(i, j) = 0;
     t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
@@ -726,7 +718,7 @@ MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::iNtegrate(EntData &row_data,
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     t_normal(i) = t_normal_1(i);
 
-    const double normal_length = sqrt(t_normal(k) * t_normal(k));
+    const double normal_length = std::sqrt(t_normal(k) * t_normal(k));
     t_normal(i) = t_normal(i) / normal_length;
     t_normal_projection(i, j) = t_normal(i) * t_normal(j);
     t_tangent_projection(i, j) = t_normal_projection(i, j);
@@ -837,7 +829,7 @@ MoFEMErrorCode MetaSpringBC::SpringALEMaterialVolOnSideLhs_dX_dX::iNtegrate(
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     t_normal(i) = t_normal_1(i);
 
-    const double normal_length = sqrt(t_normal(k) * t_normal(k));
+    const double normal_length = std::sqrt(t_normal(k) * t_normal(k));
     t_normal(i) = t_normal(i) / normal_length;
     t_normal_projection(i, j) = t_normal(i) * t_normal(j);
     t_tangent_projection(i, j) = t_normal_projection(i, j);
@@ -1003,7 +995,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringFsMaterial::iNtegrate(EntData &data) {
   for (int gg = 0; gg != nbIntegrationPts; ++gg) {
     t_normal(i) = t_normal_1(i);
 
-    const double normal_length = sqrt(t_normal(k) * t_normal(k));
+    const double normal_length = std::sqrt(t_normal(k) * t_normal(k));
     t_normal(i) = t_normal(i) / normal_length;
     t_normal_projection(i, j) = t_normal(i) * t_normal(j);
     t_tangent_projection(i, j) = t_normal_projection(i, j);

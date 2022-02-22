@@ -50,6 +50,10 @@ struct VolumeLengthQuality
   double aLpha;
   double gAmma;
 
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+
   VolumeLengthQuality(VolumeLengthQualityType type, double alpha, double gamma)
       : NonlinearElasticElement::FunctionsToCalculatePiolaKirchhoffI<TYPE>(),
         tYpe(type), aLpha(alpha), gAmma(gamma) {
@@ -147,12 +151,18 @@ struct VolumeLengthQuality
       for (int dd = 0; dd < 3; dd++) {
         deltaChi[dd] = coordsEdges[6 * ee + dd] - coordsEdges[6 * ee + 3 + dd];
       }
-      noalias(deltaX) = prod(this->F, deltaChi);
+      deltaX.clear();
+      for (int ii = 0; ii != 3; ++ii)
+        for (int jj = 0; jj != 3; ++jj)
+          deltaX(ii) += this->F(ii, jj) * deltaChi(jj);
+
       for (int dd = 0; dd < 3; dd++) {
         lrmsSquared += (1. / 6.) * deltaX[dd] * deltaX[dd];
         lrmsSquared0 += (1. / 6.) * deltaChi[dd] * deltaChi[dd];
       }
-      noalias(dXdChiT) += outer_prod(deltaX, deltaChi);
+      for (int ii = 0; ii != 3; ++ii)
+        for (int jj = 0; jj != 3; ++jj)
+          dXdChiT(ii, jj) += deltaX(ii) * deltaChi(jj);
     }
     MoFEMFunctionReturn(0);
   }
@@ -173,10 +183,11 @@ struct VolumeLengthQuality
   */
   MoFEMErrorCode calculateQ() {
     MoFEMFunctionBegin;
-    if (Q.size1() == 0) {
-      Q.resize(3, 3);
-    }
-    noalias(Q) = trans(this->invF) - 0.5 * dXdChiT / lrmsSquared;
+    Q.resize(3, 3, false);
+    auto t_Q = getFTensor2FromArray3by3(Q, FTensor::Number<0>(), 0);
+    auto t_invF = getFTensor2FromArray3by3(this->invF, FTensor::Number<0>(), 0);
+    auto t_dXdChiT = getFTensor2FromArray3by3(dXdChiT, FTensor::Number<0>(), 0);
+    t_Q(i, j) = t_invF(j, i) - 0.5 * t_dXdChiT(i, j) / lrmsSquared;
     MoFEMFunctionReturn(0);
   }
 
@@ -209,11 +220,11 @@ struct VolumeLengthQuality
     MoFEMFunctionBegin;
 
     CHKERR getEdgesFromElemCoords();
-    CHKERR this->dEterminant(this->F, detF);
+    detF = determinantTensor3by3(this->F);
     if (this->invF.size1() != 3)
       this->invF.resize(3, 3);
 
-    CHKERR this->iNvert(detF, this->F, this->invF);
+    CHKERR invertTensor3by3(this->F, detF, this->invF);
     CHKERR calculateLrms();
     CHKERR calculateQ();
 

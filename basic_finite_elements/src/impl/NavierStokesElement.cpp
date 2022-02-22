@@ -755,7 +755,7 @@ MoFEMErrorCode NavierStokesElement::OpCalcDragForce::doWork(int side,
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    double nrm2 = sqrt(t_normal(i) * t_normal(i));
+    double nrm2 = std::sqrt(t_normal(i) * t_normal(i));
     double w = t_w * nrm2 * 0.5;
 
     t_pressure_drag_force(i) += w * pressure_drag_at_gauss_pts(i);
@@ -827,7 +827,7 @@ MoFEMErrorCode NavierStokesElement::OpCalcDragTraction::doWork(int side,
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    double nrm2 = sqrt(t_normal(i) * t_normal(i));
+    double nrm2 = std::sqrt(t_normal(i) * t_normal(i));
     t_unit_normal(i) = t_normal(i) / nrm2;
 
     double mu = blockData.fluidViscosity;
@@ -1076,7 +1076,7 @@ MoFEMErrorCode NavierStokesElement::OpPostProcVorticity::doWork(int side,
 }
 
 VectorDouble3 stokes_flow_velocity(double x, double y, double z) {
-  double r = sqrt(x * x + y * y + z * z);
+  double r = std::sqrt(x * x + y * y + z * z);
   double theta = acos(x / r);
   double phi = atan2(y, z);
   double ur = cos(theta) * (1.0 + 0.5 / (r * r * r) - 1.5 / r);

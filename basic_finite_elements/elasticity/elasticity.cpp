@@ -113,6 +113,7 @@ int main(int argc, char *argv[]) {
   const string default_options = "-ksp_type gmres \n"
                                  "-pc_type lu \n"
                                  "-pc_factor_mat_solver_type mumps \n"
+                                 "-mat_mumps_icntl_20 0 \n"
                                  "-ksp_monitor \n"
                                  "-snes_type newtonls \n"
                                  "-snes_linesearch_type basic \n"
@@ -1253,7 +1254,7 @@ int main(int argc, char *argv[]) {
 
       double frequency;
       double pi = 3.14159265359;
-      frequency = sqrt(mode_stiffness / mode_mass) / (2 * pi);
+      frequency = std::sqrt(mode_stiffness / mode_mass) / (2 * pi);
       MOFEM_LOG_C("ELASTIC", Sev::inform, "Frequency  %6.4e", frequency);
     }
 
@@ -1261,34 +1262,34 @@ int main(int argc, char *argv[]) {
     auto calculate_strain_energy = [&]() {
       MoFEMFunctionBegin;
 
-      Vec v_energy;
+      SmartPetscObj<Vec> v_energy;
       CHKERR HookeElement::calculateEnergy(dm, block_sets_ptr, "DISPLACEMENT",
                                            "MESH_NODE_POSITIONS", false, true,
-                                           &v_energy);
+                                           v_energy);
 
       // Print elastic energy
-      const double *eng_ptr;
-      CHKERR VecGetArrayRead(v_energy, &eng_ptr);
-      MOFEM_LOG_C("ELASTIC", Sev::inform, "Elastic energy %6.4e", *eng_ptr);
-      
+      double energy;
+      CHKERR VecSum(v_energy, &energy);
+      MOFEM_LOG_C("ELASTIC", Sev::inform, "Elastic energy %6.4e", energy);
+
       switch (test_nb) {
       case 1:
-        if (fabs(*eng_ptr - 17.129) > 1e-3)
+        if (fabs(energy - 17.129) > 1e-3)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
       case 2:
-        if (fabs(*eng_ptr - 5.6475e-03) > 1e-4)
+        if (fabs(energy - 5.6475e-03) > 1e-4)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
       case 3:
-        if (fabs(*eng_ptr - 7.4679e-03) > 1e-4)
+        if (fabs(energy - 7.4679e-03) > 1e-4)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
       case 4:
-        if (fabs(*eng_ptr - 2.4992e+00) > 1e-3)
+        if (fabs(energy - 2.4992e+00) > 1e-3)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
@@ -1302,7 +1303,7 @@ int main(int argc, char *argv[]) {
                    "atom test diverged! %3.4e != %3.4e", min, expected_val);
       } break;
       case 9: {
-        if (fabs(*eng_ptr - 4.7416e-04) > 1e-8)
+        if (fabs(energy - 4.7416e-04) > 1e-8)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
       }
@@ -1310,8 +1311,6 @@ int main(int argc, char *argv[]) {
         break;
       }
 
-      CHKERR VecRestoreArrayRead(v_energy, &eng_ptr);
-      CHKERR VecDestroy(&v_energy);
       MoFEMFunctionReturn(0);
     };
     CHKERR calculate_strain_energy();

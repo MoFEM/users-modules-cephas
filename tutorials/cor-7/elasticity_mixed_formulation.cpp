@@ -37,6 +37,7 @@ int main(int argc, char *argv[]) {
   const string default_options = "-ksp_type gmres \n"
                                  "-pc_type lu \n"
                                  "-pc_factor_mat_solver_type mumps \n"
+                                 "-mat_mumps_icntl_20 0 \n"
                                  "-ksp_monitor\n";
 
   string param_file = "param_file.petsc";

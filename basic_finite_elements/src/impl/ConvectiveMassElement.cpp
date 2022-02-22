@@ -25,12 +25,6 @@ using namespace MoFEM;
 
 #include <Projection10NodeCoordsOnField.hpp>
 
-#include <boost/numeric/ublas/vector_proxy.hpp>
-#include <boost/numeric/ublas/matrix.hpp>
-
-#include <boost/numeric/ublas/matrix_proxy.hpp>
-#include <boost/numeric/ublas/vector.hpp>
-
 #include <adolc/adolc.h>
 #include <MethodForForceScaling.hpp>
 #include <DirichletBC.hpp>
@@ -42,9 +36,19 @@ using namespace MoFEM;
 #endif
 
 ConvectiveMassElement::MyVolumeFE::MyVolumeFE(MoFEM::Interface &m_field)
-    : VolumeElementForcesAndSourcesCore(m_field), A(PETSC_NULL), F(PETSC_NULL),
-      initV(false) {
+    : VolumeElementForcesAndSourcesCore(m_field), A(PETSC_NULL), F(PETSC_NULL) {
   meshPositionsFieldName = "NoNE";
+
+  auto create_vec = [&]() {
+    constexpr int ghosts[] = {0};
+    if (mField.get_comm_rank() == 0) {
+      return createSmartVectorMPI(mField.get_comm(), 1,1);
+    } else {
+      return createSmartVectorMPI(mField.get_comm(), 0, 1);
+    }
+  };
+
+  V = create_vec();
 }
 
 int ConvectiveMassElement::MyVolumeFE::getRule(int order) { return 2 * order; };
@@ -54,45 +58,9 @@ MoFEMErrorCode ConvectiveMassElement::MyVolumeFE::preProcess() {
 
   CHKERR VolumeElementForcesAndSourcesCore::preProcess();
 
-  switch (snes_ctx) {
-  case CTX_SNESSETFUNCTION: {
-    ts_ctx = CTX_TSSETIFUNCTION;
-    ts_F = snes_f;
-    break;
-  }
-  case CTX_SNESSETJACOBIAN: {
-    ts_ctx = CTX_TSSETIJACOBIAN;
-    ts_B = snes_B;
-  }
-  default:
-    break;
-  }
-
-  if (A != PETSC_NULL) {
-    ts_B = A;
-  }
-
-  if (F != PETSC_NULL) {
-    ts_F = F;
-  }
-
-  int ghosts[] = {0};
-  int rank;
-  MPI_Comm_rank(mField.get_comm(), &rank);
-
   switch (ts_ctx) {
   case CTX_TSNONE:
-    if (!initV) {
-      if (rank == 0) {
-        CHKERR VecCreateGhost(mField.get_comm(), 1, 1, 1, ghosts, &V);
-      } else {
-        CHKERR VecCreateGhost(mField.get_comm(), 0, 1, 1, ghosts, &V);
-      }
-      initV = true;
-    }
     CHKERR VecZeroEntries(V);
-    CHKERR VecGhostUpdateBegin(V, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(V, INSERT_VALUES, SCATTER_FORWARD);
     break;
   default:
     break;
@@ -106,22 +74,12 @@ MoFEMErrorCode ConvectiveMassElement::MyVolumeFE::postProcess() {
 
   CHKERR VolumeElementForcesAndSourcesCore::postProcess();
 
-  double *array;
+  const double *array;
   switch (ts_ctx) {
   case CTX_TSNONE:
     CHKERR VecAssemblyBegin(V);
     CHKERR VecAssemblyEnd(V);
-    CHKERR VecGhostUpdateBegin(V, ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateEnd(V, ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateBegin(V, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(V, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGetArray(V, &array);
-    eNergy = array[0];
-    CHKERR VecRestoreArray(V, &array);
-    if (initV) {
-      CHKERR VecDestroy(&V);
-      initV = false;
-    }
+    CHKERR VecSum(V, &eNergy);
     break;
   default:
     break;
@@ -241,7 +199,6 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
     if (a.size() != 3) {
       a.resize(3, false);
       dot_W.resize(3, false);
-      dp_dt.resize(3, false);
       a_res.resize(3, false);
       g.resize(3, 3, false);
       G.resize(3, 3, false);
@@ -249,7 +206,6 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
       H.resize(3, 3, false);
       invH.resize(3, 3, false);
       F.resize(3, 3, false);
-      a_res.resize(3);
     }
 
     dot_W.clear();
@@ -277,7 +233,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
     const std::vector<VectorDouble> &meshpos_vel =
         commonData.dataAtGaussPts["DOT_" + commonData.meshPositions];
 
-    const std::vector<MatrixDouble> &mesh_positions_val =
+    const std::vector<MatrixDouble> &mesh_positions_gradient =
         commonData.gradAtGaussPts[commonData.meshPositions];
 
     int nb_active_vars = 0;
@@ -321,30 +277,47 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
           for (int nn1 = 0; nn1 < 3; nn1++) { // 3+9+9+3=24
             for (int nn2 = 0; nn2 < 3; nn2++) {
               // commonData.gradAtGaussPts[commonData.meshPositions][gg]
-              H(nn1, nn2) <<= mesh_positions_val[gg](nn1, nn2);
+              H(nn1, nn2) <<= mesh_positions_gradient[gg](nn1, nn2);
               nb_active_vars++;
             }
           }
         }
-        adouble detH;
-        CHKERR dEterminant(H, detH);
-        CHKERR iNvert(detH, H, invH);
-        noalias(G) = prod(g, invH);
-        double rho0 = dAta.rho0;
-        VectorDouble a0 = dAta.a0;
+
+        auto &a0 = dAta.a0;
         CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, a0);
+
+        auto t_a_res =
+            FTensor::Tensor1<adouble *, 3>{&a_res[0], &a_res[1], &a_res[2]};
+        auto t_a = FTensor::Tensor1<adouble *, 3>{&a[0], &a[1], &a[2]};
+        auto t_a0 = FTensor::Tensor1<double *, 3>{&a0[0], &a0[1], &a0[2]};
+        auto t_dotW =
+            FTensor::Tensor1<adouble *, 3>{&dot_W[0], &dot_W[1], &dot_W[2]};
+        auto t_g = getFTensor2FromArray3by3(g, FTensor::Number<0>(), 0);
+        auto t_G = getFTensor2FromArray3by3(G, FTensor::Number<0>(), 0);
+        auto t_invH = getFTensor2FromArray3by3(invH, FTensor::Number<0>(), 0);
+        auto t_F = getFTensor2FromArray3by3(F, FTensor::Number<0>(), 0);
+        auto t_h = getFTensor2FromArray3by3(h, FTensor::Number<0>(), 0);
+
+        double rho0 = dAta.rho0;
+
+        adouble detH = determinantTensor3by3(H);
+        CHKERR invertTensor3by3(H, detH, invH);
+
+        t_G(i, j) = t_g(i, k) * t_invH(k, j);
+        t_a_res(i) = t_a(i) - t_a0(i) + t_G(i, j) * t_dotW(j);
+
         if (!lInear) {
-          noalias(F) = prod(h, invH);
-          adouble detF;
-          CHKERR dEterminant(F, detF);
-          // calculate current density
-          adouble rho = rho0 * detF;
-          // momentum rate
-          noalias(dp_dt) = rho * (-a0 + a + prod(G, dot_W));
+
+          t_F(i,j) = t_h(i,k)*t_invH(k,j);
+          t_a_res(i) *= rho0 * detH;
+          t_a_res(i) *= determinantTensor3by3(t_F);
+
         } else {
-          noalias(dp_dt) = rho0 * (-a0 + a + prod(G, dot_W));
+
+          t_a_res(i) *= rho0 * detH;
+
         }
-        noalias(a_res) = dp_dt * detH;
+
         // dependant
         VectorDouble &res = commonData.valMass[gg];
         res.resize(3);
@@ -381,7 +354,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
         }
         for (int nn1 = 0; nn1 < 3; nn1++) { // 3+9+9+3=24
           for (int nn2 = 0; nn2 < 3; nn2++) {
-            active[aa++] = mesh_positions_val[gg](nn1, nn2);
+            active[aa++] = mesh_positions_gradient[gg](nn1, nn2);
           }
         }
       }
@@ -768,10 +741,11 @@ MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dX::getJac(
 
 ConvectiveMassElement::OpEnergy::OpEnergy(const std::string field_name,
                                           BlockData &data,
-                                          CommonData &common_data, Vec *v_ptr)
+                                          CommonData &common_data,
+                                          SmartPetscObj<Vec> v)
     : VolumeElementForcesAndSourcesCore::UserDataOperator(
           field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
-      dAta(data), commonData(common_data), Vptr(v_ptr),
+      dAta(data), commonData(common_data), V(v, true),
       lInear(commonData.lInear) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
@@ -788,7 +762,7 @@ MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
   }
 
   {
-
+    double energy = 0;
     for (unsigned int gg = 0; gg < row_data.getN().size1(); gg++) {
       double val = getVolume() * getGaussPts()(3, gg);
       double rho0 = dAta.rho0;
@@ -804,25 +778,23 @@ MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
           H.resize(3, 3);
           noalias(H) =
               (commonData.gradAtGaussPts[commonData.meshPositions][gg]);
-          double detH;
-          CHKERR dEterminant(H, detH);
+          auto detH = determinantTensor3by3(H);
           invH.resize(3, 3);
-          CHKERR iNvert(detH, H, invH);
+          CHKERR invertTensor3by3(H, detH, invH);
           F.resize(3, 3);
           noalias(F) = prod(h, invH);
         } else {
           F.resize(3, 3);
           noalias(F) = h;
         }
-        double detF;
-        CHKERR dEterminant(F, detF);
+        double detF = determinantTensor3by3(F);
         rho = detF * rho0;
       }
       v.resize(3);
       noalias(v) = commonData.dataAtGaussPts[commonData.spatialVelocities][gg];
-      double energy = 0.5 * rho * inner_prod(v, v);
-      CHKERR VecSetValue(*Vptr, 0, val * energy, ADD_VALUES);
+      energy += 0.5 * (rho * val) * inner_prod(v, v);
     }
+    CHKERR VecSetValue(V, 0, energy, ADD_VALUES);
   }
 
   MoFEMFunctionReturnHot(0);
@@ -930,15 +902,37 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityJacobian::doWork(
           }
         }
         detH = 1;
+
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        FTensor::Index<'k', 3> k;
+
+        auto t_F = getFTensor2FromArray3by3(F, FTensor::Number<0>(), 0);
+        auto t_h = getFTensor2FromArray3by3(h, FTensor::Number<0>(), 0);
+        auto t_H = getFTensor2FromArray3by3(H, FTensor::Number<0>(), 0);
+        auto t_invH = getFTensor2FromArray3by3(invH, FTensor::Number<0>(), 0);
+        auto t_dot_u =
+            FTensor::Tensor1<adouble *, 3>{&dot_u[0], &dot_u[1], &dot_u[2]};
+        auto t_dot_w =
+            FTensor::Tensor1<adouble *, 3>{&dot_w[0], &dot_w[1], &dot_w[2]};
+        auto t_dot_W =
+            FTensor::Tensor1<adouble *, 3>{&dot_W[0], &dot_W[1], &dot_W[2]};
+        auto t_v = FTensor::Tensor1<adouble *, 3>{&v[0], &v[1], &v[2]};
+        auto t_a_res =
+            FTensor::Tensor1<adouble *, 3>{&a_res[0], &a_res[1], &a_res[2]};
+
         if (commonData.gradAtGaussPts[commonData.meshPositions].size() > 0) {
-          CHKERR dEterminant(H, detH);
-          CHKERR iNvert(detH, H, invH);
-          noalias(F) = prod(h, invH);
+          detH = determinantTensor3by3(H);
+          CHKERR invertTensor3by3(H, detH, invH);
+          t_F(i, j) = t_h(i, k) * t_invH(k, j);
         } else {
-          noalias(F) = h;
+          t_F(i, j) = t_h(i, j);
         }
-        noalias(dot_u) = dot_w - prod(F, dot_W);
-        noalias(a_res) = (v - dot_u) * detH;
+
+        t_dot_u(i) = t_dot_w(i) + t_F(i, j) * t_dot_W(j);
+        t_a_res(i) = t_v(i) - t_dot_u(i);
+        t_a_res(i) *= detH;
+
         // dependant
         VectorDouble &res = commonData.valVel[gg];
         res.resize(3);
@@ -1357,14 +1351,30 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumJacobian::doWork(
         adouble detH;
         detH = 1;
         if (commonData.gradAtGaussPts[commonData.meshPositions].size() > 0) {
-          CHKERR dEterminant(H, detH);
+          detH = determinantTensor3by3(H);
         }
-        CHKERR iNvert(detH, H, invH);
-        noalias(F) = prod(h, invH);
-        noalias(G) = prod(g, invH);
-        double rho0 = dAta.rho0;
+        CHKERR invertTensor3by3(H, detH, invH);
+
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        FTensor::Index<'k', 3> k;
+
         a_T.resize(3);
-        noalias(a_T) = -rho0 * (prod(trans(F), a) + prod(trans(G), v)) * detH;
+
+        auto t_h = getFTensor2FromArray3by3(h, FTensor::Number<0>(), 0);
+        auto t_invH = getFTensor2FromArray3by3(invH, FTensor::Number<0>(), 0);
+        auto t_F = getFTensor2FromArray3by3(F, FTensor::Number<0>(), 0);
+        auto t_g = getFTensor2FromArray3by3(g, FTensor::Number<0>(), 0);
+        auto t_G = getFTensor2FromArray3by3(G, FTensor::Number<0>(), 0);
+
+        auto t_a = FTensor::Tensor1<adouble *, 3>{&a[0], &a[1], &a[2]};
+        auto t_v = FTensor::Tensor1<adouble *, 3>{&v[0], &v[1], &v[2]};
+        auto t_a_T = FTensor::Tensor1<adouble *, 3>{&a_T[0], &a_T[1], &a_T[2]};
+
+        t_F(i, j) = t_h(i, k) * t_invH(k, j);
+        t_g(i, j) = t_G(i, k) * t_invH(k, j);
+        t_a_T(i) = t_F(k, i) * t_a(k) + t_G(k, i) * t_v(k);
+
         commonData.valT[gg].resize(3);
         for (int nn = 0; nn < 3; nn++) {
           a_T[nn] >>= (commonData.valT[gg])[nn];
@@ -1773,9 +1783,8 @@ MoFEMErrorCode ConvectiveMassElement::setBlocks() {
            mField, BLOCKSET | BODYFORCESSET, it)) {
     int id = it->getMeshsetId();
     EntityHandle meshset = it->getMeshset();
-    rval = mField.get_moab().get_entities_by_type(meshset, MBTET,
+    CHKERR mField.get_moab().get_entities_by_type(meshset, MBTET,
                                                   setOfBlocks[id].tEts, true);
-    CHKERRG(rval);
     added_tets.merge(setOfBlocks[id].tEts);
     Block_BodyForces mydata;
     CHKERR it->getAttributeDataStructure(mydata);
@@ -1795,8 +1804,7 @@ MoFEMErrorCode ConvectiveMassElement::setBlocks() {
       continue;
     Range tets;
     EntityHandle meshset = it->getMeshset();
-    rval = mField.get_moab().get_entities_by_type(meshset, MBTET, tets, true);
-    CHKERRG(rval);
+    CHKERR mField.get_moab().get_entities_by_type(meshset, MBTET, tets, true);
     tets = subtract(tets, added_tets);
     if (tets.empty())
       continue;
@@ -2103,7 +2111,7 @@ MoFEMErrorCode ConvectiveMassElement::setConvectiveMassOperators(
   sit = setOfBlocks.begin();
   for (; sit != setOfBlocks.end(); sit++) {
     feEnergy.getOpPtrVector().push_back(new OpEnergy(
-        spatial_position_field_name, sit->second, commonData, &feEnergy.V));
+        spatial_position_field_name, sit->second, commonData, feEnergy.V));
   }
 
   MoFEMFunctionReturnHot(0);
@@ -2343,7 +2351,7 @@ MoFEMErrorCode ConvectiveMassElement::setShellMatrixMassOperators(
   sit = setOfBlocks.begin();
   for (; sit != setOfBlocks.end(); sit++) {
     feEnergy.getOpPtrVector().push_back(new OpEnergy(
-        spatial_position_field_name, sit->second, commonData, &feEnergy.V));
+        spatial_position_field_name, sit->second, commonData, feEnergy.V));
   }
 
   MoFEMFunctionReturnHot(0);
@@ -2425,6 +2433,7 @@ MoFEMErrorCode ConvectiveMassElement::ShellResidualElement::preProcess() {
   if (!shellMatCtx->iNitialized) {
     CHKERR shellMatCtx->iNit();
   }
+  // Note velocities calculate from displacements are stroed in shellMatCtx->u
   CHKERR VecScatterBegin(shellMatCtx->scatterU, ts_u_t, shellMatCtx->u,
                          INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecScatterEnd(shellMatCtx->scatterU, ts_u_t, shellMatCtx->u,
@@ -2443,10 +2452,6 @@ MoFEMErrorCode ConvectiveMassElement::ShellResidualElement::preProcess() {
   MoFEMFunctionReturnHot(0);
 }
 
-MoFEMErrorCode ConvectiveMassElement::ShellResidualElement::postProcess() {
-  MoFEMFunctionBeginHot;
-  MoFEMFunctionReturnHot(0);
-}
 
 #ifdef __DIRICHLET_HPP__
 

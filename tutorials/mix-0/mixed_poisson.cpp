@@ -260,7 +260,7 @@ MoFEMErrorCode MixedPoisson::assembleSystem() {
       new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacHcurlFace(inv_jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeigthsOnFace());
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeightsOnFace());
 
   auto beta = [](const double, const double, const double) { return 1; };
   pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -388,7 +388,7 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
       new OpSetInvJacHcurlFace(inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpSetInvJacL2ForFace(inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeigthsOnFace());
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", commonDataPtr->approxVals));
@@ -419,11 +419,11 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   const double *array;
   CHKERR VecGetArrayRead(commonDataPtr->petscVec, &array);
   MOFEM_LOG("EXAMPLE", Sev::inform)
-      << "Global error L2 norm: " << sqrt(array[0]);
+      << "Global error L2 norm: " << std::sqrt(array[0]);
   MOFEM_LOG("EXAMPLE", Sev::inform)
-      << "Global error H1 seminorm: " << sqrt(array[1]);
+      << "Global error H1 seminorm: " << std::sqrt(array[1]);
   MOFEM_LOG("EXAMPLE", Sev::inform)
-      << "Global error indicator: " << sqrt(array[2]);
+      << "Global error indicator: " << std::sqrt(array[2]);
   MOFEM_LOG("EXAMPLE", Sev::inform)
       << "Total number of elements: " << (int)array[3];
 

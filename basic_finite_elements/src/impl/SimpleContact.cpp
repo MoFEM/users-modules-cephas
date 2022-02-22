@@ -409,7 +409,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(int side,
   for (int ii = 0; ii != 3; ++ii)
     t_normal(ii) = normal_slave_ptr[ii];
 
-  const double normal_length = sqrt(t_normal(i) * t_normal(i));
+  const double normal_length = std::sqrt(t_normal(i) * t_normal(i));
   t_normal(i) = t_normal(i) / normal_length;
 
   commonDataSimpleContact->areaSlave = 0.5 * normal_length;
@@ -443,7 +443,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(int side,
   for (int ii = 0; ii != 3; ++ii)
     t_normal(ii) = normal_master_ptr[ii];
 
-  const double normal_length = sqrt(t_normal(i) * t_normal(i));
+  const double normal_length = std::sqrt(t_normal(i) * t_normal(i));
   t_normal(i) = t_normal(i) / normal_length;
   commonDataSimpleContact->areaMaster = 0.5 * normal_length;
 
@@ -3367,7 +3367,7 @@ SimpleContactProblem::OpGetNormalSlaveALE::doWork(int side, EntityType type,
       FTensor::levi_civita(i, j, k) * tangent_0_slave(j) * tangent_1_slave(k);
 
   const double normal_length =
-      sqrt(normal_original_slave(i) * normal_original_slave(i));
+      std::sqrt(normal_original_slave(i) * normal_original_slave(i));
   normal_original_slave(i) = normal_original_slave(i) / normal_length;
 
   commonDataSimpleContact->areaSlave = 0.5 * normal_length;
@@ -3424,7 +3424,7 @@ SimpleContactProblem::OpGetNormalMasterALE::doWork(int side, EntityType type,
       FTensor::levi_civita(i, j, k) * tangent_0_master(j) * tangent_1_master(k);
 
   const double normal_length =
-      sqrt(normal_original_master(i) * normal_original_master(i));
+      std::sqrt(normal_original_master(i) * normal_original_master(i));
   normal_original_master(i) = normal_original_master(i) / normal_length;
 
   commonDataSimpleContact->areaMaster = 0.5 * normal_length;
@@ -3467,9 +3467,7 @@ MoFEMErrorCode SimpleContactProblem::OpContactTractionSlaveSlave_dX::iNtegrate(
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
 
-  auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
-                         FTensor::Tensor1<double *, 3> t_1,
-                         FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [](auto t_N, auto t_1, auto t_2) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
@@ -3552,9 +3550,7 @@ MoFEMErrorCode SimpleContactProblem::OpContactTractionMasterSlave_dX::iNtegrate(
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
 
-  auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
-                         FTensor::Tensor1<double *, 3> t_1,
-                         FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [](auto t_N, auto t_1, auto t_2) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
@@ -3648,9 +3644,7 @@ SimpleContactProblem::OpContactTractionMasterMaster_dX::iNtegrate(
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
 
-  auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
-                         FTensor::Tensor1<double *, 3> t_1,
-                         FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [](auto t_N, auto t_1, auto t_2) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
@@ -3742,9 +3736,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalDerIntCompFunSlaveSlave_dX::iNtegrate(
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
 
-  auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
-                         FTensor::Tensor1<double *, 3> t_1,
-                         FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [](auto t_N, auto t_1, auto t_2) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
@@ -4126,9 +4118,7 @@ SimpleContactProblem::OpContactMaterialMasterOnFaceLhs_dX_dX::iNtegrate(
     return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
   };
 
-  auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
-                         FTensor::Tensor1<double *, 3> t_1,
-                         FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [](auto t_N, auto t_1, auto t_2) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
@@ -4199,9 +4189,7 @@ SimpleContactProblem::OpContactMaterialSlaveOnFaceLhs_dX_dX::iNtegrate(
     return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
   };
 
-  auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
-                         FTensor::Tensor1<double *, 3> t_1,
-                         FTensor::Tensor1<double *, 3> t_2) {
+  auto make_vec_der = [](auto t_N, auto t_1, auto t_2) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;

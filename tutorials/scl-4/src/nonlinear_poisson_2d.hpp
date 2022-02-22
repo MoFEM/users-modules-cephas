@@ -120,7 +120,7 @@ public:
       CHKERR MatSetValues(getSNESB(), row_data, col_data, &locLhs(0, 0),
                           ADD_VALUES);
       // revert back row indices to the original
-      row_data.getIndices().data().swap(row_indices.data());
+      row_data.getIndices().swap(row_indices);
     }
 
     MoFEMFunctionReturn(0);
@@ -215,7 +215,7 @@ public:
       CHKERR VecSetOption(getSNESf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
       CHKERR VecSetValues(getSNESf(), data, &*locRhs.begin(), ADD_VALUES);
       // revert back the indices
-      data.getIndices().data().swap(row_indices.data());
+      data.getIndices().swap(row_indices);
     }
 
     MoFEMFunctionReturn(0);

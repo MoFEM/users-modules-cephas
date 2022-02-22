@@ -118,8 +118,8 @@ ArcLengthCtx::ArcLengthCtx(MoFEM::Interface &m_field,
     }
     dLambda = 0;
     dIag = 0;
-    ghosTdLambda = ghost_d_lambda;
-    ghostDiag = ghost_diag;
+    ghosTdLambda = SmartPetscObj<Vec>(ghost_d_lambda);
+    ghostDiag = SmartPetscObj<Vec>(ghost_diag);
     MoFEMFunctionReturn(0);
   };
 
@@ -780,7 +780,7 @@ MoFEMErrorCode SphericalArcLengthControl::calculateDxAndDlambda(Vec x) {
 MoFEMErrorCode
 SphericalArcLengthControl::calculateInitDlambda(double *dlambda) {
   ArcFunctionBegin;
-  *dlambda = sqrt(pow(arcPtrRaw->s, 2) /
+  *dlambda = std::sqrt(pow(arcPtrRaw->s, 2) /
                   (pow(arcPtrRaw->beta, 2) * arcPtrRaw->F_lambda2));
   if (!(*dlambda == *dlambda)) {
     MOFEM_LOG("WORLD", Sev::error)

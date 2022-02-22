@@ -140,17 +140,17 @@ int main(int argc, char *argv[]) {
     ThermalElement::TimeSeriesMonitor monitor(m_field, "THEMP_SERIES", "TEMP");
 
     // preprocess
-    ts_ctx.get_preProcess_to_do_IFunction().push_back(&update_velocities);
-    ts_ctx.get_preProcess_to_do_IFunction().push_back(&my_dirichlet_bc);
-    ts_ctx.get_preProcess_to_do_IJacobian().push_back(&my_dirichlet_bc);
+    ts_ctx.getPreProcessIFunction().push_back(&update_velocities);
+    ts_ctx.getPreProcessIFunction().push_back(&my_dirichlet_bc);
+    ts_ctx.getPreProcessIJacobian().push_back(&my_dirichlet_bc);
 
     // and temperature element functions
     CHKERR thermal_elements.setTimeSteppingProblem(ts_ctx, "TEMP", "TEMP_RATE");
 
     // postprocess
-    ts_ctx.get_postProcess_to_do_IFunction().push_back(&my_dirichlet_bc);
-    ts_ctx.get_postProcess_to_do_IJacobian().push_back(&my_dirichlet_bc);
-    ts_ctx.get_postProcess_to_do_Monitor().push_back(&monitor);
+    ts_ctx.getPostProcessIFunction().push_back(&my_dirichlet_bc);
+    ts_ctx.getPostProcessIJacobian().push_back(&my_dirichlet_bc);
+    ts_ctx.getPostProcessMonitor().push_back(&monitor);
 
     CHKERR TSSetIFunction(ts, F, TsSetIFunction, &ts_ctx);
     CHKERR TSSetIJacobian(ts, A, A, TsSetIJacobian, &ts_ctx);
