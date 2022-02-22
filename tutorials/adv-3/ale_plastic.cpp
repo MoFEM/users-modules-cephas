@@ -152,7 +152,7 @@ int order = 2;
 // for rotating body
 double penalty = 1e4;
 double density = 1.0;
-array<double, 3> angular_velocity{0, 0, 1};
+array<double, 3> angular_velocity{0, 0, 0.0};
 
 inline long double hardening(long double tau, double temp) {
   return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
@@ -263,7 +263,29 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->setFieldOrder("TAU", order - 1);
   CHKERR simple->setFieldOrder("EP", order - 1);
 
+  // auto my_function = [&](boost::shared_ptr<FieldEntity> ent_ptr) {
+  //   MoFEMFunctionBeginHot;
+  //   auto field_data = ent_ptr->getEntFieldData();
+  //   auto ent = ent_ptr->getEnt();
+  //   double coords[3];
+  //   CHKERR mField.get_moab().get_coords(&ent, 1, coords);
+
+  //   for (auto &v : field_data) 
+  //     v = std::ceil(coords[1] * 10 + coords[0] * 10);
+
+  //   MoFEMFunctionReturnHot(0);
+  // };
+
+
   CHKERR simple->setUp();
+
+  // mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(my_function, "EP");
+  // mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(my_function, "TAU");
+
+  // for (_IT_GET_DOFS_FIELD_BY_NAME_FOR_LOOP_(mField, "EP", dof)) {
+  //   if ((*dof)->getEntType() == MBTRI)
+  //     cerr << (*dof)->getFieldData() << endl;
+  // }
 
   MoFEMFunctionReturn(0);
 }
@@ -353,7 +375,7 @@ MoFEMErrorCode Example::createCommonData() {
                          ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                          : 1;
-
+    auto &Is = commonDataPtr->Is;
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
     auto t_D_axiator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
@@ -368,6 +390,8 @@ MoFEMErrorCode Example::createCommonData() {
     t_D_deviator(i, j, k, l) =
         2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
     t_D(i, j, k, l) = t_D_axiator(i, j, k, l) + t_D_deviator(i, j, k, l);
+
+    Is(i, j, k, l) = (t_kd(i, k) ^ t_kd(j, l)) / 4.;
 
     MoFEMFunctionReturn(0);
   };

@@ -12,7 +12,7 @@ merge surface all
 
 surface all scheme trimesh 
 #surface all scheme map
-surface all size .9
+surface all size .99
 mesh surface all
 
 block 1 add curve 14 18 12
@@ -33,7 +33,9 @@ block 2 attribute index 3 0.
 #block 2 attribute index 2 -0.05         
 #block 2 attribute index 3 0. 
 
-delete body 1 4
+# delete body 1 4
+
+delete body 4
 
 save as "/Users/karollewandowski/mofem_install/mofem-cephas/mofem/users_modules/tutorials/adv-3/meshes/adv3_plast_2D.cub" overwrite
 #delete mesh
