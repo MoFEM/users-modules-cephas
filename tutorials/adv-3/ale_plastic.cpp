@@ -250,6 +250,7 @@ MoFEMErrorCode Example::setupProblem() {
     base = LASTBASE;
     break;
   }
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_H1", &test_H1, PETSC_NULL);
 
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
@@ -509,9 +510,7 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBeginHot;
 
     // pipeline.push_back(new OpSetPiolaTransformOnBoundary());
-
     // domainSideFe->getRuleHook = [](double, double, double) { return -1; };
-
     // if (SPACE_DIM == 2) {
     //   auto det_ptr = boost::make_shared<VectorDouble>();
     //   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -609,7 +608,8 @@ MoFEMErrorCode Example::OPs() {
     if (is_with_ALE && test_convection) {
       pipeline.push_back(
           new OpCalculateTensor2SymmetricFieldGradient<SPACE_DIM, SPACE_DIM>(
-              "EP", commonDataPtr->plasticGradStrainPtr));
+              "EP", commonDataPtr->plasticGradStrainPtr,
+              test_H1 ? MBVERTEX : MBTRI));
       pipeline.push_back(new OpCalculateScalarFieldGradient<SPACE_DIM>(
           "TAU", commonDataPtr->plasticGradTauPtr));
       pipeline.push_back(
@@ -1003,7 +1003,8 @@ MoFEMErrorCode Example::tsSolve() {
         "TAU", commonDataPtr->getPlasticTauPtr()));
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
-            "EP", commonDataPtr->getPlasticStrainPtr()));
+            "EP", commonDataPtr->getPlasticStrainPtr(),
+            test_H1 ? MBVERTEX : MBTRI));
 
     if (is_large_strains) {
 

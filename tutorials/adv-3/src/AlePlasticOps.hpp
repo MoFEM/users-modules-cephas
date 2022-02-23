@@ -325,11 +325,12 @@ OpVolumeSideCalculateEP::OpVolumeSideCalculateEP(
     : DomainSideEleOp(field_name, field_name, DomainSideEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-  if constexpr (SPACE_DIM == 3)
+  if (test_H1)
+    doEntities[MBVERTEX] = true;
+  else if constexpr (SPACE_DIM == 3)
     doEntities[MBHEX] = doEntities[MBTET] = true;
   else
     doEntities[MBTRI] = doEntities[MBQUAD] = true;
-  // doEntities[MBEDGE] = true;
 }
 
 MoFEMErrorCode OpVolumeSideCalculateEP::doWork(int side, EntityType type,
@@ -383,7 +384,9 @@ OpVolumeSideCalculateTAU::OpVolumeSideCalculateTAU(
     : DomainSideEleOp(field_name, field_name, DomainSideEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-  if constexpr (SPACE_DIM == 3)
+  if (test_H1)
+    doEntities[MBVERTEX] = true;
+  else if constexpr (SPACE_DIM == 3)
     doEntities[MBHEX] = doEntities[MBTET] = true;
   else
     doEntities[MBTRI] = doEntities[MBQUAD] = true;
@@ -396,7 +399,7 @@ MoFEMErrorCode OpVolumeSideCalculateTAU::doWork(int side, EntityType type,
 
   const size_t nb_dofs = data.getIndices().size();
   // data.getFieldData().size()
-  if (true) {
+  if (nb_dofs) {
     int nb_gauss_pts = getGaussPts().size2();
     int nb_in_loop = getFEMethod()->nInTheLoop;
 
@@ -432,9 +435,9 @@ MoFEMErrorCode OpCalculateJumpOnSkeleton::doWork(int side, EntityType type,
 
   EntityHandle ent = getFEEntityHandle();
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-
+  const size_t nb_dofs = data.getIndices().size();
   // if (side == 0) {
-  if (true) {
+  if (nb_dofs) {
 
     const size_t nb_integration_pts = getGaussPts().size2();
 
@@ -682,10 +685,7 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
     auto t_X_dot_n = getFTensor0FromVec(*commonDataPtr->velocityDotNormalPtr);
     auto t_tau_jump = getFTensor0FromVec(*commonDataPtr->plasticTauJumpPtr);
 
-    // const size_t nb_integration_pts2 = data.getN().size1();
     const size_t nb_integration_pts = getGaussPts().size2();
-    // const size_t nb_base_functions = data.getN().size2();
-    // const size_t nb_integration_pts = tau_N_l.size1();
     const size_t nb_base_functions =
         commonDataPtr->rowBaseSideMap[LEFT_SIDE].size2();
 
@@ -833,15 +833,6 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
 
       for (size_t cc = 0; cc != nb_cols / size_symm; ++cc) {
 
-        // t_mat_rr(i, j, k, l) -= alpha * t_row_base_l * t_col_base_r *
-        //                         t_diff_plastic_strain(i, j, k, l);
-        // t_mat_rl(i, j, k, l) += alpha * t_row_base_l * t_col_base_l *
-        //                         t_diff_plastic_strain(i, j, k, l);
-        // t_mat_lr(i, j, k, l) += alpha * t_row_base_r * t_col_base_r *
-        //                         t_diff_plastic_strain(i, j, k, l);
-        // t_mat_ll(i, j, k, l) -= alpha * t_row_base_r * t_col_base_l *
-        //                         t_diff_plastic_strain(i, j, k, l);
-
         t_mat_rr(i, j, k, l) -= (alpha * t_row_base_l * t_col_base_r) *
                                 Is(i, j, m, n) *
                                 t_diff_plastic_strain(m, n, k, l);
@@ -855,12 +846,11 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
                                 Is(i, j, m, n) *
                                 t_diff_plastic_strain(m, n, k, l);
 
-
         ++t_mat_rr;
         ++t_mat_rl;
         ++t_mat_lr;
         ++t_mat_ll;
-        // }
+
         ++t_col_base_r;
         ++t_col_base_l;
       }
