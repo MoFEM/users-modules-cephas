@@ -111,7 +111,7 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
     MoFEMFunctionReturn(0);
   }
   
-  BitRefLevel &getBitRefLevel() { return bIt; };
+  BitRefLevel getBitRefLevel() { return bIt; };
   MoFEMErrorCode addElementsToDM(SmartPetscObj<DM> dm) {
     MoFEMFunctionBeginHot;
     this->dM = dm;

@@ -33,7 +33,7 @@ struct GenericElementInterface {
   virtual MoFEMErrorCode getCommandLineParameters() { return 0; };
   virtual MoFEMErrorCode addElementFields() = 0;
   virtual MoFEMErrorCode createElements() = 0;
-  virtual BitRefLevel &getBitRefLevel() = 0;
+  virtual BitRefLevel getBitRefLevel() { return BitRefLevel().set(); };
   virtual BitRefLevel getBitRefLevelMask() { return BitRefLevel().set(); };
   virtual MoFEMErrorCode setOperators() = 0;
   virtual MoFEMErrorCode addElementsToDM(SmartPetscObj<DM> dm) = 0;

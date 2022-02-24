@@ -123,7 +123,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
     MoFEMFunctionReturnHot(0);
   };
 
-  BitRefLevel &getBitRefLevel() { return bIt; };
+  BitRefLevel getBitRefLevel() { return bIt; };
   MoFEMErrorCode addElementsToDM(SmartPetscObj<DM> dm) {
     MoFEMFunctionBeginHot;
     this->dM = dm;
