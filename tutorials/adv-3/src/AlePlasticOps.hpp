@@ -309,8 +309,9 @@ MoFEMErrorCode OpCalculateVelocityOnSkeleton::doWork(int side, EntityType type,
 
       t_omega(i) = Omega(i, j) * t_coords(j);
       t_X_dot_n =
-          t_omega(j) * t_normal(j); 
-
+          t_omega(j) * t_normal(j);
+      // t_X_dot_n = 1;
+      
       ++t_X_dot_n;
       ++t_coords;
       ++t_omega;
@@ -1050,6 +1051,11 @@ MoFEMErrorCode OpPostProcAleSkeleton::doWork(int side, EntityType type,
   auto th_velocity = get_tag("VELOCITY", 3);
   auto th_rotation = get_tag("ROTATION", 3);
   auto th_strain_jump = get_tag("EP_JUMP", 9);
+#ifndef NDEBUG
+  auto th_normal = get_tag("NORMAL", 3);
+  auto t_normal = getFTensor1Normal();
+  t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+#endif // NDEBUG
 
   auto t_plastic_strain_jump = getFTensor2SymmetricFromMat<SPACE_DIM>(
       *commonDataPtr->plasticStrainJumpPtr);
@@ -1074,6 +1080,10 @@ MoFEMErrorCode OpPostProcAleSkeleton::doWork(int side, EntityType type,
     CHKERR set_tag(th_tau_jump, gg, set_scalar(tau_jump));
     CHKERR set_tag(th_velocity, gg, set_vector(t_omega));
     CHKERR set_tag(th_rotation, gg, set_vector(rot_disp));
+
+#ifndef NDEBUG
+    CHKERR set_tag(th_normal, gg, set_vector(t_normal));
+#endif // NDEBUG
 
     t_plastic_strain_jump(i, j) *= t_X_dot_n;
     CHKERR set_tag(th_strain_jump, gg, set_matrix_3d(t_plastic_strain_jump));

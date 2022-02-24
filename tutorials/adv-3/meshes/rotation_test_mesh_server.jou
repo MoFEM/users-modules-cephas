@@ -1,0 +1,7 @@
+#!python
+cubit.cmd('reset')
+
+cubit.cmd('play "/Users/karollewandowski/mofem_install/mofem-cephas/mofem/users_modules/tutorials/adv-3/meshes/rotation_test_mesh.jou"')
+
+import os
+os.system("scp -Cp /Users/karollewandowski/mofem_install/mofem-cephas/mofem/users_modules/tutorials/adv-3/meshes/adv3_plast_2D.cub karol@cactus.eng.gla.ac.uk:~/mofem_install/mofem-cephas/mofem/users_modules/tutorials/adv-3/meshes/adv3_plast_2D.cub")
