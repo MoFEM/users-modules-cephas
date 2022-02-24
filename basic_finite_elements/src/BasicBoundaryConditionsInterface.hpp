@@ -16,6 +16,8 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
+// TODO: This is still work in progress
+
 #ifndef __BASICBOUNDARYCONDIONSINTERFACE_HPP__
 #define __BASICBOUNDARYCONDIONSINTERFACE_HPP__
 
@@ -121,7 +123,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
     MoFEMFunctionReturnHot(0);
   };
 
-  BitRefLevel &getElementBitRefLevel() { return bIt; };
+  BitRefLevel &getBitRefLevel() { return bIt; };
   MoFEMErrorCode addElementsToDM(SmartPetscObj<DM> dm) {
     MoFEMFunctionBeginHot;
     this->dM = dm;

@@ -1,4 +1,6 @@
 /** \file NonlinearElasticElementInterface.hpp
+* \example NonlinearElasticElementInterface.hpp
+
   \brief Header file for NonlinearElasticElementInterface element implementation
 */
 
@@ -109,7 +111,7 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
     MoFEMFunctionReturn(0);
   }
   
-  BitRefLevel &getElementBitRefLevel() { return bIt; };
+  BitRefLevel &getBitRefLevel() { return bIt; };
   MoFEMErrorCode addElementsToDM(SmartPetscObj<DM> dm) {
     MoFEMFunctionBeginHot;
     this->dM = dm;

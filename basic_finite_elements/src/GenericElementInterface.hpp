@@ -30,22 +30,33 @@ struct GenericElementInterface {
   GenericElementInterface() {}
   virtual ~GenericElementInterface() {}
 
-  virtual MoFEMErrorCode getCommandLineParameters() = 0;
+  virtual MoFEMErrorCode getCommandLineParameters() { return 0; };
   virtual MoFEMErrorCode addElementFields() = 0;
   virtual MoFEMErrorCode createElements() = 0;
-  virtual BitRefLevel &getElementBitRefLevel() = 0;
+  virtual BitRefLevel &getBitRefLevel() = 0;
+  virtual BitRefLevel getBitRefLevelMask() { return BitRefLevel().set(); };
   virtual MoFEMErrorCode setOperators() = 0;
   virtual MoFEMErrorCode addElementsToDM(SmartPetscObj<DM> dm) = 0;
 
   // virtual MoFEMErrorCode setupSolverKSP() = 0;
-  //   virtual MoFEMErrorCode setupSolverTAO() = 0;
-  virtual MoFEMErrorCode setupSolverJacobianSNES() = 0;
-  virtual MoFEMErrorCode setupSolverFunctionSNES() = 0;
+  // virtual MoFEMErrorCode setupSolverTAO() = 0;
+
+  virtual MoFEMErrorCode setupSolverJacobianSNES() {
+    MoFEMFunctionBeginHot;
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
+    MoFEMFunctionReturnHot(0);
+  };
+
+  virtual MoFEMErrorCode setupSolverFunctionSNES() {
+    MoFEMFunctionBeginHot;
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
+    MoFEMFunctionReturnHot(0);
+  };
 
   virtual MoFEMErrorCode setupSolverJacobianTS(const TSType type) = 0;
   virtual MoFEMErrorCode setupSolverFunctionTS(const TSType type) = 0;
 
-  virtual MoFEMErrorCode updateElementVariables() = 0;
+  virtual MoFEMErrorCode updateElementVariables() { return 0; };
   virtual MoFEMErrorCode postProcessElement(int step) = 0;
 };
 
