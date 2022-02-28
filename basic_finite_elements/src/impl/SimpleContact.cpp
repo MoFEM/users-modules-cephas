@@ -4464,6 +4464,7 @@ SimpleContactProblem::OpContactPressureError::doWork(int side, EntityType type,
   auto t_coords = getFTensor1CoordsAtGaussPts();
 
   double nb_int_points = getGaussPts().size2();
+  cerr << "nb_int_points " << nb_int_points << "\n";
   for (int gg = 0; gg != nb_int_points; gg++) {
     double alpha = vol * t_w;
     // evaluate exact value

@@ -410,7 +410,7 @@ struct SimpleContactProblem {
    *
    */
   MoFEMErrorCode addContactPressureErrorElement(
-      const string element_name, const string lagrange_field_name,
+      const string element_name, const string spatial_positions_field_name, const string lagrange_field_name,
       const string error_field_name, Range &slave_tris) {
     MoFEMFunctionBegin;
 
@@ -419,6 +419,9 @@ struct SimpleContactProblem {
     if (slave_tris.size() > 0) {
 
       // data
+      CHKERR mField.modify_finite_element_add_field_data(spatial_positions_field_name,
+                                                         lagrange_field_name);
+
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          lagrange_field_name);
 

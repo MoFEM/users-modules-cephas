@@ -569,7 +569,7 @@ int main(int argc, char *argv[]) {
         "MESH_NODE_POSITIONS", slave_tris);
 
     if (error_check)
-      contact_problem->addContactPressureErrorElement("CONTACT_ERROR_ELEM", "LAGMULT", "ERROR",
+      contact_problem->addContactPressureErrorElement("CONTACT_ERROR_ELEM", "SPATIAL_POSITION", "LAGMULT", "ERROR",
                                        slave_tris);
 
     CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
