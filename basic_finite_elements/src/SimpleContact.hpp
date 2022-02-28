@@ -419,8 +419,8 @@ struct SimpleContactProblem {
     if (slave_tris.size() > 0) {
 
       // data
-      CHKERR mField.modify_finite_element_add_field_data(spatial_positions_field_name,
-                                                         lagrange_field_name);
+      CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                         spatial_positions_field_name);
 
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          lagrange_field_name);
