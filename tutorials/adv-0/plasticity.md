@@ -50,7 +50,7 @@ poisson_ratio=0.3
 hardening=2
 yield_stress=200
 
-number_of_steps=75
+number_of_steps=80
 nb_elastic_steps=30
 max_von_misses_fisrt_elastic_step = 4.647031123
 
@@ -78,6 +78,8 @@ absolute_tolerance=1e-12
 -large_strains 0 \
 -scale 1 \
 -order 2 \
+-Qinf 0 \
+-b_iso 0 \
 -young_modulus {young_modulus} \
 -poisson_ratio {poisson_ratio} \
 -hardening {hardening} \
