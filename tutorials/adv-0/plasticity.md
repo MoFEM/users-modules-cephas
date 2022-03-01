@@ -19,11 +19,9 @@ wd=!pwd
 print(home_dir)
 print(wd)
 
-import os
-os.system('/usr/bin/Xvfb :%d -screen 0 1024x768x24 &' % os.getuid())
-os.environ['DISPLAY'] = ':%d' % os.getuid()
-os.environ['PYVISTA_USE_IPYVTK'] = 'true'
-print(os.environ['DISPLAY'])
+from pyvirtualdisplay import Display
+display = Display(backend="xvfb", visible=False, size=(800, 600))
+display.start()
 
 # log file
 log_file='log'
