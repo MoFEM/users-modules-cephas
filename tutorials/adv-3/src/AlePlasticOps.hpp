@@ -310,7 +310,8 @@ MoFEMErrorCode OpCalculateVelocityOnSkeleton::doWork(int side, EntityType type,
       t_omega(i) = Omega(i, j) * t_coords(j);
       t_X_dot_n =
           t_omega(j) * t_normal(j);
-      // t_X_dot_n = 1;
+      //FIXME:
+      // t_X_dot_n = 1; 
       
       ++t_X_dot_n;
       ++t_coords;
@@ -520,7 +521,7 @@ OpDomainSideGetColData::doWork(int row_side, int col_side, EntityType row_type,
   const size_t nb_dofs = row_data.getIndices().size();
   const int nb_in_loop = getFEMethod()->nInTheLoop;
 
-  EntityType ent_types[] = {MBTRI, MBQUAD};
+  array<EntityType, 2> ent_types{MBTRI, MBQUAD};
   if constexpr (SPACE_DIM == 3) {
     ent_types[0] = MBHEX;
     ent_types[1] = MBTET;

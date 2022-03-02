@@ -1,5 +1,5 @@
 #!python
-cubit.cmd('reset')
+cubit.reset()
 
 cubit.cmd('play "/Users/karollewandowski/mofem_install/mofem-cephas/mofem/users_modules/tutorials/adv-3/meshes/rotation_test_mesh.jou"')
 
