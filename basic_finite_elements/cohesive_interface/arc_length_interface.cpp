@@ -638,7 +638,7 @@ int main(int argc, char *argv[]) {
     DirichletDisplacementBc my_dirichlet_bc(m_field, "DISPLACEMENT", Aij, D, F);
     CHKERR m_field.get_problem("ELASTIC_MECHANICS",
                                &my_dirichlet_bc.problemPtr);
-    CHKERR my_dirichlet_bc.iNitalize();
+    CHKERR my_dirichlet_bc.iNitialize();
     boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>);
     boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>);
     NonlinearElasticElement elastic(m_field, 2);

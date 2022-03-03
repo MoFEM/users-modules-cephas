@@ -48,8 +48,10 @@ static MoFEMErrorCode set_numered_dofs_on_ents(
 
 DirichletDisplacementBc::DirichletDisplacementBc(MoFEM::Interface &m_field,
                                                  const std::string &field_name,
-                                                 Mat Aij, Vec X, Vec F, string blockset_name)
-    : mField(m_field), fieldName(field_name), blocksetName(blockset_name), dIag(1) {
+                                                 Mat Aij, Vec X, Vec F,
+                                                 string blockset_name)
+    : mField(m_field), fieldName(field_name), blocksetName(blockset_name),
+      dIag(1) {
   snes_B = Aij;
   snes_x = X;
   snes_f = F;
@@ -59,7 +61,8 @@ DirichletDisplacementBc::DirichletDisplacementBc(MoFEM::Interface &m_field,
 };
 
 DirichletDisplacementBc::DirichletDisplacementBc(MoFEM::Interface &m_field,
-                                                 const std::string &field_name, string blockset_name)
+                                                 const std::string &field_name,
+                                                 string blockset_name)
     : mField(m_field), fieldName(field_name), blocksetName(blockset_name),
       dIag(1) {
   snes_B = PETSC_NULL;
@@ -75,34 +78,27 @@ MoFEMErrorCode DirichletDisplacementBc::getBcDataFromSetsAndBlocks(
 
   MoFEMFunctionBegin;
 
-  // sets kinetic boundary conditions by blockset.
-  bool flag_cubit_disp = false;
+  // Loop over meshsets with Dirichlet boundary condition on displacements
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
            mField, NODESET | DISPLACEMENTSET, it)) {
-    flag_cubit_disp = true;
+    bc_data.push_back(DataFromBc());
+    DisplacementCubitBcData mydata;
+    CHKERR bc_data.back().getBcData(mydata, &(*it));
+    CHKERR bc_data.back().getEntitiesFromBc(mField, &(*it));
   }
-  // Loop over meshsets with Dirichlet boundary condition on displacements
-  if (flag_cubit_disp) {
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             mField, NODESET | DISPLACEMENTSET, it)) {
+  // Loop over blocksets with DISPLACEMENT (default) boundary condition
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+    if (it->getName().compare(0, blocksetName.length(), blocksetName) == 0) {
       bc_data.push_back(DataFromBc());
-      DisplacementCubitBcData mydata;
+      std::vector<double> mydata;
       CHKERR bc_data.back().getBcData(mydata, &(*it));
       CHKERR bc_data.back().getEntitiesFromBc(mField, &(*it));
-    }
-  } else {
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, blocksetName.length(), blocksetName) == 0) {
-        bc_data.push_back(DataFromBc());
-        std::vector<double> mydata;
-        CHKERR bc_data.back().getBcData(mydata, &(*it));
-        CHKERR bc_data.back().getEntitiesFromBc(mField, &(*it));
-      }
     }
   }
 
   MoFEMFunctionReturn(0);
 }
+
 using FTensor1 = FTensor::Tensor1<double, 3>;
 
 inline auto get_rotation_from_vector(FTensor1 &t_omega) {
@@ -116,7 +112,7 @@ inline auto get_rotation_from_vector(FTensor1 &t_omega) {
   const double angle = std::sqrt(t_omega(i) * t_omega(i));
   if (std::abs(angle) <  1e-18)  
     return t_R;
-  
+
   FTensor::Tensor2<double, 3, 3> t_Omega;
   t_Omega(i, j) = FTensor::levi_civita<double>(i, j, k) * t_omega(k);
   const double a = sin(angle) / angle;
@@ -128,7 +124,7 @@ inline auto get_rotation_from_vector(FTensor1 &t_omega) {
   return t_R;
 };
 
-inline auto get_displacement(double *coords, FTensor1 t_centr,
+inline auto get_displacement(VectorDouble3 &coords, FTensor1 t_centr,
                              FTensor1 t_normal, double theta) {
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
@@ -139,15 +135,11 @@ inline auto get_displacement(double *coords, FTensor1 t_centr,
   const double a = std::sqrt(t_normal(i) * t_normal(i));
   t_omega(i) = t_normal(i) * (theta / a);
   auto t_R = get_rotation_from_vector(t_omega);
-  FTensor1 t_delta;
+  FTensor1 t_delta, t_disp;
   t_delta(i) = t_centr(i) - t_coords(i);
-  FTensor1 t_disp;
   t_disp(i) = t_delta(i) - t_R(i, j) * t_delta(j);
 
-  VectorDouble disp_vec(3);
-  for (int dd : {0, 1, 2})
-    disp_vec(dd) = t_disp(dd);
-  return disp_vec;
+  return VectorDouble({t_disp(0), t_disp(1), t_disp(2)});
 };
 
 MoFEMErrorCode DirichletDisplacementBc::getRotationBcFromBlock(
@@ -175,7 +167,8 @@ MoFEMErrorCode DirichletDisplacementBc::getRotationBcFromBlock(
         for (int ii : {0, 1, 2})
           bc_data.back().bc_flags[ii] = mydata[6 + ii];
 
-      bc_data.back().scaled_values[0] = bc_data.back().t_normal.l2();
+      bc_data.back().scaled_values[0] = bc_data.back().initial_values[0] =
+          bc_data.back().t_normal.l2();
       bc_data.back().is_rotation = true;
     }
   }
@@ -184,26 +177,37 @@ MoFEMErrorCode DirichletDisplacementBc::getRotationBcFromBlock(
 }
 
 MoFEMErrorCode
-DirichletDisplacementBc::calculateRotationForDof(EntityHandle ent,
+DirichletDisplacementBc::calculateRotationForDof(VectorDouble3 &coords,
                                                  DataFromBc &bc_data) {
   MoFEMFunctionBegin;
-  auto apply_rotation = [&](auto &ent) {
-    MoFEMFunctionBeginHot;
-    if (bc_data.is_rotation) {
-      double coords[3];
-      CHKERR mField.get_moab().get_coords(&ent, 1, coords);
-      bc_data.scaled_values = get_displacement(coords, bc_data.t_centr,
-                                               bc_data.t_normal, bc_data.theta);
-    }
-    MoFEMFunctionReturnHot(0);
-  };
-
-  CHKERR apply_rotation(ent);
-
+  if (bc_data.is_rotation) 
+    bc_data.scaled_values = get_displacement(coords, bc_data.t_centr,
+                                             bc_data.t_normal, bc_data.theta);
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
+MoFEMErrorCode
+DirichletDisplacementBc::calculateRotationForDof(EntityHandle ent,
+                                                 DataFromBc &bc_data) {
+  MoFEMFunctionBegin;
+  VectorDouble3 coords(3);
+  CHKERR mField.get_moab().get_coords(&ent, 1, &*coords.begin());
+  CHKERR calculateRotationForDof(coords, bc_data);
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode DirichletDisplacementBc::applyScaleBcData(DataFromBc &bc_data) {
+  MoFEMFunctionBegin;
+
+  bc_data.scaled_values = bc_data.initial_values;
+  CHKERR MethodForForceScaling::applyScale(this, methodsOp,
+                                           bc_data.scaled_values);
+  // for rotation
+  bc_data.theta = bc_data.scaled_values[0];
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode DirichletDisplacementBc::iNitialize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty() || !methodsOp.empty()) {
 
@@ -213,10 +217,8 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
 
     for (auto &bc_it : bcData) {
 
-      CHKERR MethodForForceScaling::applyScale(this, methodsOp,
-                                               bc_it.scaled_values);
+      CHKERR applyScaleBcData(bc_it);
 
-      bc_it.theta = bc_it.scaled_values[0]; // for rotation only
       for (int dim = 0; dim < 3; dim++) {
 
         auto for_each_dof = [&](auto &dof) {
@@ -274,7 +276,7 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
 MoFEMErrorCode DirichletDisplacementBc::preProcess() {
   MoFEMFunctionBegin;
 
-  CHKERR iNitalize();
+  CHKERR iNitialize();
 
   if (snes_ctx == CTX_SNESNONE) {
     if (!dofsIndices.empty()) {
@@ -375,7 +377,7 @@ MoFEMErrorCode DirichletDisplacementBc::postProcess() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
+MoFEMErrorCode DirichletSpatialPositionsBc::iNitialize() {
   MoFEMFunctionBegin;
 
   if (mapZeroRows.empty() || !methodsOp.empty()) {
@@ -390,8 +392,9 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
     VectorDouble3 coords(3);
 
     for (auto &bc_it : bcData) {
-      CHKERR MethodForForceScaling::applyScale(this, methodsOp,
-                                               bc_it.scaled_values);
+
+      CHKERR applyScaleBcData(bc_it);
+
       for (int dim = 0; dim < 3; dim++) {
 
         auto for_each_dof = [&](auto &dof) {
@@ -410,7 +413,7 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
                 CHKERR mField.get_moab().get_coords(&node, 1,
                                                     &*coords.data().begin());
             }
-
+            CHKERR calculateRotationForDof(coords, bc_it);
             if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] =
                   coords[0] + bc_it.scaled_values[0];
@@ -471,12 +474,11 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
       dofsIndices[ii] = mit->first;
       dofsValues[ii] = mit->second;
     }
-
   }
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
+MoFEMErrorCode DirichletTemperatureBc::iNitialize() {
   MoFEMFunctionBegin;
 
   // function to insert temperature boundary conditions from block
@@ -565,7 +567,7 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode DirichletFixFieldAtEntitiesBc::iNitalize() {
+MoFEMErrorCode DirichletFixFieldAtEntitiesBc::iNitialize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty()) {
 
@@ -590,7 +592,6 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::iNitalize() {
       dofsIndices[ii] = mit->first;
       dofsValues[ii] = mit->second;
     }
-
   }
   MoFEMFunctionReturn(0);
 }
@@ -598,7 +599,7 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::iNitalize() {
 MoFEMErrorCode DirichletFixFieldAtEntitiesBc::preProcess() {
   MoFEMFunctionBegin;
 
-  CHKERR iNitalize();
+  CHKERR iNitialize();
   MoFEMFunctionReturn(0);
 }
 
@@ -655,6 +656,67 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::postProcess() {
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode DirichletDisplacementRemoveDofsBc::iNitialize() {
+  MoFEMFunctionBegin;
+
+  auto simple = mField.getInterface<Simple>();
+  auto prb_mng = mField.getInterface<ProblemsManager>();
+  auto field_ptr = mField.get_field_structure(fieldName);
+  const int nb_coefficients = field_ptr->getNbOfCoeffs();
+
+  bcDataPtr = boost::make_shared<vector<DataFromBc>>();
+  CHKERR getRotationBcFromBlock(*bcDataPtr);
+  CHKERR getBcDataFromSetsAndBlocks(*bcDataPtr);
+
+  auto remove_dofs_from_dirichlet_data = [&]() {
+    MoFEMFunctionBeginHot;
+    for (auto &bc_it : *bcDataPtr)
+      for (auto &ents : bc_it.bc_ents)
+        for (int i = 0; i != nb_coefficients; i++)
+          if (bc_it.bc_flags[i])
+            CHKERR prb_mng->removeDofsOnEntities(problemName,
+                                                 fieldName, ents, i, i);
+
+    MoFEMFunctionReturnHot(0);
+  };
+
+  auto remove_dofs_from_dirichlet_data_non_distributed = [&]() {
+    MoFEMFunctionBeginHot;
+    for (auto &bc_it : *bcDataPtr)
+      for (auto &ents : bc_it.bc_ents)
+        for (int i = 0; i != nb_coefficients; i++)
+          if (bc_it.bc_flags[i])
+            CHKERR prb_mng->removeDofsOnEntitiesNotDistributed(
+                problemName, fieldName, ents, i, i);
+
+    MoFEMFunctionReturnHot(0);
+  };
+
+  if (isPartitioned)
+    CHKERR remove_dofs_from_dirichlet_data();
+  else
+    CHKERR remove_dofs_from_dirichlet_data_non_distributed();
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode DirichletDisplacementRemoveDofsBc::preProcess() {
+  MoFEMFunctionBegin;
+  if (!bcDataPtr) 
+    CHKERR iNitialize();
+
+  for (auto &bc_it : *bcDataPtr) {
+    Range all_bc_ents;
+    CHKERR applyScaleBcData(bc_it);
+    auto method = getEntMethodPtr(bc_it);
+    for (auto &ents : bc_it.bc_ents)
+      all_bc_ents.merge(ents);
+    CHKERR mField.loop_entities(fieldName, *method, &all_bc_ents);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode DataFromBc::getBcData(DisplacementCubitBcData &mydata,
                                      const MoFEM::CubitMeshSets *it) {
   MoFEMFunctionBegin;
@@ -663,6 +725,7 @@ MoFEMErrorCode DataFromBc::getBcData(DisplacementCubitBcData &mydata,
   this->scaled_values[0] = mydata.data.value1;
   this->scaled_values[1] = mydata.data.value2;
   this->scaled_values[2] = mydata.data.value3;
+  this->initial_values = this->scaled_values;
   this->bc_flags[0] = (int)mydata.data.flag1;
   this->bc_flags[1] = (int)mydata.data.flag2;
   this->bc_flags[2] = (int)mydata.data.flag3;
@@ -679,10 +742,10 @@ MoFEMErrorCode DataFromBc::getBcData(std::vector<double> &mydata,
             "3 flags)");
   }
   for (unsigned int ii = 0; ii < 3; ii++) {
-    this->scaled_values[ii] = mydata[ii];
+    this->initial_values[ii] = mydata[ii];
     this->bc_flags[ii] = (int)mydata[ii + 3];
   }
-
+  scaled_values = initial_values;
   MoFEMFunctionReturn(0);
 }
 
