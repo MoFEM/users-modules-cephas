@@ -33,6 +33,9 @@ extern "C" {
     double circumcenter[3],double *xi,double *eta);
 }
 
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
+
 #include <cholesky.hpp>
 
 #include <MethodForForceScaling.hpp>
@@ -66,8 +69,16 @@ extern "C" {
 #include <HookeElement.hpp>
 #include <SpringElement.hpp>
 #include <NavierStokesElement.hpp>
-#include <SimpleContact.hpp>
 #include <SimpleRodElement.hpp>
+
+// generic interfaces
+#include <GenericElementInterface.hpp>
+
+//FIXME: fix organisation of these headers
+// #include <ElasticMaterials.hpp>
+// #include <NonlinearElasticElementInterface.hpp>
+
+#include <BasicBoundaryConditionsInterface.hpp>
 
 using namespace BasicFiniteElements;
 

@@ -20,6 +20,9 @@
 #ifndef __ELASTICMATERIALS_HPP__
 #define __ELASTICMATERIALS_HPP__
 
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
+
 #include <Hooke.hpp>
 #include <NeoHookean.hpp>
 
@@ -140,13 +143,6 @@ struct ElasticMaterials {
   }
 
   /** \brief read Elastic materials declaration for blocks and meshsets
-
-    User has to include in file header:
-    \code
-    #include <boost/program_options.hpp>
-    using namespace std;
-    namespace po = boost::program_options;
-    \endcode
 
     File parameters:
     \code

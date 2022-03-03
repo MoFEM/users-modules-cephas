@@ -457,9 +457,11 @@ MoFEMErrorCode ApproxSphere::outputResults() {
 
   CHKERR simple->deleteDM();
   CHKERR simple->deleteFiniteElements();
-
-  CHKERR mField.get_moab().write_file("out_ho_mesh.h5m");
-
+  if (mField.get_comm_size() > 1)
+    CHKERR mField.get_moab().write_file("out_ho_mesh.h5m", "MOAB",
+                                        "PARALLEL=WRITE_PART");
+  else
+    CHKERR mField.get_moab().write_file("out_ho_mesh.h5m");
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]

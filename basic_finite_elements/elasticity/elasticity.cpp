@@ -62,10 +62,6 @@ of the code, look here;
 #include <BasicFiniteElements.hpp>
 using namespace MoFEM;
 
-#include <boost/program_options.hpp>
-using namespace std;
-namespace po = boost::program_options;
-
 #include <Hooke.hpp>
 using namespace boost::numeric;
 
