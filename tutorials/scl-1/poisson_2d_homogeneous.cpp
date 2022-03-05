@@ -33,11 +33,13 @@ private:
   // Field name and approximation order
   std::string domainField;
   int oRder;
-
+  PetscBool testL2Space;
+  double pEnalty;
 };
 
 Poisson2DHomogeneous::Poisson2DHomogeneous(MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field) {}
+    : domainField("U"), mField(m_field), testL2Space(PETSC_FALSE),
+      pEnalty(1e6) {}
 
 //! [Read mesh]
 MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
@@ -55,14 +57,46 @@ MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
 MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
   MoFEMFunctionBegin;
 
-  CHKERR simpleInterface->addDomainField(domainField, H1,
-                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-
-  int oRder = 3;
+  int oRder = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
-  CHKERR simpleInterface->setFieldOrder(domainField, oRder);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &pEnalty,
+                               PETSC_NULL);
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_l2", &testL2Space,
+                             PETSC_NULL);
 
+  if (!testL2Space) {
+    CHKERR simpleInterface->addDomainField(domainField, H1,
+                                           AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  } else {
+    CHKERR simpleInterface->addDomainField(domainField, L2,
+                                           AINSWORTH_LEGENDRE_BASE, 1);
+    simpleInterface->getAddSkeletonFE() = true;
+    simpleInterface->getAddBoundaryFE() = true;
+  }
+
+  CHKERR simpleInterface->setFieldOrder(domainField, oRder);
   CHKERR simpleInterface->setUp();
+
+  auto my_function = [&](boost::shared_ptr<FieldEntity> ent_ptr) {
+    MoFEMFunctionBeginHot;
+    auto field_data = ent_ptr->getEntFieldData();
+    auto ent = ent_ptr->getEnt();
+    double coords[3];
+    CHKERR mField.get_moab().get_coords(&ent, 1, coords);
+
+    for (auto &v : field_data)
+      v = exp(-100. * (coords[1] * coords[1] + coords[0] * coords[0]));
+
+    MoFEMFunctionReturnHot(0);
+  };
+  // print field
+  // CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(my_function,
+                                                                //  domainField);
+
+  // for (_IT_GET_DOFS_FIELD_BY_NAME_FOR_LOOP_(mField, domainField, dof)) {
+  //   if ((*dof)->getEntType() == MBTRI)
+  //     cerr << (*dof)->getFieldData() << endl;
+  // }
 
   MoFEMFunctionReturn(0);
 }
@@ -77,10 +111,20 @@ MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
     std::string entity_name = it->getName();
     if (entity_name.compare(0, 18, "BOUNDARY_CONDITION") == 0) {
+
       CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                  boundary_entities, true);
     }
   }
+  // FIXME: TODO: this might need change for L2 space
+  // if (testL2Space) {
+  //   Range adj;
+  //   CHKERR mField.get_moab().get_adjacencies(boundary_entities, 2, false, adj,
+  //                                            moab::Interface::UNION);
+  //   cout << adj << endl;
+  //   boundary_entities.merge(adj);
+  // }
+
   // Add vertices to boundary entities
   Range boundary_vertices;
   CHKERR mField.get_moab().get_connectivity(boundary_entities,
@@ -88,11 +132,13 @@ MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
   boundary_entities.merge(boundary_vertices);
 
   // Remove DOFs as homogeneous boundary condition is used
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simpleInterface->getProblemName(), domainField, boundary_entities);
+  if (!testL2Space)
+    CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        simpleInterface->getProblemName(), domainField, boundary_entities);
 
   MoFEMFunctionReturn(0);
 }
+
 //! [Boundary condition]
 
 //! [Assemble system]
@@ -104,7 +150,12 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  auto side_fe_rhs = boost::make_shared<FaceSide>(mField);
+  auto side_fe_lhs = boost::make_shared<FaceSide>(mField);
 
+  side_fe_rhs->getOpPtrVector().push_back(new OpCalculateSideData(domainField));
+  side_fe_lhs->getOpPtrVector().push_back(
+      new OpCalculateSideData(domainField, domainField));
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
@@ -114,15 +165,32 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
+    // if (testL2Space)
+    //   pipeline_mng->getOpDomainLhsPipeline().push_back(
+    //       new OpSetInvJacL2ForFace(inv_jac_ptr));
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField));
-  }
-
-  { // Push operators to the Pipeline that is responsible for calculating RHS
-
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsVectorF(domainField));
+  }
+  if (testL2Space) { // Push operators to the Pipeline that is responsible for
+                     // Skeleton
+    
+    pipeline_mng->getOpSkeletonLhsPipeline().push_back(
+        new OpComputeJumpOnSkeleton(domainField, side_fe_lhs));
+    pipeline_mng->getOpSkeletonLhsPipeline().push_back(
+        new OpDomainLhsPenalty(domainField, domainField, pEnalty));
+
+    pipeline_mng->getOpSkeletonRhsPipeline().push_back(
+        new OpComputeJumpOnSkeleton(domainField, side_fe_rhs));
+    pipeline_mng->getOpSkeletonRhsPipeline().push_back(
+        new OpDomainRhsPenalty(domainField, pEnalty));
+
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpBoundaryRhs(
+    //     domainField, [&](double, double, double) { return pEnalty; }));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryLhs(domainField, domainField, side_fe_lhs, pEnalty));
   }
 
   MoFEMFunctionReturn(0);
@@ -139,6 +207,12 @@ MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
+  if (testL2Space) {
+    CHKERR pipeline_mng->setSkeletonLhsIntegrationRule(rule_lhs);
+    CHKERR pipeline_mng->setSkeletonRhsIntegrationRule(rule_rhs);
+    // CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(rule_lhs);
+    // CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(rule_rhs);
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -160,6 +234,8 @@ MoFEMErrorCode Poisson2DHomogeneous::solveSystem() {
   auto D = smartVectorDuplicate(F);
 
   // Solve the system
+  // CHKERR pipeline_mng->loopFiniteElements();
+
   CHKERR KSPSolve(ksp_solver, F, D);
 
   // Scatter result data on the mesh
@@ -177,6 +253,10 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getSkeletonRhsFE().reset();
+  pipeline_mng->getSkeletonLhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
 
   auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
   post_proc_fe->generateReferenceElementMesh();

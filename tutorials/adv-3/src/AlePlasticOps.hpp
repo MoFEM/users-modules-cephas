@@ -508,6 +508,7 @@ OpDomainSideGetColData::OpDomainSideGetColData(
     const std::string row_name, const std::string col_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomainSideEleOp(row_name, col_name, DomainSideEleOp::OPROWCOL),
+    // : DomainSideEleOp(row_name, col_name, DomainSideEleOp::OPCOL), // FIXME: test this
       commonDataPtr(common_data_ptr) {
 }
 
