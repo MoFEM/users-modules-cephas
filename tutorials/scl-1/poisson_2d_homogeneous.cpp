@@ -89,10 +89,10 @@ MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
 
     MoFEMFunctionReturnHot(0);
   };
-  // print field
   // CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(my_function,
                                                                 //  domainField);
 
+  // print field
   // for (_IT_GET_DOFS_FIELD_BY_NAME_FOR_LOOP_(mField, domainField, dof)) {
   //   if ((*dof)->getEntType() == MBTRI)
   //     cerr << (*dof)->getFieldData() << endl;
@@ -132,7 +132,7 @@ MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
   boundary_entities.merge(boundary_vertices);
 
   // Remove DOFs as homogeneous boundary condition is used
-  if (!testL2Space)
+  // if (!testL2Space)
     CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
         simpleInterface->getProblemName(), domainField, boundary_entities);
 
@@ -203,15 +203,16 @@ MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
 
   auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
   auto rule_rhs = [](int, int, int p) -> int { return p; };
+  auto rule_2 = [](int, int, int){ return 2; };
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
   if (testL2Space) {
-    CHKERR pipeline_mng->setSkeletonLhsIntegrationRule(rule_lhs);
-    CHKERR pipeline_mng->setSkeletonRhsIntegrationRule(rule_rhs);
-    // CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(rule_lhs);
-    // CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(rule_rhs);
+    CHKERR pipeline_mng->setSkeletonLhsIntegrationRule(rule_2);
+    CHKERR pipeline_mng->setSkeletonRhsIntegrationRule(rule_2);
+    CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(rule_2);
+    CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(rule_2);
   }
 
   MoFEMFunctionReturn(0);
