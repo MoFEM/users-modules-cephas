@@ -199,6 +199,9 @@ struct OpCalculateSideData : public OpFaceSide {
     if (row_type == MBTRI || row_type == MBQUAD)
       if (col_type == MBTRI || col_type == MBQUAD) {
         auto nb_in_loop = getFEMethod()->nInTheLoop;
+        // auto nb_in_loop = getFEMethod()->getFaceSense();
+        auto nb_in_loop2 = getEdgeSideNumber();
+        auto nb_in_loop3 = getDirection();
         auto &vec_u = uSideMap[nb_in_loop];
         indicesColSideMap[nb_in_loop] = col_data.getIndices();
         colBaseSideMap[nb_in_loop] = col_data.getN();
@@ -213,14 +216,12 @@ struct OpCalculateSideData : public OpFaceSide {
 struct OpComputeJumpOnSkeleton : public OpSkeletonEle {
   OpComputeJumpOnSkeleton(std::string field_name,
                           boost::shared_ptr<FaceSide> side_fe)
-      : OpSkeletonEle(field_name, OpSkeletonEle::OPROW), sideFe(side_fe) {
-    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-    doEntities[MBVERTEX] = true;
+      : OpSkeletonEle(NOSPACE, OpSkeletonEle::OPLAST), sideFe(side_fe) {
+
   }
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
-    const size_t nb_dofs = data.getIndices().size();
 
     indicesRowSideMap.clear();
     rowBaseSideMap.clear();
@@ -285,7 +286,7 @@ public:
       const double a = t_w * area * mPenalty;
       auto u_jump = u_l(gg) - u_r(gg);
       for (int rr = 0; rr != nb_dofs; rr++) {
-        // locRhs[rr] += t_base * body_source * a;
+
         nf_r[rr] += t_base_l * u_jump * a;
         nf_l[rr] -= t_base_r * u_jump * a;
         ++t_base_l;
@@ -317,6 +318,7 @@ public:
         mPenalty(penalty) {
     std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
     doEntities[MBVERTEX] = true;
+    sYmm = false;
   }
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -371,10 +373,10 @@ public:
 
         for (size_t cc = 0; cc != nb_cols; ++cc) {
 
-          *t_mat_rr -= alpha * t_row_base_l * t_col_base_r;
-          *t_mat_rl += alpha * t_row_base_l * t_col_base_l;
-          *t_mat_lr += alpha * t_row_base_r * t_col_base_r;
-          *t_mat_ll -= alpha * t_row_base_r * t_col_base_l;
+          *t_mat_rr += alpha * t_row_base_r * t_col_base_r;
+          *t_mat_rl -= alpha * t_row_base_r * t_col_base_l;
+          *t_mat_lr -= alpha * t_row_base_l * t_col_base_r;
+          *t_mat_ll += alpha * t_row_base_l * t_col_base_l;
 
           ++t_mat_rr;
           ++t_mat_rl;
