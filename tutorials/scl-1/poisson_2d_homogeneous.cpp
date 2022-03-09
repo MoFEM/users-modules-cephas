@@ -105,7 +105,7 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(inv_jac_ptr));
+        new OpCalculateHOJacForFace(inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
 
