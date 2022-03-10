@@ -487,9 +487,9 @@ MoFEMErrorCode OpCalculateJumpOnSkeleton::doWork(int side, EntityType type,
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
       t_plastic_strain_jump(i, j) =
-          t_plastic_strain_l(i, j) - t_plastic_strain_r(i, j);
+          t_plastic_strain_r(i, j) - t_plastic_strain_l(i, j);
 
-      t_tau_jump = t_tau_l - t_tau_r;
+      t_tau_jump = t_tau_r - t_tau_l;
 
       ++t_tau_jump;
       ++t_tau_l;
@@ -615,8 +615,8 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
         // t_nf_l(i, j) -=
         //     (t_base_r * alpha) * Is(i, j, k, l) * t_plastic_strain_jump(k, l);
         // FIXME: we are penalising off diagonals more than the rest
-        t_nf_r(i, j) += (t_base_l * alpha) * t_plastic_strain_jump(i, j);
-        t_nf_l(i, j) -= (t_base_r * alpha) * t_plastic_strain_jump(i, j);
+        t_nf_r(i, j) += (t_base_r * alpha) * t_plastic_strain_jump(i, j);
+        t_nf_l(i, j) -= (t_base_l * alpha) * t_plastic_strain_jump(i, j);
 
         ++t_nf_l;
         ++t_nf_r;
@@ -699,8 +699,8 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
       // assemble tau
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
-        nf_r[bb] += t_base_l * t_tau_jump * alpha;
-        nf_l[bb] -= t_base_r * t_tau_jump * alpha;
+        nf_r[bb] += t_base_r * t_tau_jump * alpha;
+        nf_l[bb] -= t_base_l * t_tau_jump * alpha;
         ++t_base_l;
         ++t_base_r;
       }
@@ -836,16 +836,16 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
 
       for (size_t cc = 0; cc != nb_cols / size_symm; ++cc) {
 
-        t_mat_rr(i, j, k, l) -= (alpha * t_row_base_l * t_col_base_r) *
+        t_mat_rr(i, j, k, l) += (alpha * t_row_base_r * t_col_base_r) *
                                 Is(i, j, m, n) *
                                 t_diff_plastic_strain(m, n, k, l);
-        t_mat_rl(i, j, k, l) += (alpha * t_row_base_l * t_col_base_l) *
+        t_mat_rl(i, j, k, l) -= (alpha * t_row_base_r * t_col_base_l) *
                                 Is(i, j, m, n) *
                                 t_diff_plastic_strain(m, n, k, l);
-        t_mat_lr(i, j, k, l) += (alpha * t_row_base_r * t_col_base_r) *
+        t_mat_lr(i, j, k, l) -= (alpha * t_row_base_l * t_col_base_r) *
                                 Is(i, j, m, n) *
                                 t_diff_plastic_strain(m, n, k, l);
-        t_mat_ll(i, j, k, l) -= (alpha * t_row_base_r * t_col_base_l) *
+        t_mat_ll(i, j, k, l) += (alpha * t_row_base_l * t_col_base_l) *
                                 Is(i, j, m, n) *
                                 t_diff_plastic_strain(m, n, k, l);
 
@@ -943,10 +943,10 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
 
       for (size_t cc = 0; cc != nb_cols; ++cc) {
 
-        *t_mat_rr -= alpha * t_row_base_l * t_col_base_r;
-        *t_mat_rl += alpha * t_row_base_l * t_col_base_l;
-        *t_mat_lr += alpha * t_row_base_r * t_col_base_r;
-        *t_mat_ll -= alpha * t_row_base_r * t_col_base_l;
+        *t_mat_rr += alpha * t_row_base_r * t_col_base_r;
+        *t_mat_rl -= alpha * t_row_base_r * t_col_base_l;
+        *t_mat_lr -= alpha * t_row_base_l * t_col_base_r;
+        *t_mat_ll += alpha * t_row_base_l * t_col_base_l;
 
         ++t_mat_rr;
         ++t_mat_rl;
