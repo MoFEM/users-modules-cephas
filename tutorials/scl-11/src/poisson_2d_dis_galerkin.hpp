@@ -59,15 +59,14 @@ struct OpCalculateSideData : public OpFaceSide {
                         EntityType col_type, EntData &row_data,
                         EntData &col_data) {
     MoFEMFunctionBeginHot;
-    if (row_type == MBTRI || row_type == MBQUAD)
-      if (col_type == MBTRI || col_type == MBQUAD) {
-        auto nb_in_loop = getFEMethod()->nInTheLoop;
-
-        indicesColSideMap[nb_in_loop] = col_data.getIndices();
-        colBaseSideMap[nb_in_loop] = col_data.getN();
-        indicesRowSideMap[nb_in_loop] = row_data.getIndices();
-        rowBaseSideMap[nb_in_loop] = row_data.getN();
-      }
+    
+    if ((CN::Dimension(row_type) == 2) && (CN::Dimension(col_type) == 2)) {
+      auto nb_in_loop = getFEMethod()->nInTheLoop;
+      indicesColSideMap[nb_in_loop] = col_data.getIndices();
+      colBaseSideMap[nb_in_loop] = col_data.getN();
+      indicesRowSideMap[nb_in_loop] = row_data.getIndices();
+      rowBaseSideMap[nb_in_loop] = row_data.getN();
+    }
 
     MoFEMFunctionReturnHot(0);
   }
