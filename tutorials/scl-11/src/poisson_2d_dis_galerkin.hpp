@@ -19,7 +19,6 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-
 // Define name if it has not been defined yet
 #ifndef __POISSON2DISGALERKIN_HPP__
 #define __POISSON2DISGALERKIN_HPP__
@@ -97,90 +96,60 @@ public:
 
     CHKERR loopSideFaces("dFE", *sideFe);
 
-    EntityHandle ent = getFEEntityHandle();
-    auto t_w = getFTensor0IntegrationWeight();
-
-    array<std::array<VectorInt, 2> *, 2> idx_map{&indicesRowSideMap,
-                                                 &indicesColSideMap};
-    const size_t nb_rows = (*idx_map[ROW])[LEFT_SIDE].size();
-    const size_t nb_cols = (*idx_map[COL])[LEFT_SIDE].size();
-
-#ifndef NDEBUG
-    if (*(idx_map[ROW])[LEFT_SIDE].size() != *(idx_map[ROW])[RIGHT_SIDE].size())
-      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
-              "Code is implemented that number of base functions on both sides "
-              "is the same");
-    if (*(idx_map[COL])[LEFT_SIDE].size() != *(idx_map[COL])[RIGHT_SIDE].size())
-      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
-              "Code is implemented that number of base functions on both sides "
-              "is the same");
-#endif 
-
-    if (!nb_rows)
-      MoFEMFunctionReturnHot(0);
-
-    std::array<std::array<MatrixDouble, 2>, 2> locMat;
-    for (auto side0 : {LEFT_SIDE, RIGHT_SIDE})
-      for (auto side1 : {LEFT_SIDE, RIGHT_SIDE}) {
-        locMat[side0][side1].resize(nb_rows, nb_cols, false);
-        locMat[side0][side1].clear();
-      }
-
     const size_t nb_integration_pts = getGaussPts().size2();
-    const size_t nb_row_base_functions = rowBaseSideMap.at(LEFT_SIDE).size2();
+    constexpr std::array<int, 4> sign{1, -1, -1, 1};
 
-    // shape funcs
-    auto t_row_base_l = get_ntensor(rowBaseSideMap.at(LEFT_SIDE));
-    auto t_row_base_r = get_ntensor(rowBaseSideMap.at(RIGHT_SIDE));
+    for (auto s0 : {LEFT_SIDE, RIGHT_SIDE}) {
 
+      const auto nb_rows = indicesRowSideMap[s0].size();
 
-    for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-      const double alpha = getMeasure() * t_w * mPenalty;
+      if (nb_rows) {
 
-      auto t_mat_rr = locMat[RIGHT_SIDE][RIGHT_SIDE].data().begin();
-      auto t_mat_rl = locMat[RIGHT_SIDE][LEFT_SIDE].data().begin();
-      auto t_mat_lr = locMat[LEFT_SIDE][RIGHT_SIDE].data().begin();
-      auto t_mat_ll = locMat[LEFT_SIDE][LEFT_SIDE].data().begin();
+        const auto nb_row_base_functions = rowBaseSideMap[s0].size2();
+        for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
 
-      size_t rr = 0;
-      for (; rr != nb_rows; ++rr) {
+          const auto s = sign[s0 * 2 + s1];
 
-        auto t_col_base_l = get_ntensor(colBaseSideMap.at(LEFT_SIDE), gg, 0);
-        auto t_col_base_r = get_ntensor(colBaseSideMap.at(RIGHT_SIDE), gg, 0);
+          const auto nb_cols = indicesColSideMap[s1].size();
+          locMat.resize(nb_rows, nb_cols, false);
+          locMat.clear();
 
-        for (size_t cc = 0; cc != nb_cols; ++cc) {
+          auto t_row_base = get_ntensor(rowBaseSideMap[s0]);
+          auto t_w = getFTensor0IntegrationWeight();
 
-          *t_mat_rr += alpha * t_row_base_r * t_col_base_r;
-          *t_mat_rl -= alpha * t_row_base_r * t_col_base_l;
-          *t_mat_lr -= alpha * t_row_base_l * t_col_base_r;
-          *t_mat_ll += alpha * t_row_base_l * t_col_base_l;
+          for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
-          ++t_mat_rr;
-          ++t_mat_rl;
-          ++t_mat_lr;
-          ++t_mat_ll;
-          ++t_col_base_r;
-          ++t_col_base_l;
+            const double alpha = s * getMeasure() * t_w * mPenalty;
+            auto t_mat = locMat.data().begin();
+
+            size_t rr = 0;
+            for (; rr != nb_rows; ++rr) {
+              const double val = alpha * t_row_base;
+              auto t_col_base = get_ntensor(colBaseSideMap[s1], gg, 0);
+              for (size_t cc = 0; cc != nb_cols; ++cc) {
+                *t_mat += val * t_col_base;
+                ++t_col_base;
+                ++t_mat;
+              }
+
+              ++t_row_base;
+            }
+
+            for (; rr < nb_row_base_functions; ++rr) {
+              ++t_row_base;
+            }
+
+            ++t_w;
+          }
+
+          CHKERR ::MatSetValues(getKSPB(), indicesRowSideMap[s0].size(),
+                                &*indicesRowSideMap[s0].begin(),
+                                indicesColSideMap[s1].size(),
+                                &*indicesColSideMap[s1].begin(),
+                                &*locMat.data().begin(), ADD_VALUES);
         }
-
-        ++t_row_base_r;
-        ++t_row_base_l;
       }
-      for (; rr < nb_row_base_functions; ++rr) {
-        ++t_row_base_r;
-        ++t_row_base_l;
-      }
-
-      ++t_w;
     }
-
-    for (auto s0 : {LEFT_SIDE, RIGHT_SIDE})
-      for (auto s1 : {LEFT_SIDE, RIGHT_SIDE})
-        CHKERR ::MatSetValues(getKSPB(), (*idx_map[ROW])[s0].size(),
-                              &*(*idx_map[ROW])[s0].begin(),
-                              (*idx_map[COL])[s1].size(),
-                              &*(*idx_map[COL])[s1].begin(),
-                              &*locMat[s0][s1].data().begin(), ADD_VALUES);
 
     MoFEMFunctionReturn(0);
   }
@@ -188,7 +157,7 @@ public:
 private:
   boost::shared_ptr<FaceSide> sideFe;
   const double mPenalty;
-
+  MatrixDouble locMat;
 };
 
 struct OpL2BoundaryLhs : public OpEdgeEle {
@@ -214,7 +183,7 @@ public:
     if (!nb_cols)
       MoFEMFunctionReturnHot(0);
 
-    MatrixDouble locMat(nb_rows, nb_cols, false);
+    locMat.resize(nb_rows, nb_cols, false);
     locMat.clear();
 
     const size_t nb_integration_pts = getGaussPts().size2();
@@ -229,14 +198,13 @@ public:
       for (; rr != nb_rows; ++rr) {
 
         auto t_col_base = get_ntensor(colBaseSideMap.at(0), gg, 0);
-    
+
         for (size_t cc = 0; cc != nb_cols; ++cc) {
 
           *t_mat += alpha * t_row_base * t_col_base;
 
           ++t_mat;
           ++t_col_base;
-  
         }
 
         ++t_row_base;
@@ -260,6 +228,7 @@ private:
   MatrixDouble locBoundaryLhs;
   boost::shared_ptr<FaceSide> sideFE;
   double pEnalty;
+  MatrixDouble locMat;
 };
 
 }; // namespace Poisson2DiscontGalerkinOperators
