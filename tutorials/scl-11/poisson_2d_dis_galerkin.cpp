@@ -119,7 +119,6 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
     pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
     pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(new OpSetInvJacL2ForFace(inv_jac_ptr));
-    // pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
   };
 
   add_base_ops(pipeline_mng->getOpDomainLhsPipeline());
@@ -132,6 +131,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
       new Poisson2DHomogeneousOperators::OpDomainRhsVectorF(domainField));
 
   // Push operators to the Pipeline for Skeleton
+  add_base_ops(side_fe_lhs->getOpPtrVector());
   side_fe_lhs->getOpPtrVector().push_back(
       new OpCalculateSideData(domainField, domainField));
 

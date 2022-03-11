@@ -45,6 +45,11 @@ std::array<VectorInt, 2> indicesRowSideMap;
 std::array<VectorInt, 2> indicesColSideMap;
 std::array<MatrixDouble, 2> rowBaseSideMap;
 std::array<MatrixDouble, 2> colBaseSideMap;
+std::array<MatrixDouble, 2> rowDiffBaseSideMap;
+std::array<MatrixDouble, 2> colDiffBaseSideMap;
+
+constexpr double phi =
+    -1; // 1 - symmetric Nitsche, 0 - nonsymmetric, -1 antisymmetric
 
 struct OpCalculateSideData : public OpFaceSide {
 
@@ -59,13 +64,15 @@ struct OpCalculateSideData : public OpFaceSide {
                         EntityType col_type, EntData &row_data,
                         EntData &col_data) {
     MoFEMFunctionBeginHot;
-    
+
     if ((CN::Dimension(row_type) == 2) && (CN::Dimension(col_type) == 2)) {
       auto nb_in_loop = getFEMethod()->nInTheLoop;
       indicesColSideMap[nb_in_loop] = col_data.getIndices();
       colBaseSideMap[nb_in_loop] = col_data.getN();
+      colDiffBaseSideMap[nb_in_loop] = col_data.getDiffN();
       indicesRowSideMap[nb_in_loop] = row_data.getIndices();
       rowBaseSideMap[nb_in_loop] = row_data.getN();
+      rowDiffBaseSideMap[nb_in_loop] = row_data.getN();
     }
 
     MoFEMFunctionReturnHot(0);
@@ -82,6 +89,17 @@ template <typename T> inline auto get_ntensor(T &base_mat, int gg, int bb) {
   return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(ptr);
 };
 
+template <typename T> inline auto get_diff_ntensor(T &base_mat) {
+  double *ptr = &*base_mat.data().begin();
+  return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>(ptr, &ptr[1]);
+};
+
+template <typename T>
+inline auto get_diff_ntensor(T &base_mat, int gg, int bb) {
+  double *ptr = &base_mat(gg, 2 * bb);
+  return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>(ptr, &ptr[1]);
+};
+
 struct OpDomainLhsPenalty : public OpSkeletonEle {
 public:
   OpDomainLhsPenalty(boost::shared_ptr<FaceSide> side_fe,
@@ -95,8 +113,11 @@ public:
 
     CHKERR loopSideFaces("dFE", *sideFe);
 
+    auto t_normal = getFTensor1Normal();
+    t_normal.normalize();
+
     const size_t nb_integration_pts = getGaussPts().size2();
-    constexpr std::array<int, 4> sign{1, -1, -1, 1};
+    constexpr std::array<int, 4> sign_array{1, -1, -1, 1};
 
     for (auto s0 : {LEFT_SIDE, RIGHT_SIDE}) {
 
@@ -107,27 +128,45 @@ public:
         const auto nb_row_base_functions = rowBaseSideMap[s0].size2();
         for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
 
-          const auto s = sign[s0 * 2 + s1];
+          const auto sign = sign_array[s0 * 2 + s1];
+          const auto sign_row = sign_array[s0];
+          const auto sign_col = sign_array[s1];
 
           const auto nb_cols = indicesColSideMap[s1].size();
           locMat.resize(nb_rows, nb_cols, false);
           locMat.clear();
 
           auto t_row_base = get_ntensor(rowBaseSideMap[s0]);
+          auto t_diff_row_base = get_diff_ntensor(rowDiffBaseSideMap[0]);
           auto t_w = getFTensor0IntegrationWeight();
 
           for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
-            const double alpha = s * getMeasure() * t_w * mPenalty;
+            const double alpha = getMeasure() * t_w;
+
             auto t_mat = locMat.data().begin();
 
             size_t rr = 0;
             for (; rr != nb_rows; ++rr) {
-              const double val = alpha * t_row_base;
               auto t_col_base = get_ntensor(colBaseSideMap[s1], gg, 0);
+              auto t_diff_col_base =
+                  get_diff_ntensor(colDiffBaseSideMap[s1], gg, 0);
               for (size_t cc = 0; cc != nb_cols; ++cc) {
-                *t_mat += val * t_col_base;
+
+                // TODO: This is not effient constants should be precalculated
+                // outside loops
+
+                *t_mat += (alpha * mPenalty * sign) * t_row_base * t_col_base;
+                *t_mat -= (alpha * sign) * t_row_base *
+                          (t_diff_col_base(i) * t_normal(i));
+                *t_mat -= (alpha * sign * phi) *
+                          (t_diff_row_base(i) * t_normal(i)) * t_col_base;
+                *t_mat +=
+                    (alpha * sign * phi) * (t_diff_row_base(i) * t_normal(i)) *
+                    (t_diff_col_base(i) * t_normal(i)) / (mPenalty * mPenalty);
+
                 ++t_col_base;
+                ++t_diff_col_base;
                 ++t_mat;
               }
 
@@ -136,6 +175,7 @@ public:
 
             for (; rr < nb_row_base_functions; ++rr) {
               ++t_row_base;
+              ++t_diff_row_base;
             }
 
             ++t_w;
@@ -170,11 +210,14 @@ public:
 
     CHKERR loopSideFaces("dFE", *sideFE);
 
-    EntityHandle ent = getFEEntityHandle();
+    auto t_normal = getFTensor1Normal();
+    t_normal.normalize();
+
     auto t_w = getFTensor0IntegrationWeight();
 
     // shape funcs
-    auto t_row_base = get_ntensor(rowBaseSideMap.at(0));
+    auto t_row_base = get_ntensor(rowBaseSideMap[0]);
+    auto t_diff_row_base = get_diff_ntensor(rowDiffBaseSideMap[0]);
 
     const size_t nb_rows = indicesRowSideMap[0].size();
     const size_t nb_cols = indicesColSideMap[0].size();
@@ -186,30 +229,41 @@ public:
     locMat.clear();
 
     const size_t nb_integration_pts = getGaussPts().size2();
-    const size_t nb_row_base_functions = rowBaseSideMap.at(0).size2();
+    const size_t nb_row_base_functions = rowBaseSideMap[0].size2();
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-      const double alpha = getMeasure() * t_w * pEnalty;
+      const double alpha = getMeasure() * t_w;
 
       auto t_mat = locMat.data().begin();
 
       size_t rr = 0;
       for (; rr != nb_rows; ++rr) {
 
-        auto t_col_base = get_ntensor(colBaseSideMap.at(0), gg, 0);
+        auto t_col_base = get_ntensor(colBaseSideMap[0], gg, 0);
+        auto t_diff_col_base = get_diff_ntensor(colDiffBaseSideMap[0], gg, 0);
 
         for (size_t cc = 0; cc != nb_cols; ++cc) {
 
-          *t_mat += alpha * t_row_base * t_col_base;
+          // TODO: This is not effient constants should be precalculated
+          // outside loops
+
+          *t_mat += (alpha * pEnalty) * t_row_base * t_col_base;
+          *t_mat -= alpha * t_row_base * (t_diff_col_base(i) * t_normal(i));
+          *t_mat -=
+              alpha * phi * (t_diff_row_base(i) * t_normal(i)) * t_col_base;
+          *t_mat += alpha * phi * (t_diff_row_base(i) * t_normal(i)) *
+                    (t_diff_col_base(i) * t_normal(i)) / (pEnalty * pEnalty);
 
           ++t_mat;
           ++t_col_base;
+          ++t_diff_col_base;
         }
 
         ++t_row_base;
       }
       for (; rr < nb_row_base_functions; ++rr) {
         ++t_row_base;
+        ++t_diff_row_base;
       }
 
       ++t_w;
