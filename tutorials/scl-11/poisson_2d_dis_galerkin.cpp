@@ -1,3 +1,24 @@
+/**
+ * \file poisson_2d_dis_galerkin.cpp
+ * \example poisson_2d_dis_galerkin.cpp
+ *
+ * Example of implementation for discontinuous Galerkin.
+ */
+
+/* This file is part of MoFEM.
+ * MoFEM is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * MoFEM is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+ * License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 #include <BasicFiniteElements.hpp>
 #include <poisson_2d_dis_galerkin.hpp>
 #include <poisson_2d_homogeneous.hpp>
@@ -114,14 +135,13 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
   side_fe_lhs->getOpPtrVector().push_back(
       new OpCalculateSideData(domainField, domainField));
 
+  // Push operators to the Pipeline for Skeleton
   pipeline_mng->getOpSkeletonLhsPipeline().push_back(
-      new OpComputeJumpOnSkeleton(domainField, side_fe_lhs));
-  pipeline_mng->getOpSkeletonLhsPipeline().push_back(
-      new OpDomainLhsPenalty(domainField, domainField, pEnalty));
+      new OpDomainLhsPenalty(side_fe_lhs, pEnalty));
 
   // Push operators to the Pipeline for Boundary
   pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      new OpL2BoundaryLhs(domainField, domainField, side_fe_lhs, pEnalty));
+      new OpL2BoundaryLhs(side_fe_lhs, pEnalty));
 
   MoFEMFunctionReturn(0);
 }

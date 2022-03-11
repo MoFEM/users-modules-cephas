@@ -1,3 +1,25 @@
+/**
+ * \file poisson_2d_dis_galerkin.hpp
+ * \example poisson_2d_dis_galerkin.hpp
+ *
+ * Example of implementation for discontinuous Galerkin.
+ */
+
+/* This file is part of MoFEM.
+ * MoFEM is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * MoFEM is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+ * License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
+
 // Define name if it has not been defined yet
 #ifndef __POISSON2DISGALERKIN_HPP__
 #define __POISSON2DISGALERKIN_HPP__
@@ -20,10 +42,10 @@ FTensor::Index<'i', 2> i;
 
 enum ElementSide { LEFT_SIDE = 0, RIGHT_SIDE };
 // data for skeleton computation
-map<int, VectorInt> indicesRowSideMap;
-map<int, VectorInt> indicesColSideMap;
-map<int, MatrixDouble> rowBaseSideMap;
-map<int, MatrixDouble> colBaseSideMap;
+std::array<VectorInt, 2> indicesRowSideMap;
+std::array<VectorInt, 2> indicesColSideMap;
+std::array<MatrixDouble, 2> rowBaseSideMap;
+std::array<MatrixDouble, 2> colBaseSideMap;
 
 struct OpCalculateSideData : public OpFaceSide {
 
@@ -41,6 +63,7 @@ struct OpCalculateSideData : public OpFaceSide {
     if (row_type == MBTRI || row_type == MBQUAD)
       if (col_type == MBTRI || col_type == MBQUAD) {
         auto nb_in_loop = getFEMethod()->nInTheLoop;
+
         indicesColSideMap[nb_in_loop] = col_data.getIndices();
         colBaseSideMap[nb_in_loop] = col_data.getN();
         indicesRowSideMap[nb_in_loop] = row_data.getIndices();
@@ -49,31 +72,6 @@ struct OpCalculateSideData : public OpFaceSide {
 
     MoFEMFunctionReturnHot(0);
   }
-};
-
-struct OpComputeJumpOnSkeleton : public OpSkeletonEle {
-  OpComputeJumpOnSkeleton(std::string field_name,
-                          boost::shared_ptr<FaceSide> side_fe)
-      : OpSkeletonEle(NOSPACE, OpSkeletonEle::OPLAST), sideFe(side_fe) {}
-
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-    MoFEMFunctionBegin;
-
-    indicesRowSideMap.clear();
-    rowBaseSideMap.clear();
-
-    CHKERR loopSideFaces("dFE", *sideFe);
-
-#ifndef NDEBUG
-    if (rowBaseSideMap.size() != 2)
-      MOFEM_LOG("WORLD", Sev::error) << " Problem with the side Map";
-#endif // NDEBUG
-
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  boost::shared_ptr<FaceSide> sideFe;
 };
 
 template <typename T> inline auto get_ntensor(T &base_mat) {
@@ -88,37 +86,37 @@ template <typename T> inline auto get_ntensor(T &base_mat, int gg, int bb) {
 
 struct OpDomainLhsPenalty : public OpSkeletonEle {
 public:
-  OpDomainLhsPenalty(std::string row_field_name, std::string col_field_name,
+  OpDomainLhsPenalty(boost::shared_ptr<FaceSide> side_fe,
                      const double penalty = 1e-8)
-      : OpSkeletonEle(row_field_name, col_field_name, OpSkeletonEle::OPROWCOL),
-        mPenalty(penalty) {
-    // sYmm = false;
-  }
+      : OpSkeletonEle(NOSPACE, OpEdgeEle::OPLAST), sideFe(side_fe),
+        mPenalty(penalty) {}
 
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 
-    if (row_type != MBVERTEX || col_type != MBVERTEX)
-      MoFEMFunctionReturnHot(0);
+    CHKERR loopSideFaces("dFE", *sideFe);
 
     EntityHandle ent = getFEEntityHandle();
     auto t_w = getFTensor0IntegrationWeight();
 
-    array<map<int, VectorInt>, 2> idx_map;
-    idx_map[ROW] = indicesRowSideMap;
-    idx_map[COL] = indicesColSideMap;
+    array<std::array<VectorInt, 2> *, 2> idx_map{&indicesRowSideMap,
+                                                 &indicesColSideMap};
+    const size_t nb_rows = (*idx_map[ROW])[LEFT_SIDE].size();
+    const size_t nb_cols = (*idx_map[COL])[LEFT_SIDE].size();
 
-    // shape funcs
-    auto t_row_base_l = get_ntensor(rowBaseSideMap.at(LEFT_SIDE));
-    auto t_row_base_r = get_ntensor(rowBaseSideMap.at(RIGHT_SIDE));
+#ifndef NDEBUG
+    if (*(idx_map[ROW])[LEFT_SIDE].size() != *(idx_map[ROW])[RIGHT_SIDE].size())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "Code is implemented that number of base functions on both sides "
+              "is the same");
+    if (*(idx_map[COL])[LEFT_SIDE].size() != *(idx_map[COL])[RIGHT_SIDE].size())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "Code is implemented that number of base functions on both sides "
+              "is the same");
+#endif 
 
-    const size_t nb_rows = idx_map[ROW].at(LEFT_SIDE).size();
-    const size_t nb_cols = idx_map[COL].at(LEFT_SIDE).size();
-
-    if (!nb_cols)
+    if (!nb_rows)
       MoFEMFunctionReturnHot(0);
 
     std::array<std::array<MatrixDouble, 2>, 2> locMat;
@@ -130,6 +128,11 @@ public:
 
     const size_t nb_integration_pts = getGaussPts().size2();
     const size_t nb_row_base_functions = rowBaseSideMap.at(LEFT_SIDE).size2();
+
+    // shape funcs
+    auto t_row_base_l = get_ntensor(rowBaseSideMap.at(LEFT_SIDE));
+    auto t_row_base_r = get_ntensor(rowBaseSideMap.at(RIGHT_SIDE));
+
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w * mPenalty;
@@ -173,58 +176,40 @@ public:
 
     for (auto s0 : {LEFT_SIDE, RIGHT_SIDE})
       for (auto s1 : {LEFT_SIDE, RIGHT_SIDE})
-        CHKERR ::MatSetValues(getKSPB(), idx_map[ROW].at(s0).size(),
-                              &*idx_map[ROW].at(s0).begin(),
-                              idx_map[COL].at(s1).size(),
-                              &*idx_map[COL].at(s1).begin(),
+        CHKERR ::MatSetValues(getKSPB(), (*idx_map[ROW])[s0].size(),
+                              &*(*idx_map[ROW])[s0].begin(),
+                              (*idx_map[COL])[s1].size(),
+                              &*(*idx_map[COL])[s1].begin(),
                               &*locMat[s0][s1].data().begin(), ADD_VALUES);
 
     MoFEMFunctionReturn(0);
   }
 
 private:
+  boost::shared_ptr<FaceSide> sideFe;
   const double mPenalty;
+
 };
 
 struct OpL2BoundaryLhs : public OpEdgeEle {
 public:
-  OpL2BoundaryLhs(std::string row_field_name, std::string col_field_name,
-                boost::shared_ptr<FaceSide> side_fe, double penalty)
-      : OpEdgeEle(row_field_name, col_field_name, OpEdgeEle::OPROWCOL),
-        sideFE(side_fe), pEnalty(penalty) {
-    sYmm = true;
-  }
+  OpL2BoundaryLhs(boost::shared_ptr<FaceSide> side_fe, double penalty)
+      : OpEdgeEle(NOSPACE, OpEdgeEle::OPLAST), sideFE(side_fe),
+        pEnalty(penalty) {}
 
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data) {
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
-
-    const int nb_row_dofs = row_data.getIndices().size();
-    const int nb_col_dofs = col_data.getIndices().size();
-
-    if (row_type != MBVERTEX || col_type != MBVERTEX)
-      MoFEMFunctionReturnHot(0);
-
-    indicesRowSideMap.clear();
-    indicesColSideMap.clear();
-    rowBaseSideMap.clear();
-    colBaseSideMap.clear();
 
     CHKERR loopSideFaces("dFE", *sideFE);
 
     EntityHandle ent = getFEEntityHandle();
     auto t_w = getFTensor0IntegrationWeight();
 
-    array<map<int, VectorInt>, 2> idx_map;
-    idx_map[ROW] = indicesRowSideMap;
-    idx_map[COL] = indicesColSideMap;
-
     // shape funcs
     auto t_row_base = get_ntensor(rowBaseSideMap.at(0));
 
-    const size_t nb_rows = idx_map[ROW].at(0).size();
-    const size_t nb_cols = idx_map[COL].at(0).size();
+    const size_t nb_rows = indicesRowSideMap[0].size();
+    const size_t nb_cols = indicesColSideMap[0].size();
 
     if (!nb_cols)
       MoFEMFunctionReturnHot(0);
@@ -264,15 +249,15 @@ public:
     }
 
     CHKERR ::MatSetValues(
-        getKSPB(), idx_map[ROW].at(0).size(), &*idx_map[ROW].at(0).begin(),
-        idx_map[COL].at(0).size(), &*idx_map[COL].at(0).begin(),
+        getKSPB(), indicesRowSideMap[0].size(), &*indicesRowSideMap[0].begin(),
+        indicesColSideMap[0].size(), &*indicesColSideMap[0].begin(),
         &*locMat.data().begin(), ADD_VALUES);
 
     MoFEMFunctionReturn(0);
   }
 
 private:
-  MatrixDouble locBoundaryLhs, transLocBoundaryLhs;
+  MatrixDouble locBoundaryLhs;
   boost::shared_ptr<FaceSide> sideFE;
   double pEnalty;
 };
