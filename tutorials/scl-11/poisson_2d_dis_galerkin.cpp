@@ -38,8 +38,7 @@ private:
 };
 
 Poisson2DiscontGalerkin::Poisson2DiscontGalerkin(MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field),
-      pEnalty(1e6) {}
+    : domainField("U"), mField(m_field), oRder(4), pEnalty(1e6) {}
 
 //! [Read mesh]
 MoFEMErrorCode Poisson2DiscontGalerkin::readMesh() {
@@ -57,10 +56,12 @@ MoFEMErrorCode Poisson2DiscontGalerkin::readMesh() {
 MoFEMErrorCode Poisson2DiscontGalerkin::setupProblem() {
   MoFEMFunctionBegin;
 
-  int oRder = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &pEnalty,
                                PETSC_NULL);
+
+  MOFEM_LOG("WORLD", Sev::inform) << "Set order: " << oRder;
+  MOFEM_LOG("WORLD", Sev::inform) << "Set penalty: " << pEnalty;
 
   CHKERR simpleInterface->addDomainField(domainField, L2,
                                          AINSWORTH_LEGENDRE_BASE, 1);
@@ -132,7 +133,8 @@ MoFEMErrorCode Poisson2DiscontGalerkin::setIntegrationRules() {
 
   auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
   auto rule_rhs = [](int, int, int p) -> int { return p; };
-  auto rule_2 = [](int, int, int) { return 2; };
+
+  auto rule_2 = [this](int, int, int) { return 2 * oRder; };
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
