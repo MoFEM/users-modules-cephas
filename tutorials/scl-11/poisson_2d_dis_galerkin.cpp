@@ -32,8 +32,7 @@ template <> struct ElementsAndOps<2> {
 
   using SkeletonEleOp = DomainEle;
   using FaceSideEle = MoFEM::FaceElementForcesAndSourcesCoreOnSideSwitch<0>;
-  using FaceSideOp = FaceSideEle::UserDataOperator;  
-
+  using FaceSideOp = FaceSideEle::UserDataOperator;
 };
 
 constexpr int BASE_DIM = 1;
@@ -89,6 +88,7 @@ private:
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode solveSystem();
+  MoFEMErrorCode checkResults();
   MoFEMErrorCode outputResults();
 
   // MoFEM interfaces
@@ -128,7 +128,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::setupProblem() {
   MOFEM_LOG("WORLD", Sev::inform) << "Set penalty: " << penalty;
 
   CHKERR simpleInterface->addDomainField(domainField, L2,
-                                         AINSWORTH_LEGENDRE_BASE, 1);
+                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
   simpleInterface->getAddSkeletonFE() = true;
   simpleInterface->getAddBoundaryFE() = true;
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
@@ -151,7 +151,6 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
-
 
   auto add_base_ops = [&](auto &pipeline) {
     auto det_ptr = boost::make_shared<VectorDouble>();
@@ -245,6 +244,75 @@ MoFEMErrorCode Poisson2DiscontGalerkin::solveSystem() {
 }
 //! [Solve system]
 
+MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
+  MoFEMFunctionBegin;
+
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainRhsFE().reset();
+  pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getSkeletonRhsFE().reset();
+  pipeline_mng->getSkeletonLhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
+
+  auto rule = [](int, int, int p) -> int { return 2 * p; };
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule);
+
+  auto u_vals_ptr = boost::make_shared<VectorDouble>();
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateScalarFieldValues(domainField, u_vals_ptr));
+
+  auto l2_vec = createSmartVectorMPI(mField.get_comm(),
+                                     (!mField.get_comm_rank()) ? 1 : 0, 1);
+
+  auto error_op = new DomainEleOp(domainField, DomainEleOp::OPROW);
+  error_op->doWorkRhsHook = [&](DataOperator *op_ptr, int side, EntityType type,
+                                DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+    auto o = static_cast<DomainEleOp *>(op_ptr);
+
+    if (const size_t nb_dofs = data.getIndices().size()) {
+
+      const int nb_integration_pts = o->getGaussPts().size2();
+      auto t_w = o->getFTensor0IntegrationWeight();
+      auto t_val = getFTensor0FromVec(*u_vals_ptr);
+      auto t_coords = o->getFTensor1CoordsAtGaussPts();
+
+      auto t_row_base = data.getFTensor0N();
+      double error = 0;
+      for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+        const double alpha = t_w * o->getMeasure();
+        const double diff =
+            t_val - u_exact(t_coords(0), t_coords(1), t_coords(2));
+        error += alpha * pow(diff, 2);
+
+        ++t_w;
+        ++t_val;
+        ++t_coords;
+      }
+
+      CHKERR VecSetValue(l2_vec, 0, error, ADD_VALUES);
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
+  pipeline_mng->getOpDomainRhsPipeline().push_back(error_op);
+
+  CHKERR pipeline_mng->loopFiniteElements();
+
+  CHKERR VecAssemblyBegin(l2_vec);
+  CHKERR VecAssemblyEnd(l2_vec);
+
+  const double *array;
+  CHKERR VecGetArrayRead(l2_vec, &array);
+  MOFEM_LOG_C("WORLD", Sev::inform, "Error %6.4e", std::sqrt(array[0]));
+  CHKERR VecRestoreArrayRead(l2_vec, &array);
+
+  MoFEMFunctionReturn(0);
+}
+
 //! [Output results]
 MoFEMErrorCode Poisson2DiscontGalerkin::outputResults() {
   MoFEMFunctionBegin;
@@ -277,6 +345,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::runProgram() {
   CHKERR assembleSystem();
   CHKERR setIntegrationRules();
   CHKERR solveSystem();
+  CHKERR checkResults();
   CHKERR outputResults();
 
   MoFEMFunctionReturn(0);
