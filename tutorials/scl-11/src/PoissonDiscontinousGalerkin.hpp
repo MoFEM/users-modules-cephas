@@ -23,8 +23,6 @@
 #ifndef __POISSON2DISGALERKIN_HPP__
 #define __POISSON2DISGALERKIN_HPP__
 
-
-
 // Namespace that contains necessary UDOs, will be included in the main program
 namespace Poisson2DiscontGalerkinOperators {
 
@@ -53,7 +51,6 @@ struct OpCalculateSideData : public FaceSideOp {
     for (auto t = moab::CN::TypeDimensionMap[SPACE_DIM].first;
          t <= moab::CN::TypeDimensionMap[SPACE_DIM].second; ++t)
       doEntities[t] = true;
-
   }
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -100,16 +97,16 @@ inline auto get_diff_ntensor(T &base_mat, int gg, int bb) {
 
 struct OpDomainLhsPenalty : public BoundaryEleOp {
 public:
-  OpDomainLhsPenalty(boost::shared_ptr<FaceSideEle> side_fe,
+  OpDomainLhsPenalty(boost::shared_ptr<FaceSideEle> side_fe_ptr,
                      const double penalty = 1e-8)
-      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFe(side_fe),
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr),
         mPenalty(penalty) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 
-    CHKERR loopSideFaces("dFE", *sideFe);
+    CHKERR loopSideFaces("dFE", *sideFEPtr);
 
     auto t_normal = getFTensor1Normal();
     t_normal.normalize();
@@ -159,9 +156,9 @@ public:
                           (t_diff_col_base(i) * t_normal(i));
                 *t_mat += (alpha * sign_col * phi) *
                           (t_diff_row_base(i) * t_normal(i)) * t_col_base;
-                *t_mat +=
-                    (alpha * phi) * (t_diff_row_base(i) * t_normal(i)) *
-                    (t_diff_col_base(i) * t_normal(i)) / (mPenalty * mPenalty);
+                *t_mat += (alpha * phi) * (t_diff_row_base(i) * t_normal(i)) *
+                          (t_diff_col_base(i) * t_normal(i)) /
+                          (mPenalty * mPenalty);
 
                 ++t_col_base;
                 ++t_diff_col_base;
@@ -193,21 +190,21 @@ public:
   }
 
 private:
-  boost::shared_ptr<FaceSideEle> sideFe;
+  boost::shared_ptr<FaceSideEle> sideFEPtr;
   const double mPenalty;
   MatrixDouble locMat;
 };
 
 struct OpL2BoundaryLhs : public BoundaryEleOp {
 public:
-  OpL2BoundaryLhs(boost::shared_ptr<FaceSideEle> side_fe, double penalty)
-      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFE(side_fe),
+  OpL2BoundaryLhs(boost::shared_ptr<FaceSideEle> side_fe_ptr, double penalty)
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr),
         pEnalty(penalty) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
 
-    CHKERR loopSideFaces("dFE", *sideFE);
+    CHKERR loopSideFaces("dFE", *sideFEPtr);
 
     auto t_normal = getFTensor1Normal();
     t_normal.normalize();
@@ -278,10 +275,79 @@ public:
   }
 
 private:
-  MatrixDouble locBoundaryLhs;
-  boost::shared_ptr<FaceSideEle> sideFE;
+  boost::shared_ptr<FaceSideEle> sideFEPtr;
   double pEnalty;
   MatrixDouble locMat;
+};
+
+struct OpL2BoundaryRhs : public BoundaryEleOp {
+public:
+  OpL2BoundaryRhs(boost::shared_ptr<FaceSideEle> side_fe_ptr, ScalarFun fun,
+                  double penalty)
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr),
+        sourceFun(fun), pEnalty(penalty) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    CHKERR loopSideFaces("dFE", *sideFEPtr);
+
+    auto t_normal = getFTensor1Normal();
+    t_normal.normalize();
+
+    auto t_w = getFTensor0IntegrationWeight();
+
+    const size_t nb_rows = indicesRowSideMap[0].size();
+
+    if (!nb_rows)
+      MoFEMFunctionReturnHot(0);
+
+    rhsF.resize(nb_rows, false);
+    rhsF.clear();
+
+    const size_t nb_integration_pts = getGaussPts().size2();
+    const size_t nb_row_base_functions = rowBaseSideMap[0].size2();
+
+    // shape funcs
+    auto t_row_base = get_ntensor(rowBaseSideMap[0]);
+    auto t_diff_row_base = get_diff_ntensor(rowDiffBaseSideMap[0]);
+    auto t_coords = getFTensor1CoordsAtGaussPts();
+
+    for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+      const double alpha = getMeasure() * t_w;
+
+      const double source_val =
+          sourceFun(t_coords(0), t_coords(1), t_coords(2));
+
+      auto t_f = rhsF.data().begin();
+
+      size_t rr = 0;
+      for (; rr != nb_rows; ++rr) {
+        *t_f += (alpha * pEnalty) * t_row_base * source_val;
+        ++t_row_base;
+        ++t_f;
+      }
+
+      for (; rr < nb_row_base_functions; ++rr) {
+        ++t_row_base;
+      }
+
+      ++t_w;
+      ++t_coords;
+    }
+
+    CHKERR ::VecSetValues(getKSPf(), indicesRowSideMap[0].size(),
+                          &*indicesRowSideMap[0].begin(), &*rhsF.data().begin(),
+                          ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<FaceSideEle> sideFEPtr;
+  ScalarFun sourceFun;
+  double pEnalty;
+  VectorDouble rhsF;
 };
 
 }; // namespace Poisson2DiscontGalerkinOperators

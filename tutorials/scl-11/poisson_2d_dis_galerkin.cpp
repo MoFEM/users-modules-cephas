@@ -149,7 +149,6 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
-  auto side_fe_lhs = boost::make_shared<FaceSideEle>(mField);
 
   auto add_base_ops = [&](auto &pipeline) {
     auto det_ptr = boost::make_shared<VectorDouble>();
@@ -170,6 +169,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
       new OpDomainSource(domainField, source));
 
   // Push operators to the Pipeline for Skeleton
+  auto side_fe_lhs = boost::make_shared<FaceSideEle>(mField);
   add_base_ops(side_fe_lhs->getOpPtrVector());
   side_fe_lhs->getOpPtrVector().push_back(
       new OpCalculateSideData(domainField, domainField));
@@ -179,8 +179,17 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
       new OpDomainLhsPenalty(side_fe_lhs, pEnalty));
 
   // Push operators to the Pipeline for Boundary
+  auto side_bc_fe_lhs = boost::make_shared<FaceSideEle>(mField);
+  side_bc_fe_lhs->getOpPtrVector().push_back(
+      new OpCalculateSideData(domainField, domainField));
   pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      new OpL2BoundaryLhs(side_fe_lhs, pEnalty));
+      new OpL2BoundaryLhs(side_bc_fe_lhs, pEnalty));
+
+  auto side_bc_fe_rhs = boost::make_shared<FaceSideEle>(mField);
+  side_bc_fe_rhs->getOpPtrVector().push_back(
+      new OpCalculateSideData(domainField, domainField));
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpL2BoundaryRhs(side_bc_fe_rhs, u_exact, pEnalty));
 
   MoFEMFunctionReturn(0);
 }
