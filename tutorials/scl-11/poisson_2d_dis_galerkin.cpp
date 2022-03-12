@@ -36,6 +36,8 @@ template <> struct ElementsAndOps<2> {
 
 };
 
+constexpr int BASE_DIM = 1;
+constexpr int FIELD_DIM = 1;
 constexpr int SPACE_DIM = 2;
 
 using EntData = DataForcesAndSourcesCore::EntData;
@@ -46,17 +48,25 @@ using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
 using FaceSideEle = ElementsAndOps<SPACE_DIM>::FaceSideEle;
 using SkeletonEleOp = ElementsAndOps<SPACE_DIM>::SkeletonEleOp;
 using FaceSideOp = ElementsAndOps<SPACE_DIM>::FaceSideOp;
+using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
 #include <PoissonDiscontinousGalerkin.hpp>
 
+using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<BASE_DIM, FIELD_DIM, SPACE_DIM>;
+using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, FIELD_DIM>;
 
-#include <poisson_2d_homogeneous.hpp> // FIX<E: Obolete header name
+auto u_exact = [](const double x, const double y, const double) {
+  return cos(2 * x * M_PI) * cos(2 * y * M_PI);
+};
+
+auto source = [](const double x, const double y, const double) {
+  return -8 * M_PI * M_PI * cos(2 * x * M_PI) * cos(2 * y * M_PI);
+};
 
 using namespace MoFEM;
 using namespace Poisson2DiscontGalerkinOperators;
-// using namespace Poisson2DHomogeneousOperators;
-
-using PostProcFaceEle = PostProcFaceOnRefinedMesh;
 
 static char help[] = "...\n\n";
 
@@ -152,12 +162,12 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
 
   add_base_ops(pipeline_mng->getOpDomainLhsPipeline());
 
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new Poisson2DHomogeneousOperators::OpDomainLhsMatrixK(domainField,
-                                                          domainField));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpDomainGradGrad(
+      domainField, domainField,
+      [](const double, const double, const double) { return 1; }));
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new Poisson2DHomogeneousOperators::OpDomainRhsVectorF(domainField));
+      new OpDomainSource(domainField, source));
 
   // Push operators to the Pipeline for Skeleton
   add_base_ops(side_fe_lhs->getOpPtrVector());
@@ -235,7 +245,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::outputResults() {
   pipeline_mng->getBoundaryRhsFE().reset();
   pipeline_mng->getBoundaryLhsFE().reset();
 
-  auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc(domainField);
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
