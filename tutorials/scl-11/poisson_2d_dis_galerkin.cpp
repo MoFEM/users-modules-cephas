@@ -20,8 +20,12 @@
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
 #include <BasicFiniteElements.hpp>
-#include <poisson_2d_dis_galerkin.hpp>
-#include <poisson_2d_homogeneous.hpp>
+
+constexpr int SPACE_DIM = 2;
+
+#include <PoissonDiscontinousGalerkin.hpp>
+
+#include <poisson_2d_homogeneous.hpp> // FIX<E: Obolete header name
 
 using namespace MoFEM;
 using namespace Poisson2DiscontGalerkinOperators;

@@ -37,7 +37,7 @@ using EntData = DataForcesAndSourcesCore::EntData;
 namespace Poisson2DiscontGalerkinOperators {
 
 // Declare FTensor index for 2D problem
-FTensor::Index<'i', 2> i;
+FTensor::Index<'i', SPACE_DIM> i;
 
 enum ElementSide { LEFT_SIDE = 0, RIGHT_SIDE };
 // data for skeleton computation
@@ -57,7 +57,11 @@ struct OpCalculateSideData : public OpFaceSide {
       : OpFaceSide(field_name, col_field_name, OpFaceSide::OPROWCOL) {
 
     std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-    doEntities[MBTRI] = doEntities[MBQUAD] = true;
+
+    for (auto t = moab::CN::TypeDimensionMap[SPACE_DIM].first;
+         t <= moab::CN::TypeDimensionMap[SPACE_DIM].second; ++t)
+      doEntities[t] = true;
+
   }
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -66,13 +70,15 @@ struct OpCalculateSideData : public OpFaceSide {
     MoFEMFunctionBeginHot;
 
     if ((CN::Dimension(row_type) == 2) && (CN::Dimension(col_type) == 2)) {
-      auto nb_in_loop = getFEMethod()->nInTheLoop;
+      const auto nb_in_loop = getFEMethod()->nInTheLoop;
       indicesColSideMap[nb_in_loop] = col_data.getIndices();
-      colBaseSideMap[nb_in_loop] = col_data.getN();
-      colDiffBaseSideMap[nb_in_loop] = col_data.getDiffN();
       indicesRowSideMap[nb_in_loop] = row_data.getIndices();
+      colBaseSideMap[nb_in_loop] = col_data.getN();
       rowBaseSideMap[nb_in_loop] = row_data.getN();
-      rowDiffBaseSideMap[nb_in_loop] = row_data.getN();
+      colDiffBaseSideMap[nb_in_loop] = col_data.getDiffN();
+      rowDiffBaseSideMap[nb_in_loop] = row_data.getDiffN();
+    } else {
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Should not happen");
     }
 
     MoFEMFunctionReturnHot(0);
@@ -137,7 +143,7 @@ public:
           locMat.clear();
 
           auto t_row_base = get_ntensor(rowBaseSideMap[s0]);
-          auto t_diff_row_base = get_diff_ntensor(rowDiffBaseSideMap[0]);
+          auto t_diff_row_base = get_diff_ntensor(rowDiffBaseSideMap[s0]);
           auto t_w = getFTensor0IntegrationWeight();
 
           for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
@@ -157,12 +163,12 @@ public:
                 // outside loops
 
                 *t_mat += (alpha * mPenalty * sign) * t_row_base * t_col_base;
-                *t_mat -= (alpha * sign) * t_row_base *
+                *t_mat += (alpha * sign_row) * t_row_base *
                           (t_diff_col_base(i) * t_normal(i));
-                *t_mat -= (alpha * sign * phi) *
+                *t_mat += (alpha * sign_col * phi) *
                           (t_diff_row_base(i) * t_normal(i)) * t_col_base;
                 *t_mat +=
-                    (alpha * sign * phi) * (t_diff_row_base(i) * t_normal(i)) *
+                    (alpha * phi) * (t_diff_row_base(i) * t_normal(i)) *
                     (t_diff_col_base(i) * t_normal(i)) / (mPenalty * mPenalty);
 
                 ++t_col_base;
@@ -171,6 +177,7 @@ public:
               }
 
               ++t_row_base;
+              ++t_diff_row_base;
             }
 
             for (; rr < nb_row_base_functions; ++rr) {
@@ -248,8 +255,8 @@ public:
           // outside loops
 
           *t_mat += (alpha * pEnalty) * t_row_base * t_col_base;
-          *t_mat -= alpha * t_row_base * (t_diff_col_base(i) * t_normal(i));
-          *t_mat -=
+          *t_mat += alpha * t_row_base * (t_diff_col_base(i) * t_normal(i));
+          *t_mat +=
               alpha * phi * (t_diff_row_base(i) * t_normal(i)) * t_col_base;
           *t_mat += alpha * phi * (t_diff_row_base(i) * t_normal(i)) *
                     (t_diff_col_base(i) * t_normal(i)) / (pEnalty * pEnalty);
@@ -260,6 +267,7 @@ public:
         }
 
         ++t_row_base;
+        ++t_diff_row_base;
       }
       for (; rr < nb_row_base_functions; ++rr) {
         ++t_row_base;
