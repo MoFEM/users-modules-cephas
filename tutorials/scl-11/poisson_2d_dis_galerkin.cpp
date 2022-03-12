@@ -50,6 +50,10 @@ using SkeletonEleOp = ElementsAndOps<SPACE_DIM>::SkeletonEleOp;
 using FaceSideOp = ElementsAndOps<SPACE_DIM>::FaceSideOp;
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
+static double penalty = 1e6;
+static double phi =
+    -1; // 1 - symmetric Nitsche, 0 - nonsymmetric, -1 antisymmetric
+
 #include <PoissonDiscontinousGalerkin.hpp>
 
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
@@ -58,11 +62,11 @@ using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, FIELD_DIM>;
 
 auto u_exact = [](const double x, const double y, const double) {
-  return cos(2 * x * M_PI) * cos(2 * y * M_PI);
+  return x * x * y * y;
 };
 
 auto source = [](const double x, const double y, const double) {
-  return -8 * M_PI * M_PI * cos(2 * x * M_PI) * cos(2 * y * M_PI);
+  return -(2 * x * x + 2 * y * y);
 };
 
 using namespace MoFEM;
@@ -94,11 +98,10 @@ private:
   // Field name and approximation order
   std::string domainField;
   int oRder;
-  double pEnalty;
 };
 
 Poisson2DiscontGalerkin::Poisson2DiscontGalerkin(MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field), oRder(4), pEnalty(1e6) {}
+    : domainField("U"), mField(m_field), oRder(4) {}
 
 //! [Read mesh]
 MoFEMErrorCode Poisson2DiscontGalerkin::readMesh() {
@@ -117,11 +120,12 @@ MoFEMErrorCode Poisson2DiscontGalerkin::setupProblem() {
   MoFEMFunctionBegin;
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &pEnalty,
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &penalty,
                                PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-phi", &phi, PETSC_NULL);
 
   MOFEM_LOG("WORLD", Sev::inform) << "Set order: " << oRder;
-  MOFEM_LOG("WORLD", Sev::inform) << "Set penalty: " << pEnalty;
+  MOFEM_LOG("WORLD", Sev::inform) << "Set penalty: " << penalty;
 
   CHKERR simpleInterface->addDomainField(domainField, L2,
                                          AINSWORTH_LEGENDRE_BASE, 1);
@@ -129,7 +133,6 @@ MoFEMErrorCode Poisson2DiscontGalerkin::setupProblem() {
   simpleInterface->getAddBoundaryFE() = true;
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
   CHKERR simpleInterface->setUp();
-
 
   MoFEMFunctionReturn(0);
 }
@@ -176,20 +179,20 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
 
   // Push operators to the Pipeline for Skeleton
   pipeline_mng->getOpSkeletonLhsPipeline().push_back(
-      new OpDomainLhsPenalty(side_fe_lhs, pEnalty));
+      new OpDomainLhsPenalty(side_fe_lhs));
 
   // Push operators to the Pipeline for Boundary
   auto side_bc_fe_lhs = boost::make_shared<FaceSideEle>(mField);
   side_bc_fe_lhs->getOpPtrVector().push_back(
       new OpCalculateSideData(domainField, domainField));
   pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      new OpL2BoundaryLhs(side_bc_fe_lhs, pEnalty));
+      new OpL2BoundaryLhs(side_bc_fe_lhs));
 
   auto side_bc_fe_rhs = boost::make_shared<FaceSideEle>(mField);
   side_bc_fe_rhs->getOpPtrVector().push_back(
       new OpCalculateSideData(domainField, domainField));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpL2BoundaryRhs(side_bc_fe_rhs, u_exact, pEnalty));
+      new OpL2BoundaryRhs(side_bc_fe_rhs, u_exact));
 
   MoFEMFunctionReturn(0);
 }
@@ -199,10 +202,9 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
 MoFEMErrorCode Poisson2DiscontGalerkin::setIntegrationRules() {
   MoFEMFunctionBegin;
 
-  auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  auto rule_rhs = [](int, int, int p) -> int { return p; };
-
-  auto rule_2 = [this](int, int, int) { return 2 * oRder; };
+  auto rule_lhs = [](int, int, int p) -> int { return 2 * p; };
+  auto rule_rhs = [](int, int, int p) -> int { return 2 * p; };
+  auto rule_2 = [this](int, int, int) { return 2 * oRder + 1; };
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);

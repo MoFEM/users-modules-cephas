@@ -38,9 +38,6 @@ std::array<MatrixDouble, 2> colBaseSideMap;
 std::array<MatrixDouble, 2> rowDiffBaseSideMap;
 std::array<MatrixDouble, 2> colDiffBaseSideMap;
 
-constexpr double phi =
-    -1; // 1 - symmetric Nitsche, 0 - nonsymmetric, -1 antisymmetric
-
 struct OpCalculateSideData : public FaceSideOp {
 
   OpCalculateSideData(std::string field_name, std::string col_field_name)
@@ -97,10 +94,8 @@ inline auto get_diff_ntensor(T &base_mat, int gg, int bb) {
 
 struct OpDomainLhsPenalty : public BoundaryEleOp {
 public:
-  OpDomainLhsPenalty(boost::shared_ptr<FaceSideEle> side_fe_ptr,
-                     const double penalty = 1e-8)
-      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr),
-        mPenalty(penalty) {}
+  OpDomainLhsPenalty(boost::shared_ptr<FaceSideEle> side_fe_ptr)
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
@@ -151,14 +146,14 @@ public:
                 // TODO: This is not effient constants should be precalculated
                 // outside loops
 
-                *t_mat += (alpha * mPenalty * sign) * t_row_base * t_col_base;
+                *t_mat += (alpha * penalty * sign) * t_row_base * t_col_base;
                 *t_mat += (alpha * sign_row) * t_row_base *
                           (t_diff_col_base(i) * t_normal(i));
                 *t_mat += (alpha * sign_col * phi) *
                           (t_diff_row_base(i) * t_normal(i)) * t_col_base;
                 *t_mat += (alpha * phi) * (t_diff_row_base(i) * t_normal(i)) *
                           (t_diff_col_base(i) * t_normal(i)) /
-                          (mPenalty * mPenalty);
+                          (penalty * penalty);
 
                 ++t_col_base;
                 ++t_diff_col_base;
@@ -191,15 +186,13 @@ public:
 
 private:
   boost::shared_ptr<FaceSideEle> sideFEPtr;
-  const double mPenalty;
   MatrixDouble locMat;
 };
 
 struct OpL2BoundaryLhs : public BoundaryEleOp {
 public:
-  OpL2BoundaryLhs(boost::shared_ptr<FaceSideEle> side_fe_ptr, double penalty)
-      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr),
-        pEnalty(penalty) {}
+  OpL2BoundaryLhs(boost::shared_ptr<FaceSideEle> side_fe_ptr)
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -243,12 +236,12 @@ public:
           // TODO: This is not effient constants should be precalculated
           // outside loops
 
-          *t_mat += (alpha * pEnalty) * t_row_base * t_col_base;
+          *t_mat += (alpha * penalty) * t_row_base * t_col_base;
           *t_mat += alpha * t_row_base * (t_diff_col_base(i) * t_normal(i));
           *t_mat +=
               alpha * phi * (t_diff_row_base(i) * t_normal(i)) * t_col_base;
           *t_mat += alpha * phi * (t_diff_row_base(i) * t_normal(i)) *
-                    (t_diff_col_base(i) * t_normal(i)) / (pEnalty * pEnalty);
+                    (t_diff_col_base(i) * t_normal(i)) / (penalty * penalty);
 
           ++t_mat;
           ++t_col_base;
@@ -276,16 +269,14 @@ public:
 
 private:
   boost::shared_ptr<FaceSideEle> sideFEPtr;
-  double pEnalty;
   MatrixDouble locMat;
 };
 
 struct OpL2BoundaryRhs : public BoundaryEleOp {
 public:
-  OpL2BoundaryRhs(boost::shared_ptr<FaceSideEle> side_fe_ptr, ScalarFun fun,
-                  double penalty)
+  OpL2BoundaryRhs(boost::shared_ptr<FaceSideEle> side_fe_ptr, ScalarFun fun)
       : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr),
-        sourceFun(fun), pEnalty(penalty) {}
+        sourceFun(fun) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -323,7 +314,7 @@ public:
 
       size_t rr = 0;
       for (; rr != nb_rows; ++rr) {
-        *t_f += (alpha * pEnalty) * t_row_base * source_val;
+        *t_f += (alpha * penalty) * t_row_base * source_val;
         ++t_row_base;
         ++t_f;
       }
@@ -346,7 +337,6 @@ public:
 private:
   boost::shared_ptr<FaceSideEle> sideFEPtr;
   ScalarFun sourceFun;
-  double pEnalty;
   VectorDouble rhsF;
 };
 
