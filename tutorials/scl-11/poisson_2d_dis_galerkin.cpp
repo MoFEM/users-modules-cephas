@@ -21,9 +21,34 @@
 
 #include <BasicFiniteElements.hpp>
 
+template <int DIM> struct ElementsAndOps {};
+
+template <> struct ElementsAndOps<2> {
+  using DomainEle = PipelineManager::FaceEle;
+  using DomainEleOp = DomainEle::UserDataOperator;
+  using BoundaryEle = PipelineManager::EdgeEle;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using PostProcEle = PostProcFaceOnRefinedMesh;
+
+  using SkeletonEleOp = DomainEle;
+  using FaceSideEle = MoFEM::FaceElementForcesAndSourcesCoreOnSideSwitch<0>;
+  using FaceSideOp = FaceSideEle::UserDataOperator;  
+
+};
+
 constexpr int SPACE_DIM = 2;
 
+using EntData = DataForcesAndSourcesCore::EntData;
+using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
+using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
+using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
+using FaceSideEle = ElementsAndOps<SPACE_DIM>::FaceSideEle;
+using SkeletonEleOp = ElementsAndOps<SPACE_DIM>::SkeletonEleOp;
+using FaceSideOp = ElementsAndOps<SPACE_DIM>::FaceSideOp;
+
 #include <PoissonDiscontinousGalerkin.hpp>
+
 
 #include <poisson_2d_homogeneous.hpp> // FIX<E: Obolete header name
 
@@ -114,7 +139,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
-  auto side_fe_lhs = boost::make_shared<FaceSide>(mField);
+  auto side_fe_lhs = boost::make_shared<FaceSideEle>(mField);
 
   auto add_base_ops = [&](auto &pipeline) {
     auto det_ptr = boost::make_shared<VectorDouble>();

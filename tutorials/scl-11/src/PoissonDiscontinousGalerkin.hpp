@@ -23,15 +23,7 @@
 #ifndef __POISSON2DISGALERKIN_HPP__
 #define __POISSON2DISGALERKIN_HPP__
 
-// Use of alias for some specific functions
-// We are solving Poisson's equation in 2D so Face element is used
-using FaceEle = MoFEM::FaceElementForcesAndSourcesCore;
-using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
-using OpEdgeEle = PipelineManager::EdgeEle::UserDataOperator;
-using OpSkeletonEle = OpEdgeEle;
-using FaceSide = MoFEM::FaceElementForcesAndSourcesCoreOnSideSwitch<0>;
-using OpFaceSide = FaceSide::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+
 
 // Namespace that contains necessary UDOs, will be included in the main program
 namespace Poisson2DiscontGalerkinOperators {
@@ -51,10 +43,10 @@ std::array<MatrixDouble, 2> colDiffBaseSideMap;
 constexpr double phi =
     -1; // 1 - symmetric Nitsche, 0 - nonsymmetric, -1 antisymmetric
 
-struct OpCalculateSideData : public OpFaceSide {
+struct OpCalculateSideData : public FaceSideOp {
 
   OpCalculateSideData(std::string field_name, std::string col_field_name)
-      : OpFaceSide(field_name, col_field_name, OpFaceSide::OPROWCOL) {
+      : FaceSideOp(field_name, col_field_name, FaceSideOp::OPROWCOL) {
 
     std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
 
@@ -106,11 +98,11 @@ inline auto get_diff_ntensor(T &base_mat, int gg, int bb) {
   return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>(ptr, &ptr[1]);
 };
 
-struct OpDomainLhsPenalty : public OpSkeletonEle {
+struct OpDomainLhsPenalty : public BoundaryEleOp {
 public:
-  OpDomainLhsPenalty(boost::shared_ptr<FaceSide> side_fe,
+  OpDomainLhsPenalty(boost::shared_ptr<FaceSideEle> side_fe,
                      const double penalty = 1e-8)
-      : OpSkeletonEle(NOSPACE, OpEdgeEle::OPLAST), sideFe(side_fe),
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFe(side_fe),
         mPenalty(penalty) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
@@ -201,15 +193,15 @@ public:
   }
 
 private:
-  boost::shared_ptr<FaceSide> sideFe;
+  boost::shared_ptr<FaceSideEle> sideFe;
   const double mPenalty;
   MatrixDouble locMat;
 };
 
-struct OpL2BoundaryLhs : public OpEdgeEle {
+struct OpL2BoundaryLhs : public BoundaryEleOp {
 public:
-  OpL2BoundaryLhs(boost::shared_ptr<FaceSide> side_fe, double penalty)
-      : OpEdgeEle(NOSPACE, OpEdgeEle::OPLAST), sideFE(side_fe),
+  OpL2BoundaryLhs(boost::shared_ptr<FaceSideEle> side_fe, double penalty)
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFE(side_fe),
         pEnalty(penalty) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
@@ -287,7 +279,7 @@ public:
 
 private:
   MatrixDouble locBoundaryLhs;
-  boost::shared_ptr<FaceSide> sideFE;
+  boost::shared_ptr<FaceSideEle> sideFE;
   double pEnalty;
   MatrixDouble locMat;
 };
