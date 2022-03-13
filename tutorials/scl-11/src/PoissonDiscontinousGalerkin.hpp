@@ -61,8 +61,8 @@ struct OpCalculateSideData : public FaceSideOp {
       indicesRowSideMap[nb_in_loop] = row_data.getIndices();
       colBaseSideMap[nb_in_loop] = col_data.getN();
       rowBaseSideMap[nb_in_loop] = row_data.getN();
-      colDiffBaseSideMap[nb_in_loop] = col_data.getDiffN();
-      rowDiffBaseSideMap[nb_in_loop] = row_data.getDiffN();
+      rowDiffBaseSideMap[nb_in_loop] = row_data.getDiffN(); // * getEdgeSense();
+      colDiffBaseSideMap[nb_in_loop] = col_data.getDiffN(); // * getEdgeSense();
     } else {
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Should not happen");
     }
@@ -119,8 +119,6 @@ public:
         for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
 
           const auto sign = sign_array[s0 * 2 + s1];
-          const auto sign_row = sign_array[s0];
-          const auto sign_col = sign_array[s1];
 
           const auto nb_cols = indicesColSideMap[s1].size();
           locMat.resize(nb_rows, nb_cols, false);
@@ -147,13 +145,13 @@ public:
                 // outside loops
 
                 *t_mat += (alpha * penalty * sign) * t_row_base * t_col_base;
-                *t_mat += (alpha * sign_row) * t_row_base *
+                *t_mat += (alpha * sign) * t_row_base *
                           (t_diff_col_base(i) * t_normal(i));
-                *t_mat += (alpha * sign_col * phi) *
+                *t_mat += (alpha * sign * phi) *
                           (t_diff_row_base(i) * t_normal(i)) * t_col_base;
-                *t_mat += (alpha * phi) * (t_diff_row_base(i) * t_normal(i)) *
-                          (t_diff_col_base(i) * t_normal(i)) /
-                          (penalty * penalty);
+                *t_mat +=
+                    (alpha * phi * sign) * (t_diff_row_base(i) * t_normal(i)) *
+                    (t_diff_col_base(i) * t_normal(i)) / (penalty * penalty);
 
                 ++t_col_base;
                 ++t_diff_col_base;
@@ -315,12 +313,15 @@ public:
       size_t rr = 0;
       for (; rr != nb_rows; ++rr) {
         *t_f += (alpha * penalty) * t_row_base * source_val;
+        *t_f += alpha * phi * (t_diff_row_base(i) * t_normal(i)) * source_val;
         ++t_row_base;
+        ++t_diff_row_base;
         ++t_f;
       }
 
       for (; rr < nb_row_base_functions; ++rr) {
         ++t_row_base;
+        ++t_diff_row_base;
       }
 
       ++t_w;
