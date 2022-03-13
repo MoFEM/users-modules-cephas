@@ -52,7 +52,7 @@ using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 static double penalty = 1e6;
 static double phi =
     -1; // 1 - symmetric Nitsche, 0 - nonsymmetric, -1 antisymmetrica
-static bool penalty = false;
+static PetscBool nitsche = PETSC_TRUE;
 
 #include <PoissonDiscontinousGalerkin.hpp>
 
@@ -62,15 +62,20 @@ using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, FIELD_DIM>;
 
 auto u_exact = [](const double x, const double y, const double) {
-  return x * x * y * y;
+  return cos(2 * x * M_PI) * cos(2 * y * M_PI);
 };
 
 auto u_grad_exact = [](const double x, const double y, const double) {
-  return FTensor::Tensor1<double, 2>{2 * x * y * y, 2 * x * x * y};
+  return FTensor::Tensor1<double, 2>{
+
+      -2 * M_PI * cos(2 * M_PI * y) * sin(2 * M_PI * x),
+      -2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y)
+
+  };
 };
 
 auto source = [](const double x, const double y, const double) {
-  return -(2 * x * x + 2 * y * y);
+  return 8 * M_PI * M_PI * cos(2 * x * M_PI) * cos(2 * y * M_PI);
 };
 
 using namespace MoFEM;
@@ -128,10 +133,12 @@ MoFEMErrorCode Poisson2DiscontGalerkin::setupProblem() {
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &penalty,
                                PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-phi", &phi, PETSC_NULL);
-  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-penalty", &penalty, PETSC_NULL);
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-nitsche", &nitsche, PETSC_NULL);
 
   MOFEM_LOG("WORLD", Sev::inform) << "Set order: " << oRder;
   MOFEM_LOG("WORLD", Sev::inform) << "Set penalty: " << penalty;
+  MOFEM_LOG("WORLD", Sev::inform) << "Set phi: " << phi;
+  MOFEM_LOG("WORLD", Sev::inform) << "Set nitche: " << nitsche;
 
   CHKERR simpleInterface->addDomainField(domainField, L2,
                                          AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
@@ -275,8 +282,12 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldGradient<2>(domainField, u_grad_ptr));
 
-  auto l2_vec = createSmartVectorMPI(mField.get_comm(),
-                                     (!mField.get_comm_rank()) ? 1 : 0, 1);
+  enum NORMS { L2 = 0, SEMI_NORM, H1, LAST_NORM };
+  std::array<int, LAST_NORM> error_indices;
+  for (int i = 0; i != LAST_NORM; ++i)
+    error_indices[i] = i;
+  auto l2_vec = createSmartVectorMPI(
+      mField.get_comm(), (!mField.get_comm_rank()) ? LAST_NORM : 0, LAST_NORM);
 
   auto error_op = new DomainEleOp(domainField, DomainEleOp::OPROW);
   error_op->doWorkRhsHook = [&](DataOperator *op_ptr, int side, EntityType type,
@@ -295,7 +306,9 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
       auto t_coords = o->getFTensor1CoordsAtGaussPts();
 
       auto t_row_base = data.getFTensor0N();
-      double error = 0;
+      std::array<double, LAST_NORM> error;
+      std::fill(error.begin(), error.end(), 0);
+
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
         const double alpha = t_w * o->getMeasure();
@@ -307,7 +320,9 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
         const double diff_grad =
             (t_grad(i) - t_exact_grad(i)) * (t_grad(i) - t_exact_grad(i));
 
-        error += alpha * (pow(diff, 2) + diff_grad);
+        error[L2] += alpha * pow(diff, 2);
+        error[SEMI_NORM] += alpha * diff_grad;
+        error[H1] += error[L2] + error[SEMI_NORM];
 
         ++t_w;
         ++t_val;
@@ -315,7 +330,8 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
         ++t_coords;
       }
 
-      CHKERR VecSetValue(l2_vec, 0, error, ADD_VALUES);
+      CHKERR VecSetValues(l2_vec, LAST_NORM, error_indices.data(), error.data(),
+                          ADD_VALUES);
     }
 
     MoFEMFunctionReturn(0);
@@ -330,7 +346,11 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
 
   const double *array;
   CHKERR VecGetArrayRead(l2_vec, &array);
-  MOFEM_LOG_C("WORLD", Sev::inform, "Error %6.4e", std::sqrt(array[0]));
+  MOFEM_LOG_C("WORLD", Sev::inform, "Error Norm L2 %6.4e",
+              std::sqrt(array[L2]));
+  MOFEM_LOG_C("WORLD", Sev::inform, "Error Norm Energetic %6.4e",
+              std::sqrt(array[SEMI_NORM]));
+  MOFEM_LOG_C("WORLD", Sev::inform, "Error Norm H1 %6.4e", std::sqrt(array[H1]));
   CHKERR VecRestoreArrayRead(l2_vec, &array);
 
   MoFEMFunctionReturn(0);

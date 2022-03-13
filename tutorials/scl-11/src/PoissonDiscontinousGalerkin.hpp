@@ -37,6 +37,16 @@ std::array<MatrixDouble, 2> rowBaseSideMap;
 std::array<MatrixDouble, 2> colBaseSideMap;
 std::array<MatrixDouble, 2> rowDiffBaseSideMap;
 std::array<MatrixDouble, 2> colDiffBaseSideMap;
+std::array<double, 2> areaMap;
+
+auto testing_fun = [](auto base, auto diff_base, auto p, auto phi,
+                      auto nitche) {
+  return p * base - nitche * phi * diff_base / p;
+};
+
+auto tested_fun = [](auto base, auto diff_base, auto p, auto nitche) {
+  return p * base - nitche * diff_base / p;
+};
 
 struct OpCalculateSideData : public FaceSideOp {
 
@@ -55,14 +65,16 @@ struct OpCalculateSideData : public FaceSideOp {
                         EntData &col_data) {
     MoFEMFunctionBeginHot;
 
-    if ((CN::Dimension(row_type) == 2) && (CN::Dimension(col_type) == 2)) {
+    if ((CN::Dimension(row_type) == SPACE_DIM) &&
+        (CN::Dimension(col_type) == SPACE_DIM)) {
       const auto nb_in_loop = getFEMethod()->nInTheLoop;
-      indicesColSideMap[nb_in_loop] = col_data.getIndices();
       indicesRowSideMap[nb_in_loop] = row_data.getIndices();
-      colBaseSideMap[nb_in_loop] = col_data.getN();
+      indicesColSideMap[nb_in_loop] = col_data.getIndices();
       rowBaseSideMap[nb_in_loop] = row_data.getN();
-      rowDiffBaseSideMap[nb_in_loop] = row_data.getDiffN(); // * getEdgeSense();
-      colDiffBaseSideMap[nb_in_loop] = col_data.getDiffN(); // * getEdgeSense();
+      colBaseSideMap[nb_in_loop] = col_data.getN();
+      rowDiffBaseSideMap[nb_in_loop] = row_data.getDiffN();
+      colDiffBaseSideMap[nb_in_loop] = col_data.getDiffN();
+      areaMap[nb_in_loop] = getMeasure();
     } else {
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Should not happen");
     }
@@ -103,6 +115,9 @@ public:
 
     CHKERR loopSideFaces("dFE", *sideFEPtr);
 
+    const double s = getMeasure() / (areaMap[0] + areaMap[1]);
+    const double p = penalty * s;
+
     auto t_normal = getFTensor1Normal();
     t_normal.normalize();
 
@@ -130,7 +145,7 @@ public:
 
           for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
-            const double alpha = getMeasure() * t_w;
+            const double alpha = getMeasure() * t_w * sign;
 
             auto t_mat = locMat.data().begin();
 
@@ -139,19 +154,17 @@ public:
               auto t_col_base = get_ntensor(colBaseSideMap[s1], gg, 0);
               auto t_diff_col_base =
                   get_diff_ntensor(colDiffBaseSideMap[s1], gg, 0);
+
+              const double row_val =
+                  alpha * testing_fun(t_row_base,
+                                      t_diff_row_base(i) * t_normal(i), p, phi,
+                                      nitsche);
+
               for (size_t cc = 0; cc != nb_cols; ++cc) {
 
-                // TODO: This is not effient constants should be precalculated
-                // outside loops
-
-                *t_mat += (alpha * penalty * sign) * t_row_base * t_col_base;
-                *t_mat += (alpha * sign) * t_row_base *
-                          (t_diff_col_base(i) * t_normal(i));
-                *t_mat += (alpha * sign * phi) *
-                          (t_diff_row_base(i) * t_normal(i)) * t_col_base;
-                *t_mat +=
-                    (alpha * phi * sign) * (t_diff_row_base(i) * t_normal(i)) *
-                    (t_diff_col_base(i) * t_normal(i)) / (penalty * penalty);
+                *t_mat += row_val * tested_fun(t_col_base,
+                                               t_diff_col_base(i) * t_normal(i),
+                                               p, nitsche);
 
                 ++t_col_base;
                 ++t_diff_col_base;
@@ -197,6 +210,9 @@ public:
 
     CHKERR loopSideFaces("dFE", *sideFEPtr);
 
+    const double s = getMeasure() / areaMap[0];
+    const double p = penalty * s;
+
     auto t_normal = getFTensor1Normal();
     t_normal.normalize();
 
@@ -229,17 +245,15 @@ public:
         auto t_col_base = get_ntensor(colBaseSideMap[0], gg, 0);
         auto t_diff_col_base = get_diff_ntensor(colDiffBaseSideMap[0], gg, 0);
 
+        const double row_val =
+            alpha * testing_fun(t_row_base, t_diff_row_base(i) * t_normal(i), p,
+                                phi, nitsche);
+
         for (size_t cc = 0; cc != nb_cols; ++cc) {
 
-          // TODO: This is not effient constants should be precalculated
-          // outside loops
-
-          *t_mat += (alpha * penalty) * t_row_base * t_col_base;
-          *t_mat += alpha * t_row_base * (t_diff_col_base(i) * t_normal(i));
           *t_mat +=
-              alpha * phi * (t_diff_row_base(i) * t_normal(i)) * t_col_base;
-          *t_mat += alpha * phi * (t_diff_row_base(i) * t_normal(i)) *
-                    (t_diff_col_base(i) * t_normal(i)) / (penalty * penalty);
+              row_val * tested_fun(t_col_base, t_diff_col_base(i) * t_normal(i),
+                                   p, nitsche);
 
           ++t_mat;
           ++t_col_base;
@@ -281,6 +295,9 @@ public:
 
     CHKERR loopSideFaces("dFE", *sideFEPtr);
 
+    const double s = getMeasure() / areaMap[0];
+    const double p = penalty * s;
+
     auto t_normal = getFTensor1Normal();
     t_normal.normalize();
 
@@ -306,14 +323,18 @@ public:
       const double alpha = getMeasure() * t_w;
 
       const double source_val =
-          sourceFun(t_coords(0), t_coords(1), t_coords(2));
+          p * sourceFun(t_coords(0), t_coords(1), t_coords(2));
 
       auto t_f = rhsF.data().begin();
 
       size_t rr = 0;
       for (; rr != nb_rows; ++rr) {
-        *t_f += (alpha * penalty) * t_row_base * source_val;
-        *t_f += alpha * phi * (t_diff_row_base(i) * t_normal(i)) * source_val;
+
+        const double row_val =
+            alpha * testing_fun(t_row_base, t_diff_row_base(i) * t_normal(i), p,
+                                phi, nitsche);
+        *t_f += row_val * source_val;
+
         ++t_row_base;
         ++t_diff_row_base;
         ++t_f;
