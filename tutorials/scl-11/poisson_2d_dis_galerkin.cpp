@@ -51,7 +51,8 @@ using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
 static double penalty = 1e6;
 static double phi =
-    -1; // 1 - symmetric Nitsche, 0 - nonsymmetric, -1 antisymmetric
+    -1; // 1 - symmetric Nitsche, 0 - nonsymmetric, -1 antisymmetrica
+static bool penalty = false;
 
 #include <PoissonDiscontinousGalerkin.hpp>
 
@@ -62,6 +63,10 @@ using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
 
 auto u_exact = [](const double x, const double y, const double) {
   return x * x * y * y;
+};
+
+auto u_grad_exact = [](const double x, const double y, const double) {
+  return FTensor::Tensor1<double, 2>{2 * x * y * y, 2 * x * x * y};
 };
 
 auto source = [](const double x, const double y, const double) {
@@ -123,6 +128,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::setupProblem() {
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &penalty,
                                PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-phi", &phi, PETSC_NULL);
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-penalty", &penalty, PETSC_NULL);
 
   MOFEM_LOG("WORLD", Sev::inform) << "Set order: " << oRder;
   MOFEM_LOG("WORLD", Sev::inform) << "Set penalty: " << penalty;
@@ -171,27 +177,20 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
       new OpDomainSource(domainField, source));
 
   // Push operators to the Pipeline for Skeleton
-  auto side_fe_lhs = boost::make_shared<FaceSideEle>(mField);
-  add_base_ops(side_fe_lhs->getOpPtrVector());
-  side_fe_lhs->getOpPtrVector().push_back(
+  auto side_fe_ptr = boost::make_shared<FaceSideEle>(mField);
+  add_base_ops(side_fe_ptr->getOpPtrVector());
+  side_fe_ptr->getOpPtrVector().push_back(
       new OpCalculateSideData(domainField, domainField));
 
   // Push operators to the Pipeline for Skeleton
   pipeline_mng->getOpSkeletonLhsPipeline().push_back(
-      new OpDomainLhsPenalty(side_fe_lhs));
+      new OpDomainLhsPenalty(side_fe_ptr));
 
   // Push operators to the Pipeline for Boundary
-  auto side_bc_fe_lhs = boost::make_shared<FaceSideEle>(mField);
-  side_bc_fe_lhs->getOpPtrVector().push_back(
-      new OpCalculateSideData(domainField, domainField));
   pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      new OpL2BoundaryLhs(side_bc_fe_lhs));
-
-  auto side_bc_fe_rhs = boost::make_shared<FaceSideEle>(mField);
-  side_bc_fe_rhs->getOpPtrVector().push_back(
-      new OpCalculateSideData(domainField, domainField));
+      new OpL2BoundaryLhs(side_fe_ptr));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpL2BoundaryRhs(side_bc_fe_rhs, u_exact));
+      new OpL2BoundaryRhs(side_fe_ptr, u_exact));
 
   MoFEMFunctionReturn(0);
 }
@@ -255,12 +254,26 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
   pipeline_mng->getBoundaryRhsFE().reset();
   pipeline_mng->getBoundaryLhsFE().reset();
 
-  auto rule = [](int, int, int p) -> int { return 2 * p; };
+  auto rule = [](int, int, int p) -> int { return 2 * std::max(p, 4); };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule);
 
+  auto add_base_ops = [&](auto &pipeline) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline.push_back(new OpSetInvJacL2ForFace(inv_jac_ptr));
+  };
+
   auto u_vals_ptr = boost::make_shared<VectorDouble>();
+  auto u_grad_ptr = boost::make_shared<MatrixDouble>();
+
+  add_base_ops(pipeline_mng->getOpDomainRhsPipeline());
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues(domainField, u_vals_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateScalarFieldGradient<2>(domainField, u_grad_ptr));
 
   auto l2_vec = createSmartVectorMPI(mField.get_comm(),
                                      (!mField.get_comm_rank()) ? 1 : 0, 1);
@@ -271,11 +284,14 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
     MoFEMFunctionBegin;
     auto o = static_cast<DomainEleOp *>(op_ptr);
 
+    FTensor::Index<'i', 2> i;
+
     if (const size_t nb_dofs = data.getIndices().size()) {
 
       const int nb_integration_pts = o->getGaussPts().size2();
       auto t_w = o->getFTensor0IntegrationWeight();
       auto t_val = getFTensor0FromVec(*u_vals_ptr);
+      auto t_grad = getFTensor1FromMat<2>(*u_grad_ptr);
       auto t_coords = o->getFTensor1CoordsAtGaussPts();
 
       auto t_row_base = data.getFTensor0N();
@@ -285,10 +301,17 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
         const double alpha = t_w * o->getMeasure();
         const double diff =
             t_val - u_exact(t_coords(0), t_coords(1), t_coords(2));
-        error += alpha * pow(diff, 2);
+
+        auto t_exact_grad = u_grad_exact(t_coords(0), t_coords(1), t_coords(2));
+
+        const double diff_grad =
+            (t_grad(i) - t_exact_grad(i)) * (t_grad(i) - t_exact_grad(i));
+
+        error += alpha * (pow(diff, 2) + diff_grad);
 
         ++t_w;
         ++t_val;
+        ++t_grad;
         ++t_coords;
       }
 
