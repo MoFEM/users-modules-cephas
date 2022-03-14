@@ -1,6 +1,6 @@
 /**
- * \file poisson_2d_dis_galerkin.hpp
- * \example poisson_2d_dis_galerkin.hpp
+ * \file PoissonDiscontinousGalerkin.hpp
+ * \example PoissonDiscontinousGalerkin.hpp
  *
  * Example of implementation for discontinuous Galerkin.
  */
@@ -41,11 +41,16 @@ std::array<double, 2> areaMap;
 
 auto testing_fun = [](auto base, auto diff_base, auto p, auto phi,
                       auto nitche) {
-  return p * base - nitche * phi * diff_base / p;
+  return (base - nitche * phi * diff_base / p);
+};
+
+auto testing_fun_plus = [](auto base, auto diff_base, auto p, auto phi,
+                           auto nitche) {
+  return nitche * phi * diff_base / p;
 };
 
 auto tested_fun = [](auto base, auto diff_base, auto p, auto nitche) {
-  return p * base - nitche * diff_base / p;
+  return -p * (base - nitche * diff_base / p);
 };
 
 struct OpCalculateSideData : public FaceSideOp {
@@ -155,16 +160,17 @@ public:
               auto t_diff_col_base =
                   get_diff_ntensor(colDiffBaseSideMap[s1], gg, 0);
 
+              const double row_q = t_diff_row_base(i) * t_normal(i);
               const double row_val =
-                  alpha * testing_fun(t_row_base,
-                                      t_diff_row_base(i) * t_normal(i), p, phi,
-                                      nitsche);
+                  alpha * testing_fun(t_row_base, row_q, p, phi, nitsche);
+              const double row_val_plus =
+                  alpha * testing_fun_plus(t_row_base, row_q, p, phi, nitsche);
 
               for (size_t cc = 0; cc != nb_cols; ++cc) {
 
-                *t_mat += row_val * tested_fun(t_col_base,
-                                               t_diff_col_base(i) * t_normal(i),
-                                               p, nitsche);
+                const double col_q = t_diff_col_base(i) * t_normal(i);
+                *t_mat -= row_val * tested_fun(t_col_base, col_q, p, nitsche);
+                *t_mat -= row_val_plus * col_q;
 
                 ++t_col_base;
                 ++t_diff_col_base;
@@ -210,7 +216,7 @@ public:
 
     CHKERR loopSideFaces("dFE", *sideFEPtr);
 
-    const double s = getMeasure() / areaMap[0];
+    const double s = getMeasure() / (areaMap[0]);
     const double p = penalty * s;
 
     auto t_normal = getFTensor1Normal();
@@ -245,19 +251,21 @@ public:
         auto t_col_base = get_ntensor(colBaseSideMap[0], gg, 0);
         auto t_diff_col_base = get_diff_ntensor(colDiffBaseSideMap[0], gg, 0);
 
+        const double row_q = t_diff_row_base(i) * t_normal(i);
         const double row_val =
-            alpha * testing_fun(t_row_base, t_diff_row_base(i) * t_normal(i), p,
-                                phi, nitsche);
+            alpha * testing_fun(t_row_base, row_q, p, phi, nitsche);
+        const double row_val_plus =
+            alpha * testing_fun_plus(t_row_base, row_q, p, phi, nitsche);
 
         for (size_t cc = 0; cc != nb_cols; ++cc) {
 
-          *t_mat +=
-              row_val * tested_fun(t_col_base, t_diff_col_base(i) * t_normal(i),
-                                   p, nitsche);
+          const double col_q = t_diff_col_base(i) * t_normal(i);
+          *t_mat -= row_val * tested_fun(t_col_base, col_q, p, nitsche);
+          *t_mat -= row_val_plus * col_q;
 
-          ++t_mat;
           ++t_col_base;
           ++t_diff_col_base;
+          ++t_mat;
         }
 
         ++t_row_base;
@@ -295,7 +303,7 @@ public:
 
     CHKERR loopSideFaces("dFE", *sideFEPtr);
 
-    const double s = getMeasure() / areaMap[0];
+    const double s = getMeasure() / (areaMap[0]);
     const double p = penalty * s;
 
     auto t_normal = getFTensor1Normal();
@@ -323,17 +331,17 @@ public:
       const double alpha = getMeasure() * t_w;
 
       const double source_val =
-          p * sourceFun(t_coords(0), t_coords(1), t_coords(2));
+          -p * sourceFun(t_coords(0), t_coords(1), t_coords(2));
 
       auto t_f = rhsF.data().begin();
 
       size_t rr = 0;
       for (; rr != nb_rows; ++rr) {
 
+        const double row_q = t_diff_row_base(i) * t_normal(i);
         const double row_val =
-            alpha * testing_fun(t_row_base, t_diff_row_base(i) * t_normal(i), p,
-                                phi, nitsche);
-        *t_f += row_val * source_val;
+            alpha * testing_fun(t_row_base, row_q, p, phi, nitsche);
+        *t_f -= row_val * source_val;
 
         ++t_row_base;
         ++t_diff_row_base;
