@@ -109,10 +109,12 @@ inline auto get_diff_ntensor(T &base_mat, int gg, int bb) {
   return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>(ptr, &ptr[1]);
 };
 
-struct OpDomainLhsPenalty : public BoundaryEleOp {
+struct OpL2LhsPenalty : public BoundaryEleOp {
 public:
-  OpDomainLhsPenalty(boost::shared_ptr<FaceSideEle> side_fe_ptr)
-      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr) {}
+  OpL2LhsPenalty(boost::shared_ptr<FaceSideEle> side_fe_ptr,
+                     bool is_boundary)
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr),
+        isBoundary(is_boundary) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
@@ -194,6 +196,9 @@ public:
                                 indicesColSideMap[s1].size(),
                                 &*indicesColSideMap[s1].begin(),
                                 &*locMat.data().begin(), ADD_VALUES);
+
+          if (isBoundary)
+            MoFEMFunctionReturnHot(0);
         }
       }
     }
@@ -204,92 +209,8 @@ public:
 private:
   boost::shared_ptr<FaceSideEle> sideFEPtr;
   MatrixDouble locMat;
-};
+  bool isBoundary;
 
-struct OpL2BoundaryLhs : public BoundaryEleOp {
-public:
-  OpL2BoundaryLhs(boost::shared_ptr<FaceSideEle> side_fe_ptr)
-      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr) {}
-
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-    MoFEMFunctionBegin;
-
-    CHKERR loopSideFaces("dFE", *sideFEPtr);
-
-    const double s = getMeasure() / (areaMap[0]);
-    const double p = penalty * s;
-
-    auto t_normal = getFTensor1Normal();
-    t_normal.normalize();
-
-    auto t_w = getFTensor0IntegrationWeight();
-
-    // shape funcs
-    auto t_row_base = get_ntensor(rowBaseSideMap[0]);
-    auto t_diff_row_base = get_diff_ntensor(rowDiffBaseSideMap[0]);
-
-    const size_t nb_rows = indicesRowSideMap[0].size();
-    const size_t nb_cols = indicesColSideMap[0].size();
-
-    if (!nb_cols)
-      MoFEMFunctionReturnHot(0);
-
-    locMat.resize(nb_rows, nb_cols, false);
-    locMat.clear();
-
-    const size_t nb_integration_pts = getGaussPts().size2();
-    const size_t nb_row_base_functions = rowBaseSideMap[0].size2();
-
-    for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-      const double alpha = getMeasure() * t_w;
-
-      auto t_mat = locMat.data().begin();
-
-      size_t rr = 0;
-      for (; rr != nb_rows; ++rr) {
-
-        auto t_col_base = get_ntensor(colBaseSideMap[0], gg, 0);
-        auto t_diff_col_base = get_diff_ntensor(colDiffBaseSideMap[0], gg, 0);
-
-        const double row_q = t_diff_row_base(i) * t_normal(i);
-        const double row_val =
-            alpha * testing_fun(t_row_base, row_q, p, phi, nitsche);
-        const double row_val_plus =
-            alpha * testing_fun_plus(t_row_base, row_q, p, phi, nitsche);
-
-        for (size_t cc = 0; cc != nb_cols; ++cc) {
-
-          const double col_q = t_diff_col_base(i) * t_normal(i);
-          *t_mat -= row_val * tested_fun(t_col_base, col_q, p, nitsche);
-          *t_mat -= row_val_plus * col_q;
-
-          ++t_col_base;
-          ++t_diff_col_base;
-          ++t_mat;
-        }
-
-        ++t_row_base;
-        ++t_diff_row_base;
-      }
-      for (; rr < nb_row_base_functions; ++rr) {
-        ++t_row_base;
-        ++t_diff_row_base;
-      }
-
-      ++t_w;
-    }
-
-    CHKERR ::MatSetValues(
-        getKSPB(), indicesRowSideMap[0].size(), &*indicesRowSideMap[0].begin(),
-        indicesColSideMap[0].size(), &*indicesColSideMap[0].begin(),
-        &*locMat.data().begin(), ADD_VALUES);
-
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  boost::shared_ptr<FaceSideEle> sideFEPtr;
-  MatrixDouble locMat;
 };
 
 struct OpL2BoundaryRhs : public BoundaryEleOp {

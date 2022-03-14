@@ -193,11 +193,11 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
 
   // Push operators to the Pipeline for Skeleton
   pipeline_mng->getOpSkeletonLhsPipeline().push_back(
-      new OpDomainLhsPenalty(side_fe_ptr));
+      new OpL2LhsPenalty(side_fe_ptr, false));
 
   // Push operators to the Pipeline for Boundary
   pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      new OpL2BoundaryLhs(side_fe_ptr));
+      new OpL2LhsPenalty(side_fe_ptr, true));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
       new OpL2BoundaryRhs(side_fe_ptr, u_exact));
 
