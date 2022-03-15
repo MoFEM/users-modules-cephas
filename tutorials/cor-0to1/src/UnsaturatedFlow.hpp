@@ -1287,8 +1287,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
 
     PetscSection section;
     CHKERR mField.getInterface<ISManager>()->sectionCreate("MIX", &section);
-    CHKERR DMSetDefaultSection(dM, section);
-    CHKERR DMSetDefaultGlobalSection(dM, section);
+    CHKERR DMSetSection(dM, section);
     // CHKERR PetscSectionView(section,PETSC_VIEWER_STDOUT_WORLD);
     CHKERR PetscSectionDestroy(&section);
 
