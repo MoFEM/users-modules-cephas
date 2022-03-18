@@ -30,7 +30,6 @@ template <> struct ElementsAndOps<2> {
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 
-  using SkeletonEleOp = DomainEle;
   using FaceSideEle = MoFEM::FaceElementForcesAndSourcesCoreOnSideSwitch<0>;
   using FaceSideOp = FaceSideEle::UserDataOperator;
 };
@@ -45,7 +44,6 @@ using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
 using FaceSideEle = ElementsAndOps<SPACE_DIM>::FaceSideEle;
-using SkeletonEleOp = ElementsAndOps<SPACE_DIM>::SkeletonEleOp;
 using FaceSideOp = ElementsAndOps<SPACE_DIM>::FaceSideOp;
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
@@ -62,24 +60,24 @@ using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, FIELD_DIM>;
 
 auto u_exact = [](const double x, const double y, const double) {
-  return x * x * y * y;
-  // return cos(2 * x * M_PI) * cos(2 * y * M_PI);
+  // return x * x * y * y;
+  return cos(2 * x * M_PI) * cos(2 * y * M_PI);
 };
 
 auto u_grad_exact = [](const double x, const double y, const double) {
-  return FTensor::Tensor1<double, 2>{2 * x * y * y, 2 * x * x * y};
+  // return FTensor::Tensor1<double, 2>{2 * x * y * y, 2 * x * x * y};
 
-  // return FTensor::Tensor1<double, 2>{
+  return FTensor::Tensor1<double, 2>{
 
-  //     -2 * M_PI * cos(2 * M_PI * y) * sin(2 * M_PI * x),
-  //     -2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y)
+      -2 * M_PI * cos(2 * M_PI * y) * sin(2 * M_PI * x),
+      -2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y)
 
-  // };
+  };
 };
 
 auto source = [](const double x, const double y, const double) {
-  return -(2 * x * x + 2 * y * y);
-  // return 8 * M_PI * M_PI * cos(2 * x * M_PI) * cos(2 * y * M_PI);
+  // return -(2 * x * x + 2 * y * y);
+  return 8 * M_PI * M_PI * cos(2 * x * M_PI) * cos(2 * y * M_PI);
 };
 
 using namespace MoFEM;
@@ -137,7 +135,8 @@ MoFEMErrorCode Poisson2DiscontGalerkin::setupProblem() {
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &penalty,
                                PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-phi", &phi, PETSC_NULL);
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-nitsche", &nitsche, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-nitsche", &nitsche,
+                               PETSC_NULL);
 
   MOFEM_LOG("WORLD", Sev::inform) << "Set order: " << oRder;
   MOFEM_LOG("WORLD", Sev::inform) << "Set penalty: " << penalty;
@@ -145,7 +144,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::setupProblem() {
   MOFEM_LOG("WORLD", Sev::inform) << "Set nitche: " << nitsche;
 
   CHKERR simpleInterface->addDomainField(domainField, L2,
-                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+                                         AINSWORTH_LOBATTO_BASE, 1);
   simpleInterface->getAddSkeletonFE() = true;
   simpleInterface->getAddBoundaryFE() = true;
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
@@ -193,11 +192,11 @@ MoFEMErrorCode Poisson2DiscontGalerkin::assembleSystem() {
 
   // Push operators to the Pipeline for Skeleton
   pipeline_mng->getOpSkeletonLhsPipeline().push_back(
-      new OpL2LhsPenalty(side_fe_ptr, false));
+      new OpL2LhsPenalty(side_fe_ptr));
 
   // Push operators to the Pipeline for Boundary
   pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      new OpL2LhsPenalty(side_fe_ptr, true));
+      new OpL2LhsPenalty(side_fe_ptr));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
       new OpL2BoundaryRhs(side_fe_ptr, u_exact));
 
@@ -265,6 +264,8 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
 
   auto rule = [](int, int, int p) -> int { return 2 * p; };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule);
+  auto rule_2 = [this](int, int, int) { return 2 * oRder; };
+  CHKERR pipeline_mng->setSkeletonRhsIntegrationRule(rule_2);
 
   auto add_base_ops = [&](auto &pipeline) {
     auto det_ptr = boost::make_shared<VectorDouble>();
@@ -307,7 +308,6 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
       auto t_grad = getFTensor1FromMat<2>(*u_grad_ptr);
       auto t_coords = o->getFTensor1CoordsAtGaussPts();
 
-      auto t_row_base = data.getFTensor0N();
       std::array<double, LAST_NORM> error;
       std::fill(error.begin(), error.end(), 0);
 
@@ -324,13 +324,14 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
 
         error[L2] += alpha * pow(diff, 2);
         error[SEMI_NORM] += alpha * diff_grad;
-        error[H1] += error[L2] + error[SEMI_NORM];
 
         ++t_w;
         ++t_val;
         ++t_grad;
         ++t_coords;
       }
+
+      error[H1] = error[L2] + error[SEMI_NORM];
 
       CHKERR VecSetValues(l2_vec, LAST_NORM, error_indices.data(), error.data(),
                           ADD_VALUES);
@@ -339,7 +340,98 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
     MoFEMFunctionReturn(0);
   };
 
+  auto side_fe_ptr = boost::make_shared<FaceSideEle>(mField);
+  add_base_ops(side_fe_ptr->getOpPtrVector());
+  side_fe_ptr->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues(domainField, u_vals_ptr));
+  std::array<VectorDouble, 2> side_vals;
+  std::array<double, 2> area_map;
+
+  auto side_vals_op = new DomainEleOp(domainField, DomainEleOp::OPROW);
+  side_vals_op->doWorkRhsHook = [&](DataOperator *op_ptr, int side,
+                                    EntityType type,
+                                    DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+    auto o = static_cast<FaceSideOp *>(op_ptr);
+
+    const auto nb_in_loop = o->getFEMethod()->nInTheLoop;
+    area_map[nb_in_loop] = o->getMeasure();
+    side_vals[nb_in_loop] = *u_vals_ptr;
+    if (!nb_in_loop) {
+      area_map[1] = 0;
+      side_vals[1].clear();
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+  side_fe_ptr->getOpPtrVector().push_back(side_vals_op);
+
+  auto do_work_rhs_error = [&](DataOperator *op_ptr, int side, EntityType type,
+                               DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+    auto o = static_cast<BoundaryEleOp *>(op_ptr);
+
+    CHKERR o->loopSideFaces("dFE", *side_fe_ptr);
+    const auto in_the_loop = side_fe_ptr->nInTheLoop;
+
+#ifndef NDEBUG
+    const std::array<std::string, 2> ele_type_name = {"BOUNDARY", "SKELETON"};
+    MOFEM_LOG("SELF", Sev::noisy)
+        << "do_work_rhs_error in_the_loop " << ele_type_name[in_the_loop];
+#endif
+
+    const double s = o->getMeasure() / (area_map[0] + area_map[1]);
+    const double p = penalty * s;
+
+    constexpr std::array<int, 2> sign_array{1, -1};
+
+    std::array<double, LAST_NORM> error;
+    std::fill(error.begin(), error.end(), 0);
+
+    const int nb_integration_pts = o->getGaussPts().size2();
+
+    if (!in_the_loop) {
+      side_vals[1].resize(nb_integration_pts, false);
+      auto t_coords = o->getFTensor1CoordsAtGaussPts();
+      auto t_val_m = getFTensor0FromVec(side_vals[1]);
+      for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+        t_val_m = u_exact(t_coords(0), t_coords(1), t_coords(2));
+        ++t_coords;
+        ++t_val_m;
+      }
+    }
+
+    auto t_val_p = getFTensor0FromVec(side_vals[0]);
+    auto t_val_m = getFTensor0FromVec(side_vals[1]);
+    auto t_w = o->getFTensor0IntegrationWeight();
+
+    for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+
+      const double alpha = o->getMeasure() * t_w;
+      const auto diff = t_val_p - t_val_m;
+      error[SEMI_NORM] += alpha * p * diff * diff;
+
+      ++t_w;
+      ++t_val_p;
+      ++t_val_m;
+    }
+
+
+    error[H1] = error[SEMI_NORM];
+    CHKERR VecSetValues(l2_vec, LAST_NORM, error_indices.data(), error.data(),
+                        ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  };
+
+  auto skeleton_error_op = new BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST);
+  skeleton_error_op->doWorkRhsHook = do_work_rhs_error;
+  auto boundary_error_op = new BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST);
+  boundary_error_op->doWorkRhsHook = do_work_rhs_error;
+
   pipeline_mng->getOpDomainRhsPipeline().push_back(error_op);
+  pipeline_mng->getOpSkeletonLhsPipeline().push_back(skeleton_error_op);
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(boundary_error_op);
 
   CHKERR pipeline_mng->loopFiniteElements();
 

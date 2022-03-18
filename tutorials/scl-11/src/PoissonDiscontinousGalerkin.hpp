@@ -38,20 +38,7 @@ std::array<MatrixDouble, 2> colBaseSideMap;
 std::array<MatrixDouble, 2> rowDiffBaseSideMap;
 std::array<MatrixDouble, 2> colDiffBaseSideMap;
 std::array<double, 2> areaMap;
-
-auto testing_fun = [](auto base, auto diff_base, auto p, auto phi,
-                      auto nitche) {
-  return (base - nitche * phi * diff_base / p);
-};
-
-auto testing_fun_plus = [](auto base, auto diff_base, auto p, auto phi,
-                           auto nitche) {
-  return nitche * phi * diff_base / p;
-};
-
-auto tested_fun = [](auto base, auto diff_base, auto p, auto nitche) {
-  return -p * (base - nitche * diff_base / p);
-};
+std::array<int, 2> senseMap;
 
 struct OpCalculateSideData : public FaceSideOp {
 
@@ -80,6 +67,17 @@ struct OpCalculateSideData : public FaceSideOp {
       rowDiffBaseSideMap[nb_in_loop] = row_data.getDiffN();
       colDiffBaseSideMap[nb_in_loop] = col_data.getDiffN();
       areaMap[nb_in_loop] = getMeasure();
+      senseMap[nb_in_loop] = getEdgeSense();
+      if (!nb_in_loop) {
+        indicesRowSideMap[1].clear();
+        indicesColSideMap[1].clear();
+        rowBaseSideMap[1].clear();
+        colBaseSideMap[1].clear();
+        rowDiffBaseSideMap[1].clear();
+        colDiffBaseSideMap[1].clear();
+        areaMap[1] = 0;
+        senseMap[1] = 0;
+      }
     } else {
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Should not happen");
     }
@@ -111,16 +109,23 @@ inline auto get_diff_ntensor(T &base_mat, int gg, int bb) {
 
 struct OpL2LhsPenalty : public BoundaryEleOp {
 public:
-  OpL2LhsPenalty(boost::shared_ptr<FaceSideEle> side_fe_ptr,
-                     bool is_boundary)
-      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr),
-        isBoundary(is_boundary) {}
+  OpL2LhsPenalty(boost::shared_ptr<FaceSideEle> side_fe_ptr)
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 
     CHKERR loopSideFaces("dFE", *sideFEPtr);
+    const auto in_the_loop = sideFEPtr->nInTheLoop;
+    
+#ifndef NDEBUG
+    const std::array<std::string, 2> ele_type_name = {"BOUNDARY", "SKELETON"};
+    MOFEM_LOG("SELF", Sev::noisy)
+        << "OpL2LhsPenalty inTheLoop " << ele_type_name[in_the_loop];
+    MOFEM_LOG("SELF", Sev::noisy)
+        << "OpL2LhsPenalty sense " << senseMap[0] << " " << senseMap[1];
+#endif
 
     const double s = getMeasure() / (areaMap[0] + areaMap[1]);
     const double p = penalty * s;
@@ -129,7 +134,6 @@ public:
     t_normal.normalize();
 
     const size_t nb_integration_pts = getGaussPts().size2();
-    constexpr std::array<int, 4> sign_array{1, -1, -1, 1};
 
     for (auto s0 : {LEFT_SIDE, RIGHT_SIDE}) {
 
@@ -137,10 +141,12 @@ public:
 
       if (nb_rows) {
 
+        const auto sense_row = senseMap[s0];
+
         const auto nb_row_base_functions = rowBaseSideMap[s0].size2();
         for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
 
-          const auto sign = sign_array[s0 * 2 + s1];
+          const auto sense_col = senseMap[s1];
 
           const auto nb_cols = indicesColSideMap[s1].size();
           locMat.resize(nb_rows, nb_cols, false);
@@ -150,29 +156,33 @@ public:
           auto t_diff_row_base = get_diff_ntensor(rowDiffBaseSideMap[s0]);
           auto t_w = getFTensor0IntegrationWeight();
 
+          const double beta = static_cast<double>(nitsche) / (in_the_loop + 1);
+
           for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
-            const double alpha = getMeasure() * t_w * sign;
-
+            const double alpha = getMeasure() * t_w;
             auto t_mat = locMat.data().begin();
-
+            
             size_t rr = 0;
             for (; rr != nb_rows; ++rr) {
+
+              FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
+              t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
+              FTensor::Tensor1<double, SPACE_DIM> t_vn;
+              t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
+
               auto t_col_base = get_ntensor(colBaseSideMap[s1], gg, 0);
               auto t_diff_col_base =
                   get_diff_ntensor(colDiffBaseSideMap[s1], gg, 0);
 
-              const double row_q = t_diff_row_base(i) * t_normal(i);
-              const double row_val =
-                  alpha * testing_fun(t_row_base, row_q, p, phi, nitsche);
-              const double row_val_plus =
-                  alpha * testing_fun_plus(t_row_base, row_q, p, phi, nitsche);
-
               for (size_t cc = 0; cc != nb_cols; ++cc) {
 
-                const double col_q = t_diff_col_base(i) * t_normal(i);
-                *t_mat -= row_val * tested_fun(t_col_base, col_q, p, nitsche);
-                *t_mat -= row_val_plus * col_q;
+                FTensor::Tensor1<double, SPACE_DIM> t_un;
+                t_un(i) = -p * (t_col_base * t_normal(i) * sense_col -
+                                beta * t_diff_col_base(i) / p);
+
+                *t_mat -= alpha * (t_vn(i) * t_un(i));
+                *t_mat -= alpha * (t_vn_plus(i) * (beta * t_diff_col_base(i)));
 
                 ++t_col_base;
                 ++t_diff_col_base;
@@ -197,7 +207,7 @@ public:
                                 &*indicesColSideMap[s1].begin(),
                                 &*locMat.data().begin(), ADD_VALUES);
 
-          if (isBoundary)
+          if (!in_the_loop)
             MoFEMFunctionReturnHot(0);
         }
       }
@@ -223,6 +233,7 @@ public:
     MoFEMFunctionBegin;
 
     CHKERR loopSideFaces("dFE", *sideFEPtr);
+    const auto in_the_loop = sideFEPtr->nInTheLoop;
 
     const double s = getMeasure() / (areaMap[0]);
     const double p = penalty * s;
@@ -248,6 +259,9 @@ public:
     auto t_diff_row_base = get_diff_ntensor(rowDiffBaseSideMap[0]);
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
+    const auto sense_row = senseMap[0];
+    const double beta = static_cast<double>(nitsche) / (in_the_loop + 1);
+
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
 
@@ -259,10 +273,12 @@ public:
       size_t rr = 0;
       for (; rr != nb_rows; ++rr) {
 
-        const double row_q = t_diff_row_base(i) * t_normal(i);
-        const double row_val =
-            alpha * testing_fun(t_row_base, row_q, p, phi, nitsche);
-        *t_f -= row_val * source_val;
+        FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
+        t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
+        FTensor::Tensor1<double, SPACE_DIM> t_vn;
+        t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
+
+        *t_f -= alpha * t_vn(i) * (source_val * t_normal(i));
 
         ++t_row_base;
         ++t_diff_row_base;
