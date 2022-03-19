@@ -127,6 +127,12 @@ inline auto get_diff_ntensor(T &base_mat, int gg, int bb) {
  */
 struct OpL2LhsPenalty : public BoundaryEleOp {
 public:
+
+  /**
+   * @brief Construct a new OpL2LhsPenalty 
+   * 
+   * @param side_fe_ptr pointer to FE to evaluate side elements
+   */
   OpL2LhsPenalty(boost::shared_ptr<FaceSideEle> side_fe_ptr)
       : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr) {}
 
@@ -137,7 +143,7 @@ public:
     // Collect data from side domian elements
     CHKERR loopSideFaces("dFE", *sideFEPtr);
     const auto in_the_loop =
-        sideFEPtr->nInTheLoop; // Return number of elements on the side
+        sideFEPtr->nInTheLoop; // return number of elements on the side
 
 #ifndef NDEBUG
     const std::array<std::string, 2> ele_type_name = {"BOUNDARY", "SKELETON"};
@@ -147,10 +153,11 @@ public:
         << "OpL2LhsPenalty sense " << senseMap[0] << " " << senseMap[1];
 #endif
 
-    // Calilate penalty
+    // calculate  penalty
     const double s = getMeasure() / (areaMap[0] + areaMap[1]);
     const double p = penalty * s;
 
+    // get normal of the face or edge
     auto t_normal = getFTensor1Normal();
     t_normal.normalize();
 
@@ -195,6 +202,8 @@ public:
           // iterate integration points on face/edge
           for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
+            // t_w is integration weight, and measure is element area, or
+            // volume, depending if problem is in 2d/3d.
             const double alpha = getMeasure() * t_w;
             auto t_mat = locMat.data().begin();
             
@@ -202,11 +211,13 @@ public:
             size_t rr = 0;
             for (; rr != nb_rows; ++rr) {
 
+              // calculate tetting function 
               FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
               t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
               FTensor::Tensor1<double, SPACE_DIM> t_vn;
               t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
 
+              // get base functions on columns
               auto t_col_base = get_ntensor(colBaseSideMap[s1], gg, 0);
               auto t_diff_col_base =
                   get_diff_ntensor(colDiffBaseSideMap[s1], gg, 0);
@@ -214,22 +225,30 @@ public:
               // iterate columns
               for (size_t cc = 0; cc != nb_cols; ++cc) {
 
+                // calculate variance of tested function 
                 FTensor::Tensor1<double, SPACE_DIM> t_un;
                 t_un(i) = -p * (t_col_base * t_normal(i) * sense_col -
                                 beta * t_diff_col_base(i) / p);
 
+                // assemble matrix
                 *t_mat -= alpha * (t_vn(i) * t_un(i));
                 *t_mat -= alpha * (t_vn_plus(i) * (beta * t_diff_col_base(i)));
 
+                // move to next column base and element of matrix
                 ++t_col_base;
                 ++t_diff_col_base;
                 ++t_mat;
               }
 
+              // move to next row base
               ++t_row_base;
               ++t_diff_row_base;
             }
 
+            // this is obsolete for this particular example, we keep it for
+            // generality. in case of multi-physcis problems diffrent fields can
+            // chare hierarchical base but use diffrent approx. order, so is
+            // possible to have more base functions than DOFs on element.
             for (; rr < nb_row_base_functions; ++rr) {
               ++t_row_base;
               ++t_diff_row_base;
@@ -256,10 +275,9 @@ public:
   }
 
 private:
-  boost::shared_ptr<FaceSideEle> sideFEPtr;
-  MatrixDouble locMat;
-  bool isBoundary;
-
+  boost::shared_ptr<FaceSideEle>
+      sideFEPtr; ///< pointer to element to get data on edge/face sides
+  MatrixDouble locMat; ///< local operator matrix
 };
 
 
@@ -276,12 +294,16 @@ public:
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
 
+    // get normal of the face or edge
     CHKERR loopSideFaces("dFE", *sideFEPtr);
-    const auto in_the_loop = sideFEPtr->nInTheLoop;
+    const auto in_the_loop =
+        sideFEPtr->nInTheLoop; // return number of elements on the side
 
+    // calculate  penalty
     const double s = getMeasure() / (areaMap[0]);
     const double p = penalty * s;
 
+    // get normal of the face or edge
     auto t_normal = getFTensor1Normal();
     t_normal.normalize();
 
@@ -292,6 +314,7 @@ public:
     if (!nb_rows)
       MoFEMFunctionReturnHot(0);
 
+    // resize local operator vector
     rhsF.resize(nb_rows, false);
     rhsF.clear();
 
@@ -322,6 +345,7 @@ public:
         FTensor::Tensor1<double, SPACE_DIM> t_vn;
         t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
 
+        // assemble operator local vactor
         *t_f -= alpha * t_vn(i) * (source_val * t_normal(i));
 
         ++t_row_base;
@@ -338,6 +362,7 @@ public:
       ++t_coords;
     }
 
+    // assemble local operator vector to global vector
     CHKERR ::VecSetValues(getKSPf(), indicesRowSideMap[0].size(),
                           &*indicesRowSideMap[0].begin(), &*rhsF.data().begin(),
                           ADD_VALUES);
@@ -346,9 +371,10 @@ public:
   }
 
 private:
-  boost::shared_ptr<FaceSideEle> sideFEPtr;
-  ScalarFun sourceFun;
-  VectorDouble rhsF;
+  boost::shared_ptr<FaceSideEle>
+      sideFEPtr;       ///< pointer to element to get data on edge/face sides
+  ScalarFun sourceFun; ///< pointer to function to evaluate value of function on boundary
+  VectorDouble rhsF;   ///< vector to strore local operator right hand side
 };
 
 }; // namespace Poisson2DiscontGalerkinOperators

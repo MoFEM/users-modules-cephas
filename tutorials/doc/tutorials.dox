@@ -170,6 +170,13 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
+  <tr valign="top">
+       <td>\ref tutorial_dg_poisson</td>
+       <td> Discountinous Galerkin for Poisson problem
+       <br/> *Keywords:* integartion on skeleton
+       </td>
+  </tr>
+
 </table>
 
 \section tutorials_complex_field_problems Problems with complex variable fields
