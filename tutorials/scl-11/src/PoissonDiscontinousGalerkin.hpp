@@ -31,15 +31,22 @@ FTensor::Index<'i', SPACE_DIM> i;
 
 enum ElementSide { LEFT_SIDE = 0, RIGHT_SIDE };
 // data for skeleton computation
-std::array<VectorInt, 2> indicesRowSideMap;
-std::array<VectorInt, 2> indicesColSideMap;
-std::array<MatrixDouble, 2> rowBaseSideMap;
-std::array<MatrixDouble, 2> colBaseSideMap;
-std::array<MatrixDouble, 2> rowDiffBaseSideMap;
-std::array<MatrixDouble, 2> colDiffBaseSideMap;
-std::array<double, 2> areaMap;
-std::array<int, 2> senseMap;
+std::array<VectorInt, 2>
+    indicesRowSideMap; ///< indices on rows for left hand-side
+std::array<VectorInt, 2>
+    indicesColSideMap; ///< indices on columns for left hand-side
+std::array<MatrixDouble, 2> rowBaseSideMap; // base functions on rows
+std::array<MatrixDouble, 2> colBaseSideMap; // base function  on columns
+std::array<MatrixDouble, 2> rowDiffBaseSideMap; // direvative of base functions
+std::array<MatrixDouble, 2> colDiffBaseSideMap; // direvative of base functions
+std::array<double, 2> areaMap; // area/volume of elements on the side
+std::array<int, 2> senseMap; // orientaton of local element edge/face in respect
+                             // to global orientation of edge/face
 
+/**
+ * @brief Operator tp collect data from elements on the side of Edge/Face
+ * 
+ */
 struct OpCalculateSideData : public FaceSideOp {
 
   OpCalculateSideData(std::string field_name, std::string col_field_name)
@@ -56,6 +63,12 @@ struct OpCalculateSideData : public FaceSideOp {
                         EntityType col_type, EntData &row_data,
                         EntData &col_data) {
     MoFEMFunctionBeginHot;
+
+    // Note: THat for L2 base data rows, and columns are the same, so operator
+    // above can be simpler operator for the right hand side, and data can be
+    // stored only for rows, since for columns data are the same. However for
+    // complex multi-physics problems that not necessary would be a case. For
+    // generality, we keep generic case.
 
     if ((CN::Dimension(row_type) == SPACE_DIM) &&
         (CN::Dimension(col_type) == SPACE_DIM)) {
@@ -107,6 +120,11 @@ inline auto get_diff_ntensor(T &base_mat, int gg, int bb) {
   return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>(ptr, &ptr[1]);
 };
 
+
+/**
+ * @brief Operator the left hand side matrix 
+ * 
+ */
 struct OpL2LhsPenalty : public BoundaryEleOp {
 public:
   OpL2LhsPenalty(boost::shared_ptr<FaceSideEle> side_fe_ptr)
@@ -116,9 +134,11 @@ public:
                         DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 
+    // Collect data from side domian elements
     CHKERR loopSideFaces("dFE", *sideFEPtr);
-    const auto in_the_loop = sideFEPtr->nInTheLoop;
-    
+    const auto in_the_loop =
+        sideFEPtr->nInTheLoop; // Return number of elements on the side
+
 #ifndef NDEBUG
     const std::array<std::string, 2> ele_type_name = {"BOUNDARY", "SKELETON"};
     MOFEM_LOG("SELF", Sev::noisy)
@@ -127,42 +147,58 @@ public:
         << "OpL2LhsPenalty sense " << senseMap[0] << " " << senseMap[1];
 #endif
 
+    // Calilate penalty
     const double s = getMeasure() / (areaMap[0] + areaMap[1]);
     const double p = penalty * s;
 
     auto t_normal = getFTensor1Normal();
     t_normal.normalize();
 
+    // get number of integration points on face
     const size_t nb_integration_pts = getGaussPts().size2();
 
+    // beta paramter is zero, when penalty method is used, also, takes value 1,
+    // when boundary edge/face is evaluated, and 2 when is skeleton edge/face.
+    const double beta = static_cast<double>(nitsche) / (in_the_loop + 1);
+
+    // iterate the sides rows
     for (auto s0 : {LEFT_SIDE, RIGHT_SIDE}) {
 
+      // gent number of DOFs on the right side. 
       const auto nb_rows = indicesRowSideMap[s0].size();
 
       if (nb_rows) {
 
+        // get orientation of the local element edge
         const auto sense_row = senseMap[s0];
 
+        // iterate the side cols
         const auto nb_row_base_functions = rowBaseSideMap[s0].size2();
         for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
 
+          // get orientation of the edge
           const auto sense_col = senseMap[s1];
 
+          // number of dofs, for homogenous approximation this value is
+          // constant.
           const auto nb_cols = indicesColSideMap[s1].size();
+
+          // resize local element matrix
           locMat.resize(nb_rows, nb_cols, false);
           locMat.clear();
 
+          // get base functions, and integration weights
           auto t_row_base = get_ntensor(rowBaseSideMap[s0]);
           auto t_diff_row_base = get_diff_ntensor(rowDiffBaseSideMap[s0]);
           auto t_w = getFTensor0IntegrationWeight();
 
-          const double beta = static_cast<double>(nitsche) / (in_the_loop + 1);
-
+          // iterate integration points on face/edge
           for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
             const double alpha = getMeasure() * t_w;
             auto t_mat = locMat.data().begin();
             
+            // iterate rows
             size_t rr = 0;
             for (; rr != nb_rows; ++rr) {
 
@@ -175,6 +211,7 @@ public:
               auto t_diff_col_base =
                   get_diff_ntensor(colDiffBaseSideMap[s1], gg, 0);
 
+              // iterate columns
               for (size_t cc = 0; cc != nb_cols; ++cc) {
 
                 FTensor::Tensor1<double, SPACE_DIM> t_un;
@@ -201,12 +238,14 @@ public:
             ++t_w;
           }
 
+          // assemble system
           CHKERR ::MatSetValues(getKSPB(), indicesRowSideMap[s0].size(),
                                 &*indicesRowSideMap[s0].begin(),
                                 indicesColSideMap[s1].size(),
                                 &*indicesColSideMap[s1].begin(),
                                 &*locMat.data().begin(), ADD_VALUES);
 
+          // stop of boundary element
           if (!in_the_loop)
             MoFEMFunctionReturnHot(0);
         }
@@ -223,6 +262,11 @@ private:
 
 };
 
+
+/**
+ * @brief Opator tp evaluate Dirichlet boundary conditions using DG 
+ * 
+ */
 struct OpL2BoundaryRhs : public BoundaryEleOp {
 public:
   OpL2BoundaryRhs(boost::shared_ptr<FaceSideEle> side_fe_ptr, ScalarFun fun)
