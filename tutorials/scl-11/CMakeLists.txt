@@ -36,3 +36,14 @@ tutorials_copy_and_install("*.ipynb" "${permissions_default}")
 tutorials_build_and_install(
   poisson_2d_dis_galerkin ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_dis_galerkin.cpp)
 
+  add_test(
+    poisson_2d_dis_galerkin
+    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
+    poisson_2d_dis_galerkin
+    -file_name mesh2d.cub 
+    -order 4 
+    -penalty 1
+    -phi -1 
+    -nitsche 1 
+    -log_sl inform
+    -is_test)

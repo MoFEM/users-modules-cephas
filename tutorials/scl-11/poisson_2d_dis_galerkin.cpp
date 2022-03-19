@@ -59,25 +59,32 @@ using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
 using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, FIELD_DIM>;
 
+PetscBool is_test = PETSC_FALSE;
+
 auto u_exact = [](const double x, const double y, const double) {
-  // return x * x * y * y;
-  return cos(2 * x * M_PI) * cos(2 * y * M_PI);
+  if (is_test)
+    return x * x * y * y;
+  else
+    return cos(2 * x * M_PI) * cos(2 * y * M_PI);
 };
 
 auto u_grad_exact = [](const double x, const double y, const double) {
-  // return FTensor::Tensor1<double, 2>{2 * x * y * y, 2 * x * x * y};
+  if (is_test)
+    return FTensor::Tensor1<double, 2>{2 * x * y * y, 2 * x * x * y};
+  else
+    return FTensor::Tensor1<double, 2>{
 
-  return FTensor::Tensor1<double, 2>{
+        -2 * M_PI * cos(2 * M_PI * y) * sin(2 * M_PI * x),
+        -2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y)
 
-      -2 * M_PI * cos(2 * M_PI * y) * sin(2 * M_PI * x),
-      -2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y)
-
-  };
+    };
 };
 
 auto source = [](const double x, const double y, const double) {
-  // return -(2 * x * x + 2 * y * y);
-  return 8 * M_PI * M_PI * cos(2 * x * M_PI) * cos(2 * y * M_PI);
+  if (is_test)
+    return -(2 * x * x + 2 * y * y);
+  else
+    return 8 * M_PI * M_PI * cos(2 * x * M_PI) * cos(2 * y * M_PI);
 };
 
 using namespace MoFEM;
@@ -137,11 +144,13 @@ MoFEMErrorCode Poisson2DiscontGalerkin::setupProblem() {
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-phi", &phi, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-nitsche", &nitsche,
                                PETSC_NULL);
+  PetscOptionsGetBool(PETSC_NULL, "", "-is_test", &is_test, PETSC_NULL);
 
   MOFEM_LOG("WORLD", Sev::inform) << "Set order: " << oRder;
   MOFEM_LOG("WORLD", Sev::inform) << "Set penalty: " << penalty;
   MOFEM_LOG("WORLD", Sev::inform) << "Set phi: " << phi;
   MOFEM_LOG("WORLD", Sev::inform) << "Set nitche: " << nitsche;
+  MOFEM_LOG("WORLD", Sev::inform) << "Set test: " << (is_test == PETSC_TRUE);
 
   CHKERR simpleInterface->addDomainField(domainField, L2,
                                          AINSWORTH_LOBATTO_BASE, 1);
@@ -447,12 +456,21 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
                 std::sqrt(array[SEMI_NORM]));
     MOFEM_LOG_C("SELF", Sev::inform, "Error Norm H1 %6.4e",
                 std::sqrt(array[H1]));
+
+    if(is_test) {
+      constexpr double eps = 1e-12;
+      if (std::sqrt(array[H1]) > eps)
+        SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID, "Error is too big");
+    }
+                
     CHKERR VecRestoreArrayRead(l2_vec, &array);
     const MoFEM::Problem *problem_ptr;
     CHKERR DMMoFEMGetProblemPtr(simpleInterface->getDM(), &problem_ptr);
     MOFEM_LOG_C("SELF", Sev::inform, "Nb. DOFs %d",
                 problem_ptr->getNbDofsRow());
   }
+
+
 
   MoFEMFunctionReturn(0);
 }
