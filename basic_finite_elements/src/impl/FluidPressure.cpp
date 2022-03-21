@@ -22,7 +22,7 @@
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
 MoFEMErrorCode FluidPressure::OpCalculatePressure::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
   if (data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);

@@ -128,7 +128,7 @@ private:
 struct OpCalculatePlasticFlowRhs : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowRhs(const std::string field_name,
                             boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -137,7 +137,7 @@ private:
 struct OpCalculateContrainsRhs : public AssemblyDomainEleOp {
   OpCalculateContrainsRhs(const std::string field_name,
                           boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -148,8 +148,8 @@ struct OpCalculatePlasticInternalForceLhs_dEP : public AssemblyDomainEleOp {
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<MatrixDouble> m_D_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -163,8 +163,8 @@ struct OpCalculatePlasticInternalForceLhs_LogStrain_dEP
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<HenckyOps::CommonData> common_henky_data_ptr,
       boost::shared_ptr<MatrixDouble> m_D_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -178,8 +178,8 @@ struct OpCalculatePlasticFlowLhs_dU : public AssemblyDomainEleOp {
                                const std::string col_field_name,
                                boost::shared_ptr<CommonData> common_data_ptr,
                                boost::shared_ptr<MatrixDouble> m_D_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -192,8 +192,8 @@ struct OpCalculatePlasticFlowLhs_LogStrain_dU : public AssemblyDomainEleOp {
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
       boost::shared_ptr<MatrixDouble> m_D_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -206,8 +206,8 @@ struct OpCalculatePlasticFlowLhs_dEP : public AssemblyDomainEleOp {
                                 const std::string col_field_name,
                                 boost::shared_ptr<CommonData> common_data_ptr,
                                 boost::shared_ptr<MatrixDouble> m_D_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -218,8 +218,8 @@ struct OpCalculatePlasticFlowLhs_dTAU : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowLhs_dTAU(const std::string row_field_name,
                                  const std::string col_field_name,
                                  boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -230,8 +230,8 @@ struct OpCalculateContrainsLhs_dU : public AssemblyDomainEleOp {
                              const std::string col_field_name,
                              boost::shared_ptr<CommonData> common_data_ptr,
                              boost::shared_ptr<MatrixDouble> m_D_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -244,8 +244,8 @@ struct OpCalculateContrainsLhs_LogStrain_dU : public AssemblyDomainEleOp {
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
       boost::shared_ptr<MatrixDouble> m_D_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -258,8 +258,8 @@ struct OpCalculateContrainsLhs_dEP : public AssemblyDomainEleOp {
                               const std::string col_field_name,
                               boost::shared_ptr<CommonData> common_data_ptr,
                               boost::shared_ptr<MatrixDouble> mat_D_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -270,8 +270,8 @@ struct OpCalculateContrainsLhs_dTAU : public AssemblyDomainEleOp {
   OpCalculateContrainsLhs_dTAU(const std::string row_field_name,
                                const std::string col_field_name,
                                boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };

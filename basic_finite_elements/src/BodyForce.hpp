@@ -52,7 +52,7 @@ struct BodyForceConstantField {
     VectorDouble Nf;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
 
       if (data.getIndices().size() == 0)

@@ -31,7 +31,7 @@ static char help[] = "...\n\n";
 
 using Element = MoFEM::VolumeElementForcesAndSourcesCoreBase;
 using OpElement = Element::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 //! [Example]
 struct Example {

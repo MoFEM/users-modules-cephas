@@ -77,7 +77,7 @@ NeumannForcesSurfaceComplexForLazy::AuxMethodMaterial::AuxMethodMaterial(
       myPtr(my_ptr){};
 
 MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   switch (type) {
@@ -128,7 +128,7 @@ MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
 }
 
 MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodMaterial::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   switch (type) {

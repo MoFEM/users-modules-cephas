@@ -320,7 +320,7 @@ struct OpRow: public MoFEM::ForcesAndSourcesCore::UserDataOperator {
  OpRow(const std::string& field_name):
  ForcesAndSourcesCore::UserDataOperator(field_name,field_name,OPROW) {
  }
- MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data);
+ MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data);
 };
 \endcode
 This user data operator class is derived from
@@ -329,11 +329,11 @@ entity. It is the type of OPROW, which indicates that it only iterates lower
 dimension entities on the element. On each lower entity overload method is
 called
 \code
-MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data);
+MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data);
 \endcode
 which as arguments take entity side number (local entity number on the finite
 element), entity type (e.g. MBVERTEX, MBEDGE, MBTET) and reference to structure
-MoFEM::DataForcesAndSourcesCore::EntData, which keeps information on DOFs,
+MoFEM::EntitiesFieldData::EntData, which keeps information on DOFs,
 approximation on given entity. This type of entity is usually used to integrate
 the right-hand side vector.
 
@@ -350,8 +350,8 @@ struct OpRowCol: public MoFEM::ForcesAndSourcesCore::UserDataOperator {
  MoFEMErrorCode doWork(
    int row_side,int col_side,
    EntityType row_type,EntityType col_type,
-   DataForcesAndSourcesCore::EntData &row_data,
-   DataForcesAndSourcesCore::EntData &col_data
+   EntitiesFieldData::EntData &row_data,
+   EntitiesFieldData::EntData &col_data
  );
 };
 \endcode

@@ -33,7 +33,7 @@ using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EdgeEle = PipelineManager::EdgeEle;
 using EdgeEleOp = EdgeEle::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 2>;
 using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
@@ -127,7 +127,7 @@ private:
           sumTemperature(sum_temp), surfaceArea(surf) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
 
 
   };
@@ -485,7 +485,7 @@ MoFEMErrorCode Example::OpFluxRhs::iNtegrate(EntData &row_data) {
 
 //! [Ave Temp]
 MoFEMErrorCode Example::OpCalcSurfaceAverageTemperature::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
 
   MoFEMFunctionBegin;
   if (type == MBVERTEX) {

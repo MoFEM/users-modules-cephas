@@ -84,7 +84,7 @@ struct HookeElement {
   using BlockData = NonlinearElasticElement::BlockData;
   using MassBlockData = ConvectiveMassElement::BlockData;
 
-  using EntData = DataForcesAndSourcesCore::EntData;
+  using EntData = EntitiesFieldData::EntData;
   using UserDataOperator = ForcesAndSourcesCore::UserDataOperator;
   using VolUserDataOperator =
       VolumeElementForcesAndSourcesCore::UserDataOperator;
@@ -243,8 +243,8 @@ struct HookeElement {
 
     PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
@@ -664,7 +664,7 @@ struct HookeElement {
                            bool is_ale = false, bool is_field_disp = true);
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   static MoFEMErrorCode
@@ -1407,7 +1407,7 @@ HookeElement::OpPostProcHookeElement<ELEMENT>::OpPostProcHookeElement(
 
 template <class ELEMENT>
 MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBVERTEX) {

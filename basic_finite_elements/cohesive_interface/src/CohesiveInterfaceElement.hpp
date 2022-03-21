@@ -321,7 +321,7 @@ struct CohesiveInterfaceElement {
     OpSetSignToShapeFunctions(const std::string field_name):
     FlatPrismElementForcesAndSourcesCore::UserDataOperator(field_name,ForcesAndSourcesCore::UserDataOperator::OPROW) {}
 
-    MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+    MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data) {
       MoFEMFunctionBeginHot;
       if(data.getN().size1()==0)  MoFEMFunctionReturnHot(0);
       if(data.getN().size2()==0)  MoFEMFunctionReturnHot(0);
@@ -359,7 +359,7 @@ struct CohesiveInterfaceElement {
       commonData(common_data) {}
 
     MoFEMErrorCode doWork(
-      int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+      int side,EntityType type,EntitiesFieldData::EntData &data) {
       MoFEMFunctionBeginHot;
       try {
         int nb_dofs = data.getIndices().size();
@@ -416,7 +416,7 @@ struct CohesiveInterfaceElement {
       FlatPrismElementForcesAndSourcesCore::UserDataOperator(field_name,ForcesAndSourcesCore::UserDataOperator::OPROW),
       commonData(common_data) {}
 
-    MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+    MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data) {
       MoFEMFunctionBeginHot;
       try {
         if(type == MBVERTEX) {
@@ -449,7 +449,7 @@ struct CohesiveInterfaceElement {
       commonData(common_data),physicalEqations(physical_eqations) {}
 
     VectorDouble traction,Nf;
-    MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+    MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data) {
       MoFEMFunctionBeginHot;
 
       try {
@@ -496,8 +496,8 @@ struct CohesiveInterfaceElement {
     MoFEMErrorCode doWork(
       int row_side,int col_side,
       EntityType row_type,EntityType col_type,
-      DataForcesAndSourcesCore::EntData &row_data,
-      DataForcesAndSourcesCore::EntData &col_data
+      EntitiesFieldData::EntData &row_data,
+      EntitiesFieldData::EntData &col_data
     ) {
       MoFEMFunctionBeginHot;
 
@@ -562,7 +562,7 @@ struct CohesiveInterfaceElement {
       FlatPrismElementForcesAndSourcesCore::UserDataOperator(field_name,ForcesAndSourcesCore::UserDataOperator::OPROW),
       commonData(common_data),physicalEqations(physical_eqations) {}
 
-      MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+      MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data) {
         MoFEMFunctionBeginHot;
 
         if(type != MBVERTEX) MoFEMFunctionReturnHot(0);

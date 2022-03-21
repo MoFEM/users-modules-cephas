@@ -58,7 +58,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 using AssemblyDomainEleOp =

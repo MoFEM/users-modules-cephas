@@ -43,7 +43,7 @@ double dt = 2; // relative to edge length
 
 using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 // Use forms iterators for Grad-Grad term
 using OpGradGrad = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
@@ -83,7 +83,7 @@ private:
     OpRhs(boost::shared_ptr<MatrixDouble> u_grad_ptr);
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
 
   protected:
     boost::shared_ptr<MatrixDouble> uGradPtr;
@@ -417,7 +417,7 @@ Example::OpRhs::OpRhs(boost::shared_ptr<MatrixDouble> u_grad_ptr)
     : DomainEleOp("U", DomainEleOp::OPROW), uGradPtr(u_grad_ptr) {}
 
 MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
-                                      DataForcesAndSourcesCore::EntData &data) {
+                                      EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   FTensor::Index<'i', 3> i;

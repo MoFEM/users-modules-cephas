@@ -10,7 +10,7 @@ using EdgeEle = MoFEM::EdgeElementForcesAndSourcesCore;
 using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
 using OpEdgeEle = MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator;
 
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 namespace NonlinearPoissonOps {
 

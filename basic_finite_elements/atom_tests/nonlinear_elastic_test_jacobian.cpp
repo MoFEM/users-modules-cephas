@@ -22,7 +22,7 @@ struct OpCheck
   FTensor::Index<'j', 3> j;
 
   MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     const int nb_dofs = data.getFieldData().size();
     // const int nb_base_functions = data.getN().size2();

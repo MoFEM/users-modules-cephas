@@ -63,8 +63,8 @@ struct FieldApproximationH1 {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       if (A == PETSC_NULL)
@@ -172,7 +172,7 @@ struct FieldApproximationH1 {
     /** \brief calculate vector
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
 
       if (data.getIndices().size() == 0)
@@ -270,8 +270,8 @@ struct FieldApproximationH1 {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       if (A == PETSC_NULL)
@@ -369,7 +369,7 @@ struct FieldApproximationH1 {
     /** \brief calculate vector
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
 
       if (data.getIndices().size() == 0)

@@ -38,7 +38,7 @@ constexpr int BASE_DIM = 1;
 constexpr int FIELD_DIM = 1;
 constexpr int SPACE_DIM = 2;
 
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
@@ -303,7 +303,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
 
   auto error_op = new DomainEleOp(domainField, DomainEleOp::OPROW);
   error_op->doWorkRhsHook = [&](DataOperator *op_ptr, int side, EntityType type,
-                                DataForcesAndSourcesCore::EntData &data) {
+                                EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     auto o = static_cast<DomainEleOp *>(op_ptr);
 
@@ -359,7 +359,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
   auto side_vals_op = new DomainEleOp(domainField, DomainEleOp::OPROW);
   side_vals_op->doWorkRhsHook = [&](DataOperator *op_ptr, int side,
                                     EntityType type,
-                                    DataForcesAndSourcesCore::EntData &data) {
+                                    EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     auto o = static_cast<FaceSideOp *>(op_ptr);
 
@@ -376,7 +376,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
   side_fe_ptr->getOpPtrVector().push_back(side_vals_op);
 
   auto do_work_rhs_error = [&](DataOperator *op_ptr, int side, EntityType type,
-                               DataForcesAndSourcesCore::EntData &data) {
+                               EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     auto o = static_cast<BoundaryEleOp *>(op_ptr);
 

@@ -40,7 +40,7 @@ struct OpRow : public ForcesAndSourcesCore::UserDataOperator {
   OpRow(const std::string &field_name)
       : ForcesAndSourcesCore::UserDataOperator(field_name, field_name, OPROW) {}
   MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
     HelloFunctionBegin;
     if (type == MBVERTEX) {
       // get number of evaluated element in the loop
@@ -62,8 +62,8 @@ struct OpRowCol : public ForcesAndSourcesCore::UserDataOperator {
                                                symm) {}
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
     HelloFunctionBegin;
     MOFEM_LOG("SYNC", Sev::inform)
         << "Hello Operator OpRowCol:"
@@ -83,7 +83,7 @@ struct OpVolume : public VolumeElementForcesAndSourcesCore::UserDataOperator {
                                                             field_name, OPROW) {
   }
   MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
     HelloFunctionBegin;
     if (type == MBVERTEX) {
       MOFEM_LOG("SYNC", Sev::inform) << "Hello Operator OpVolume:"
@@ -97,7 +97,7 @@ struct OpFace : public FaceElementForcesAndSourcesCore::UserDataOperator {
   OpFace(const std::string &field_name)
       : FaceElementForcesAndSourcesCore::UserDataOperator(field_name, OPROW) {}
   MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
     HelloFunctionBegin;
     if (type == MBVERTEX) {
       MOFEM_LOG("SYNC", Sev::inform) << "Hello Operator OpFace:"
@@ -115,7 +115,7 @@ struct OpFaceSide : public FaceElementForcesAndSourcesCore::UserDataOperator {
       : FaceElementForcesAndSourcesCore::UserDataOperator(field_name, OPROW),
         feSidePtr(fe_side_ptr) {}
   MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
 
     HelloFunctionBegin;
     if (type == MBVERTEX) {
@@ -132,7 +132,7 @@ struct OpVolumeSide
       : VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator(
             field_name, field_name, OPROW) {}
   MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
     HelloFunctionBegin;
     if (type == MBVERTEX) {
       MOFEM_LOG("SYNC", Sev::inform)
