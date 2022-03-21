@@ -97,7 +97,7 @@ MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
     myPtr->dofs_x_indices = &*myPtr->dOfs_x_indices.data().begin();
   } break;
   case MBEDGE: {
-    myPtr->order_edge[side] = data.getDataOrder();
+    myPtr->order_edge[side] = data.getOrder();
     myPtr->N_edge[side] = &*data.getN().data().begin();
     myPtr->diffN_edge[side] = &*data.getDiffN().data().begin();
     myPtr->dOfs_x_edge.resize(3);
@@ -110,7 +110,7 @@ MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
         &*myPtr->dOfs_x_edge_indices[side].data().begin();
   } break;
   case MBTRI: {
-    myPtr->order_face = data.getDataOrder();
+    myPtr->order_face = data.getOrder();
     myPtr->N_face = &*data.getN().data().begin();
     myPtr->diffN_face = &*data.getDiffN().data().begin();
     myPtr->dOfs_x_face.resize(data.getFieldData().size());
@@ -152,14 +152,14 @@ MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodMaterial::doWork(
     myPtr->dofs_X = &*myPtr->dOfs_X.data().begin();
   } break;
   case MBEDGE: {
-    myPtr->order_edge_material[side] = data.getDataOrder();
+    myPtr->order_edge_material[side] = data.getOrder();
     myPtr->dOfs_X_edge.resize(3);
     myPtr->dOfs_X_edge[side].resize(data.getFieldData().size());
     ublas::noalias(myPtr->dOfs_X_edge[side]) = data.getFieldData();
     myPtr->dofs_X_edge[side] = &*myPtr->dOfs_X_edge[side].data().begin();
   } break;
   case MBTRI: {
-    myPtr->order_face_material = data.getDataOrder();
+    myPtr->order_face_material = data.getOrder();
     myPtr->dOfs_X_face.resize(data.getFieldData().size());
     ublas::noalias(myPtr->dOfs_X_face) = data.getFieldData();
     myPtr->dofs_X_face = &*myPtr->dOfs_X_face.data().begin();
