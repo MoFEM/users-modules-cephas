@@ -727,7 +727,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       nN.resize(nb_row, nb_col, false);
       divVec.resize(nb_col, false);
       nN.clear();
-      // take direvatives of base functions
+      // take derivatives of base functions
       FTensor::Index<'i', 3> i;
       auto t_base_diff_hdiv = col_data.getFTensor2DiffN<3, 3>();
       // Scale eq.
@@ -810,7 +810,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       auto t_w = getFTensor0IntegrationWeight();
       // Get base function
       auto t_n_hdiv_row = row_data.getFTensor1N<3>();
-      // Get direvatives of base functions
+      // Get derivatives of base functions
       FTensor::Index<'i', 3> i;
       auto t_base_diff_hdiv = row_data.getFTensor2DiffN<3, 3>();
       // Get volume
