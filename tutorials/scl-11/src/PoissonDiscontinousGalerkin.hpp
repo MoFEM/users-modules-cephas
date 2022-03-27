@@ -37,8 +37,8 @@ std::array<VectorInt, 2>
     indicesColSideMap; ///< indices on columns for left hand-side
 std::array<MatrixDouble, 2> rowBaseSideMap; // base functions on rows
 std::array<MatrixDouble, 2> colBaseSideMap; // base function  on columns
-std::array<MatrixDouble, 2> rowDiffBaseSideMap; // direvative of base functions
-std::array<MatrixDouble, 2> colDiffBaseSideMap; // direvative of base functions
+std::array<MatrixDouble, 2> rowDiffBaseSideMap; // derivative of base functions
+std::array<MatrixDouble, 2> colDiffBaseSideMap; // derivative of base functions
 std::array<double, 2> areaMap; // area/volume of elements on the side
 std::array<int, 2> senseMap; // orientaton of local element edge/face in respect
                              // to global orientation of edge/face

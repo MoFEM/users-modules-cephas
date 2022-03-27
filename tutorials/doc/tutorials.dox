@@ -231,6 +231,13 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
+<tr valign="top">
+       <td width="350px">\ref phase_field_doc</td>
+       <td> Phase field model and Navier-Sokes equations
+       <br/> *Keywords:* Phase field, Navier-Srokes, hyberbolic equation, inital boundary condition
+       </td>
+  </tr>
+
 </table>
 
 
