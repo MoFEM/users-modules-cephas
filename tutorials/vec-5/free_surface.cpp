@@ -1,6 +1,6 @@
 /**
  * \file free_surface.cpp
- * \FreeSurface free_surface.cpp
+ * \example free_surface.cpp
  *
  * Using PipelineManager interface calculate the divergence of base functions,
  * and integral of flux on the boundary. Since the h-div space is used, volume
