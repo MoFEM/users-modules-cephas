@@ -136,7 +136,7 @@ PetscBool test_penalty = PETSC_TRUE;
 
 double petsc_time = 0;
 double scale = 1.;
-double max_load_time = 1.3;
+double max_load_time = 1.;
 
 double young_modulus = 206913;
 double poisson_ratio = 0.29;
@@ -150,11 +150,14 @@ double b_iso = 16.93;
 int order = 2;
 
 // for rotating body
-double penalty = 1e4;
-double density = 1.0;
-array<double, 3> angular_velocity{0, 0, 0.1};
+static double penalty = 1e4;
+static array<double, 3> angular_velocity{0, 0, 0.0};
 
 PetscBool test_H1 = PETSC_FALSE;
+
+// 1 - symmetric Nitsche, 0 - nonsymmetric, -1 antisymmetrica
+static double phi = -1;
+static double nitsche = 0;
 
 inline long double hardening(long double tau, double temp) {
   return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
@@ -163,6 +166,7 @@ inline long double hardening(long double tau, double temp) {
 inline long double hardening_dtau(long double tau, double temp) {
   return H + Qinf * b_iso * std::exp(-b_iso * tau);
 }
+PetscBool is_cut_off = PETSC_FALSE;
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
@@ -228,8 +232,9 @@ MoFEMErrorCode Example::setupProblem() {
   // FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
 
   // Select base
-  enum bases { AINSWORTH, DEMKOWICZ, LASBASETOPT };
-  const char *list_bases[LASBASETOPT] = {"ainsworth", "demkowicz"};
+  enum bases { AINSWORTH, DEMKOWICZ, BERNSTEIN_BEZIER, LASBASETOPT };
+  const char *list_bases[LASBASETOPT] = {"ainsworth", "demkowicz",
+                                         "bernstein_bezier"};
   PetscInt choice_base_value = AINSWORTH;
   CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-base", list_bases,
                               LASBASETOPT, &choice_base_value, PETSC_NULL);
@@ -244,12 +249,17 @@ MoFEMErrorCode Example::setupProblem() {
   case DEMKOWICZ:
     base = DEMKOWICZ_JACOBI_BASE;
     MOFEM_LOG("EXAMPLE", Sev::inform)
-        << "Set DEMKOWICZ_JACOBI_BASE for displacents";
+        << "Set DEMKOWICZ_JACOBI_BASE for displacements";
+  case BERNSTEIN_BEZIER:
+    base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
+    MOFEM_LOG("EXAMPLE", Sev::inform)
+        << "Set AINSWORTH_BERNSTEIN_BEZIER_BASE for displacements";
     break;
   default:
     base = LASTBASE;
     break;
   }
+  
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_H1", &test_H1, PETSC_NULL);
 
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
@@ -330,6 +340,11 @@ MoFEMErrorCode Example::createCommonData() {
                                &test_convection, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_H1", &test_H1,
                                PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_cut_off", &is_cut_off,
+                               PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-phi", &phi, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-nitsche", &nitsche,
+                                 PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-max_load_time",
                                  &max_load_time, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &penalty,
@@ -345,6 +360,10 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Set cut_off " << is_cut_off;
+    MOFEM_LOG("WORLD", Sev::inform) << "Set phi: " << phi;
+    MOFEM_LOG("WORLD", Sev::inform) << "Set nitche: " << nitsche;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "is_cut_off " << is_cut_off;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
@@ -503,27 +522,11 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto integration_rule_skeleton = [](int, int, int approx_order) {
-    return 2 * approx_order;
+    return 2 * order;
   };
 
   auto add_skeleton_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBeginHot;
-
-    // pipeline.push_back(new OpSetPiolaTransformOnBoundary());
-    // domainSideFe->getRuleHook = [](double, double, double) { return -1; };
-    // if (SPACE_DIM == 2) {
-    //   auto det_ptr = boost::make_shared<VectorDouble>();
-    //   auto jac_ptr = boost::make_shared<MatrixDouble>();
-    //   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    //   domainSideFe->getOpPtrVector().push_back(
-    //       new OpCalculateHOJacForFace(jac_ptr));
-    //   domainSideFe->getOpPtrVector().push_back(
-    //       new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    //   // domainSideFe->getOpPtrVector().push_back(
-    //   //     new OpSetInvJacH1ForFace(inv_jac_ptr));
-    //   // domainSideFe->getOpPtrVector().push_back(
-    //   //     new OpSetInvJacL2ForFace(inv_jac_ptr));
-    // }
 
     domainSideFe = boost::make_shared<DomainSideEle>(mField);
     domainSideFe->getOpPtrVector().push_back(
@@ -539,7 +542,6 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_skeleton_rhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBeginHot;
-    // pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(
         new OpCalculateJumpOnSkeleton("U", commonDataPtr, domainSideFe));
@@ -547,8 +549,6 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculatePlasticFlowPenalty_Rhs("U", commonDataPtr));
     pipeline.push_back(
         new OpCalculateConstraintPenalty_Rhs("U", commonDataPtr));
-
-    // pipeline.push_back(new OpUnSetBc("U"));
 
     MoFEMFunctionReturnHot(0);
   };
@@ -588,7 +588,7 @@ MoFEMErrorCode Example::OPs() {
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
       pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+      // pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
       pipeline.push_back(new OpSetInvJacL2ForFace(inv_jac_ptr));
     }
     
