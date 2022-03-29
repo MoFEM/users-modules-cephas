@@ -2,9 +2,8 @@
  * \file plate.cpp
  * \example plate.cpp
  *
- * Using PipelineManager interface calculate the divergence of base functions,
- * and integral of flux on the boundary. Since the h-div space is used, volume
- * integral and boundary integral should give the same result.
+ * Implementation Kirchhoff-Love plate using Discointinous Galerkin (DG-Nitsche
+ * method)
  */
 
 /* This file is part of MoFEM.
