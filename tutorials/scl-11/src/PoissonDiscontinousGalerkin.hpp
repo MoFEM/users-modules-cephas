@@ -111,15 +111,14 @@ template <typename T> inline auto get_ntensor(T &base_mat, int gg, int bb) {
 
 template <typename T> inline auto get_diff_ntensor(T &base_mat) {
   double *ptr = &*base_mat.data().begin();
-  return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>(ptr, &ptr[1]);
+  return getFTensor1FromPtr<2>(ptr);
 };
 
 template <typename T>
 inline auto get_diff_ntensor(T &base_mat, int gg, int bb) {
   double *ptr = &base_mat(gg, 2 * bb);
-  return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>(ptr, &ptr[1]);
+  return getFTensor1FromPtr<2>(ptr);
 };
-
 
 /**
  * @brief Operator the left hand side matrix 
