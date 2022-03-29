@@ -160,11 +160,11 @@ using OpHBC = FormsIntegrators<BoundaryEleOp>::Assembly<
 
 double scale = 1.;
 
-double young_modulus = 206913;
-double poisson_ratio = 0.29;
+double young_modulus = 10000;
+double poisson_ratio = 0.;//zero for verification
 double conductivity = 1;
 double capacity = 1;
-double fluid_density = 1;
+double fluid_density = 10;
 
 #include <OpPostProcElastic.hpp>
 #include <SeepageOps.hpp>
@@ -275,7 +275,7 @@ private:
   struct BcHFun {
     BcHFun(double v, FEMethod &fe) : valH(v), fE(fe) {}
     double operator()(const double x, const double y, const double z) {
-      return valH * y;// - y; // * fE.ts_t;
+      return 0;//valH * y;// - y; // * fE.ts_t;
     }
 
   private:
@@ -644,7 +644,7 @@ MoFEMErrorCode Example::OPs() {
     auto get_time_scaled = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return fe_domain_rhs->ts_t * scale;
+      return /*fe_domain_rhs->ts_t */ scale;
     };
 
     // auto get_minus_time = [&](double, double, double) {
@@ -675,6 +675,13 @@ MoFEMErrorCode Example::OPs() {
         auto force_vec_ptr = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
         std::copy(&attr_vec[0], &attr_vec[SPACE_DIM],
                   force_vec_ptr->data().begin());
+        cerr << "Force " << attr_vec[0] << " " <<attr_vec[1]<< "\n";
+        cerr << "Force edges " << force_edges.size() <<  "\n";
+
+        auto t_vec = getFTensor1FromMat<SPACE_DIM, 0>(*force_vec_ptr);
+
+        cerr << "t_vec  " << t_vec << "\n";
+
         pipeline.push_back(
             new OpBoundaryVec("U", force_vec_ptr, get_time_scaled,
                               boost::make_shared<Range>(force_edges)));
