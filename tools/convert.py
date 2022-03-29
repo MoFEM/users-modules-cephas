@@ -1,19 +1,17 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import sys
 import argparse
 import subprocess
-import os
 from os import path
-import multiprocessing as mp
-from multiprocessing import Value
+from itertools import filterfalse
+
 try:
-    # Python 3
-    from itertools import filterfalse
+    import multiprocess as mp
 except ImportError:
-    # Python 2
-    from itertools import ifilterfalse
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "multiprocess"])
+    import multiprocess as mp
 
 def print_progress(iteration, total, decimals=1, bar_length=50):
     str_format = "{0:." + str(decimals) + "f}"
@@ -50,34 +48,26 @@ def init(l):
     global lock
     lock = l
 
-def filterfalse_comp(fun, file_list):
-    try:
-        # Python 3
-        return filterfalse(fun, file_list)
-    except NameError:
-        # Python 2
-        return ifilterfalse(fun, file_list)
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description="Convert multiple h5m files to vtk using mbconvert and multiprocessing")
+        description="Convert multiple h5m files to vtk files using the mbconvert tool (part of the MOAB library) and the multiprocess package for distributing input files between multiple processes")
     parser.add_argument(
         "file", help="list of h5m files or a regexp mask", nargs='+')
     parser.add_argument("-np", help="number of processes", type=int, default=1)
     args = parser.parse_args()
 
-    file_list = list(filterfalse_comp(is_not_h5m, args.file))
+    file_list = list(filterfalse(is_not_h5m, args.file))
     if not len(file_list):
-        print("No h5m files found with the given name/mask")
+        print("No h5m files were found with the given name/mask")
         exit()
 
-    file_list = list(filterfalse_comp(is_older_than_vtk, file_list))
+    file_list = list(filterfalse(is_older_than_vtk, file_list))
     if not len(file_list):
         print("All found h5m files are older than corresponding vtk files")
         exit()
 
-    N = Value('i', len(file_list))
-    n = Value('i', 0)
+    N = mp.Value('i', len(file_list))
+    n = mp.Value('i', 0)
 
     l = mp.Lock()
     pool = mp.Pool(processes=args.np, initializer=init, initargs=(l,))
