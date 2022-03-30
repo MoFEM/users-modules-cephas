@@ -1,0 +1,18 @@
+/*! \page tutorial_plate VEC-6: Discountinous Galrekin for Kirchoff-Love Plate
+
+\note Prerequisites of this tutorial include \ref tutorial_dg_poisson
+
+<br>
+
+\note Intended learning outcome:
+- general structure of a program developed using MoFEM
+- idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
+- integartion skeleton
+
+\tableofcontents
+
+\section source_vec_6 Source code main code
+
+\include plate.cpp
+
+*/

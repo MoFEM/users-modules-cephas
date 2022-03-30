@@ -231,12 +231,20 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
-<tr valign="top">
+  <tr valign="top">
        <td width="350px">\ref phase_field_doc</td>
        <td> Phase field model and Navier-Sokes equations
        <br/> *Keywords:* phase field, Navier-Stokes, hyberbolic equation, inital boundary condition
        </td>
   </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_plate</td>
+       <td> Solving forth order eliptic equation describing plate bending
+       <br/> *Keywords:* discountinous Galerkin method, plate theroy
+       </td>
+  </tr>
+
 
 </table>
 
