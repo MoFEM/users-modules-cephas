@@ -2,16 +2,24 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import platform
 import argparse
 import subprocess
 from os import path
 from itertools import filterfalse
 
-try:
-    import multiprocess as mp
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "multiprocess"])
-    import multiprocess as mp
+if platform.system() == 'Linux':
+    import multiprocessing as mp
+if platform.system() == 'Darwin':
+    try:
+        import multiprocess as mp
+    except ImportError:
+        print('On macOS this script requires multiprocess package for distributing input files between multiple processes.\nThis package could not be found on your system, it could be installed using e.g. "pip install multiprocess".\n')
+        exit()
+if platform.system() == 'Windows':
+     print('This script is not supported on Windows\n')
+     exit()
+
 
 def print_progress(iteration, total, decimals=1, bar_length=50):
     str_format = "{0:." + str(decimals) + "f}"
@@ -50,11 +58,15 @@ def init(l):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description="Convert multiple h5m files to vtk files using the mbconvert tool (part of the MOAB library) and the multiprocess package for distributing input files between multiple processes")
+        description="Convert multiple h5m files to vtk files using the mbconvert tool (part of the MOAB library). The input files can be distributed between multiple processes to speed-up the conversion.")
     parser.add_argument(
         "file", help="list of h5m files or a regexp mask", nargs='+')
     parser.add_argument("-np", help="number of processes", type=int, default=1)
+    parser.add_argument('--platform', help=argparse.SUPPRESS, action='store_true')
     args = parser.parse_args()
+
+    if args.platform:
+        print('Platform: {}'.format(platform.system()))
 
     file_list = list(filterfalse(is_not_h5m, args.file))
     if not len(file_list):
@@ -78,5 +90,4 @@ if __name__ == '__main__':
     pool.join()
 
     print('\n')
-
     exit()
