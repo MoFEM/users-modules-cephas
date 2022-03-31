@@ -361,9 +361,8 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Set cut_off " << is_cut_off;
-    MOFEM_LOG("WORLD", Sev::inform) << "Set phi: " << phi;
-    MOFEM_LOG("WORLD", Sev::inform) << "Set nitche: " << nitsche;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "is_cut_off " << is_cut_off;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Set phi: " << phi;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Set nitche: " << nitsche;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,

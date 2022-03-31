@@ -264,9 +264,6 @@ MoFEMErrorCode OpCalculatePlasticConvRotatingFrame::doWork(int side,
       // but rotation will not change the velocity, right?
       t_omega(i) = Omega(i, j) * t_coords(j);
 
-      // if (is_cut_off)
-      //   t_omega(i) *= cut_off_dtau(t_tau);
-
       t_tau_dot += t_grad_tau(i) * t_omega(i);
       t_plastic_strain_dot(i, j) += t_grad_plastic_strain(i, j, k) * t_omega(k);
 
@@ -375,11 +372,9 @@ MoFEMErrorCode OpVolumeSideCalculateEP::doWork(int side, EntityType type,
     auto base_function = data.getFTensor0N();
     int nb_in_loop = getFEMethod()->nInTheLoop;
 
-    int sense = 0;
     auto &cmdata = *commonDataPtr;
     auto &mat_ep = cmdata.strainSideMap[nb_in_loop];
     cmdata.indicesRowStrainSideMap[nb_in_loop] = data.getIndices();
-    cmdata.rowBaseSideMap[nb_in_loop] = data.getN();
 
     cmdata.rowBaseSideMap[nb_in_loop] = data.getN();
     cmdata.rowDiffBaseSideMap[nb_in_loop] = data.getDiffN();
@@ -607,6 +602,7 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
 
     auto t_w = getFTensor0IntegrationWeight();
     auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
+    auto t_omega = getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
     auto t_plastic_strain_jump =
         getFTensor2SymmetricFromMat<SPACE_DIM>(*cmdata.plasticStrainJumpPtr);
 
@@ -623,7 +619,7 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
 
       for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
         // FIXME: might be -p
-        const double alpha = getMeasure() * t_w * t_X_dot_n * t_X_dot_n * -p;
+        const double alpha = getMeasure() * t_w * t_X_dot_n * -p;
 
         auto t_nf = get_nf(nf, FTensor::Number<SPACE_DIM>());
 
@@ -648,6 +644,7 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
         }
         ++t_w;
         ++t_X_dot_n;
+        ++t_omega;
         ++t_plastic_strain_jump;
       }
       CHKERR ::VecSetValues(getKSPf(), idx_rmap.at(s0).size(),
@@ -695,6 +692,8 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
 
     auto t_w = getFTensor0IntegrationWeight();
     auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
+    auto t_omega = getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
+
     auto t_tau_jump =
         getFTensor0FromVec(*commonDataPtr->plasticTauJumpPtr);
 
@@ -711,7 +710,7 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
 
       for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
         // FIXME: might be -p
-        const double alpha = getMeasure() * t_w * t_X_dot_n * t_X_dot_n * -p;
+        const double alpha = getMeasure() * t_w * t_X_dot_n * -p;
 
         auto t_nf = nf.data().begin();
 
@@ -723,8 +722,7 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
           FTensor::Tensor1<double, SPACE_DIM> t_vn;
           t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
 
-          t_nf -=
-              alpha * (t_vn(k) * t_normal(k)) * t_tau_jump;
+          t_nf -= alpha * t_vn(k) * t_tau_jump * t_normal(k);
 
           ++t_nf;
           ++t_row_base;
@@ -736,6 +734,7 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
         }
         ++t_w;
         ++t_X_dot_n;
+        ++t_omega;
         ++t_tau_jump;
       }
       CHKERR ::VecSetValues(getKSPf(), idx_rmap.at(s0).size(),
@@ -841,10 +840,12 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
         auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
         auto t_w = getFTensor0IntegrationWeight();
         auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
+        auto t_omega =
+            getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
 
         for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
-          const double alpha = getMeasure() * t_w * t_X_dot_n * t_X_dot_n;
+          const double alpha = getMeasure() * t_w * t_X_dot_n;
 
           // iterate rows
           size_t rr = 0;
@@ -897,6 +898,7 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
 
           ++t_w;
           ++t_X_dot_n;
+          ++t_omega;
         }
 
         // assemble system
@@ -963,10 +965,12 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
         auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
         auto t_w = getFTensor0IntegrationWeight();
         auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
+        auto t_omega =
+            getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
 
         for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
-          const double alpha = getMeasure() * t_w * t_X_dot_n * t_X_dot_n;
+          const double alpha = getMeasure() * t_w * t_X_dot_n;
 
           // iterate rows
             auto t_mat = locMat.data().begin();
@@ -1013,6 +1017,7 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
           }
 
           ++t_w;
+          ++t_omega;
           ++t_X_dot_n;
         }
 
