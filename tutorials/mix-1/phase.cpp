@@ -47,8 +47,8 @@ constexpr std::array<int, 9> d1_savitzky_golay_w9_p4 = {
 
 constexpr std::array<int, 10> d1_normalisation_p2 = {0,  0, 0,  2, 0,
                                                     10, 0, 28, 0, 60};
-constexpr std::array<int, 10> d1_normalisation_p4 = {0, 0,   0, 0,   12,
-                                                     0, 252, 0, 1188};
+constexpr std::array<int, 10> d1_normalisation_p4 = {0,  0, 0,   0, 0,
+                                                     12, 0, 252, 0, 1188};
 
 const int *d1_savitzky_golay_p2[] = {nullptr, nullptr,
                                      nullptr, d1_savitzky_golay_w3_p2.data(),
@@ -60,11 +60,17 @@ const int *d1_savitzky_golay_p4[] = {nullptr,
                                      nullptr,
                                      nullptr,
                                      nullptr,
+                                     nullptr,
                                      d1_savitzky_golay_w5_p4.data(),
                                      nullptr,
                                      d1_savitzky_golay_w7_p4.data(),
                                      nullptr,
                                      d1_savitzky_golay_w9_p4.data()};
+
+const int **d1_savitzky_golay[] = {nullptr, nullptr, d1_savitzky_golay_p2,
+                                   nullptr, d1_savitzky_golay_p4};
+const int *d1_normalisation[] = {nullptr, nullptr, d1_normalisation_p2.data(),
+                                 nullptr, d1_normalisation_p4.data()};
 
 using EntData = EntitiesFieldData::EntData;
 using AssemblyBoundaryEleOp =
@@ -77,6 +83,8 @@ using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
 static double k = 1; // wave number
+static int order_savitzky_golay = 2;
+static int window_savitzky_golay = 3;
 
 struct Example {
 
@@ -113,22 +121,23 @@ private:
   static std::array<double, LAST_BB> aveMaxMin;
 
   static int focalIndex;
+  static int savitzkyGolayNormalisation;
+  static const int *savitzkyGolayWeights;
+
   static std::pair<int, int> getCoordsInImage(double x, double y);
 
   static double rhsSource(const double x, const double y, const double);
   static double lhsFlux(const double x, const double y, const double);
 
-  SmartPetscObj<Mat> B;
-  SmartPetscObj<Vec> F;
-
   struct BoundaryOp;
-  struct BoundaryRhs;
 };
 
 std::vector<double> Example::rZ;
 std::vector<MatrixInt> Example::iI;
 std::array<double, Example::BoundingBox::LAST_BB> Example::aveMaxMin;
 int Example::focalIndex;
+int Example::savitzkyGolayNormalisation;
+const int *Example::savitzkyGolayWeights;
 
 std::pair<int, int> Example::getCoordsInImage(double x, double y) {
 
@@ -151,11 +160,17 @@ std::pair<int, int> Example::getCoordsInImage(double x, double y) {
 
 double Example::rhsSource(const double x, const double y, const double) {
   const auto idx = getCoordsInImage(x, y);
-  const auto &up = iI[focalIndex + 1];
-  const auto &down = iI[focalIndex - 1];
+
+  double v = 0;
+  for (auto w = 0; w != window_savitzky_golay; ++w) {
+    const auto i = focalIndex - (window_savitzky_golay - 1) / 2 + w;
+    const auto &intensity = iI[i];
+    v += intensity(idx.first, idx.second) * savitzkyGolayWeights[w];
+  }
+  v = static_cast<double>(v) / savitzkyGolayNormalisation;
+
   const auto dz = rZ[focalIndex + 1] - rZ[focalIndex - 1];
-  return -k *
-         ((up(idx.first, idx.second) - down(idx.first, idx.second)) / (2 * dz));
+  return -k * v / dz;
 }
 
 double Example::lhsFlux(const double x, const double y, const double) {
@@ -188,32 +203,6 @@ private:
   double &globFlux;
 };
 
-struct Example::BoundaryRhs : public AssemblyBoundaryEleOp {
-  BoundaryRhs(const std::string flux_field)
-      : AssemblyBoundaryEleOp(flux_field, flux_field, OPROW) {}
-
-  MoFEMErrorCode iNtegrate(EntData &row_data) {
-    MoFEMFunctionBegin;
-    const size_t nb_base_functions = row_data.getN().size2() / 3;
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_row_base = row_data.getFTensor1N<3>();
-    auto t_normal = getFTensor1Normal();
-    FTensor::Index<'i', 3> i;
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
-      const double alpha = t_w;
-      int rr = 0;
-      for (; rr != nbRows; ++rr) {
-        locF[rr] += alpha * t_row_base(i) * t_normal(i);
-        ++t_row_base;
-      }
-      for (; rr < nb_base_functions; ++rr)
-        ++t_row_base;
-      ++t_w; // move to another integration weight
-    }
-    MoFEMFunctionReturn(0);
-  }
-};
-
 //! [run problem]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
@@ -221,15 +210,42 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR setupProblem();
   CHKERR boundaryCondition();
 
-  for (auto i = 1; i != rZ.size() - 1; ++i) {
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-k", &k, PETSC_NULL);
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order_savitzky_golay",
+                               &order_savitzky_golay, PETSC_NULL);
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-window_savitzky_golay",
+                            &window_savitzky_golay, PETSC_NULL);
 
-    MOFEM_LOG_CHANNEL("WORLD");
-    MOFEM_LOG("WORLD", Sev::inform) << i << " focal length zR = " << rZ[i];
+  MOFEM_LOG("WORLD", Sev::inform) << "Wave number " << k;
+  MOFEM_LOG("WORLD", Sev::inform)
+      << "Order Savitzky Golay " << order_savitzky_golay;
+  MOFEM_LOG("WORLD", Sev::inform)
+      << "Window Savitzky Golay " << window_savitzky_golay;
 
-    focalIndex = i;
-    CHKERR solveSystem();
-    CHKERR outputResults(i);
-  }
+  if ((rZ.size() - 1) % 2)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "Expected even number of images");
+
+  focalIndex = (rZ.size() - 1) / 2;
+  MOFEM_LOG("WORLD", Sev::inform) << "zR for mid plane " << rZ[focalIndex];
+
+  const auto d1_sg_data = d1_savitzky_golay[order_savitzky_golay];
+  if (!d1_sg_data)
+    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+            "Wrong Savitzky Golay order");
+
+  auto d1_sg_data_window = d1_sg_data[window_savitzky_golay];
+  if (!d1_sg_data_window)
+    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+            "Wrong Savitzky Golay window");
+
+  savitzkyGolayNormalisation =
+      d1_normalisation[order_savitzky_golay][window_savitzky_golay];
+  savitzkyGolayWeights = d1_sg_data_window;
+
+  CHKERR assembleSystemIntensity();
+  CHKERR solveSystem();
+  CHKERR outputResults(0);
 
   MoFEMFunctionReturn(0);
 }
@@ -369,10 +385,9 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-base_order", &base_order,
                             PETSC_NULL);
 
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-k", &k, PETSC_NULL);
 
   MOFEM_LOG("WORLD", Sev::inform) << "Base order " << base_order;
-  MOFEM_LOG("WORLD", Sev::inform) << "Wave number " << k;
+
 
   CHKERR simpleInterface->setFieldOrder("S", base_order);
   CHKERR simpleInterface->setFieldOrder("PHI", base_order - 1);
@@ -438,6 +453,7 @@ MoFEMErrorCode Example::assembleSystemIntensity() {
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeightsOnFace());
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateHOJacForFace(jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -454,57 +470,10 @@ MoFEMErrorCode Example::assembleSystemIntensity() {
   auto unity = []() { return 1; };
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpHdivU("S", "PHI", unity, true));
+
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpDomainSource("PHI", rhsSource));
-
-  auto dm = simpleInterface->getDM();
-  F = smartCreateDMVector(dm);
-  B = smartCreateDMMatrix(dm);
-
-  pipeline_mng->getDomainLhsFE()->ksp_A = B;
-  pipeline_mng->getDomainLhsFE()->ksp_B = B;
-  pipeline_mng->getDomainRhsFE()->ksp_f = F;
-
-  CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR MatAssemblyBegin(B, MAT_FINAL_ASSEMBLY);
-  CHKERR MatAssemblyEnd(B, MAT_FINAL_ASSEMBLY);
-  CHKERR VecAssemblyBegin(F);
-  CHKERR VecAssemblyEnd(F);
-  CHKERR VecGhostUpdateBegin(F, ADD_VALUES, SCATTER_REVERSE);
-  CHKERR VecGhostUpdateEnd(F, ADD_VALUES, SCATTER_REVERSE);
-
-  MoFEMFunctionReturn(0);
-}
-//! [Push operators to pipeline]
-
-//! [Push operators to pipeline]
-MoFEMErrorCode Example::assembleSystemFlux() {
-  MoFEMFunctionBegin;
-
-  auto *pipeline_mng = mField.getInterface<PipelineManager>();
-
-  pipeline_mng->getDomainLhsFE().reset();
-  pipeline_mng->getDomainRhsFE().reset();
-  pipeline_mng->getBoundaryRhsFE().reset();
-
-  auto rule_vol = [](int, int, int order) { return 2 * (order + 1); };
-  pipeline_mng->setBoundaryRhsIntegrationRule(rule_vol);
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpSetContravariantPiolaTransformOnEdge2D());
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(new BoundaryRhs("S"));
-
-  auto dm = simpleInterface->getDM();
-  F = smartCreateDMVector(dm);
-  pipeline_mng->getBoundaryRhsFE()->ksp_f = F;
-  CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR VecAssemblyBegin(F);
-  CHKERR VecAssemblyEnd(F);
-  CHKERR VecGhostUpdateBegin(F, ADD_VALUES, SCATTER_REVERSE);
-  CHKERR VecGhostUpdateEnd(F, ADD_VALUES, SCATTER_REVERSE);
-
-  double fnorm;
-  CHKERR VecNorm(F, NORM_2, &fnorm);
-  MOFEM_LOG("WORLD", Sev::inform) << "Flux F norm " << std::scientific << fnorm;
 
   MoFEMFunctionReturn(0);
 }
@@ -514,17 +483,15 @@ MoFEMErrorCode Example::assembleSystemFlux() {
 MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
 
-  CHKERR assembleSystemIntensity();
-
   auto dm = simpleInterface->getDM();
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  auto solver = MoFEM::createKSP(mField.get_comm());
+  auto solver = pipeline_mng->createKSP();
   CHKERR KSPSetFromOptions(solver);
-  CHKERR KSPSetOperators(solver, B, B);
   CHKERR KSPSetUp(solver);
 
   auto iD = smartCreateDMVector(dm);
+  auto F = smartVectorDuplicate(iD);
   CHKERR KSPSolve(solver, F, iD);
   CHKERR VecGhostUpdateBegin(iD, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(iD, INSERT_VALUES, SCATTER_FORWARD);
@@ -535,29 +502,6 @@ MoFEMErrorCode Example::solveSystem() {
   MOFEM_LOG_CHANNEL("WORLD");
   MOFEM_LOG("WORLD", Sev::inform)
       << "iD flux " << std::scientific << i_lambda_flux;
-
-  auto lambdaD = smartVectorDuplicate(iD);
-  CHKERR assembleSystemFlux();
-  CHKERR KSPSolve(solver, F, lambdaD);
-  CHKERR VecGhostUpdateBegin(lambdaD, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(lambdaD, INSERT_VALUES, SCATTER_FORWARD);
-
-  CHKERR DMoFEMMeshToLocalVector(dm, lambdaD, INSERT_VALUES, SCATTER_REVERSE);
-  double lambda_flux;
-  CHKERR calculateFlux(lambda_flux);
-  MOFEM_LOG_CHANNEL("WORLD");
-  MOFEM_LOG("WORLD", Sev::inform)
-      << "lambdaD flux " << std::scientific << lambda_flux;
-
-  double lambda = -i_lambda_flux / lambda_flux;
-
-  // CHKERR VecAXPY(iD, lambda, lambdaD);
-  // CHKERR DMoFEMMeshToLocalVector(dm, iD, INSERT_VALUES, SCATTER_REVERSE);
-  // double zero_flux;
-  // CHKERR calculateFlux(zero_flux);
-  // MOFEM_LOG_CHANNEL("WORLD");
-  // MOFEM_LOG("WORLD", Sev::inform)
-  //     << "Zero flux " << std::scientific << zero_flux;
 
   MoFEMFunctionReturn(0);
 }
