@@ -33,6 +33,39 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
 using EdgeEleOp = EdgeEle::UserDataOperator;
 
+constexpr std::array<int, 3> d1_savitzky_golay_w3_p2 = {-1, 0, 1};
+constexpr std::array<int, 5> d1_savitzky_golay_w5_p2 = {-2, -1, 0, 1, 2};
+constexpr std::array<int, 7> d1_savitzky_golay_w7_p2 = {-3, -2, -1, 0, 1, 2, 3};
+constexpr std::array<int, 9> d1_savitzky_golay_w9_p2 = {-4, -3, -2, -1, 0,
+                                                         1,  2,  3,  4};
+
+constexpr std::array<int, 5> d1_savitzky_golay_w5_p4 = {1, -8, 0, 8, -1};
+constexpr std::array<int, 7> d1_savitzky_golay_w7_p4 = {22, -67, -58, 0,
+                                                        58, 67,  -22};
+constexpr std::array<int, 9> d1_savitzky_golay_w9_p4 = {
+    86, -142, -193, -126, 0, 126, 193, 142, -86};
+
+constexpr std::array<int, 10> d1_normalisation_p2 = {0,  0, 0,  2, 0,
+                                                    10, 0, 28, 0, 60};
+constexpr std::array<int, 10> d1_normalisation_p4 = {0, 0,   0, 0,   12,
+                                                     0, 252, 0, 1188};
+
+const int *d1_savitzky_golay_p2[] = {nullptr, nullptr,
+                                     nullptr, d1_savitzky_golay_w3_p2.data(),
+                                     nullptr, d1_savitzky_golay_w5_p2.data(),
+                                     nullptr, d1_savitzky_golay_w7_p2.data(),
+                                     nullptr, d1_savitzky_golay_w9_p2.data()};
+
+const int *d1_savitzky_golay_p4[] = {nullptr,
+                                     nullptr,
+                                     nullptr,
+                                     nullptr,
+                                     d1_savitzky_golay_w5_p4.data(),
+                                     nullptr,
+                                     d1_savitzky_golay_w7_p4.data(),
+                                     nullptr,
+                                     d1_savitzky_golay_w9_p4.data()};
+
 using EntData = EntitiesFieldData::EntData;
 
 using OpHdivHdiv = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
