@@ -1,0 +1,17 @@
+/*! \page tutorial_phase MIX-1: Retrive phase solving transport-of-intensity equation.
+
+\note Prerequisites of this tutorial include \ref tut_mix_poisson
+
+<br>
+
+\note Intended learning outcome:
+- Hetergounous source and parameters
+- Mixed formulation
+
+\tableofcontents
+
+\section source_mix_1 Source code main code
+
+\include phase.cpp
+
+*/

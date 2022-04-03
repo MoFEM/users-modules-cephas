@@ -262,6 +262,17 @@ continuing with the one you are most excited about.
 
 </table>
 
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_phase </td>
+       <td> A mixed problem for transport intensity equation
+       <br/> *Keywords:* Hetergenous paramterers and source function
+       </td>
+  </tr>
+
+</table>
+
 \section tutorials_data_driven Data driven problems
 
 <table style="width:100%">

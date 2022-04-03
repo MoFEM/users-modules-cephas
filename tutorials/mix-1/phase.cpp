@@ -1,6 +1,6 @@
 /**
- * \file helmholtz.cpp
- * \example helmholtz.cpp
+ * \file phase.cpp
+ * \example phase.cpp
  *
  * Using PipelineManager interface calculate Helmholtz problem. Example show how
  * to manage complex variable fields.
@@ -216,17 +216,22 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-window_savitzky_golay",
                             &window_savitzky_golay, PETSC_NULL);
 
+  int window_shift = 0;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-window_shift", &window_shift,
+                            PETSC_NULL);
+
   MOFEM_LOG("WORLD", Sev::inform) << "Wave number " << k;
   MOFEM_LOG("WORLD", Sev::inform)
       << "Order Savitzky Golay " << order_savitzky_golay;
   MOFEM_LOG("WORLD", Sev::inform)
       << "Window Savitzky Golay " << window_savitzky_golay;
+  MOFEM_LOG("WORLD", Sev::inform) << "Window shift " << window_shift;
 
   if ((rZ.size() - 1) % 2)
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
             "Expected even number of images");
 
-  focalIndex = (rZ.size() - 1) / 2;
+  focalIndex = (rZ.size() - 1) / 2 + window_shift;
   MOFEM_LOG("WORLD", Sev::inform) << "zR for mid plane " << rZ[focalIndex];
 
   const auto d1_sg_data = d1_savitzky_golay[order_savitzky_golay];
