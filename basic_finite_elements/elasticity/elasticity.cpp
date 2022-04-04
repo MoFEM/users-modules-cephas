@@ -147,9 +147,9 @@ int main(int argc, char *argv[]) {
     PetscBool is_post_proc_volume = PETSC_TRUE;
 
     // Select base
-    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, DEMKOWICZ, LASBASETOP };
+    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, JACOBI, LASBASETOP };
     const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier",
-                                "demkowicz"};
+                                "jacobi"};
     PetscInt choice_base_value = LOBATTO;
 
     // Read options from command line
@@ -280,7 +280,7 @@ int main(int argc, char *argv[]) {
     case BERNSTEIN_BEZIER:
       base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
       break;
-    case DEMKOWICZ:
+    case JACOBI:
       base = DEMKOWICZ_JACOBI_BASE;
       break;
     default:
