@@ -99,7 +99,6 @@ private:
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystemIntensity();
   MoFEMErrorCode assembleSystemFlux();
   MoFEMErrorCode solveSystem();
@@ -208,7 +207,51 @@ MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
   CHKERR readMesh();
   CHKERR setupProblem();
-  CHKERR boundaryCondition();
+
+  char images_array_files[255] = "out_arrays.txt";
+  CHKERR PetscOptionsGetString(PETSC_NULL, "", "-images_arrays",
+                               images_array_files, 255, PETSC_NULL);
+
+  // Look into "extract_data.ipynb" file, it is used to generate data file with
+  // combined stack of the images.
+  auto read_images = [&]() {
+    std::ifstream in;
+    in.open(images_array_files);
+    std::vector<int> values;
+    values.insert(values.end(), std::istream_iterator<int>(in),
+                  std::istream_iterator<int>());
+    MOFEM_LOG("WORLD", Sev::inform) << "Read data size " << values.size();
+    in.close();
+    return values;
+  };
+
+  auto structure_data = [&](auto &&data) {
+    constexpr double scale = 1e4; // scale to float
+    auto it = data.begin();
+    if (it == data.end()) {
+      THROW_MESSAGE("No images");
+    }
+    rZ.reserve(*it);
+    iI.reserve(*it);
+    MOFEM_LOG("WORLD", Sev::inform) << "Number of images " << *it;
+    it++;
+    for (; it != data.end();) {
+      rZ.emplace_back(*(it++) / scale);
+      const auto r = *(it++);
+      const auto c = *(it++);
+      iI.emplace_back(r, c);
+      MOFEM_LOG("WORLD", Sev::inform)
+          << "Read data set " << rZ.back() << " size " << r << " by " << c;
+      auto &m = iI.back();
+      for (auto rit = m.begin1(); rit != m.end1(); ++rit) {
+        for (auto cit = rit.begin(); cit != rit.end(); ++cit) {
+          *cit = *(it++);
+        }
+      }
+    }
+  };
+
+  structure_data(read_images());
 
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-k", &k, PETSC_NULL);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order_savitzky_golay",
@@ -259,45 +302,6 @@ MoFEMErrorCode Example::runProblem() {
 //! [Read mesh]
 MoFEMErrorCode Example::readMesh() {
   MoFEMFunctionBegin;
-
-  auto read_data = []() {
-    std::ifstream in;
-    in.open("out_arrays.txt");
-    std::vector<int> values;
-    values.insert(values.end(), std::istream_iterator<int>(in),
-                  std::istream_iterator<int>());
-    MOFEM_LOG("WORLD", Sev::inform) << "Read data size " << values.size();
-    in.close();
-    return values;
-  };
-
-  auto struture_data = [&](auto &&data) {
-    constexpr double scale = 1e4; // scale to float
-    auto it = data.begin();
-    if (it == data.end()) {
-      THROW_MESSAGE("No images");
-    }
-    rZ.reserve(*it);
-    iI.reserve(*it);
-    MOFEM_LOG("WORLD", Sev::inform) << "Number of images " << *it;
-    it++;
-    for (; it != data.end();) {
-      rZ.emplace_back(*(it++) / scale);
-      const auto r = *(it++);
-      const auto c = *(it++);
-      iI.emplace_back(r, c);
-      MOFEM_LOG("WORLD", Sev::inform)
-          << "Read data set " << rZ.back() << " size " << r << " by " << c;
-      auto &m = iI.back();
-      for (auto rit = m.begin1(); rit != m.end1(); ++rit) {
-        for (auto cit = rit.begin(); cit != rit.end(); ++cit) {
-          *cit = *(it++);
-        }
-      }
-    }
-  };
-
-  struture_data(read_data());
 
   auto get_bounding_box = [&]() {
     auto &moab = mField.get_moab();
@@ -401,14 +405,6 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
-
-//! [Applying essential BC]
-MoFEMErrorCode Example::boundaryCondition() {
-  MoFEMFunctionBegin;
-
-  MoFEMFunctionReturn(0);
-}
-//! [Applying essential BC]
 
 //! [Calculate flux on boundary]
 MoFEMErrorCode Example::calculateFlux(double &calc_flux) {
