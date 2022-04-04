@@ -2,8 +2,10 @@
  * \file phase.cpp
  * \example phase.cpp
  *
- * Using PipelineManager interface calculate Helmholtz problem. Example show how
- * to manage complex variable fields.
+ * Calculate light phase using <a
+ * href="https://en.wikipedia.org/wiki/Transport-of-intensity_equation">Transport
+ * intensity equation</a>.
+ *
  */
 
 /* This file is part of MoFEM.
