@@ -399,10 +399,12 @@ MoFEMErrorCode Example::setupProblem() {
 
   MOFEM_LOG("WORLD", Sev::inform) << "Base order " << base_order;
 
-
   CHKERR simpleInterface->setFieldOrder("S", base_order);
   CHKERR simpleInterface->setFieldOrder("PHI", base_order - 1);
   CHKERR simpleInterface->setUp();
+
+  // Block PHI-PHI is empty
+  CHKERR simpleInterface->addFieldToEmptyFieldBlocks("PHI", "PHI");
 
   MoFEMFunctionReturn(0);
 }
