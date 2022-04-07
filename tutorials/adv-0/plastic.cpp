@@ -570,7 +570,6 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-
     pipeline.push_back(
         new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr));
     pipeline.push_back(
@@ -707,7 +706,7 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_domain_stress_ops(feAxiatorRhs->getOpPtrVector(),
                                commonPlasticDataPtr->mDPtr_Axiator);
   CHKERR add_domain_ops_rhs_mechanical(feAxiatorRhs->getOpPtrVector());
-  
+
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_deviator);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_deviator);
 

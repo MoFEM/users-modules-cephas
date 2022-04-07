@@ -62,10 +62,6 @@ of the code, look here;
 #include <BasicFiniteElements.hpp>
 using namespace MoFEM;
 
-#include <boost/program_options.hpp>
-using namespace std;
-namespace po = boost::program_options;
-
 #include <Hooke.hpp>
 using namespace boost::numeric;
 
@@ -737,9 +733,9 @@ int main(int argc, char *argv[]) {
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
 
     // Initialise mass matrix
-    Mat Mij;
+    SmartPetscObj<Mat> Mij;
     if (is_calculating_frequency == PETSC_TRUE) {
-      CHKERR MatDuplicate(Aij, MAT_DO_NOT_COPY_VALUES, &Mij);
+      Mij = smartMatDuplicate(Aij, MAT_DO_NOT_COPY_VALUES);
       CHKERR MatSetOption(Mij, MAT_SPD, PETSC_TRUE);
       // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
     }

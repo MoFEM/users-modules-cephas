@@ -4,9 +4,10 @@ Dam example {#jup_dam_example}
 
 ```python
 import os
-os.system('/usr/bin/Xvfb :99 -screen 0 1024x768x24 &')
-os.environ['DISPLAY'] = ':99'
-os.environ['PYVISTA_USE_IPYVTK'] = 'true'
+
+from pyvirtualdisplay import Display
+display = Display(visible=0, size=(1200, 800))
+display.start()
 
 import pyvista as pv
 import matplotlib.pyplot as plt
@@ -170,7 +171,7 @@ scale_factor=2e4
 plotter = pv.Plotter()
 plotter.add_mesh(mesh, scalars='DISPLACEMENT', smooth_shading=False)
 
-print('Orient the view, then press "q" to close window and produce movie')
+#print('Orient the view, then press "q" to close window and produce movie')
 
 # setup camera and close
 plotter.show(auto_close=False)
@@ -178,6 +179,7 @@ plotter.show(auto_close=False)
 # Open a gif
 out_gif=data_dir+'/dam.gif'
 plotter.open_gif(out_gif)
+print(out_gif)
 
 list_of_files=!ls -c1 out*h5m.vtk
 for f in list_of_files:
@@ -192,8 +194,8 @@ plotter.close()
        
 ```
 
-![](examples/dam/dam.gif)
-
 ```python
-
+from IPython.display import Image
+from IPython.core.display import HTML 
+Image(filename = out_gif)
 ```

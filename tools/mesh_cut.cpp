@@ -209,7 +209,7 @@ int main(int argc, char *argv[]) {
     int first_bit = 1;
     CHKERR cut_mesh->cutTrimAndMerge(first_bit, fraction_level, th, tol[0],
                                      tol[1], tol[2], fixed_edges, corner_nodes,
-                                     true, true);
+                                     true, false);
 
     // Set coordinates for tag data
     if (set_coords)
@@ -247,9 +247,9 @@ int main(int argc, char *argv[]) {
               create_surface_side_set, SIDESET))
         CHKERR meshset_manager->addMeshset(SIDESET, create_surface_side_set);
       else
-        PetscPrintf(PETSC_COMM_SELF,
-                    "<<< Warring >>> sideset %d is on the mesh\n",
-                    create_surface_side_set);
+        MOFEM_LOG_C("WORLD", Sev::warning,
+                  "Warring >>> sideset %d is on the mesh",
+                  create_surface_side_set);
 
       CHKERR meshset_manager->addEntitiesToMeshset(
           SIDESET, create_surface_side_set, cut_mesh->getMergedSurfaces());
