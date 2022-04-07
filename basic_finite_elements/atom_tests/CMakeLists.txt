@@ -467,7 +467,7 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_navier_stokes_element
   -my_file mesh_for_testing_navier_stokes_element.h5m 
-  -my_order_u 4 -my_order_p 3
+  -my_order_u 3 -my_order_p 2
 )
 
 add_test(
@@ -475,7 +475,7 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_navier_stokes_element
   -my_file mesh_for_testing_navier_stokes_element.h5m 
-  -my_order_u 4 -my_order_p 2 -discont_pressure 1
+  -my_order_u 3 -my_order_p 1 -discont_pressure 1
 )
 
 cm_export_file("2_tets_springs.cub" export_atom_tests_basic_fe)

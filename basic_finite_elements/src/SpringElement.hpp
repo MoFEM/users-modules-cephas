@@ -106,8 +106,8 @@ struct MetaSpringBC {
 
           const int id = bit->getMeshsetId();
           mapSpring[id].tRis.clear();
-          CHKERR mField.get_moab().get_entities_by_type(
-              bit->getMeshset(), MBTRI, mapSpring[id].tRis, true);
+          CHKERR mField.get_moab().get_entities_by_dimension(
+              bit->getMeshset(), 2, mapSpring[id].tRis, true);
 
           std::vector<double> attributes;
           bit->getAttributes(attributes);
