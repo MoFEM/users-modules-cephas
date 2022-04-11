@@ -131,10 +131,9 @@ int main(int argc, char *argv[]) {
                                       moab::Interface::UNION);
         }
       }
-      ProblemsManager *prb_mng_ptr;
-      CHKERR m_field.getInterface(prb_mng_ptr);
-      CHKERR prb_mng_ptr->partitionMesh(ents_dim, dim, adj_dim, n_partas,
-                                        nullptr, nullptr, nullptr, VERBOSE);
+      CommInterface *comm_interafce_ptr = m_field.getInterface<CommInterface>();
+      CHKERR comm_interafce_ptr->partitionMesh(
+          ents_dim, dim, adj_dim, n_partas, nullptr, nullptr, nullptr, VERBOSE);
     }
 
     auto get_tag_list = [&]() {
