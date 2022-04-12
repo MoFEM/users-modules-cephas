@@ -5,6 +5,8 @@
  * Calculate light phase using <a
  * href="https://en.wikipedia.org/wiki/Transport-of-intensity_equation">Transport
  * intensity equation</a>.
+ * 
+ * See paper \cite parvizi2015practical
  *
  */
 
