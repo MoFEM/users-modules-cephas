@@ -128,6 +128,13 @@ MoFEMErrorCode Poisson2DiscontGalerkin::readMesh() {
 
   CHKERR mField.getInterface(simpleInterface);
   CHKERR simpleInterface->getOptions();
+
+  // Only L2 field is set in this example. Two lines bellow forces simple
+  // interface to creat lower diminesion (edge) elements, despite that fact that
+  // there is no field spanning on such elements. We need them for DF method.
+  simpleInterface->getAddSkeletonFE() = true;
+  simpleInterface->getAddBoundaryFE() = true;
+
   CHKERR simpleInterface->loadFile();
 
   MoFEMFunctionReturn(0);
@@ -154,10 +161,23 @@ MoFEMErrorCode Poisson2DiscontGalerkin::setupProblem() {
 
   CHKERR simpleInterface->addDomainField(domainField, L2,
                                          AINSWORTH_LOBATTO_BASE, 1);
-  simpleInterface->getAddSkeletonFE() = true;
-  simpleInterface->getAddBoundaryFE() = true;
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
   CHKERR simpleInterface->setUp();
+
+  // This is only for debigging and experimentation, to see boundary and edge
+  // elements.
+  auto save_shared = [&](auto meshset, std::string prefix) {
+    MoFEMFunctionBegin;
+    auto file_name =
+        prefix + "_" +
+        boost::lexical_cast<std::string>(mField.get_comm_rank()) + ".vtk";
+    CHKERR mField.get_moab().write_file(file_name.c_str(), "VTK", "", &meshset,
+                                        1);
+    MoFEMFunctionReturn(0);
+  };
+
+  // CHKERR save_shared(simpleInterface->getBoundaryMeshSet(), "bdy");
+  // CHKERR save_shared(simpleInterface->getSkeletonMeshSet(), "skel");
 
   MoFEMFunctionReturn(0);
 }
@@ -507,8 +527,8 @@ MoFEMErrorCode Poisson2DiscontGalerkin::runProgram() {
   CHKERR assembleSystem();
   CHKERR setIntegrationRules();
   CHKERR solveSystem();
-  CHKERR checkResults();
   CHKERR outputResults();
+  CHKERR checkResults();
 
   MoFEMFunctionReturn(0);
 }
