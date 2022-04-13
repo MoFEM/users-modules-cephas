@@ -33,6 +33,9 @@ struct CommonData : public PlasticOps::CommonData {
   boost::shared_ptr<VectorDouble> plasticTauJumpPtr;
   boost::shared_ptr<MatrixDouble> plasticStrainJumpPtr;
 
+  boost::shared_ptr<MatrixDouble> plasticTauDiffAvgPtr;
+  boost::shared_ptr<MatrixDouble> plasticStrainDiffAvgJumpPtr;
+
   boost::shared_ptr<MatrixDouble> guidingVelocityPtr;
   boost::shared_ptr<VectorDouble> velocityDotNormalPtr;
 
@@ -54,6 +57,9 @@ struct CommonData : public PlasticOps::CommonData {
 
   map<int, MatrixDouble> strainSideMap;
   map<int, VectorDouble> tauSideMap;
+
+  map<int, MatrixDouble> strainDiffSideMap;
+  map<int, MatrixDouble> tauDiffSideMap;
 
   std::array<double, 2> areaMap;
   std::array<int, 2> senseMap;
@@ -694,8 +700,13 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
     auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
     auto t_omega = getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
 
-    auto t_tau_jump =
-        getFTensor0FromVec(*commonDataPtr->plasticTauJumpPtr);
+    auto t_tau_jump = getFTensor0FromVec(*cmdata.plasticTauJumpPtr);
+    auto t_grad_tau_avg =
+        getFTensor1FromMat<SPACE_DIM>(*cmdata.plasticTauDiffAvgPtr);
+
+    FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
+    FTensor::Tensor1<double, SPACE_DIM> t_n;
+    FTensor::Tensor1<double, SPACE_DIM> t_vn;
 
     if (nb_dofs) {
 
@@ -709,20 +720,20 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
       auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
 
       for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-        // FIXME: might be -p
-        const double alpha = getMeasure() * t_w * t_X_dot_n * -p;
-
+        const double alpha = getMeasure() * t_w;
         auto t_nf = nf.data().begin();
 
         size_t rr = 0;
         for (; rr != nb_dofs; ++rr) {
 
-          FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
+          t_n(i) = p * t_tau_jump * t_normal(i) * sense_row - phi * t_grad_tau_avg(i) / p;
+
           t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
-          FTensor::Tensor1<double, SPACE_DIM> t_vn;
           t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
 
-          t_nf -= alpha * t_vn(k) * t_tau_jump * t_normal(k);
+          t_nf += alpha * t_vn(k) * t_omega(k) * (t_n(i) * t_omega(i));
+          t_nf += alpha * p * t_vn_plus(i) * t_omega(i) *
+                  (t_grad_tau_avg(k) * t_omega(k));
 
           ++t_nf;
           ++t_row_base;
@@ -730,9 +741,10 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
         }
         for (; rr < nb_row_base_functions; ++rr) {
           ++t_row_base;
-          ++t_diff_row_base;
+          ++t_diff_row_base; 
         }
         ++t_w;
+        ++t_grad_tau_avg;
         ++t_X_dot_n;
         ++t_omega;
         ++t_tau_jump;

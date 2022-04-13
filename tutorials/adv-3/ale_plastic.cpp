@@ -294,9 +294,11 @@ MoFEMErrorCode Example::setupProblem() {
   //   MoFEMFunctionReturnHot(0);
   // };
 
-
   CHKERR simple->setUp();
 
+  // block U TAU is empty
+  CHKERR simple->addFieldToEmptyFieldBlocks("U", "TAU");
+  
   // mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(my_function, "EP");
   // mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(my_function, "TAU");
 

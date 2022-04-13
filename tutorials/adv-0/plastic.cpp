@@ -117,9 +117,12 @@ inline long double hardening(long double tau, double temp) {
   return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
 }
 
+
 inline long double hardening_dtau(long double tau, double temp) {
   return H + Qinf * b_iso * std::exp(-b_iso * tau);
 }
+
+PetscBool is_cut_off = PETSC_FALSE;
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
@@ -187,6 +190,7 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->setFieldOrder("TAU", order - 1);
   CHKERR simple->setFieldOrder("EP", order - 1);
   CHKERR simple->setUp();
+  CHKERR simple->addFieldToEmptyFieldBlocks("U", "TAU");
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
@@ -211,7 +215,8 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Qinf", &Qinf, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
-
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_cut_off", &is_cut_off,
+                               PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
 
@@ -223,6 +228,7 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "is_cut_off " << is_cut_off;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
