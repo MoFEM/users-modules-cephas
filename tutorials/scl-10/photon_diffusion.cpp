@@ -38,6 +38,8 @@ using BoundaryEle = FaceElementForcesAndSourcesCore;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcVolumeOnRefinedMesh;
 
+using VolSideFe = VolumeElementForcesAndSourcesCoreOnSide;
+
 using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
@@ -56,61 +58,25 @@ using OpBoundaryTimeScalarField = FormsIntegrators<BoundaryEleOp>::Assembly<
 using OpBoundarySource = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
-double n = 1.44;     ///< refractive index of diffusive medium
-double c = 30.;      ///< speed of light (cm/ns)
-double v = c / n;    ///< phase velocity of light in medium (cm/ns)
-double mu_a = 0.09;  ///< absorption coefficient (cm^-1)
-double mu_sp = 16.5; ///< scattering coefficient (cm^-1)
+const double n = 1.44;     ///< refractive index of diffusive medium
+const double c = 30.;      ///< speed of light (cm/ns)
+const double v = c / n;    ///< phase velocity of light in medium (cm/ns)
+const double inv_v = 1. / v;
+
+double mu_a;  ///< absorption coefficient (cm^-1)
+double mu_sp; ///< scattering coefficient (cm^-1)
+double D;
+double A;
+double h; 
 
 PetscBool from_initial = PETSC_TRUE;
 PetscBool output_volume = PETSC_FALSE;
 
-int order = 3;
+int order = 2;
 int save_every_nth_step = 1;
 
-double A = 3.0;
-
-double h = 0.5 / A; ///< convective heat coefficient
-double D = 1. / (3. * (mu_a + mu_sp));
-double inv_v = 1. / v;
-
-/**
- * @brief Monitor solution
- *
- * This functions is called by TS solver at the end of each step. It is used
- * to output results to the hard drive.
- */
-struct Monitor : public FEMethod {
-
-  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc,
-          boost::shared_ptr<PostProcFaceOnRefinedMesh> skin_post_proc)
-      : dM(dm), postProc(post_proc), skinPostProc(skin_post_proc){};
-
-  MoFEMErrorCode preProcess() { return 0; }
-  MoFEMErrorCode operator()() { return 0; }
-
-  MoFEMErrorCode postProcess() {
-    MoFEMFunctionBegin;
-    if (ts_step % save_every_nth_step == 0) {
-      if (output_volume) {
-        CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
-        CHKERR postProc->writeFile(
-            "out_volume_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
-      }
-      if (skinPostProc) {
-        CHKERR DMoFEMLoopFiniteElements(dM, "CAMERA_FE", skinPostProc);
-        CHKERR skinPostProc->writeFile(
-            "out_camera_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
-      }
-    }
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  SmartPetscObj<DM> dM;
-  boost::shared_ptr<PostProcEle> postProc;
-  boost::shared_ptr<PostProcFaceOnRefinedMesh> skinPostProc;
-};
+char init_data_file_name[255] = "init_file.dat";
+int numHoLevels = 1;
 
 struct PhotonDiffusion {
 public:
@@ -122,6 +88,7 @@ public:
 private:
   // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
+  MoFEMErrorCode createCommonData();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode initialCondition();
@@ -139,6 +106,125 @@ private:
   boost::shared_ptr<FEMethod> domianLhsFEPtr;
   boost::shared_ptr<FEMethod> boundaryLhsFEPtr;
   boost::shared_ptr<FEMethod> boundaryRhsFEPtr;
+
+  struct CommonData {
+    boost::shared_ptr<VectorDouble> approxVals;
+    boost::shared_ptr<MatrixDouble> approxValsGrad;
+    SmartPetscObj<Vec> petscVec;
+
+    enum VecElements {
+      VALUES_INTEG = 0,
+      FLUX_NORM_INTEG,
+      FLUX_MAGN_INTEG,
+      TOTAL_AREA,
+      LAST_ELEMENT
+    };
+  };
+
+  boost::shared_ptr<CommonData> commonDataPtr;
+
+  struct OpCameraInteg : public BoundaryEleOp {
+    boost::shared_ptr<CommonData> commonDataPtr;
+    OpCameraInteg(boost::shared_ptr<CommonData> common_data_ptr)
+        : BoundaryEleOp("PHOTON_FLUENCE_RATE", OPROW),
+          commonDataPtr(common_data_ptr) {
+      std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+      doEntities[MBTRI] = doEntities[MBQUAD] = true;
+    }
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  struct OpGetScalarFieldGradientValuesOnSkin : public BoundaryEleOp {
+
+    boost::shared_ptr<VolSideFe> sideOpFe;
+
+    OpGetScalarFieldGradientValuesOnSkin(boost::shared_ptr<VolSideFe> side_fe)
+        : BoundaryEleOp("PHOTON_FLUENCE_RATE", OPROW), sideOpFe(side_fe) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data) {
+      MoFEMFunctionBegin;
+      if (type != MBVERTEX)
+        MoFEMFunctionReturnHot(0);
+      CHKERR loopSideVolumes("dFE", *sideOpFe);
+      MoFEMFunctionReturn(0);
+    }
+  };
+
+  struct Monitor : public FEMethod {
+
+    Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc,
+            boost::shared_ptr<PostProcFaceOnRefinedMesh> skin_post_proc,
+            boost::shared_ptr<BoundaryEle> skin_post_proc_integ,
+            boost::shared_ptr<CommonData> common_data_ptr)
+        : dM(dm), postProc(post_proc), skinPostProc(skin_post_proc),
+          skinPostProcInteg(skin_post_proc_integ),
+          commonDataPtr(common_data_ptr){};
+
+    MoFEMErrorCode preProcess() {
+      MoFEMFunctionBegin;
+      // MOFEM_LOG("PHOTON", Sev::inform) << "Pre process\n";
+      MoFEMFunctionReturn(0);
+    }
+    MoFEMErrorCode operator()() {
+      MoFEMFunctionBegin;
+      // MOFEM_LOG("PHOTON", Sev::inform) << "Operator\n";
+      MoFEMFunctionReturn(0);
+    }
+
+    MoFEMErrorCode postProcess() {
+      MoFEMFunctionBegin;
+      // MOFEM_LOG("PHOTON", Sev::inform) << "Post process\n";
+
+      CHKERR VecZeroEntries(commonDataPtr->petscVec);
+      CHKERR VecGhostUpdateBegin(commonDataPtr->petscVec, INSERT_VALUES,
+                                 SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(commonDataPtr->petscVec, INSERT_VALUES,
+                               SCATTER_FORWARD);
+      CHKERR DMoFEMLoopFiniteElements(dM, "CAMERA_FE", skinPostProcInteg);
+      CHKERR VecAssemblyBegin(commonDataPtr->petscVec);
+      CHKERR VecAssemblyEnd(commonDataPtr->petscVec);
+      CHKERR VecGhostUpdateBegin(commonDataPtr->petscVec, ADD_VALUES,
+                                 SCATTER_REVERSE);
+      CHKERR VecGhostUpdateEnd(commonDataPtr->petscVec, ADD_VALUES,
+                               SCATTER_REVERSE);
+      CHKERR VecGhostUpdateBegin(commonDataPtr->petscVec, INSERT_VALUES,
+                                 SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(commonDataPtr->petscVec, INSERT_VALUES,
+                               SCATTER_FORWARD);
+      const double *array;
+      CHKERR VecGetArrayRead(commonDataPtr->petscVec, &array);
+      MOFEM_LOG("PHOTON", Sev::inform) << "Fluence rate integral: " << array[0];
+      MOFEM_LOG("PHOTON", Sev::inform)
+          << "Normal flux integral: " << array[1];
+      MOFEM_LOG("PHOTON", Sev::inform)
+          << "Flux magnitude integral: " << array[2];
+      MOFEM_LOG("PHOTON", Sev::inform) << "Total area: " << array[3];
+
+      if (ts_step % save_every_nth_step == 0) {
+        if (output_volume) {
+          CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
+          CHKERR postProc->writeFile("out_volume_" +
+                                     boost::lexical_cast<std::string>(ts_step) +
+                                     ".h5m");
+        }
+        if (skinPostProc) {
+          CHKERR DMoFEMLoopFiniteElements(dM, "CAMERA_FE", skinPostProc);
+          CHKERR skinPostProc->writeFile(
+              "out_camera_" + boost::lexical_cast<std::string>(ts_step) +
+              ".h5m");
+        }
+      }
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    SmartPetscObj<DM> dM;
+    boost::shared_ptr<PostProcEle> postProc;
+    boost::shared_ptr<PostProcFaceOnRefinedMesh> skinPostProc;
+    boost::shared_ptr<BoundaryEle> skinPostProcInteg;
+    boost::shared_ptr<CommonData> commonDataPtr;
+  };
 };
 
 PhotonDiffusion::PhotonDiffusion(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -154,6 +240,21 @@ MoFEMErrorCode PhotonDiffusion::readMesh() {
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode PhotonDiffusion::createCommonData() {
+  MoFEMFunctionBegin;
+  commonDataPtr = boost::make_shared<CommonData>();
+  PetscInt ghosts[4] = {0, 1, 2, 3};
+  if (!mField.get_comm_rank())
+    commonDataPtr->petscVec =
+        createSmartGhostVector(mField.get_comm(), 4, 4, 0, ghosts);
+  else
+    commonDataPtr->petscVec =
+        createSmartGhostVector(mField.get_comm(), 0, 4, 4, ghosts);
+  commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
+  commonDataPtr->approxValsGrad = boost::make_shared<MatrixDouble>();
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode PhotonDiffusion::setupProblem() {
   MoFEMFunctionBegin;
 
@@ -163,29 +264,79 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
   CHKERR simple->addBoundaryField("PHOTON_FLUENCE_RATE", H1,
                                   AINSWORTH_LEGENDRE_BASE, 1);
 
+  CHKERR PetscOptionsGetString(PETSC_NULL, "", "-initial_file",
+                               init_data_file_name, 255, PETSC_NULL);
+
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-from_initial", &from_initial,
                              PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-output_volume", &output_volume,
                              PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-mu_a", &mu_a, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-mu_sp", &mu_sp, PETSC_NULL);
-
-  MOFEM_LOG("PHOTON", Sev::inform) << "Refractive index: " << n;
-  MOFEM_LOG("PHOTON", Sev::inform) << "Speed of light (cm/ns): " << c;
-  MOFEM_LOG("PHOTON", Sev::inform) << "Phase velocity in medium (cm/ns): " << v;
-  MOFEM_LOG("PHOTON", Sev::inform)
-      << "Absorption coefficient (cm^-1): " << mu_a;
-  MOFEM_LOG("PHOTON", Sev::inform)
-      << "Scattering coefficient (cm^-1): " << mu_sp;
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-coef_A", &A, PETSC_NULL);
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_step", &save_every_nth_step,
                             PETSC_NULL);
 
+  h = 0.5 / A; 
+  D = 1. / (3. * (mu_a + mu_sp));
+
+  MOFEM_LOG("PHOTON", Sev::inform) << "Refractive index: " << n;
+  MOFEM_LOG("PHOTON", Sev::inform) << "Speed of light (cm/ns): " << c;
+  MOFEM_LOG("PHOTON", Sev::inform) << "Phase velocity in medium (cm/ns): " << v;
+  MOFEM_LOG("PHOTON", Sev::inform) << "Inverse velocity : " << inv_v;
+  MOFEM_LOG("PHOTON", Sev::inform)
+      << "Absorption coefficient (cm^-1): " << mu_a;
+  MOFEM_LOG("PHOTON", Sev::inform)
+      << "Scattering coefficient (cm^-1): " << mu_sp;
+  MOFEM_LOG("PHOTON", Sev::inform) << "Diffusion coefficient D : " << D;
+  MOFEM_LOG("PHOTON", Sev::inform) << "Coefficient A : " << A;
+  MOFEM_LOG("PHOTON", Sev::inform) << "Coefficient h : " << h;
+
   MOFEM_LOG("PHOTON", Sev::inform) << "Approximation order: " << order;
   MOFEM_LOG("PHOTON", Sev::inform) << "Save step: " << save_every_nth_step;
 
   CHKERR simple->setFieldOrder("PHOTON_FLUENCE_RATE", order);
+
+  // if (numHoLevels > 0) {
+
+  //   Range ho_ents;
+
+  //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+  //     std::string entity_name = it->getName();
+  //     if (entity_name.compare(0, 3, "CAM") == 0) {
+  //       CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 2,
+  //                                                  ho_ents, true);
+  //     }
+  //   }
+
+  //   std::vector<Range> levels(numHoLevels);
+  //   Range ents;
+  //   ents.merge(ho_ents);
+  //   for (int ll = 0; ll != numHoLevels; ll++) {
+  //     Range verts;
+  //     CHKERR mField.get_moab().get_connectivity(ents, verts, true);
+  //     for (auto d : {1, 2, 3}) {
+  //       CHKERR mField.get_moab().get_adjacencies(verts, d, false, ents,
+  //                                                moab::Interface::UNION);
+  //     }
+  //     levels[ll] = subtract(ents, ents.subset_by_type(MBVERTEX));
+  //   }
+  //   for (int ll = numHoLevels - 1; ll >= 1; ll--) {
+  //     levels[ll] = subtract(levels[ll], levels[ll - 1]);
+  //   }
+
+  //   int add_order = 1;
+  //   for (int ll = numHoLevels - 1; ll >= 0; ll--) {
+  //       CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+  //           levels[ll]);
+
+  //     CHKERR simple->setFieldOrder("PHOTON_FLUENCE_RATE", order + add_order ,
+  //                                  &levels[ll]);
+  //     ++add_order;
+  //   }
+  // }
 
   auto set_camera_skin_fe = [&]() {
     MoFEMFunctionBegin;
@@ -267,6 +418,26 @@ MoFEMErrorCode PhotonDiffusion::boundaryCondition() {
   auto *simple = mField.getInterface<Simple>();
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "EXT",
                                         "PHOTON_FLUENCE_RATE", 0, 0, false);
+
+  // Get boundary edges marked in block named "BOUNDARY_CONDITION"
+  Range boundary_ents;
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+    std::string entity_name = it->getName();
+    if (entity_name.compare(0, 3, "INT") == 0) {
+      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+                                                 boundary_ents, true);
+    }
+  }
+  // Add vertices to boundary entities
+  Range boundary_verts;
+  CHKERR mField.get_moab().get_connectivity(boundary_ents, boundary_verts,
+                                            true);
+  boundary_ents.merge(boundary_verts);
+
+  // Remove DOFs as homogeneous boundary condition is used
+  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+      simple->getProblemName(), "PHOTON_FLUENCE_RATE", boundary_ents);
+
   MoFEMFunctionReturn(0);
 }
 
@@ -380,11 +551,11 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto create_post_process_element = [&]() {
-    auto post_froc_fe = boost::make_shared<PostProcEle>(mField);
-    post_froc_fe->generateReferenceElementMesh();
-    post_froc_fe->addFieldValuesPostProc("PHOTON_FLUENCE_RATE");
-    post_froc_fe->addFieldValuesGradientPostProc("PHOTON_FLUENCE_RATE");
-    return post_froc_fe;
+    auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+    post_proc_fe->generateReferenceElementMesh();
+    post_proc_fe->addFieldValuesPostProc("PHOTON_FLUENCE_RATE");
+    post_proc_fe->addFieldValuesGradientPostProc("PHOTON_FLUENCE_RATE");
+    return post_proc_fe;
   };
 
   auto create_post_process_camera_element = [&]() {
@@ -401,11 +572,47 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
     }
   };
 
+  auto create_post_process_integ_camera_element = [&]() {
+    if (mField.check_finite_element("CAMERA_FE")) {
+      boost::shared_ptr<VolSideFe> my_vol_side_fe_ptr =
+          boost::make_shared<VolSideFe>(mField);
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      my_vol_side_fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateHOJacVolume(jac_ptr));
+      my_vol_side_fe_ptr->getOpPtrVector().push_back(
+          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+      my_vol_side_fe_ptr->getOpPtrVector().push_back(
+          new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
+      my_vol_side_fe_ptr->getOpPtrVector().push_back(
+          new OpSetHOWeights(det_ptr));
+      my_vol_side_fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldGradient<3>("PHOTON_FLUENCE_RATE",
+                                                commonDataPtr->approxValsGrad));
+
+      auto post_proc_integ_skin = boost::make_shared<BoundaryEle>(mField);
+      post_proc_integ_skin->getOpPtrVector().push_back(
+          new OpSetHOWeightsOnFace());
+      post_proc_integ_skin->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldValues("PHOTON_FLUENCE_RATE",
+                                           commonDataPtr->approxVals));
+      post_proc_integ_skin->getOpPtrVector().push_back(
+          new OpGetScalarFieldGradientValuesOnSkin(my_vol_side_fe_ptr));
+      post_proc_integ_skin->getOpPtrVector().push_back(
+          new OpCameraInteg(commonDataPtr));
+
+      return post_proc_integ_skin;
+    } else {
+      return boost::shared_ptr<BoundaryEle>();
+    }
+  };
+
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
-    boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, create_post_process_element(),
-                    create_post_process_camera_element()));
+    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(
+        dm, create_post_process_element(), create_post_process_camera_element(),
+        create_post_process_integ_camera_element(), commonDataPtr));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
@@ -413,32 +620,32 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   };
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMVector(dm);
+  auto X = smartCreateDMVector(dm);
 
   if (from_initial) {
 
-    MOFEM_LOG("PHOTON", Sev::inform)
-        << "reading vector in binary from initial_vector.dat ...";
+    MOFEM_LOG("PHOTON", Sev::inform) << "reading vector in binary from file "
+                                     << init_data_file_name << " ...";
     PetscViewer viewer;
-    PetscViewerBinaryOpen(PETSC_COMM_WORLD, "initial_vector.dat",
-                          FILE_MODE_READ, &viewer);
-    VecLoad(D, viewer);
+    PetscViewerBinaryOpen(PETSC_COMM_WORLD, init_data_file_name, FILE_MODE_READ,
+                          &viewer);
+    VecLoad(X, viewer);
 
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    CHKERR DMoFEMMeshToLocalVector(dm, X, INSERT_VALUES, SCATTER_REVERSE);
   }
 
   auto solver = pipeline_mng->createTS();
 
-  CHKERR TSSetSolution(solver, D);
+  CHKERR TSSetSolution(solver, X);
   CHKERR set_time_monitor(dm, solver);
-  CHKERR TSSetSolution(solver, D);
+  CHKERR TSSetSolution(solver, X);
   CHKERR TSSetFromOptions(solver);
   CHKERR TSSetUp(solver);
   CHKERR TSSolve(solver, NULL);
 
-  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR VecGhostUpdateBegin(X, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(X, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR DMoFEMMeshToLocalVector(dm, X, INSERT_VALUES, SCATTER_REVERSE);
 
   MoFEMFunctionReturn(0);
 }
@@ -455,6 +662,7 @@ MoFEMErrorCode PhotonDiffusion::runProgram() {
   MoFEMFunctionBegin;
 
   CHKERR readMesh();
+  CHKERR createCommonData();
   CHKERR setupProblem();
   CHKERR setIntegrationRules();
   CHKERR initialCondition();
@@ -463,6 +671,53 @@ MoFEMErrorCode PhotonDiffusion::runProgram() {
   CHKERR solveSystem();
   CHKERR outputResults();
 
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode PhotonDiffusion::OpCameraInteg::doWork(int side, EntityType type,
+                                                      EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_integration_pts = getGaussPts().size2();
+  const double area = getMeasure();
+  auto t_w = getFTensor0IntegrationWeight();
+  auto t_val = getFTensor0FromVec(*(commonDataPtr->approxVals));
+  auto t_val_grad = getFTensor1FromMat<3>(*(commonDataPtr->approxValsGrad));
+
+  double values_integ = 0;
+  double flux_norm_integ = 0;
+  double flux_magn_integ = 0;
+  double total_area = 0;
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  auto t_normal = getFTensor1Normal();
+  t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+    const double alpha = t_w * area;
+
+    values_integ += alpha * t_val;
+    flux_norm_integ -= alpha * D * t_val_grad(i) * t_normal(i);
+    flux_magn_integ += alpha * D * sqrt(t_val_grad(i) * t_val_grad(i));
+    total_area += alpha;
+
+    ++t_w;
+    ++t_val;
+    ++t_val_grad;
+  }
+
+  constexpr std::array<int, 4> indices = {CommonData::VALUES_INTEG,
+                                          CommonData::FLUX_NORM_INTEG,
+                                          CommonData::FLUX_MAGN_INTEG,
+                                          CommonData::TOTAL_AREA};
+  std::array<double, 4> values;
+  values[0] = values_integ;
+  values[1] = flux_norm_integ;
+  values[2] = flux_magn_integ;
+  values[3] = total_area;
+  CHKERR VecSetValues(commonDataPtr->petscVec, 4, indices.data(), values.data(),
+                      ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
 
