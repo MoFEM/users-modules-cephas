@@ -106,7 +106,7 @@ public:
    * @return double
    */
   static double sourceFunction(const double x, const double y, const double z) {
-    const double A = 4 * D * v * initial_time;
+    const double A = 4. * D * v * initial_time;
     const double T =
         (v / pow(M_PI * A, 3. / 2.)) * exp(-mu_a * v * initial_time);
 

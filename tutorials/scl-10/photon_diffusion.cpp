@@ -71,6 +71,7 @@ double h;
 
 PetscBool from_initial = PETSC_TRUE;
 PetscBool output_volume = PETSC_FALSE;
+PetscBool output_camera = PETSC_FALSE;
 
 int order = 2;
 int save_every_nth_step = 1;
@@ -103,20 +104,16 @@ private:
   // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
-  boost::shared_ptr<FEMethod> domianLhsFEPtr;
+  boost::shared_ptr<FEMethod> domainLhsFEPtr;
   boost::shared_ptr<FEMethod> boundaryLhsFEPtr;
   boost::shared_ptr<FEMethod> boundaryRhsFEPtr;
 
   struct CommonData {
     boost::shared_ptr<VectorDouble> approxVals;
-    boost::shared_ptr<MatrixDouble> approxValsGrad;
     SmartPetscObj<Vec> petscVec;
 
     enum VecElements {
       VALUES_INTEG = 0,
-      FLUX_NORM_INTEG,
-      FLUX_MAGN_INTEG,
-      TOTAL_AREA,
       LAST_ELEMENT
     };
   };
@@ -163,18 +160,15 @@ private:
 
     MoFEMErrorCode preProcess() {
       MoFEMFunctionBegin;
-      // MOFEM_LOG("PHOTON", Sev::inform) << "Pre process\n";
       MoFEMFunctionReturn(0);
     }
     MoFEMErrorCode operator()() {
       MoFEMFunctionBegin;
-      // MOFEM_LOG("PHOTON", Sev::inform) << "Operator\n";
       MoFEMFunctionReturn(0);
     }
 
     MoFEMErrorCode postProcess() {
       MoFEMFunctionBegin;
-      // MOFEM_LOG("PHOTON", Sev::inform) << "Post process\n";
 
       CHKERR VecZeroEntries(commonDataPtr->petscVec);
       CHKERR VecGhostUpdateBegin(commonDataPtr->petscVec, INSERT_VALUES,
@@ -195,11 +189,6 @@ private:
       const double *array;
       CHKERR VecGetArrayRead(commonDataPtr->petscVec, &array);
       MOFEM_LOG("PHOTON", Sev::inform) << "Fluence rate integral: " << array[0];
-      MOFEM_LOG("PHOTON", Sev::inform)
-          << "Normal flux integral: " << array[1];
-      MOFEM_LOG("PHOTON", Sev::inform)
-          << "Flux magnitude integral: " << array[2];
-      MOFEM_LOG("PHOTON", Sev::inform) << "Total area: " << array[3];
 
       if (ts_step % save_every_nth_step == 0) {
         if (output_volume) {
@@ -208,7 +197,7 @@ private:
                                      boost::lexical_cast<std::string>(ts_step) +
                                      ".h5m");
         }
-        if (skinPostProc) {
+        if (output_camera && skinPostProc) {
           CHKERR DMoFEMLoopFiniteElements(dM, "CAMERA_FE", skinPostProc);
           CHKERR skinPostProc->writeFile(
               "out_camera_" + boost::lexical_cast<std::string>(ts_step) +
@@ -243,15 +232,14 @@ MoFEMErrorCode PhotonDiffusion::readMesh() {
 MoFEMErrorCode PhotonDiffusion::createCommonData() {
   MoFEMFunctionBegin;
   commonDataPtr = boost::make_shared<CommonData>();
-  PetscInt ghosts[4] = {0, 1, 2, 3};
+  PetscInt ghosts[1] = {0};
   if (!mField.get_comm_rank())
     commonDataPtr->petscVec =
-        createSmartGhostVector(mField.get_comm(), 4, 4, 0, ghosts);
+        createSmartGhostVector(mField.get_comm(), 1, 1, 0, ghosts);
   else
     commonDataPtr->petscVec =
-        createSmartGhostVector(mField.get_comm(), 0, 4, 4, ghosts);
+        createSmartGhostVector(mField.get_comm(), 0, 1, 1, ghosts);
   commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
-  commonDataPtr->approxValsGrad = boost::make_shared<MatrixDouble>();
   MoFEMFunctionReturn(0);
 }
 
@@ -271,6 +259,8 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
                              PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-output_volume", &output_volume,
                              PETSC_NULL);
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-output_camera", &output_camera,
+                             PETSC_NULL);                           
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-mu_a", &mu_a, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-mu_sp", &mu_sp, PETSC_NULL);
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-coef_A", &A, PETSC_NULL);
@@ -462,7 +452,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
         "PHOTON_FLUENCE_RATE", "PHOTON_FLUENCE_RATE",
         [](double, double, double) -> double { return D; }));
     auto get_mass_coefficient = [&](const double, const double, const double) {
-      return inv_v * domianLhsFEPtr->ts_a + mu_a;
+      return inv_v * domainLhsFEPtr->ts_a + mu_a;
     };
     pipeline.push_back(new OpDomainMass(
         "PHOTON_FLUENCE_RATE", "PHOTON_FLUENCE_RATE", get_mass_coefficient));
@@ -487,17 +477,13 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
     pipeline.push_back(new OpDomainTimesScalarField(
         "PHOTON_FLUENCE_RATE", u_at_gauss_pts,
         [](const double, const double, const double) { return mu_a; }));
-    auto source_term = [&](const double, const double, const double) {
-      return 0;
-    };
-    pipeline.push_back(new OpDomainSource("PHOTON_FLUENCE_RATE", source_term));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetHOWeightsOnFace());
   };
 
-  auto add_lhs_base_ops = [&](auto &pipeline) {
+  auto add_boundary_lhs_ops = [&](auto &pipeline) {
     for (auto b : bc_map) {
       if (std::regex_match(b.first, std::regex("(.*)EXT(.*)"))) {
         pipeline.push_back(new OpBoundaryMass(
@@ -510,7 +496,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
     }
   };
 
-  auto add_rhs_base_ops = [&](auto &pipeline) {
+  auto add_boundary_rhs_ops = [&](auto &pipeline) {
     auto u_at_gauss_pts = boost::make_shared<VectorDouble>();
     pipeline.push_back(new OpCalculateScalarFieldValues("PHOTON_FLUENCE_RATE",
                                                         u_at_gauss_pts));
@@ -534,10 +520,10 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
 
   add_boundary_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
   add_boundary_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
-  add_lhs_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
-  add_rhs_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
+  add_boundary_lhs_ops(pipeline_mng->getOpBoundaryLhsPipeline());
+  add_boundary_rhs_ops(pipeline_mng->getOpBoundaryRhsPipeline());
 
-  domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
+  domainLhsFEPtr = pipeline_mng->getDomainLhsFE();
   boundaryLhsFEPtr = pipeline_mng->getBoundaryLhsFE();
   boundaryRhsFEPtr = pipeline_mng->getBoundaryRhsFE();
 
@@ -574,22 +560,6 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
 
   auto create_post_process_integ_camera_element = [&]() {
     if (mField.check_finite_element("CAMERA_FE")) {
-      boost::shared_ptr<VolSideFe> my_vol_side_fe_ptr =
-          boost::make_shared<VolSideFe>(mField);
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      my_vol_side_fe_ptr->getOpPtrVector().push_back(
-          new OpCalculateHOJacVolume(jac_ptr));
-      my_vol_side_fe_ptr->getOpPtrVector().push_back(
-          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
-      my_vol_side_fe_ptr->getOpPtrVector().push_back(
-          new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
-      my_vol_side_fe_ptr->getOpPtrVector().push_back(
-          new OpSetHOWeights(det_ptr));
-      my_vol_side_fe_ptr->getOpPtrVector().push_back(
-          new OpCalculateScalarFieldGradient<3>("PHOTON_FLUENCE_RATE",
-                                                commonDataPtr->approxValsGrad));
 
       auto post_proc_integ_skin = boost::make_shared<BoundaryEle>(mField);
       post_proc_integ_skin->getOpPtrVector().push_back(
@@ -597,8 +567,6 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
       post_proc_integ_skin->getOpPtrVector().push_back(
           new OpCalculateScalarFieldValues("PHOTON_FLUENCE_RATE",
                                            commonDataPtr->approxVals));
-      post_proc_integ_skin->getOpPtrVector().push_back(
-          new OpGetScalarFieldGradientValuesOnSkin(my_vol_side_fe_ptr));
       post_proc_integ_skin->getOpPtrVector().push_back(
           new OpCameraInteg(commonDataPtr));
 
@@ -681,42 +649,22 @@ MoFEMErrorCode PhotonDiffusion::OpCameraInteg::doWork(int side, EntityType type,
   const double area = getMeasure();
   auto t_w = getFTensor0IntegrationWeight();
   auto t_val = getFTensor0FromVec(*(commonDataPtr->approxVals));
-  auto t_val_grad = getFTensor1FromMat<3>(*(commonDataPtr->approxValsGrad));
 
   double values_integ = 0;
-  double flux_norm_integ = 0;
-  double flux_magn_integ = 0;
-  double total_area = 0;
-
-  FTensor::Index<'i', 3> i;
-  FTensor::Index<'j', 3> j;
-
-  auto t_normal = getFTensor1Normal();
-  t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
 
   for (int gg = 0; gg != nb_integration_pts; ++gg) {
     const double alpha = t_w * area;
 
     values_integ += alpha * t_val;
-    flux_norm_integ -= alpha * D * t_val_grad(i) * t_normal(i);
-    flux_magn_integ += alpha * D * sqrt(t_val_grad(i) * t_val_grad(i));
-    total_area += alpha;
 
     ++t_w;
     ++t_val;
-    ++t_val_grad;
   }
 
-  constexpr std::array<int, 4> indices = {CommonData::VALUES_INTEG,
-                                          CommonData::FLUX_NORM_INTEG,
-                                          CommonData::FLUX_MAGN_INTEG,
-                                          CommonData::TOTAL_AREA};
-  std::array<double, 4> values;
+  constexpr std::array<int, 1> indices = {CommonData::VALUES_INTEG};
+  std::array<double, 1> values;
   values[0] = values_integ;
-  values[1] = flux_norm_integ;
-  values[2] = flux_magn_integ;
-  values[3] = total_area;
-  CHKERR VecSetValues(commonDataPtr->petscVec, 4, indices.data(), values.data(),
+  CHKERR VecSetValues(commonDataPtr->petscVec, 1, indices.data(), values.data(),
                       ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
