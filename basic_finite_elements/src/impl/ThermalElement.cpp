@@ -23,7 +23,7 @@ using namespace MoFEM;
 using namespace boost::numeric;
 
 MoFEMErrorCode ThermalElement::OpGetGradAtGaussPts::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -48,7 +48,7 @@ MoFEMErrorCode ThermalElement::OpGetGradAtGaussPts::doWork(
 
 MoFEMErrorCode
 ThermalElement::OpThermalRhs::doWork(int side, EntityType type,
-                                     DataForcesAndSourcesCore::EntData &data) {
+                                     EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -89,8 +89,8 @@ ThermalElement::OpThermalRhs::doWork(int side, EntityType type,
 
 MoFEMErrorCode ThermalElement::OpThermalLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -134,7 +134,7 @@ MoFEMErrorCode ThermalElement::OpThermalLhs::doWork(
 }
 
 MoFEMErrorCode ThermalElement::OpHeatCapacityRhs::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -161,8 +161,8 @@ MoFEMErrorCode ThermalElement::OpHeatCapacityRhs::doWork(
 
 MoFEMErrorCode ThermalElement::OpHeatCapacityLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   if (row_data.getIndices().size() == 0)
@@ -201,7 +201,7 @@ MoFEMErrorCode ThermalElement::OpHeatCapacityLhs::doWork(
 
 MoFEMErrorCode
 ThermalElement::OpHeatFlux::doWork(int side, EntityType type,
-                                   DataForcesAndSourcesCore::EntData &data) {
+                                   EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -244,8 +244,8 @@ ThermalElement::OpHeatFlux::doWork(int side, EntityType type,
 
 MoFEMErrorCode ThermalElement::OpRadiationLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   if (row_data.getIndices().size() == 0)
@@ -292,7 +292,7 @@ MoFEMErrorCode ThermalElement::OpRadiationLhs::doWork(
 }
 
 MoFEMErrorCode ThermalElement::OpRadiationRhs::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -342,7 +342,7 @@ MoFEMErrorCode ThermalElement::OpRadiationRhs::doWork(
 }
 
 MoFEMErrorCode ThermalElement::OpConvectionRhs::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -388,8 +388,8 @@ MoFEMErrorCode ThermalElement::OpConvectionRhs::doWork(
 
 MoFEMErrorCode ThermalElement::OpConvectionLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 if (row_data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);

@@ -68,7 +68,7 @@ struct OpNormalConstrainRhs : public AssemblyBoundaryEleOp {
                               AssemblyBoundaryEleOp::OPROW),
         uPtr(u_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data) {
     MoFEMFunctionBegin;
 
     auto t_w = getFTensor0IntegrationWeight();
@@ -110,7 +110,7 @@ struct OpNormalForcebRhs : public AssemblyBoundaryEleOp {
                               AssemblyDomainEleOp::OPROW),
         lambdaPtr(lambda_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data) {
     MoFEMFunctionBegin;
 
     auto t_w = getFTensor0IntegrationWeight();
@@ -159,8 +159,8 @@ struct OpNormalConstrainLhs : public AssemblyBoundaryEleOp {
     sYmm = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     auto t_w = getFTensor0IntegrationWeight();
@@ -218,7 +218,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
         dotUPtr(dot_u_ptr), uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr),
         gradHPtr(grad_h_ptr), gPtr(g_ptr), pPtr(p_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -331,8 +331,8 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
     assembleTranspose = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -443,8 +443,8 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
     assembleTranspose = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -558,8 +558,8 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
     assembleTranspose = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -621,7 +621,7 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
         uPtr(u_ptr), dotHPtr(dot_h_ptr), hPtr(h_ptr), gradHPtr(grad_h_ptr),
         gradGPtr(grad_g_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -727,8 +727,8 @@ struct OpLhsH_dU : public AssemblyDomainEleOp {
     sYmm = false;
     assembleTranspose = false;
   }
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -783,8 +783,8 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
     sYmm = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -905,8 +905,8 @@ template <bool I> struct OpLhsH_dG : public AssemblyDomainEleOp {
     assembleTranspose = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -966,7 +966,7 @@ template <bool I> struct OpRhsG : public AssemblyDomainEleOp {
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
         hPtr(h_ptr), gradHPtr(grad_h_ptr), gPtr(g_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -1037,8 +1037,8 @@ template <bool I> struct OpLhsG_dH : public AssemblyDomainEleOp {
     assembleTranspose = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -1106,8 +1106,8 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
     sYmm = true;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();

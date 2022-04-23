@@ -49,7 +49,7 @@ template <> struct ElementsAndOps<3> {
 
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 template <int FIELD_DIM> struct ApproxFieldFunction;
 

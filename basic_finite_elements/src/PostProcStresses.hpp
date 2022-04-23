@@ -59,7 +59,7 @@ struct PostProcStress
   NonlinearElasticElement::CommonData nonLinearElementCommonData;
 
   MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
 
     if (type != MBVERTEX)

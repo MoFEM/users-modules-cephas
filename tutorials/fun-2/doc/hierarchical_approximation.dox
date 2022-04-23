@@ -362,14 +362,14 @@ element for each sub-entity of finite element. For example, the quadrilateral
 is made from four nodes, four edges and one quadrilateral face. The
 tetrahedron is constructed from four nodes, six edges, four faces and one
 tetrahedron volume. Developer can access base functions on those entities by
-structure MoFEM::DataForcesAndSourcesCore::EntData. This structure carries
+structure MoFEM::EntitiesFieldData::EntData. This structure carries
 basic on information entity, like approximation order, orientation (sense),
 number of DOFs, and base functions, etc.. It is accessed from \e Users \e
 Data \e Operator explained in other tutorials.
 
 In particular, base functions are accessed on entity by
-MoFEM::DataForcesAndSourcesCore::EntData::getN and derivatives by
-MoFEM::DataForcesAndSourcesCore::EntData::getDiffN. Here we explain the
+MoFEM::EntitiesFieldData::EntData::getN and derivatives by
+MoFEM::EntitiesFieldData::EntData::getDiffN. Here we explain the
 structure of matrices returned by those two functions. Note that those
 functions are overloaded and have many variants for developer convenience,
 and derivatives of them for H-div and H-curl spaces.
@@ -382,7 +382,7 @@ such operator is implemented for example in \ref simple_elasticity_1.
 The goal of the loop over element entities is to assemble the element
 stiffness matrix presented in \f$\eqref {eq:FullStiffness}\f$. The set of
 information associated to each entity is \e row\_data and \e col\_data which are instances of
-MoFEM::DataForcesAndSourcesCore::EntData and passed as argument in
+MoFEM::EntitiesFieldData::EntData and passed as argument in
 MoFEM::DataOperator::doWork. In \e col\_data the matrix
 \f${\mathbf {\nabla^{\textrm T} N}^e_{\textrm {ent}}}\f$ presented in
 \f$\eqref {eq:FullStiffness}\f$ is stored. In \f$row\_data\f$, a series of

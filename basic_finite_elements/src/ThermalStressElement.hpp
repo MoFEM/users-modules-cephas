@@ -66,7 +66,7 @@ struct ThermalStressElement {
           commonData(common_data), verb(_verb) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
@@ -101,7 +101,7 @@ struct ThermalStressElement {
 
     VectorDouble Nf;
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
 
       if (data.getIndices().size() == 0)

@@ -90,8 +90,8 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
    */
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
 
     MoFEMFunctionBegin;
 
@@ -145,8 +145,8 @@ protected:
    * @return error code
    */
   MoFEMErrorCode
-  iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-            DataForcesAndSourcesCore::EntData &col_data) {
+  iNtegrate(EntitiesFieldData::EntData &row_data,
+            EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     // get sub-block (3x3) of local stiffens matrix, here represented by second
@@ -217,8 +217,8 @@ protected:
    * @param  col_data column data (consist base functions on column entity)
    * @return          error code
    */
-  MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data,
-                                  DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode aSsemble(EntitiesFieldData::EntData &row_data,
+                                  EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // get pointer to first global index on row
     const int *row_indices = &*row_data.getIndices().data().begin();
@@ -255,7 +255,7 @@ struct OpPressure : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
   FTensor::Index<'i', 3> i;
 
   MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
 
     MoFEMFunctionBegin;
     // check that the faces have associated degrees of freedom

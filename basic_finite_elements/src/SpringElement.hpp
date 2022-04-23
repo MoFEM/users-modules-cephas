@@ -21,7 +21,7 @@
 
 using VolOnSideUserDataOperator =
     MoFEM::VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using FaceDataOperator =
     MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
 /** \brief Set of functions declaring elements and setting operators
@@ -69,7 +69,7 @@ struct MetaSpringBC {
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
 
-    DataForcesAndSourcesCore::EntData *faceRowData;
+    EntitiesFieldData::EntData *faceRowData;
 
     std::map<int, BlockOptionDataSprings> mapSpring;
     //   ~DataAtIntegrationPtsSprings() {}

@@ -41,7 +41,7 @@ template <int DIM> struct ElementsAndOps {};
 constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
 //! [Define dimension]
 
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = PipelineManager::EdgeEle;

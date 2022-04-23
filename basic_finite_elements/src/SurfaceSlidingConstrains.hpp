@@ -39,7 +39,7 @@ struct GenericSliding {
               field_name, UserDataOperator::OPCOL),
           activeVariablesPtr(active_variables_ptr) {}
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (type == MBVERTEX) {
         for (unsigned int dd = 0; dd != data.getFieldData().size(); ++dd)
@@ -60,7 +60,7 @@ struct GenericSliding {
               field_name, UserDataOperator::OPCOL),
           activeVariablesPtr(active_variables_ptr) {}
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (type == MBVERTEX) {
         for (unsigned int dd = 0; dd != data.getFieldData().size(); ++dd)
@@ -82,7 +82,7 @@ struct GenericSliding {
           resultsPtr(results_ptr) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (type != MBVERTEX)
         MoFEMFunctionReturnHot(0);
@@ -121,8 +121,8 @@ struct GenericSliding {
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
       if (row_type != MBVERTEX)
         MoFEMFunctionReturnHot(0);
@@ -452,7 +452,7 @@ struct SurfaceSlidingConstrains : public GenericSliding {
           aLpha(alpha) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (type != MBVERTEX)
         MoFEMFunctionReturnHot(0);
@@ -965,7 +965,7 @@ struct EdgeSlidingConstrains : public GenericSliding {
           evaluateJacobian(evaluate_jacobian), aLpha(alpha) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (type != MBVERTEX)
         MoFEMFunctionReturnHot(0);

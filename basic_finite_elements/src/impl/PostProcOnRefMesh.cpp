@@ -27,7 +27,7 @@ using namespace boost::numeric;
 #include <PostProcOnRefMesh.hpp>
 
 MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -210,7 +210,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
 }
 
 MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -933,7 +933,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
 template <int RANK>
 MoFEMErrorCode
 PostProcFaceOnRefinedMesh::OpGetFieldValuesOnSkinImpl<RANK>::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBVERTEX)

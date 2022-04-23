@@ -83,7 +83,7 @@ struct FluidPressure {
     VectorDouble Nf;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
     
   };
 

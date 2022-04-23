@@ -82,7 +82,7 @@ The code developed for this example can be compiled for both 2D and 3D cases by 
 
 Note that based on *SPACE_DIM* an appropriate type of elements is defined in the following snippet:
 \code 
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;

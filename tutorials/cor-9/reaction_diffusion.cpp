@@ -27,7 +27,7 @@ namespace ReactionDiffusionEquation {
 
 using Ele = FaceElementForcesAndSourcesCore;
 using OpEle = FaceElementForcesAndSourcesCore::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 const double D = 2e-3; ///< diffusivity
 const double r = 1;    ///< rate factor

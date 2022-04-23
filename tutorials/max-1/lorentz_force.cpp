@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
       MyOpDebug(decltype(B) b) : VolOp("MAGNETIC_POTENTIAL", OPROW), B(b) {}
 
       MoFEMErrorCode doWork(int side, EntityType type,
-                            DataForcesAndSourcesCore::EntData &data) {
+                            EntitiesFieldData::EntData &data) {
         MoFEMFunctionBegin;
         if (type == MBEDGE && side == 0) {
           std::cout << "found " << (*B) << endl;
