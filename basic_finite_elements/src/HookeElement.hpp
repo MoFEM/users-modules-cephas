@@ -1451,20 +1451,24 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
       MAT_TO_DDG(dataAtPts->stiffnessMat));
   for (auto &m : (blockSetsPtr)) {
-    const double young = m.second.E;
-    const double poisson = m.second.PoissonRatio;
+    if (m.second.tEts.find(this->getFEEntityHandle()) != m.second.tEts.end()) {
+      const double young = m.second.E;
+      const double poisson = m.second.PoissonRatio;
 
-    const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+      const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
 
-    t_D(i, j, k, l) = 0.;
-    t_D(0, 0, 0, 0) = t_D(1, 1, 1, 1) = t_D(2, 2, 2, 2) = 1 - poisson;
-    t_D(0, 1, 0, 1) = t_D(0, 2, 0, 2) = t_D(1, 2, 1, 2) =
-        0.5 * (1 - 2 * poisson);
-    t_D(0, 0, 1, 1) = t_D(1, 1, 0, 0) = t_D(0, 0, 2, 2) = t_D(2, 2, 0, 0) =
-        t_D(1, 1, 2, 2) = t_D(2, 2, 1, 1) = poisson;
-    t_D(i, j, k, l) *= coefficient;
+      t_D(i, j, k, l) = 0.;
+      t_D(0, 0, 0, 0) = t_D(1, 1, 1, 1) = t_D(2, 2, 2, 2) = 1 - poisson;
+      t_D(0, 1, 0, 1) = t_D(0, 2, 0, 2) = t_D(1, 2, 1, 2) =
+          0.5 * (1 - 2 * poisson);
+      t_D(0, 0, 1, 1) = t_D(1, 1, 0, 0) = t_D(0, 0, 2, 2) = t_D(2, 2, 0, 0) =
+          t_D(1, 1, 2, 2) = t_D(2, 2, 1, 1) = poisson;
+      t_D(i, j, k, l) *= coefficient;
 
-    break; // FIXME: calculates only first block
+      break;
+    }
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "Element not found in any of the material block sets");
   }
 
   double detH = 0.;
