@@ -34,7 +34,7 @@ struct CommonData : public PlasticOps::CommonData {
   boost::shared_ptr<MatrixDouble> plasticStrainJumpPtr;
 
   boost::shared_ptr<MatrixDouble> plasticTauDiffAvgPtr;
-  boost::shared_ptr<MatrixDouble> plasticStrainDiffAvgJumpPtr;
+  boost::shared_ptr<MatrixDouble> plasticStrainDiffAvgPtr;
 
   boost::shared_ptr<MatrixDouble> guidingVelocityPtr;
   boost::shared_ptr<VectorDouble> velocityDotNormalPtr;
@@ -242,7 +242,7 @@ MoFEMErrorCode OpCalculatePlasticConvRotatingFrame::doWork(int side,
   if (nb_dofs) {
     const size_t nb_integration_pts = data.getN().size1();
 
-    auto t_plastic_strain_dot = getFTensor2SymmetricFromMat<SPACE_DIM>(
+    auto t_ep_dot = getFTensor2SymmetricFromMat<SPACE_DIM>(
         *(commonDataPtr->getPlasticStrainDotPtr()));
     auto t_tau_dot =
         getFTensor0FromVec(*(commonDataPtr->getPlasticTauDotPtr()));
@@ -271,12 +271,12 @@ MoFEMErrorCode OpCalculatePlasticConvRotatingFrame::doWork(int side,
       t_omega(i) = Omega(i, j) * t_coords(j);
 
       t_tau_dot += t_grad_tau(i) * t_omega(i);
-      t_plastic_strain_dot(i, j) += t_grad_plastic_strain(i, j, k) * t_omega(k);
+      t_ep_dot(i, j) += t_grad_plastic_strain(i, j, k) * t_omega(k);
 
       ++t_coords;
       ++t_omega;
       ++t_grad_plastic_strain;
-      ++t_plastic_strain_dot;
+      ++t_ep_dot;
       ++t_tau_dot;
       ++t_tau;
       ++t_grad_tau;
@@ -376,34 +376,47 @@ MoFEMErrorCode OpVolumeSideCalculateEP::doWork(int side, EntityType type,
   if (nb_dofs) {
 
     auto base_function = data.getFTensor0N();
+    auto diff_base_function = data.getFTensor1DiffN<SPACE_DIM>();
     int nb_in_loop = getFEMethod()->nInTheLoop;
 
     auto &cmdata = *commonDataPtr;
     auto &mat_ep = cmdata.strainSideMap[nb_in_loop];
-    cmdata.indicesRowStrainSideMap[nb_in_loop] = data.getIndices();
+    auto &diff_mat_ep = cmdata.strainDiffSideMap[nb_in_loop];
 
+    cmdata.indicesRowStrainSideMap[nb_in_loop] = data.getIndices();
     cmdata.rowBaseSideMap[nb_in_loop] = data.getN();
     cmdata.rowDiffBaseSideMap[nb_in_loop] = data.getDiffN();
+
     cmdata.areaMap[nb_in_loop] = getMeasure();
     cmdata.senseMap[nb_in_loop] = getEdgeSense();
 
     constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+    diff_mat_ep.resize(size_symm * SPACE_DIM, nb_gauss_pts, false);
+    diff_mat_ep.clear();
     mat_ep.resize(size_symm, nb_gauss_pts, false);
     mat_ep.clear();
 
+    auto gradients_at_gauss_pts =
+        getFTensor3DgFromMat<SPACE_DIM, SPACE_DIM>(diff_mat_ep);
     auto values_at_gauss_pts = getFTensor2SymmetricFromMat<SPACE_DIM>(mat_ep);
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
       auto field_data = data.getFTensor2SymmetricFieldData<SPACE_DIM>();
-      // cout << "field data: " << field_data << endl;
-      size_t bb = 0;
+      int bb = 0;
       for (; bb != nb_dofs / size_symm; ++bb) {
         values_at_gauss_pts(i, j) += field_data(i, j) * base_function;
+        gradients_at_gauss_pts(i, j, k) +=
+            field_data(i, j) * diff_base_function(k);
+
         ++field_data;
         ++base_function;
+        ++diff_base_function;
       }
-      for (; bb != nb_base_functions; ++bb)
+      for (; bb != nb_base_functions; ++bb) {
         ++base_function;
+        ++diff_base_function;
+      }
       ++values_at_gauss_pts;
+      ++gradients_at_gauss_pts;
     }
   }
   MoFEMFunctionReturn(0);
@@ -427,20 +440,49 @@ MoFEMErrorCode OpVolumeSideCalculateTAU::doWork(int side, EntityType type,
                                                 EntData &data) {
   MoFEMFunctionBegin;
 
+  // FIXME:  look into zero_type, zeroType variable setting
   const size_t nb_dofs = data.getIndices().size();
   if (nb_dofs) {
     int nb_gauss_pts = getGaussPts().size2();
     int nb_in_loop = getFEMethod()->nInTheLoop;
+    const int nb_base_functions = data.getN().size2();
 
-    auto &vec_tau = commonDataPtr->tauSideMap[nb_in_loop];
     commonDataPtr->indicesRowTauSideMap[nb_in_loop] = data.getIndices();
     commonDataPtr->rowBaseSideMap[nb_in_loop] = data.getN();
+    commonDataPtr->rowDiffBaseSideMap[nb_in_loop] = data.getDiffN();
+    auto &mat_diff_tau = commonDataPtr->tauDiffSideMap[nb_in_loop];
+    mat_diff_tau.resize(SPACE_DIM, nb_gauss_pts, false);
+    mat_diff_tau.clear();
 
+    auto &vec_tau = commonDataPtr->tauSideMap[nb_in_loop];
     vec_tau.resize(nb_gauss_pts, false);
     vec_tau.clear();
 
-    for (int gg = 0; gg != nb_gauss_pts; gg++)
-      vec_tau(gg) = inner_prod(trans(data.getN(gg)), data.getFieldData());
+    auto t_tau = getFTensor0FromVec(vec_tau);
+    auto gradients_at_gauss_pts = getFTensor1FromMat<SPACE_DIM>(mat_diff_tau);
+
+    auto base_function = data.getFTensor0N();
+    auto diff_base_function = data.getFTensor1DiffN<SPACE_DIM>();
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      auto field_data = data.getFTensor0FieldData();
+      int bb = 0;
+      for (; bb != nb_dofs; ++bb) {
+        t_tau += field_data * base_function;
+        gradients_at_gauss_pts(i) += field_data * diff_base_function(i);
+        ++field_data;
+        ++base_function;
+        ++diff_base_function;
+      }
+      for (; bb < nb_base_functions; ++bb) {
+        ++base_function;
+        ++diff_base_function;
+      }
+      ++t_tau;
+      ++gradients_at_gauss_pts;
+
+      // vec_tau(gg) = inner_prod(trans(data.getN(gg)), data.getFieldData());
+    }
   }
   MoFEMFunctionReturn(0);
 }
@@ -460,6 +502,7 @@ MoFEMErrorCode OpCalculateJumpOnSkeleton::doWork(int side, EntityType type,
 
   FTensor::Index<'i', SPACE_DIM> i;
   FTensor::Index<'j', SPACE_DIM> j;
+  FTensor::Index<'k', SPACE_DIM> k;
 
   EntityHandle ent = getFEEntityHandle();
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
@@ -471,12 +514,16 @@ MoFEMErrorCode OpCalculateJumpOnSkeleton::doWork(int side, EntityType type,
 
     commonDataPtr->strainSideMap.clear();
     commonDataPtr->tauSideMap.clear();
+    commonDataPtr->strainDiffSideMap.clear();
+    commonDataPtr->tauDiffSideMap.clear();
 
     CHKERR loopSide("dFE",
                     dynamic_cast<MoFEM::ForcesAndSourcesCore *>(sideOpFe.get()),
                     SPACE_DIM);
     auto &ep_data_map = commonDataPtr->strainSideMap;
     auto &tau_data_map = commonDataPtr->tauSideMap;
+    auto &diff_ep_data_map = commonDataPtr->strainDiffSideMap;
+    auto &diff_tau_data_map = commonDataPtr->tauDiffSideMap;
 
 #ifndef NDEBUG
     // check all dimensions
@@ -491,39 +538,70 @@ MoFEMErrorCode OpCalculateJumpOnSkeleton::doWork(int side, EntityType type,
               "wrong number of integration points");
 #endif
 
-    auto t_plastic_strain_l =
+    auto t_ep_l =
         getFTensor2SymmetricFromMat<SPACE_DIM>(ep_data_map.at(LEFT_SIDE));
-    auto t_plastic_strain_r =
+    auto t_ep_r =
         getFTensor2SymmetricFromMat<SPACE_DIM>(ep_data_map.at(RIGHT_SIDE));
+
+    auto t_diff_ep_l = getFTensor3DgFromMat<SPACE_DIM, SPACE_DIM>(
+        diff_ep_data_map.at(LEFT_SIDE));
+    auto t_diff_ep_r = getFTensor3DgFromMat<SPACE_DIM, SPACE_DIM>(
+        diff_ep_data_map.at(RIGHT_SIDE));
 
     auto t_tau_l = getFTensor0FromVec(tau_data_map.at(LEFT_SIDE));
     auto t_tau_r = getFTensor0FromVec(tau_data_map.at(RIGHT_SIDE));
+
+    auto t_diff_tau_l =
+        getFTensor1FromMat<SPACE_DIM>(diff_tau_data_map.at(LEFT_SIDE));
+    auto t_diff_tau_r =
+        getFTensor1FromMat<SPACE_DIM>(diff_tau_data_map.at(RIGHT_SIDE));
 
     // fl_L * jump
     // -fl_R * jump
 
     // field values
+    constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+
     commonDataPtr->plasticTauJumpPtr->resize(nb_integration_pts, false);
-    auto t_tau_jump = getFTensor0FromVec(*commonDataPtr->plasticTauJumpPtr);
+    commonDataPtr->plasticTauDiffAvgPtr->resize(SPACE_DIM, nb_integration_pts);
     commonDataPtr->plasticStrainJumpPtr->resize(size_symm, nb_integration_pts,
                                                 false);
-    auto t_plastic_strain_jump = getFTensor2SymmetricFromMat<SPACE_DIM>(
+    commonDataPtr->plasticStrainDiffAvgPtr->resize(size_symm * SPACE_DIM,
+                                                   nb_integration_pts);
+
+    auto t_tau_jump = getFTensor0FromVec(*commonDataPtr->plasticTauJumpPtr);
+    auto t_ep_jump = getFTensor2SymmetricFromMat<SPACE_DIM>(
         *commonDataPtr->plasticStrainJumpPtr);
+
+    auto t_diff_tau_avg =
+        getFTensor1FromMat<SPACE_DIM>(*commonDataPtr->plasticTauDiffAvgPtr);
+    auto t_diff_ep_avg = getFTensor3DgFromMat<SPACE_DIM, SPACE_DIM>(
+        *(commonDataPtr->plasticStrainDiffAvgPtr));
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
-      t_plastic_strain_jump(i, j) =
-          t_plastic_strain_r(i, j) - t_plastic_strain_l(i, j);
-
+      t_ep_jump(i, j) = t_ep_r(i, j) - t_ep_l(i, j);
       t_tau_jump = t_tau_r - t_tau_l;
+
+      t_diff_tau_avg(i) = 0.5 * (t_diff_tau_r(i) + t_diff_tau_l(i));
+      t_diff_ep_avg(i, j, k) =
+          0.5 * (t_diff_ep_r(i, j, k) + t_diff_ep_l(i, j, k));
 
       ++t_tau_jump;
       ++t_tau_l;
       ++t_tau_r;
 
-      ++t_plastic_strain_jump;
-      ++t_plastic_strain_l;
-      ++t_plastic_strain_r;
+      ++t_ep_jump;
+      ++t_ep_l;
+      ++t_ep_r;
+
+      ++t_diff_tau_avg;
+      ++t_diff_tau_l;
+      ++t_diff_tau_r;
+
+      ++t_diff_ep_avg;
+      ++t_diff_ep_l;
+      ++t_diff_ep_r;
     }
   }
 
@@ -585,6 +663,8 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
 
   FTensor::Index<'i', SPACE_DIM> i;
   FTensor::Index<'j', SPACE_DIM> j;
+  FTensor::Index<'k', SPACE_DIM> k;
+
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   const auto in_the_loop = 1; // skeleton
 
@@ -609,8 +689,15 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
     auto t_w = getFTensor0IntegrationWeight();
     auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
     auto t_omega = getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
-    auto t_plastic_strain_jump =
+
+    auto t_ep_jump =
         getFTensor2SymmetricFromMat<SPACE_DIM>(*cmdata.plasticStrainJumpPtr);
+    auto t_grad_ep_avg =
+        getFTensor3DgFromMat<SPACE_DIM, SPACE_DIM>(*cmdata.plasticStrainDiffAvgPtr);
+
+    FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
+    FTensor::Dg<double, SPACE_DIM, size_symm> t_n;
+    FTensor::Tensor1<double, SPACE_DIM> t_vn;
 
     if (nb_dofs) {
 
@@ -624,21 +711,30 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
       auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
 
       for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-        // FIXME: might be -p
-        const double alpha = getMeasure() * t_w * t_X_dot_n * -p;
+        const double alpha = getMeasure() * t_w;
 
         auto t_nf = get_nf(nf, FTensor::Number<SPACE_DIM>());
 
         size_t rr = 0;
         for (; rr != nb_dofs / size_symm; ++rr) {
 
-          FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
+          // FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
+          // t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
+          // FTensor::Tensor1<double, SPACE_DIM> t_vn;
+          // t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
+
+          // t_nf(i, j) -= alpha * (t_vn(k) * t_normal(k)) * t_ep_jump(i, j);
+
+          t_n(i, j, k) = p * t_ep_jump(i, j) * t_normal(k) * sense_row -
+                   (phi / p) * t_grad_ep_avg(i, j, k) ;
+          auto c = phi;
+
           t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
-          FTensor::Tensor1<double, SPACE_DIM> t_vn;
           t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
 
-          t_nf(i, j) -=
-              alpha * (t_vn(k) * t_normal(k)) * t_plastic_strain_jump(i, j);
+          t_nf(i, j) += alpha * (t_vn(k) * t_omega(k)) * (t_n(i, j, k) * t_omega(k));
+          t_nf(i, j) += alpha * p * t_vn_plus(i) * t_omega(i) *
+                        (t_grad_ep_avg(i, j, k) * t_omega(k));
 
           ++t_nf;
           ++t_row_base;
@@ -648,10 +744,12 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
           ++t_row_base;
           ++t_diff_row_base;
         }
+        
         ++t_w;
+        ++t_grad_ep_avg;
         ++t_X_dot_n;
         ++t_omega;
-        ++t_plastic_strain_jump;
+        ++t_ep_jump;
       }
       CHKERR ::VecSetValues(getKSPf(), idx_rmap.at(s0).size(),
                             &*idx_rmap.at(s0).begin(), &*nf.data().begin(),
@@ -659,8 +757,8 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
     }
   }
 
-    MoFEMFunctionReturn(0);
-  }
+  MoFEMFunctionReturn(0);
+}
 
 OpCalculateConstraintPenalty_Rhs::OpCalculateConstraintPenalty_Rhs(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
@@ -726,13 +824,14 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
         size_t rr = 0;
         for (; rr != nb_dofs; ++rr) {
 
-          t_n(i) = p * t_tau_jump * t_normal(i) * sense_row - phi * t_grad_tau_avg(i) / p;
+          t_n(i) = p * t_tau_jump * t_normal(i) * sense_row -
+                   (phi / p) * t_grad_tau_avg(i);
 
           t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
           t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
 
-          t_nf += alpha * t_vn(k) * t_omega(k) * (t_n(i) * t_omega(i));
-          t_nf += alpha * p * t_vn_plus(i) * t_omega(i) *
+          *t_nf += alpha * t_vn(k) * t_omega(k) * (t_n(i) * t_omega(i));
+          *t_nf += alpha * p * t_vn_plus(i) * t_omega(i) *
                   (t_grad_tau_avg(k) * t_omega(k));
 
           ++t_nf;
@@ -741,8 +840,9 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
         }
         for (; rr < nb_row_base_functions; ++rr) {
           ++t_row_base;
-          ++t_diff_row_base; 
+          ++t_diff_row_base;
         }
+        
         ++t_w;
         ++t_grad_tau_avg;
         ++t_X_dot_n;
@@ -887,11 +987,12 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
 
               // assemble matrix
               t_mat(i, j, k, l) -= (alpha * (t_vn(m) * t_un(m))) *
-                                  cmdata.Is(i, j, m, n) * t_diff_plastic_strain(m, n, k, l);
+                                   cmdata.Is(i, j, m, n) *
+                                   t_diff_plastic_strain(m, n, k, l);
 
               t_mat(i, j, k, l) -=
                   (alpha * (t_vn_plus(m) * (beta * t_diff_col_base(m)))) *
-                 cmdata.Is(i, j, m, n) * t_diff_plastic_strain(m, n, k, l);
+                  cmdata.Is(i, j, m, n) * t_diff_plastic_strain(m, n, k, l);
 
               // move to next column base and element of matrix
               ++t_col_base;
@@ -914,16 +1015,15 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
         }
 
         // assemble system
-        CHKERR ::MatSetValues(getKSPB(), cmdata.indicesRowStrainSideMap[s0].size(),
+        CHKERR ::MatSetValues(getKSPB(),
+                              cmdata.indicesRowStrainSideMap[s0].size(),
                               &*cmdata.indicesRowStrainSideMap[s0].begin(),
                               cmdata.indicesColStrainSideMap[s1].size(),
                               &*cmdata.indicesColStrainSideMap[s1].begin(),
                               &*locMat.data().begin(), ADD_VALUES);
-
       }
     }
   }
-
 
   MoFEMFunctionReturn(0);
 }
@@ -985,10 +1085,9 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
           const double alpha = getMeasure() * t_w * t_X_dot_n;
 
           // iterate rows
-            auto t_mat = locMat.data().begin();
+          auto t_mat = locMat.data().begin();
           size_t rr = 0;
           for (; rr != nb_rows / size_symm; ++rr) {
-
 
             // calculate tetting function
             FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
@@ -1034,8 +1133,7 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
         }
 
         // assemble system
-        CHKERR ::MatSetValues(getKSPB(),
-                              cmdata.indicesRowTauSideMap[s0].size(),
+        CHKERR ::MatSetValues(getKSPB(), cmdata.indicesRowTauSideMap[s0].size(),
                               &*cmdata.indicesRowTauSideMap[s0].begin(),
                               cmdata.indicesColTauSideMap[s1].size(),
                               &*cmdata.indicesColTauSideMap[s1].begin(),
@@ -1127,7 +1225,7 @@ MoFEMErrorCode OpPostProcAleSkeleton::doWork(int side, EntityType type,
   t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
 #endif // NDEBUG
 
-  auto t_plastic_strain_jump = getFTensor2SymmetricFromMat<SPACE_DIM>(
+  auto t_ep_jump = getFTensor2SymmetricFromMat<SPACE_DIM>(
       *commonDataPtr->plasticStrainJumpPtr);
   auto t_omega =
       getFTensor1FromMat<SPACE_DIM>(*commonDataPtr->guidingVelocityPtr);
@@ -1155,13 +1253,13 @@ MoFEMErrorCode OpPostProcAleSkeleton::doWork(int side, EntityType type,
     CHKERR set_tag(th_normal, gg, set_vector(t_normal));
 #endif // NDEBUG
 
-    t_plastic_strain_jump(i, j) *= t_X_dot_n;
-    CHKERR set_tag(th_strain_jump, gg, set_matrix_3d(t_plastic_strain_jump));
+    t_ep_jump(i, j) *= t_X_dot_n;
+    CHKERR set_tag(th_strain_jump, gg, set_matrix_3d(t_ep_jump));
 
     ++t_coords;
     ++t_X_dot_n;
     ++t_omega;
-    ++t_plastic_strain_jump;
+    ++t_ep_jump;
   }
 
   MoFEMFunctionReturn(0);

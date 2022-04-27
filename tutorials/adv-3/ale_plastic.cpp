@@ -462,6 +462,9 @@ MoFEMErrorCode Example::createCommonData() {
 
   commonDataPtr->plasticGradTauPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->plasticGradStrainPtr = boost::make_shared<MatrixDouble>();
+  
+  commonDataPtr->plasticTauDiffAvgPtr = boost::make_shared<MatrixDouble>();
+  commonDataPtr->plasticStrainDiffAvgPtr = boost::make_shared<MatrixDouble>();
 
   MoFEMFunctionReturn(0);
 }

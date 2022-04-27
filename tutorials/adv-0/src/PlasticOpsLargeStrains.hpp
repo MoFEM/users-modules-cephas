@@ -91,12 +91,12 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::iNtegrate(
     FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
         t_diff_plastic_flow_stress_dgrad;
     t_diff_plastic_flow_stress_dgrad(i, j, k, l) = 0;
-    for (int ii = 0; ii != SPACE_DIM; ++ii)
-      for (int jj = 0; jj != SPACE_DIM; ++jj)
-        for (int kk = 0; kk != SPACE_DIM; ++kk)
-          for (int ll = 0; ll != SPACE_DIM; ++ll)
-            for (int mm = 0; mm != SPACE_DIM; ++mm)
-              for (int nn = 0; nn != SPACE_DIM; ++nn)
+    for (int jj = 0; jj != SPACE_DIM; ++jj)
+      for (int ii = 0; ii != SPACE_DIM; ++ii)
+        for (int mm = 0; mm != SPACE_DIM; ++mm)
+          for (int nn = 0; nn != SPACE_DIM; ++nn)
+            for (int kk = 0; kk != SPACE_DIM; ++kk)
+              for (int ll = 0; ll != SPACE_DIM; ++ll)
                 t_diff_plastic_flow_stress_dgrad(ii, jj, kk, ll) +=
                     t_diff_plastic_flow_stress_dC(ii, jj, mm, nn) *
                     dC_dF(mm, nn, kk, ll);

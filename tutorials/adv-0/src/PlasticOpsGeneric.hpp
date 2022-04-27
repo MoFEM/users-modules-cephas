@@ -341,15 +341,7 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::iNtegrate(
 
     FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
         t_DLogC_dC;
-    t_DLogC_dC(i, j, k, l) = 0;
-    for (int ii = 0; ii != SPACE_DIM; ++ii)
-      for (int jj = 0; jj != SPACE_DIM; ++jj)
-        for (int kk = 0; kk != SPACE_DIM; ++kk)
-          for (int ll = 0; ll != SPACE_DIM; ++ll)
-            for (int mm = 0; mm != SPACE_DIM; ++mm)
-              for (int nn = 0; nn != SPACE_DIM; ++nn)
-                t_DLogC_dC(ii, jj, kk, ll) +=
-                    t_D(mm, nn, kk, ll) * t_logC_dC(mm, nn, ii, jj);
+    t_DLogC_dC(i, j, k, l) = t_D(k, l, m, n) * t_logC_dC(m, n, i, j);
 
     FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
         t_FDLogC_dC;
