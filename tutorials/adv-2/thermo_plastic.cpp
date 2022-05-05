@@ -599,8 +599,6 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
-    // pipeline.push_back(
-    //     new OpPlasticStress("U", commonPlasticDataPtr, m_D_ptr, 1));
     pipeline.push_back(new PlasticThermalOps::OpPlasticStressThermal(
         "U", commonPlasticDataPtr, m_D_ptr, 1));
 
@@ -958,9 +956,6 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
                                             commonPlasticDataPtr->mStrainPtr));
-      // pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr,
-      //                                        commonPlasticDataPtr->mDPtr,
-      //                                        1));
       pipeline.push_back(new PlasticThermalOps::OpPlasticStressThermal(
           "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, 1));
       pipeline.push_back(new OpSetBc("U", false, reactionMarker));
@@ -1035,8 +1030,6 @@ MoFEMErrorCode Example::tsSolve() {
 
     postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
-    // postProcFe->getOpPtrVector().push_back(new OpPlasticStress(
-    //     "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
     postProcFe->getOpPtrVector().push_back(
         new PlasticThermalOps::OpPlasticStressThermal(
             "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
