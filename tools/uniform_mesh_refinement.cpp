@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
     BitRefManager *bit_ref_manager;
     CHKERR m_field.getInterface(bit_ref_manager);
 
-    auto bit = [](auto l) { return BitRefLevel().set(l) };
+    auto bit = [](auto l) { return BitRefLevel().set(l); };
 
     for (auto l = 0; l != nb_levels; ++l) {
 
@@ -99,26 +99,29 @@ int main(int argc, char *argv[]) {
       CHKERR moab.create_meshset(MESHSET_SET, meshset_ref_edges);
       CHKERR moab.add_entities(meshset_ref_edges, edges);
 
-      MeshRefinement *refine = m_field.getInterface<MeshRefinement>(refine);
+      MeshRefinement *refine = m_field.getInterface<MeshRefinement>();
 
       CHKERR refine->addVerticesInTheMiddleOfEdges(meshset_ref_edges,
                                                    bit(l + 1));
       if (dim == 3) {
-        CHKERR refine->refineTets(0, bit(l + 1));
-      } else if(dim = 2) {
-        CHKERR refine->refineTris(0, bit(l + 1));
+        CHKERR refine->refineTets(ents, bit(l + 1));
+      } else if(dim == 2) {
+        CHKERR refine->refineTris(ents, bit(l + 1));
       } else {
         SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
                 "Refinment implemented only for three and two dimensions");
       }
 
-      // update cubit meshsets
-      for (_IT_CUBITMESHSETS_FOR_LOOP_(m_field, ciit)) {
-        EntityHandle cubit_meshset = ciit->meshset;
-        CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
-            cubit_meshset, BitRefLevel().set(1), cubit_meshset, MBMAXTYPE,
-            true);
-      }
+      auto update_meshsets = [&]() {
+        MoFEMFunctionBegin;
+        // update cubit meshsets
+        for (_IT_CUBITMESHSETS_FOR_LOOP_(m_field, ciit)) {
+          EntityHandle cubit_meshset = ciit->meshset;
+          CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
+              cubit_meshset, bit(l + 1), cubit_meshset, MBMAXTYPE, true);
+        }
+        MoFEMFunctionReturn(0);
+      };
 
       auto update_partition_sets = [&]() {
         MoFEMFunctionBegin;
@@ -131,18 +134,33 @@ int main(int argc, char *argv[]) {
         CHKERR m_field.get_moab().get_entities_by_type_and_tag(
             0, MBENTITYSET, &part_tag, NULL, 1, tagged_sets,
             moab::Interface::UNION);
-        for (auto m : tagged_sets) {
-          CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
-              m, bit(l), bit(l + 1), m, MBMAXTYPE, true);
-        }
 
+        for (auto m : tagged_sets) {
+          for (auto t = CN::TypeDimensionMap[dim].first;
+               t != CN::TypeDimensionMap[dim].second; t++) {
+
+            // Refinemnt is only implemented for simplexes in 2d and 3d
+            if (t == MBTRI || t == MBTET) {
+              CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
+                  m, bit(l + 1), m, MBMAXTYPE, true);
+              Range ents;
+              CHKERR moab.get_entities_by_dimension(m, t, ents, true);
+              int part;
+              CHKERR moab.tag_get_data(part_tag, &m, 1, &part);
+              CHKERR moab.tag_clear_data(part_tag, ents, &part);
+            }
+          }
+        }
         MoFEMFunctionReturn(0);
       };
+
+      CHKERR update_meshsets();
+      CHKERR update_partition_sets();
 
       CHKERR moab.delete_entities(&meshset_ref_edges, 1);
     }
 
-    if(shift)
+    if (shift == PETSC_TRUE)
       CHKERR core.getInterface<BitRefManager>()->shiftRightBitRef(
           nb_levels, BitRefLevel().set(), VERBOSE);
 
