@@ -133,7 +133,7 @@ public:
    * @param side_fe_ptr pointer to FE to evaluate side elements
    */
   OpL2LhsPenalty(boost::shared_ptr<FaceSideEle> side_fe_ptr)
-      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr) {}
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE), sideFEPtr(side_fe_ptr) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
                         EntitiesFieldData::EntData &data) {
@@ -287,7 +287,7 @@ private:
 struct OpL2BoundaryRhs : public BoundaryEleOp {
 public:
   OpL2BoundaryRhs(boost::shared_ptr<FaceSideEle> side_fe_ptr, ScalarFun fun)
-      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr),
+      : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE), sideFEPtr(side_fe_ptr),
         sourceFun(fun) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {

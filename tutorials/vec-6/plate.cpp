@@ -504,7 +504,7 @@ inline auto get_diff2_ntensor(T &base_mat, int gg, int bb) {
  */
 OpH1LhsSkeleton::OpH1LhsSkeleton(boost::shared_ptr<FaceSideEle> side_fe_ptr,
                                  boost::shared_ptr<MatrixDouble> mat_d_ptr)
-    : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST), sideFEPtr(side_fe_ptr),
+    : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE), sideFEPtr(side_fe_ptr),
       dMatPtr(mat_d_ptr) {}
 
 MoFEMErrorCode OpH1LhsSkeleton::doWork(int side, EntityType type,

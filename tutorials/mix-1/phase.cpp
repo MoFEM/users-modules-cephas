@@ -184,7 +184,7 @@ double Example::lhsFlux(const double x, const double y, const double) {
 
 struct Example::BoundaryOp : public EdgeEleOp {
   BoundaryOp(boost::shared_ptr<MatrixDouble> flux_ptr, double &glob_flux)
-      : EdgeEleOp(NOSPACE, OPLAST), fluxPtr(flux_ptr), globFlux(glob_flux) {}
+      : EdgeEleOp(NOSPACE, OPSPACE), fluxPtr(flux_ptr), globFlux(glob_flux) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;

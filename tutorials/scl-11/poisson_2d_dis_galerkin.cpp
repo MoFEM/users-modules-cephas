@@ -453,9 +453,9 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
     MoFEMFunctionReturn(0);
   };
 
-  auto skeleton_error_op = new BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST);
+  auto skeleton_error_op = new BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE);
   skeleton_error_op->doWorkRhsHook = do_work_rhs_error;
-  auto boundary_error_op = new BoundaryEleOp(NOSPACE, BoundaryEleOp::OPLAST);
+  auto boundary_error_op = new BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE);
   boundary_error_op->doWorkRhsHook = do_work_rhs_error;
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(error_op);
