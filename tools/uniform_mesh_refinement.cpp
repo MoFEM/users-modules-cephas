@@ -55,9 +55,9 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsInt("-nb_levels", "number of refinement levels", "", nb_levels,
                            &nb_levels, PETSC_NULL);
 
-    CHKERR PetscOptionsBool(
-        "-shift bits", "shift bits, squash entities of refined elements", "",
-        shift, &shift, PETSC_NULL);
+    CHKERR PetscOptionsBool("-shift",
+                            "shift bits, squash entities of refined elements",
+                            "", shift, &shift, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -86,12 +86,13 @@ int main(int argc, char *argv[]) {
 
     auto bit = [](auto l) { return BitRefLevel().set(l); };
 
+    CHKERR bit_ref_manager->setBitRefLevelByDim(0, dim, bit(0));
+
     for (auto l = 0; l != nb_levels; ++l) {
-
-      CHKERR bit_ref_manager->setBitRefLevelByDim(0, dim, bit(l));
-
       Range ents;
-      rval = moab.get_entities_by_dimension(0, dim, ents, false);
+      CHKERR bit_ref_manager->getEntitiesByDimAndRefLevel(
+          bit(l), BitRefLevel().set(), dim, ents);
+
       Range edges;
       CHKERR moab.get_adjacencies(ents, 1, true, edges, moab::Interface::UNION);
 
