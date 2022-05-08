@@ -289,45 +289,6 @@ MoFEMErrorCode PhotonDiffusion::setupProblem() {
 
   CHKERR simple->setFieldOrder("PHOTON_FLUENCE_RATE", order);
 
-  // if (numHoLevels > 0) {
-
-  //   Range ho_ents;
-
-  //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-  //     std::string entity_name = it->getName();
-  //     if (entity_name.compare(0, 3, "CAM") == 0) {
-  //       CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 2,
-  //                                                  ho_ents, true);
-  //     }
-  //   }
-
-  //   std::vector<Range> levels(numHoLevels);
-  //   Range ents;
-  //   ents.merge(ho_ents);
-  //   for (int ll = 0; ll != numHoLevels; ll++) {
-  //     Range verts;
-  //     CHKERR mField.get_moab().get_connectivity(ents, verts, true);
-  //     for (auto d : {1, 2, 3}) {
-  //       CHKERR mField.get_moab().get_adjacencies(verts, d, false, ents,
-  //                                                moab::Interface::UNION);
-  //     }
-  //     levels[ll] = subtract(ents, ents.subset_by_type(MBVERTEX));
-  //   }
-  //   for (int ll = numHoLevels - 1; ll >= 1; ll--) {
-  //     levels[ll] = subtract(levels[ll], levels[ll - 1]);
-  //   }
-
-  //   int add_order = 1;
-  //   for (int ll = numHoLevels - 1; ll >= 0; ll--) {
-  //       CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
-  //           levels[ll]);
-
-  //     CHKERR simple->setFieldOrder("PHOTON_FLUENCE_RATE", order + add_order ,
-  //                                  &levels[ll]);
-  //     ++add_order;
-  //   }
-  // }
-
   auto set_camera_skin_fe = [&]() {
     MoFEMFunctionBegin;
     auto meshset_mng = mField.getInterface<MeshsetsManager>();
