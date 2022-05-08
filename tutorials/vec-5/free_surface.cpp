@@ -130,9 +130,7 @@ auto cylindrical = [](const double r) {
 
 auto my_max = [](const double x) { return (x - 1 + std::abs(x + 1)) / 2; };
 auto my_min = [](const double x) { return (x + 1 - std::abs(x - 1)) / 2; };
-auto cut_off = [](const double h) {
-  return my_max(my_min(h));
-};
+auto cut_off = [](const double h) { return my_max(my_min(h)); };
 auto d_cut_off = [](const double h) {
   if (h >= -1 && h < 1)
     return 1.;
@@ -213,6 +211,21 @@ auto init_h = [](double r, double y, double theta) {
   return kernel_eye(r, y, theta);
 };
 
+auto bit = [](auto b) { return BitRefLevel().set(b); };
+
+auto save_range = [](moab::Interface &moab, const std::string name,
+                     const Range r) {
+  MoFEMFunctionBegin;
+  EntityHandle out_meshset;
+  CHKERR moab.create_meshset(MESHSET_SET, out_meshset);
+  CHKERR moab.add_entities(out_meshset, r);
+  CHKERR moab.write_file(name.c_str(), "VTK", "", &out_meshset, 1);
+  CHKERR moab.delete_entities(&out_meshset, 1);
+  MoFEMFunctionReturn(0);
+};
+
+static constexpr int max_nb_levels = 3;
+
 #include <FreeSurfaceOps.hpp>
 using namespace FreeSurfaceOps;
 
@@ -232,6 +245,13 @@ private:
   MoFEM::Interface &mField;
 
   boost::shared_ptr<FEMethod> domianLhsFEPtr;
+
+  Range findEntitiesCrossedByPhaseInterface();
+  Range getBitSkin(BitRefLevel bit, BitRefLevel mask);
+  Range findEntitiesOnNextLevel(const Range &ents);
+
+  Range bodySkinBit0;
+  Range bodySkinBitAll;
 };
 
 //! [Run programme]
@@ -251,8 +271,12 @@ MoFEMErrorCode FreeSurface::readMesh() {
   MoFEMFunctionBegin;
 
   auto simple = mField.getInterface<Simple>();
+  simple->getBitRefLevel().reset();
+
   CHKERR simple->getOptions();
   CHKERR simple->loadFile();
+
+  simple->getBitRefLevel() = bit(0);
 
   MoFEMFunctionReturn(0);
 }
@@ -265,18 +289,19 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   auto simple = mField.getInterface<Simple>();
 
   // Fields on domain
-  
+
   // Velocity field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
   // Pressure field
   CHKERR simple->addDomainField("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
   // Order/phase fild
   CHKERR simple->addDomainField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
-  //Chemical potential
+  // Chemical potential
   CHKERR simple->addDomainField("G", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
   // Field on boundary
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE,
+                                  U_FIELD_DIM);
   CHKERR simple->addBoundaryField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
   // Lagrange multiplier which constrains slip conditions
   CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
@@ -287,6 +312,11 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->setFieldOrder("H", order);
   CHKERR simple->setFieldOrder("G", order);
   CHKERR simple->setFieldOrder("L", order);
+
+  // Simple intrafece will resolve adjacency to DOFs of parent of the element.
+  // Using that information MAtrixManager  allocate appropriately size of
+  // matrix.
+  simple->getParentAdjacencies() = true;
   CHKERR simple->setUp();
 
   MoFEMFunctionReturn(0);
@@ -426,17 +456,45 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   CHKERR solve_init();
   CHKERR post_proc();
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "SYMETRY", "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "SYMETRY", "L", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
-                                           "U", 0, SPACE_DIM);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
-                                           "L", 0, 0);
   // Clear pipelines
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainLhsPipeline().clear();
+
+  bodySkinBit0 = getBitSkin(bit(0), BitRefLevel().set());
+  bodySkinBitAll = bodySkinBit0;
+  for (auto l = 0; l != max_nb_levels; ++l)
+    CHKERR mField.getInterface<BitRefManager>()->updateRange(bodySkinBitAll,
+                                                             bodySkinBitAll);
+
+  auto update_and_filter = [&](auto ents, auto bit, auto mask) {
+    CHKERR mField.getInterface<BitRefManager>()->updateRange(ents, ents);
+    CHKERR mField.getInterface<BitRefManager>()->filterEntitiesByRefLevel(
+        bit, mask, ents);
+    return ents.subset_by_dimension(2);
+  };
+
+  auto first_level = findEntitiesCrossedByPhaseInterface();
+  first_level = update_and_filter(first_level, bit(1), BitRefLevel().set());
+  CHKERR save_range(mField.get_moab(), "first_level.vtk", first_level);
+
+  auto next_level = findEntitiesOnNextLevel(first_level);
+  next_level = update_and_filter(next_level, bit(2), BitRefLevel().set());
+  CHKERR save_range(mField.get_moab(), "next_level.vtk", next_level);
+
+  auto last_level = findEntitiesOnNextLevel(next_level);
+  last_level = update_and_filter(last_level, bit(3), BitRefLevel().set());
+  CHKERR save_range(mField.get_moab(), "last_level.vtk", last_level);
+
+  // Enforce moundary conditions by removing DOFs on symmetry axis and fixed
+  // positions
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
+                                           "L", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "U",
+                                           0, SPACE_DIM);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
+                                           0, 0);
 
   MoFEMFunctionReturn(0);
 }
@@ -503,7 +561,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         }));
     pipeline.push_back(new OpBaseTimesScalarField(
         "P", p_ptr, [](const double r, const double, const double) {
-          return eps * cylindrical(r) ;
+          return eps * cylindrical(r);
         }));
   };
 
@@ -584,7 +642,6 @@ struct Monitor : public FEMethod {
                                       this->getCacheWeakPtr());
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
-
 
       // MOFEM_LOG("FS", Sev::verbose)
       //     << "writing vector in binary to vector.dat ...";
@@ -739,6 +796,124 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   CHKERR TSGetTime(ts, &ftime);
 
   MoFEMFunctionReturn(0);
+}
+
+Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
+
+  auto &moab = mField.get_moab();
+  auto bit_mng = mField.getInterface<BitRefManager>();
+
+  Range vertices;
+  CHK_THROW_MESSAGE(bit_mng->getEntitiesByTypeAndRefLevel(
+                        bit(0), BitRefLevel().set(), MBVERTEX, vertices),
+                    "can not get vertices on bit 0");
+
+  auto &dofs_mi = mField.get_dofs()->get<Unique_mi_tag>();
+  auto field_bit_number = mField.get_field_bit_number("H");
+
+  Range plus_range, minus_range;
+  std::vector<EntityHandle> plus, minus;
+
+  for (auto p = vertices.pair_begin(); p != vertices.pair_end(); ++p) {
+
+    const auto f = p->first;
+    const auto s = p->second;
+
+    // Lowest Dof UId for given field (field bit number) on entity f
+    const auto lo_uid = DofEntity::getLoFieldEntityUId(field_bit_number, f);
+    const auto hi_uid = DofEntity::getHiFieldEntityUId(field_bit_number, s);
+    auto it = dofs_mi.lower_bound(lo_uid);
+    const auto hi_it = dofs_mi.upper_bound(hi_uid);
+
+    plus.clear();
+    minus.clear();
+    plus.reserve(std::distance(it, hi_it));
+    minus.reserve(std::distance(it, hi_it));
+
+    for (; it != hi_it; ++it) {
+      const auto v = (*it)->getFieldData();
+      if (v > 0)
+        plus.push_back((*it)->getEnt());
+      else
+        minus.push_back((*it)->getEnt());
+    }
+
+    plus_range.insert_list(plus.begin(), plus.end());
+    minus_range.insert_list(minus.begin(), minus.end());
+  }
+
+  MOFEM_LOG("SELF", Sev::noisy) << "Plus range " << plus_range << endl;
+  MOFEM_LOG("SELF", Sev::noisy) << "Minus range " << minus_range << endl;
+
+  auto get_elems = [&](auto &ents) {
+    Range adj;
+    CHK_MOAB_THROW(
+        moab.get_adjacencies(ents, 2, false, adj, moab::Interface::UNION),
+        "can not get adjacencies");
+    CHK_THROW_MESSAGE(
+        bit_mng->filterEntitiesByRefLevel(bit(0), BitRefLevel().set(), adj),
+        "can not filter elements with bit 0");
+    return adj;
+  };
+
+  auto ele_plus = get_elems(plus_range);
+  auto ele_minus = get_elems(minus_range);
+  auto common = intersect(ele_plus, ele_minus);
+  ele_plus = subtract(ele_plus, common);
+  ele_minus = subtract(ele_minus, common);
+
+  Range all;
+  CHK_THROW_MESSAGE(
+      bit_mng->getEntitiesByDimAndRefLevel(bit(0), BitRefLevel().set(), 2, all),
+      "can not get vertices on bit 0");
+  all = subtract(all, ele_plus);
+  all = subtract(all, ele_minus);
+
+  Range conn;
+  CHK_MOAB_THROW(moab.get_connectivity(all, conn, true), "");
+  all = get_elems(conn);
+
+  return all;
+}
+
+Range FreeSurface::getBitSkin(BitRefLevel bit, BitRefLevel mask) {
+  auto &moab = mField.get_moab();
+  moab::Skinner skin(&moab);
+  ParallelComm *pcomm =
+      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+  Range bit_ents;
+  CHK_THROW_MESSAGE(
+      mField.getInterface<BitRefManager>()->getEntitiesByDimAndRefLevel(
+          bit, mask, SPACE_DIM, bit_ents),
+      "can't get bit level");
+  Range bit_skin;
+  CHK_MOAB_THROW(skin.find_skin(0, bit_ents, false, bit_skin),
+                 "can't get skin");
+  pcomm->filter_pstatus(bit_skin, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                        PSTATUS_NOT, -1, nullptr);
+  return bit_skin;
+}
+
+Range FreeSurface::findEntitiesOnNextLevel(const Range &ents) {
+  auto &moab = mField.get_moab();
+  moab::Skinner skin(&moab);
+  ParallelComm *pcomm =
+      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+  Range level_skin;
+  CHK_MOAB_THROW(skin.find_skin(0, ents, false, level_skin), "can't get skin");
+  CHK_MOAB_THROW(pcomm->filter_pstatus(level_skin,
+                                       PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                       PSTATUS_NOT, -1, nullptr),
+                 "can't filter");
+  level_skin = subtract(level_skin, bodySkinBitAll);
+  CHK_MOAB_THROW(moab.get_connectivity(level_skin, level_skin),
+                 "can't get connectivity of from skin edges");
+  Range adj;
+  CHK_MOAB_THROW(mField.get_moab().get_adjacencies(level_skin, 2, false, adj,
+                                                   moab::Interface::UNION),
+                 "can't get adjacencies");
+  Range next_level_ents = subtract(ents, adj);
+  return next_level_ents;
 }
 
 int main(int argc, char *argv[]) {
