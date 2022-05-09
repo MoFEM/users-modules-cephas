@@ -39,21 +39,15 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
+  using DomianParentEle = FaceElementForcesAndSourcesCoreOnChildParentSwitch<0>;
   using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
-template <> struct ElementsAndOps<3> {
-  using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = PipelineManager::FaceEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcVolumeOnRefinedMesh;
-};
-
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+using DomianParentEle = ElementsAndOps<SPACE_DIM>::DomianParentEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
@@ -211,7 +205,11 @@ auto init_h = [](double r, double y, double theta) {
   return kernel_eye(r, y, theta);
 };
 
+static constexpr int max_nb_levels = 2;
+static constexpr int bit_shift = 10;
+
 auto bit = [](auto b) { return BitRefLevel().set(b); };
+auto marker = [](auto b) { return BitRefLevel().set(BITREFLEVEL_SIZE - b); };
 
 auto save_range = [](moab::Interface &moab, const std::string name,
                      const Range r) {
@@ -224,7 +222,51 @@ auto save_range = [](moab::Interface &moab, const std::string name,
   MoFEMFunctionReturn(0);
 };
 
-static constexpr int max_nb_levels = 3;
+/**
+ * @brief set levels of projection operators, which project field data from
+ * parent entities, to child, up to to level, i.e. last mesh refinement.
+ *
+ */
+auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
+                          auto field_name) {
+  MoFEMFunctionBegin;
+
+  boost::function<void(boost::shared_ptr<ForcesAndSourcesCore>, int)>
+      add_parent_level =
+          [&](boost::shared_ptr<ForcesAndSourcesCore> parent_fe_pt, int level) {
+            if (level > 0) {
+
+              auto fe_ptr_current = boost::shared_ptr<ForcesAndSourcesCore>(
+                  new DomianParentEle(m_field));
+
+              add_parent_level(
+                  boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
+                      fe_ptr_current),
+                  level - 1);
+
+              BitRefLevel bit_marker;
+              for (auto l = 1; l <= max_nb_levels; ++l)
+                bit_marker |= marker(l);
+
+              parent_fe_pt->getOpPtrVector().push_back(
+
+                  new OpAddParentEntData(
+
+                      field_name, op, fe_ptr_current,
+
+                      BitRefLevel().set(), bit(0).flip(),
+
+                      bit_marker, BitRefLevel().set(),
+
+                      QUIET, Sev::noisy));
+            }
+          };
+
+  add_parent_level(boost::dynamic_pointer_cast<ForcesAndSourcesCore>(fe_top),
+                   max_nb_levels);
+
+  MoFEMFunctionReturn(0);
+};
 
 #include <FreeSurfaceOps.hpp>
 using namespace FreeSurfaceOps;
@@ -249,6 +291,8 @@ private:
   Range findEntitiesCrossedByPhaseInterface();
   Range getBitSkin(BitRefLevel bit, BitRefLevel mask);
   Range findEntitiesOnNextLevel(const Range &ents);
+
+  MoFEMErrorCode setBitLevels();
 
   Range bodySkinBit0;
   Range bodySkinBitAll;
@@ -463,27 +507,10 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   bodySkinBit0 = getBitSkin(bit(0), BitRefLevel().set());
   bodySkinBitAll = bodySkinBit0;
   for (auto l = 0; l != max_nb_levels; ++l)
-    CHKERR mField.getInterface<BitRefManager>()->updateRange(bodySkinBitAll,
-                                                             bodySkinBitAll);
+    CHKERR mField.getInterface<BitRefManager>()->updateRangeByChildren(
+        bodySkinBitAll, bodySkinBitAll);
 
-  auto update_and_filter = [&](auto ents, auto bit, auto mask) {
-    CHKERR mField.getInterface<BitRefManager>()->updateRange(ents, ents);
-    CHKERR mField.getInterface<BitRefManager>()->filterEntitiesByRefLevel(
-        bit, mask, ents);
-    return ents.subset_by_dimension(2);
-  };
-
-  auto first_level = findEntitiesCrossedByPhaseInterface();
-  first_level = update_and_filter(first_level, bit(1), BitRefLevel().set());
-  CHKERR save_range(mField.get_moab(), "first_level.vtk", first_level);
-
-  auto next_level = findEntitiesOnNextLevel(first_level);
-  next_level = update_and_filter(next_level, bit(2), BitRefLevel().set());
-  CHKERR save_range(mField.get_moab(), "next_level.vtk", next_level);
-
-  auto last_level = findEntitiesOnNextLevel(next_level);
-  last_level = update_and_filter(last_level, bit(3), BitRefLevel().set());
-  CHKERR save_range(mField.get_moab(), "last_level.vtk", last_level);
+  CHKERR setBitLevels();
 
   // Enforce moundary conditions by removing DOFs on symmetry axis and fixed
   // positions
@@ -720,7 +747,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       ents_ptr->merge(ents);
     }
 
-    MOFEM_LOG("FS", Sev::inform) << "Lift ents " << (*ents_ptr);
+    MOFEM_LOG("FS", Sev::noisy) << "Lift ents " << (*ents_ptr);
 
     fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("P", p_ptr));
@@ -914,6 +941,112 @@ Range FreeSurface::findEntitiesOnNextLevel(const Range &ents) {
                  "can't get adjacencies");
   Range next_level_ents = subtract(ents, adj);
   return next_level_ents;
+}
+
+MoFEMErrorCode FreeSurface::setBitLevels() {
+  auto &moab = mField.get_moab();
+  MoFEMFunctionBegin;
+
+  auto update_and_filter = [&](auto ents, auto bit, auto mask) {
+    CHKERR mField.getInterface<BitRefManager>()->updateRangeByChildren(ents,
+                                                                       ents);
+    CHKERR mField.getInterface<BitRefManager>()->filterEntitiesByRefLevel(
+        bit, mask, ents);
+    return ents.subset_by_dimension(2);
+  };
+
+  std::vector<Range> levels;
+
+  levels.push_back(findEntitiesCrossedByPhaseInterface());
+  levels.back() = update_and_filter(levels.back(), bit(1), BitRefLevel().set());
+  CHKERR save_range(moab, "1_level.vtk", levels.back());
+
+  for (auto l = 2; l <= max_nb_levels; ++l) {
+    levels.push_back(findEntitiesOnNextLevel(levels.back()));
+    levels.back() =
+        update_and_filter(levels.back(), bit(l), BitRefLevel().set());
+    CHKERR save_range(moab, boost::lexical_cast<std::string>(l) + "_level.vtk",
+                      levels.back());
+  }
+
+  auto reset_bits = [&]() {
+    MoFEMFunctionBegin;
+    auto ref_ents_ptr = mField.get_ref_ents();
+    const auto hi_dit = ref_ents_ptr->end();
+    for (auto dit = ref_ents_ptr->begin(); dit != hi_dit; ++dit) {
+      auto &bit = (*const_cast<RefEntity *>(dit->get())->getBitRefLevelPtr());
+      for (int l = bit_shift; l != BITREFLEVEL_SIZE; ++l) {
+        bit[l] = 0;
+      }
+    }
+    MoFEMFunctionReturn(0);
+  };
+
+  auto mark_skins = [&](auto &&ents, auto m) {
+    auto &moab = mField.get_moab();
+    moab::Skinner skin(&moab);
+    ParallelComm *pcomm =
+        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+    MoFEMFunctionBegin;
+    Range level_skin;
+    CHKERR skin.find_skin(0, ents, false, level_skin);
+    CHKERR pcomm->filter_pstatus(level_skin,
+                                 PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                 PSTATUS_NOT, -1, nullptr);
+    level_skin = subtract(level_skin, bodySkinBitAll);
+    CHKERR mField.get_moab().get_adjacencies(level_skin, 0, false, level_skin,
+                                             moab::Interface::UNION);
+    CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(
+        level_skin, marker(m));
+    MoFEMFunctionReturn(0);
+  };
+
+  auto set_bits = [&]() {
+    MoFEMFunctionBegin;
+
+    int l = 1;
+    for (auto &r : levels) {
+      Range l_mesh;
+      CHKERR mField.getInterface<BitRefManager>()->getEntitiesByRefLevel(
+          bit(bit_shift + l - 1), BitRefLevel().set(), l_mesh);
+      Range r_parents;
+      CHKERR mField.getInterface<BitRefManager>()->updateRangeByParent(
+          r, r_parents);
+      CHKERR mark_skins(unite(r, r_parents), l);
+      l_mesh = subtract(l_mesh, r_parents);
+      l_mesh.merge(r);
+      CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(
+          l_mesh, bit(bit_shift + l));
+
+      ++l;
+    }
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR reset_bits();
+
+  {
+    Range zero_mesh;
+    CHKERR mField.getInterface<BitRefManager>()->getEntitiesByRefLevel(
+        bit(0), BitRefLevel().set(), zero_mesh);
+    CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(zero_mesh,
+                                                                bit(bit_shift));
+  }
+
+  CHKERR set_bits();
+
+  for (auto l = 1; l <= max_nb_levels; ++l) {
+    CHKERR mField.getInterface<BitRefManager>()->writeBitLevelByDim(
+        bit(bit_shift + l), BitRefLevel().set(), SPACE_DIM,
+        (boost::lexical_cast<std::string>(l) + "_level_mesh.vtk").c_str(),
+        "VTK", "");
+    CHKERR mField.getInterface<BitRefManager>()->writeBitLevelByDim(
+        marker(l), BitRefLevel().set(), 1,
+        (boost::lexical_cast<std::string>(l) + "_level_marker.vtk").c_str(),
+        "VTK", "");
+  }
+
+  MoFEMFunctionReturn(0);
 }
 
 int main(int argc, char *argv[]) {
