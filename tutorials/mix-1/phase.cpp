@@ -32,9 +32,9 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEle = FaceElementForcesAndSourcesCore;
 using DomainEleOp = DomainEle::UserDataOperator;
-using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
+using EdgeEle = EdgeElementForcesAndSourcesCore;
 using EdgeEleOp = EdgeEle::UserDataOperator;
 
 constexpr std::array<int, 3> d1_savitzky_golay_w3_p2 = {-1, 0, 1};

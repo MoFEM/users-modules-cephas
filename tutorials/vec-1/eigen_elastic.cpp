@@ -29,7 +29,7 @@ using namespace MoFEM;
 template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
-  using DomainEle = FaceElementForcesAndSourcesCoreBase;
+  using DomainEle = FaceElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 };

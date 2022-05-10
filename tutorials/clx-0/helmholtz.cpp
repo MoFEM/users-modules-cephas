@@ -28,9 +28,9 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEle = FaceElementForcesAndSourcesCore;
 using DomainEleOp = DomainEle::UserDataOperator;
-using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
+using EdgeEle = EdgeElementForcesAndSourcesCore;
 using EdgeEleOp = EdgeEle::UserDataOperator;
 
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<

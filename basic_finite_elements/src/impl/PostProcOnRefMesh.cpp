@@ -823,7 +823,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
     postProcMesh.delete_mesh();
 
     auto get_number_of_computational_elements = [&]() {
-      auto fe_name = this->feName;
       auto fe_ptr = this->problemPtr->numeredFiniteElementsPtr;
 
       auto miit =

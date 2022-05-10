@@ -39,7 +39,7 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
-  using DomianParentEle = FaceElementForcesAndSourcesCoreOnChildParentSwitch<0>;
+  using DomianParentEle = FaceElementForcesAndSourcesCoreOnChildParent;
   using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
@@ -304,8 +304,8 @@ MoFEMErrorCode FreeSurface::runProblem() {
   CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR boundaryCondition();
-  CHKERR assembleSystem();
-  CHKERR solveSystem();
+  // CHKERR assembleSystem();
+  // CHKERR solveSystem();
   MoFEMFunctionReturn(0);
 }
 //! [Run programme]
@@ -386,14 +386,22 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
     post_proc_fe->generateReferenceElementMesh();
 
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    // auto det_ptr = boost::make_shared<VectorDouble>();
+    // auto jac_ptr = boost::make_shared<MatrixDouble>();
+    // auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
+    post_proc_fe->exeTestHook = [](FEMethod *fe_ptr) {
+      return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
+          bit_shift + max_nb_levels);
+    };
+
+    CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPCOL, "H");
     post_proc_fe->addFieldValuesPostProc("H");
+    // post_proc_fe->addFieldValuesGradientPostProc("H", 2);
+
+    CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPCOL, "G");
     post_proc_fe->addFieldValuesPostProc("G");
-    post_proc_fe->addFieldValuesGradientPostProc("G", 2);
-    post_proc_fe->addFieldValuesGradientPostProc("H", 2);
+    // post_proc_fe->addFieldValuesGradientPostProc("G", 2);
 
     CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
     CHKERR post_proc_fe->writeFile("out_init.h5m");
@@ -497,20 +505,29 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR solve_init();
-  CHKERR post_proc();
-
-  // Clear pipelines
-  pipeline_mng->getOpDomainRhsPipeline().clear();
-  pipeline_mng->getOpDomainLhsPipeline().clear();
-
   bodySkinBit0 = getBitSkin(bit(0), BitRefLevel().set());
   bodySkinBitAll = bodySkinBit0;
   for (auto l = 0; l != max_nb_levels; ++l)
     CHKERR mField.getInterface<BitRefManager>()->updateRangeByChildren(
         bodySkinBitAll, bodySkinBitAll);
 
+  CHKERR solve_init();
   CHKERR setBitLevels();
+
+  simple->getBitRefLevel().reset();
+  for (auto l = 0; l <= max_nb_levels; ++l)
+    simple->getBitRefLevel() |= bit(bit_shift + l);
+
+  simple->getBitRefLevelMask() = BitRefLevel().set();
+
+  simple->reSetUp(true);
+
+  CHKERR post_proc();
+
+  // Clear pipelines
+  pipeline_mng->getOpDomainRhsPipeline().clear();
+  pipeline_mng->getOpDomainLhsPipeline().clear();
+
 
   // Enforce moundary conditions by removing DOFs on symmetry axis and fixed
   // positions

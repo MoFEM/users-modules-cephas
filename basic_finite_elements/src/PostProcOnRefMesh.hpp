@@ -732,7 +732,6 @@ struct PostProcTemplateVolumeOnRefinedMesh
     auto alloc_vertives_and_elements_on_post_proc_mesh = [&]() {
       MoFEMFunctionBegin;
 
-      auto fe_name = this->feName;
       auto fe_ptr = this->problemPtr->numeredFiniteElementsPtr;
 
       auto miit =
