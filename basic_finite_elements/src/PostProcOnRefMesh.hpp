@@ -759,24 +759,33 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
         // Set pointer to element. So that getDataVectorDofsPtr in getMaxLevel
         // can work
-        this->numeredEntFiniteElementPtr = *miit;  
-        auto level = getMaxLevel();
+        this->numeredEntFiniteElementPtr = *miit;
 
-        switch (type) {
-        case MBTET:
-          level = std::min(level, levelGaussPtsOnRefMeshTets.size() - 1);
-          nb_tet_vertices += levelGaussPtsOnRefMeshTets[level].size2();
-          nb_tets += levelRefTets[level].size1();
-          break;
-        case MBHEX:
-          level = std::min(level, levelGaussPtsOnRefMeshHexes.size() - 1);
-          nb_hex_vertices += levelGaussPtsOnRefMeshHexes[level].size2();
-          nb_hexes += levelRefHexes[level].size1();
-          break;
-        default:
-          SETERRQ(this->mField.get_comm(), MOFEM_DATA_INCONSISTENCY,
-                  "Element type not implemented");
-          break;
+        bool add = true;
+        if (this->exeTestHook) {
+          add = this->exeTestHook(this);
+        }
+
+        if (add) {
+
+          auto level = getMaxLevel();
+
+          switch (type) {
+          case MBTET:
+            level = std::min(level, levelGaussPtsOnRefMeshTets.size() - 1);
+            nb_tet_vertices += levelGaussPtsOnRefMeshTets[level].size2();
+            nb_tets += levelRefTets[level].size1();
+            break;
+          case MBHEX:
+            level = std::min(level, levelGaussPtsOnRefMeshHexes.size() - 1);
+            nb_hex_vertices += levelGaussPtsOnRefMeshHexes[level].size2();
+            nb_hexes += levelRefHexes[level].size1();
+            break;
+          default:
+            SETERRQ(this->mField.get_comm(), MOFEM_DATA_INCONSISTENCY,
+                    "Element type not implemented");
+            break;
+          }
         }
       }
 

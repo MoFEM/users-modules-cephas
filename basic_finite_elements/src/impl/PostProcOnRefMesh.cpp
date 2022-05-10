@@ -844,8 +844,17 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
       std::fill(nb_elemms_by_type.begin(), nb_elemms_by_type.end(), 0);
 
       for (; miit != hi_miit; ++miit) {
-        auto type = (*miit)->getEntType();
-        ++nb_elemms_by_type[type];
+
+        bool add = true;
+        if (exeTestHook) {
+          numeredEntFiniteElementPtr = *miit;
+          add = exeTestHook(this);
+        }
+
+        if (add) {
+          auto type = (*miit)->getEntType();
+          ++nb_elemms_by_type[type];
+        }
       }
 
       return nb_elemms_by_type;
