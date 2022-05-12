@@ -957,7 +957,7 @@ MoFEMErrorCode Example::OPs() {
           new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
                                             commonPlasticDataPtr->mStrainPtr));
       pipeline.push_back(new PlasticThermalOps::OpPlasticStressThermal(
-          "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, 1));
+          "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
       pipeline.push_back(new OpSetBc("U", false, reactionMarker));
 
       // Calculate internal forece
