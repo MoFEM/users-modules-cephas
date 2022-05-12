@@ -827,10 +827,10 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
 
       auto miit =
           fe_ptr->template get<Composite_Name_And_Part_mi_tag>().lower_bound(
-              boost::make_tuple(fe_name, this->getLoFERank()));
+              boost::make_tuple(this->getFEName(), this->getLoFERank()));
       auto hi_miit =
           fe_ptr->template get<Composite_Name_And_Part_mi_tag>().upper_bound(
-              boost::make_tuple(fe_name, this->getHiFERank()));
+              boost::make_tuple(this->getFEName(), this->getHiFERank()));
 
       const int number_of_ents_in_the_loop = this->getLoopSize();
       if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
@@ -1122,10 +1122,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
                                         mat_ptr, save_on_tag));
 
   MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
-  return opSwitch<0>();
 }
 
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::generateReferenceElementMesh() {

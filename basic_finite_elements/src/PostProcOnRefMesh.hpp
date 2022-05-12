@@ -736,10 +736,10 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
       auto miit =
           fe_ptr->template get<Composite_Name_And_Part_mi_tag>().lower_bound(
-              boost::make_tuple(fe_name, this->getLoFERank()));
+              boost::make_tuple(this->getFEName(), this->getLoFERank()));
       auto hi_miit =
           fe_ptr->template get<Composite_Name_And_Part_mi_tag>().upper_bound(
-              boost::make_tuple(fe_name, this->getHiFERank()));
+              boost::make_tuple(this->getFEName(), this->getHiFERank()));
 
       const int number_of_ents_in_the_loop = this->getLoopSize();
       if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
@@ -1165,7 +1165,6 @@ struct PostProcFaceOnRefinedMeshFor2D : public PostProcFaceOnRefinedMesh {
 
   using PostProcFaceOnRefinedMesh::PostProcFaceOnRefinedMesh;
 
-  MoFEMErrorCode operator()();
 };
 
 using EdgeEleBasePostProc = MoFEM::EdgeElementForcesAndSourcesCore;
