@@ -227,6 +227,60 @@ auto save_range = [](moab::Interface &moab, const std::string name,
  * parent entities, to child, up to to level, i.e. last mesh refinement.
  *
  */
+auto set_parent_space = [](auto &m_field, auto &fe_top, auto space) {
+  MoFEMFunctionBegin;
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  auto det_ptr = boost::make_shared<VectorDouble>();
+
+  boost::function<void(boost::shared_ptr<ForcesAndSourcesCore>, int)>
+      add_parent_level =
+          [&](boost::shared_ptr<ForcesAndSourcesCore> parent_fe_pt, int level) {
+            if (level > 0) {
+
+              auto fe_ptr_current = boost::shared_ptr<ForcesAndSourcesCore>(
+                  new DomianParentEle(m_field));
+              fe_ptr_current->getOpPtrVector().push_back(
+                  new OpCalculateHOJacForFace(jac_ptr));
+              fe_ptr_current->getOpPtrVector().push_back(
+                  new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+              fe_ptr_current->getOpPtrVector().push_back(
+                  new OpSetInvJacH1ForFace(inv_jac_ptr));
+
+              add_parent_level(
+                  boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
+                      fe_ptr_current),
+                  level - 1);
+
+              BitRefLevel bit_marker;
+              for (auto l = 1; l <= max_nb_levels; ++l)
+                bit_marker |= marker(l);
+
+              parent_fe_pt->getOpPtrVector().push_back(
+
+                  new OpAddParentEntData(
+
+                      space, DomainEleOp::OPSPACE, fe_ptr_current,
+
+                      BitRefLevel().set(), bit(0).flip(),
+
+                      BitRefLevel().set(), BitRefLevel().set(),
+
+                      QUIET, Sev::noisy));
+            }
+          };
+
+  add_parent_level(boost::dynamic_pointer_cast<ForcesAndSourcesCore>(fe_top),
+                   max_nb_levels);
+
+  MoFEMFunctionReturn(0);
+};
+
+/**
+ * @brief set levels of projection operators, which project field data from
+ * parent entities, to child, up to to level, i.e. last mesh refinement.
+ *
+ */
 auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
                           auto field_name) {
   MoFEMFunctionBegin;
@@ -256,7 +310,7 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
 
                       BitRefLevel().set(), bit(0).flip(),
 
-                      bit_marker, BitRefLevel().set(),
+                      BitRefLevel().set(), BitRefLevel().set(),
 
                       QUIET, Sev::noisy));
             }
@@ -386,22 +440,32 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
     post_proc_fe->generateReferenceElementMesh();
 
-    // auto det_ptr = boost::make_shared<VectorDouble>();
-    // auto jac_ptr = boost::make_shared<MatrixDouble>();
-    // auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
     post_proc_fe->exeTestHook = [](FEMethod *fe_ptr) {
       return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
           bit_shift + max_nb_levels);
     };
 
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+    post_proc_fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateHOJacForFace(jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
+
+    CHKERR set_parent_space(mField, post_proc_fe, FieldSpace::H1);
     CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPCOL, "H");
+
     post_proc_fe->addFieldValuesPostProc("H");
-    // post_proc_fe->addFieldValuesGradientPostProc("H", 2);
+    post_proc_fe->addFieldValuesGradientPostProc("H", 2);
 
     CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPCOL, "G");
     post_proc_fe->addFieldValuesPostProc("G");
-    // post_proc_fe->addFieldValuesGradientPostProc("G", 2);
+    post_proc_fe->addFieldValuesGradientPostProc("G", 2);
 
     CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
     CHKERR post_proc_fe->writeFile("out_init.h5m");
@@ -527,7 +591,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   // Clear pipelines
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainLhsPipeline().clear();
-
 
   // Enforce moundary conditions by removing DOFs on symmetry axis and fixed
   // positions
@@ -1013,8 +1076,8 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
     level_skin = subtract(level_skin, bodySkinBitAll);
     CHKERR mField.get_moab().get_adjacencies(level_skin, 0, false, level_skin,
                                              moab::Interface::UNION);
-    CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(
-        level_skin, marker(m));
+    CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(level_skin,
+                                                                marker(m));
     MoFEMFunctionReturn(0);
   };
 
