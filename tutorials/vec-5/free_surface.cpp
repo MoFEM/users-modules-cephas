@@ -94,7 +94,7 @@ constexpr double lambda = 7.4;
 constexpr double W = 0.25;
 
 // Model parameters
-constexpr double h = 0.02; // mesh size
+constexpr double h = 0.1; // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -205,7 +205,7 @@ auto init_h = [](double r, double y, double theta) {
   return kernel_eye(r, y, theta);
 };
 
-static constexpr int max_nb_levels = 2;
+static constexpr int max_nb_levels = 1;
 static constexpr int bit_shift = 10;
 
 auto bit = [](auto b) { return BitRefLevel().set(b); };
@@ -222,6 +222,20 @@ auto save_range = [](moab::Interface &moab, const std::string name,
   MoFEMFunctionReturn(0);
 };
 
+auto get_dofs_ents = [](auto dm) {
+  auto prb_ptr = getProblemPtr(dm);
+  std::vector<EntityHandle> ents_vec;
+  ents_vec.reserve(prb_ptr->numeredRowDofsPtr->size());
+  for (auto dof : *prb_ptr->numeredRowDofsPtr) {
+    ents_vec.push_back(dof->getEnt());
+  }
+  std::sort(ents_vec.begin(), ents_vec.end());
+  auto it = std::unique(ents_vec.begin(), ents_vec.end());
+  Range r;
+  r.insert_list(ents_vec.begin(), it);
+  return r;
+};
+
 /**
  * @brief set levels of projection operators, which project field data from
  * parent entities, to child, up to to level, i.e. last mesh refinement.
@@ -231,13 +245,14 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
                           auto field_name = std::string()) {
   MoFEMFunctionBegin;
 
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-  auto det_ptr = boost::make_shared<VectorDouble>();
+  BitRefLevel bit_marker(0);
+  for (auto l = 1; l <= max_nb_levels; ++l)
+    bit_marker |= marker(l);
 
   boost::function<void(boost::shared_ptr<ForcesAndSourcesCore>, int)>
       add_parent_level =
           [&](boost::shared_ptr<ForcesAndSourcesCore> parent_fe_pt, int level) {
+            
             if (level > 0) {
 
               auto fe_ptr_current = boost::shared_ptr<ForcesAndSourcesCore>(
@@ -248,11 +263,11 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
                       fe_ptr_current),
                   level - 1);
 
-              BitRefLevel bit_marker;
-              for (auto l = 1; l <= max_nb_levels; ++l)
-                bit_marker |= marker(l);
-
               if (op == DomainEleOp::OPSPACE) {
+
+                auto jac_ptr = boost::make_shared<MatrixDouble>();
+                auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+                auto det_ptr = boost::make_shared<VectorDouble>();
 
                 fe_ptr_current->getOpPtrVector().push_back(
                     new OpCalculateHOJacForFace(jac_ptr));
@@ -269,7 +284,7 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
 
                         BitRefLevel().set(), bit(0).flip(),
 
-                        BitRefLevel().set(), BitRefLevel().set(),
+                        bit_marker, BitRefLevel().set(),
 
                         QUIET, Sev::noisy));
 
@@ -283,7 +298,7 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
 
                         BitRefLevel().set(), bit(0).flip(),
 
-                        BitRefLevel().set(), BitRefLevel().set(),
+                        bit_marker, BitRefLevel().set(),
 
                         QUIET, Sev::noisy));
               }
@@ -389,6 +404,10 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   // Using that information MAtrixManager  allocate appropriately size of
   // matrix.
   simple->getParentAdjacencies() = true;
+  BitRefLevel bit_marker;
+  for (auto l = 1; l <= max_nb_levels; ++l)
+    bit_marker |= marker(l);
+  simple->getBitAdjEnt() = bit_marker;
   CHKERR simple->setUp();
 
   MoFEMFunctionReturn(0);
@@ -409,38 +428,78 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   auto g_ptr = boost::make_shared<VectorDouble>();
   auto grad_g_ptr = boost::make_shared<MatrixDouble>();
 
-  auto post_proc = [&]() {
+  auto set_generic = [&](auto &pipeline, auto &fe) {
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(new OpSetHOWeightsOnFace());
+    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPSPACE, std::string());
+
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "H");
+    pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
+    pipeline.push_back(
+        new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
+
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "G");
+    pipeline.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
+    pipeline.push_back(
+        new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
+  };
+
+  auto post_proc = [&](auto b) {
     MoFEMFunctionBegin;
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
     post_proc_fe->generateReferenceElementMesh();
 
-    post_proc_fe->exeTestHook = [](FEMethod *fe_ptr) {
-      return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
-          bit_shift + max_nb_levels);
+    post_proc_fe->exeTestHook = [&](FEMethod *fe_ptr) {
+      return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(b);
     };
 
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    set_generic(post_proc_fe->getOpPtrVector(), post_proc_fe);
 
-    post_proc_fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+    // auto det_ptr = boost::make_shared<VectorDouble>();
+    // auto jac_ptr = boost::make_shared<MatrixDouble>();
+    // auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
-    CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPSPACE,
-                           std::string());
+    // post_proc_fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
+    // post_proc_fe->getOpPtrVector().push_back(
+    //     new OpCalculateHOJacForFace(jac_ptr));
+    // post_proc_fe->getOpPtrVector().push_back(
+    //     new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    // post_proc_fe->getOpPtrVector().push_back(
+    //     new OpSetInvJacH1ForFace(inv_jac_ptr));
+
+    // CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPSPACE,
+    //                        std::string());
+
     CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPCOL, "H");
-
     post_proc_fe->addFieldValuesPostProc("H");
-    post_proc_fe->addFieldValuesGradientPostProc("H", 2);
+    post_proc_fe->addFieldValuesGradientPostProc("H", SPACE_DIM);
 
     CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPCOL, "G");
     post_proc_fe->addFieldValuesPostProc("G");
-    post_proc_fe->addFieldValuesGradientPostProc("G", 2);
+    post_proc_fe->addFieldValuesGradientPostProc("G", SPACE_DIM);
+
+    // CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPROW, "H");
+    // post_proc_fe->getOpPtrVector().push_back(
+    //     new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
+
+    // CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPROW, "G");
+    // post_proc_fe->getOpPtrVector().push_back(
+    //     new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
+
+    OpPostProcMap::DataMap map;
+    map["GRAD_H"] = grad_h_ptr;
+    map["GRAD_G"] = grad_g_ptr;
+
+    post_proc_fe->getOpPtrVector().push_back(new OpPostProcMap(
+        "G", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, map));
+
 
     CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
     CHKERR post_proc_fe->writeFile("out_init.h5m");
@@ -450,28 +509,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
   auto solve_init = [&](auto b) {
     MoFEMFunctionBegin;
-
-    auto set_generic = [&](auto &pipeline, auto &fe) {
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpSetHOWeightsOnFace());
-      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
-      pipeline.push_back(
-          new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPSPACE, std::string());
-
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "H");
-      pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
-      pipeline.push_back(
-          new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
-
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "G");
-      pipeline.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
-      pipeline.push_back(
-          new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
-    };
 
     auto set_domain_rhs = [&](auto &pipeline, auto &fe) {
       CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "H");
@@ -485,15 +522,12 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
       CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "H");
       CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL, "H");
       pipeline.push_back(new OpLhsH_dH<true>("H", nullptr, h_ptr, grad_g_ptr));
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "H");
       CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL, "G");
-      pipeline.push_back(new OpLhsH_dG<true>("H", "G", h_ptr));
+      // pipeline.push_back(new OpLhsH_dG<true>("H", "G", h_ptr));
       CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "G");
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL, "G");
       pipeline.push_back(new OpLhsG_dG("G"));
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "G");
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL, "H");
-      pipeline.push_back(new OpLhsG_dH<true>("G", "H", h_ptr));
+      // CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL, "H");
+      // pipeline.push_back(new OpLhsG_dH<true>("G", "H", h_ptr));
     };
 
     auto create_subdm = [&]() {
@@ -503,6 +537,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
       CHKERR DMMoFEMCreateSubDM(subdm, dm, "SUB");
       CHKERR DMMoFEMAddElement(subdm, simple->getDomainFEName().c_str());
       CHKERR DMMoFEMSetSquareProblem(subdm, PETSC_TRUE);
+      CHKERR DMMoFEMSetDestroyProblem(subdm, PETSC_TRUE);
       CHKERR DMMoFEMAddSubFieldRow(subdm, "H");
       CHKERR DMMoFEMAddSubFieldRow(subdm, "G");
       CHKERR DMMoFEMAddSubFieldCol(subdm, "H");
@@ -512,6 +547,15 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     };
 
     auto subdm = create_subdm();
+
+    auto prb_ents = get_dofs_ents(subdm);
+    CHKERR save_range(mField.get_moab(), "prb_verts_dofs.vtk",
+                      prb_ents.subset_by_dimension(0));
+    CHKERR save_range(mField.get_moab(), "prb_edges_dofs.vtk",
+                      prb_ents.subset_by_dimension(1));
+    CHKERR save_range(mField.get_moab(), "prb_faces_dofs.vtk",
+                      prb_ents.subset_by_dimension(2));
+
     CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
     CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
 
@@ -576,21 +620,27 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   CHKERR solve_init(0);
   CHKERR setBitLevels();
 
-  simple->getBitRefLevel().reset();
-  for (auto l = 0; l <= max_nb_levels; ++l)
-    simple->getBitRefLevel() |= bit(bit_shift + l);
 
+  simple->getParentAdjacencies() = true;
+
+  BitRefLevel bit_marker;
+  for (auto l = 1; l <= max_nb_levels; ++l)
+    bit_marker |= marker(l);
+  simple->getBitAdjEnt() = bit_marker;
+
+  BitRefLevel bit_level;
+  for (auto l = 0; l <= max_nb_levels; ++l)
+    bit_level |= bit(bit_shift + l);
+  simple->getBitRefLevel() = bit_level;
   simple->getBitRefLevelMask() = BitRefLevel().set();
 
-  simple->reSetUp(true);
+  simple->reSetUp(false);
 
   for (auto field : {"U", "P", "H", "G", "L"}) {
-    for (auto l = 0; l != max_nb_levels; ++l) {
-      CHKERR
-      mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-          simple->getProblemName(), field, bit(bit_shift + l),
-          bit(bit_shift + l) | bit(l));
-    }
+    CHKERR
+    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        simple->getProblemName(), field, BitRefLevel().set(),
+        bit(bit_shift + max_nb_levels).flip());
     for (auto l = 1; l <= max_nb_levels; ++l) {
       CHKERR
       mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
@@ -599,8 +649,11 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     }
   }
 
-  // CHKERR solve_init(bit_shift + max_nb_levels);
-  CHKERR post_proc();
+  CHKERR mField.getInterface<FieldBlas>()->setField(0, "H");
+  CHKERR mField.getInterface<FieldBlas>()->setField(0, "G");
+
+  CHKERR solve_init(bit_shift + max_nb_levels);
+  CHKERR post_proc(bit_shift + max_nb_levels);
 
   // Clear pipelines
   pipeline_mng->getOpDomainRhsPipeline().clear();
@@ -1101,14 +1154,27 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
     int l = 1;
     for (auto &r : levels) {
       Range l_mesh;
-      CHKERR mField.getInterface<BitRefManager>()->getEntitiesByRefLevel(
-          bit(bit_shift + l - 1), BitRefLevel().set(), l_mesh);
+      CHKERR mField.getInterface<BitRefManager>()->getEntitiesByDimAndRefLevel(
+          bit(bit_shift + l - 1), BitRefLevel().set(), SPACE_DIM, l_mesh);
       Range r_parents;
       CHKERR mField.getInterface<BitRefManager>()->updateRangeByParent(
           r, r_parents);
+      r = r.subset_by_dimension(2);
+      r_parents = r_parents.subset_by_dimension(2);
       CHKERR mark_skins(unite(r, r_parents), l);
       l_mesh = subtract(l_mesh, r_parents);
       l_mesh.merge(r);
+
+      Range conn;
+      CHKERR mField.get_moab().get_connectivity(l_mesh.subset_by_dimension(2),
+                                                conn, true);
+      Range edges;
+      CHKERR mField.get_moab().get_adjacencies(l_mesh.subset_by_dimension(2), 1,
+                                               false, edges,
+                                               moab::Interface::UNION);
+      l_mesh.merge(conn);
+      l_mesh.merge(edges);
+
       CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(
           l_mesh, bit(bit_shift + l));
 
@@ -1123,6 +1189,14 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
     Range zero_mesh;
     CHKERR mField.getInterface<BitRefManager>()->getEntitiesByRefLevel(
         bit(0), BitRefLevel().set(), zero_mesh);
+    Range conn;
+    CHKERR mField.get_moab().get_connectivity(zero_mesh.subset_by_dimension(2),
+                                              conn, true);
+    Range edges;
+    CHKERR mField.get_moab().get_adjacencies(
+        zero_mesh.subset_by_dimension(2), 1, false, edges, moab::Interface::UNION);
+    zero_mesh.merge(conn);
+    zero_mesh.merge(edges);
     CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(zero_mesh,
                                                                 bit(bit_shift));
   }

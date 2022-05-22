@@ -630,10 +630,30 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
     auto t_base = data.getFTensor0N();
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
 
+    if(data.getDiffN().size1() != data.getN().size1())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
+    if (data.getDiffN().size2() != data.getN().size2() * SPACE_DIM) {
+      MOFEM_LOG("SELF", Sev::error)
+          << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
+      MOFEM_LOG("SELF", Sev::error) << data.getN();
+      MOFEM_LOG("SELF", Sev::error) << data.getDiffN();
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
+    }
+
+    // if(rowType == MBENTITYSET) {
+    //   MOFEM_LOG("SELF", Sev::verbose)
+    //       << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
+    //   MOFEM_LOG("SELF", Sev::error) << data.getN();
+    //   MOFEM_LOG("SELF", Sev::error) << data.getDiffN();
+    //   for(auto d : data.getFieldEntities())
+    //     MOFEM_LOG("SELF", Sev::error) << *d << endl; 
+    // }
+
     if constexpr (I) {
 
       auto t_h = getFTensor0FromVec(*hPtr);
       auto t_grad_g = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
+      auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
 
       for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
@@ -643,10 +663,13 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
         const double set_h = init_h(t_coords(0), t_coords(1), t_coords(2));
         const double m = get_M(set_h) * alpha;
 
+        FTensor::Tensor1<double, 2> t_tmp{1e-1, 1e-1};
+
         int bb = 0;
         for (; bb != nbRows; ++bb) {
           locF[bb] += (t_base * alpha) * (t_h - set_h);
-          locF[bb] += (t_diff_base(i) * m) * t_grad_g(i);
+          // locF[bb] += (t_diff_base(i) *alpha) * (/*t_grad_h(i)*/-t_tmp(i));//(t_diff_base(i) * m) * t_grad_g(i);
+          // locF[bb] += (t_diff_base(i) * alpha) * (t_grad_h(i)) * 1e-5;
           ++t_base;
           ++t_diff_base;
         }
@@ -658,6 +681,7 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
 
         ++t_h;
         ++t_grad_g;
+        ++t_grad_h;
 
         ++t_coords;
         ++t_w;
@@ -793,6 +817,26 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
     auto t_row_base = row_data.getFTensor0N();
     auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
 
+    if (row_data.getDiffN().size1() != row_data.getN().size1())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
+    if (row_data.getDiffN().size2() != row_data.getN().size2() * SPACE_DIM) {
+      MOFEM_LOG("SELF", Sev::error)
+          << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
+      MOFEM_LOG("SELF", Sev::error) << row_data.getN();
+      MOFEM_LOG("SELF", Sev::error) << row_data.getDiffN();
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
+    }
+
+    if (col_data.getDiffN().size1() != col_data.getN().size1())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
+    if (col_data.getDiffN().size2() != col_data.getN().size2() * SPACE_DIM) {
+      MOFEM_LOG("SELF", Sev::error)
+          << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
+      MOFEM_LOG("SELF", Sev::error) << col_data.getN();
+      MOFEM_LOG("SELF", Sev::error) << col_data.getDiffN();
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
+    }
+
     if constexpr (I) {
 
       auto t_h = getFTensor0FromVec(*hPtr);
@@ -812,6 +856,10 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
           for (int cc = 0; cc != nbCols; ++cc) {
 
             locMat(rr, cc) += (t_row_base * t_col_base * alpha);
+
+            FTensor::Tensor1<double, 2> t_tmp{1e-1, 1e-1};
+            // locMat(rr, cc) +=
+            //     (t_row_diff_base(i) * alpha) * (t_col_diff_base(i)) * 1e-5;
 
             ++t_col_base;
             ++t_col_diff_base;
@@ -995,7 +1043,7 @@ template <bool I> struct OpRhsG : public AssemblyDomainEleOp {
       int bb = 0;
       for (; bb != nbRows; ++bb) {
         locF[bb] += (t_base * alpha) * (t_g - f);
-        locF[bb] -= (t_diff_base(i) * (eta2 * alpha)) * t_grad_h(i);
+        // locF[bb] -= (t_diff_base(i) * (eta2 * alpha)) * t_grad_h(i);
         ++t_base;
         ++t_diff_base;
       }
@@ -1146,5 +1194,96 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
 
 private:
 };
+
+struct OpPostProcMap : public DomainEleOp {
+
+  using DataMap = std::map<std::string, boost::shared_ptr<MatrixDouble>>;
+
+  OpPostProcMap(const std::string field_name,
+                    moab::Interface &post_proc_mesh,
+                    std::vector<EntityHandle> &map_gauss_pts, DataMap data_map)
+      : DomainEleOp(field_name, DomainEleOp::OPROW),
+        postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
+        dataMap(data_map) {
+    // Opetor is only executed for vertices
+    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  }
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  moab::Interface &postProcMesh;
+  std::vector<EntityHandle> &mapGaussPts;
+  DataMap dataMap;;
+};
+
+//! [Postprocessing]
+MoFEMErrorCode OpPostProcMap::doWork(int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  std::array<double, 9> def;
+  std::fill(def.begin(), def.end(), 0);
+
+  auto get_tag = [&](const std::string name, size_t size) {
+    Tag th;
+    CHKERR postProcMesh.tag_get_handle(name.c_str(), size, MB_TYPE_DOUBLE, th,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       def.data());
+    return th;
+  };
+
+  MatrixDouble3by3 mat(3, 3);
+
+  auto set_vector_3d = [&](auto &t) -> MatrixDouble3by3 & {
+    mat.clear();
+    for (size_t r = 0; r != SPACE_DIM; ++r)
+      mat(0, r) = t(r);
+    return mat;
+  };
+
+  auto set_matrix_3d = [&](auto &t) -> MatrixDouble3by3 & {
+    mat.clear();
+    for (size_t r = 0; r != SPACE_DIM; ++r)
+      for (size_t c = 0; c != SPACE_DIM; ++c)
+        mat(r, c) = t(r, c);
+    return mat;
+  };
+
+  auto set_scalar = [&](auto t) -> MatrixDouble3by3 & {
+    mat.clear();
+    mat(0, 0) = t;
+    return mat;
+  };
+
+  auto set_float_precision = [](const double x) {
+    if (std::abs(x) < std::numeric_limits<float>::epsilon())
+      return 0.;
+    else
+      return x;
+  };
+
+  auto set_tag = [&](auto th, auto gg, MatrixDouble3by3 &mat) {
+    for (auto &v : mat.data())
+      v = set_float_precision(v);
+    return postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1,
+                                     &*mat.data().begin());
+  };
+
+  auto th_grad_h = get_tag("GRAD_H", 3);
+  auto th_grad_g = get_tag("GRAD_G", 3);
+
+  auto t_grad_h = getFTensor1FromMat<2>(*dataMap.at("GRAD_H"));
+  auto t_grad_g = getFTensor1FromMat<2>(*dataMap.at("GRAD_G"));
+
+  auto nb_integration_pts = getGaussPts().size2();
+  size_t gg = 0;
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+    CHKERR set_tag(th_grad_h, gg, set_vector_3d(t_grad_h));
+    CHKERR set_tag(th_grad_g, gg, set_vector_3d(t_grad_g));
+    ++t_grad_h;
+    ++t_grad_g;
+  }
+
+  MoFEMFunctionReturn(0);
+}
 
 } // namespace FreeSurfaceOps
