@@ -462,21 +462,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
     set_generic(post_proc_fe->getOpPtrVector(), post_proc_fe);
 
-    // auto det_ptr = boost::make_shared<VectorDouble>();
-    // auto jac_ptr = boost::make_shared<MatrixDouble>();
-    // auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-    // post_proc_fe->getOpPtrVector().push_back(new OpSetHOWeightsOnFace());
-    // post_proc_fe->getOpPtrVector().push_back(
-    //     new OpCalculateHOJacForFace(jac_ptr));
-    // post_proc_fe->getOpPtrVector().push_back(
-    //     new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    // post_proc_fe->getOpPtrVector().push_back(
-    //     new OpSetInvJacH1ForFace(inv_jac_ptr));
-
-    // CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPSPACE,
-    //                        std::string());
-
     CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPCOL, "H");
     post_proc_fe->addFieldValuesPostProc("H");
     post_proc_fe->addFieldValuesGradientPostProc("H", SPACE_DIM);
@@ -484,14 +469,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPCOL, "G");
     post_proc_fe->addFieldValuesPostProc("G");
     post_proc_fe->addFieldValuesGradientPostProc("G", SPACE_DIM);
-
-    // CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPROW, "H");
-    // post_proc_fe->getOpPtrVector().push_back(
-    //     new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
-
-    // CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPROW, "G");
-    // post_proc_fe->getOpPtrVector().push_back(
-    //     new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
 
     OpPostProcMap::DataMap map;
     map["GRAD_H"] = grad_h_ptr;
