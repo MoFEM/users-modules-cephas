@@ -1,4 +1,29 @@
-#include <stdlib.h>
+/**
+ * \file poisson_2d_homogeneous.cpp
+ * \example poisson_2d_homogeneous.cpp
+ *
+ * Solution of poisson equation. Direct implementation of User Data Operators
+ * for teaching proposes.
+ *
+ * \note In practical application we suggest use form integrators to generalise
+ * and simplify code. However, here we like to expose user to ways how to
+ * implement data operator from scratch.
+ */
+
+/* This file is part of MoFEM.
+ * MoFEM is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * MoFEM is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+ * License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 #include <BasicFiniteElements.hpp>
 #include <poisson_2d_homogeneous.hpp>
 
