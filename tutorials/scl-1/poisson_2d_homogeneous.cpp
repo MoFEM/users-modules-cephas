@@ -235,8 +235,8 @@ MoFEMErrorCode Poisson2DHomogeneous::runProgram() {
   CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR boundaryCondition();
-  CHKERR assembleSystem();
   CHKERR setIntegrationRules();
+  CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
 
