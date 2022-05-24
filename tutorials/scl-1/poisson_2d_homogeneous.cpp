@@ -205,7 +205,21 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 
   auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
+
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateHOJacForFace(jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpSetInvJacH1ForFace(inv_jac_ptr));
+
   post_proc_fe->addFieldValuesPostProc(domainField);
+  constexpr auto SPACE_DIM = 2; // dimension of problem
+  post_proc_fe->addFieldValuesGradientPostProc("U", SPACE_DIM);
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_result.h5m"); 
