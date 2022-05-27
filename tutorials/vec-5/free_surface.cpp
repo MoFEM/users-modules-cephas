@@ -464,14 +464,22 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
     set_generic(post_proc_fe->getOpPtrVector(), post_proc_fe);
 
-    CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPCOL, "H");
+    post_proc_fe->getOpPtrVector().push_back(
 
-    post_proc_fe->addFieldValuesPostProc("H");
-    post_proc_fe->addFieldValuesGradientPostProc("H", SPACE_DIM);
+        new OpPostProcMap<2, 2>(
+            post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
 
-    CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPCOL, "G");
-    post_proc_fe->addFieldValuesPostProc("G");
-    post_proc_fe->addFieldValuesGradientPostProc("G", SPACE_DIM);
+            OpPostProcMap<2, 2>::DataMapVec{{"H", h_ptr}, {"G", g_ptr}},
+
+            OpPostProcMap<2, 2>::DataMapMat{{"GRAD_H", grad_h_ptr},
+                                            {"GRAD_G", grad_g_ptr}},
+
+            OpPostProcMap<2, 2>::DataMapMat{}
+
+            )
+
+    );
+
     CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
     CHKERR post_proc_fe->writeFile("out_init.h5m");
 
@@ -620,9 +628,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     }
   }
 
-  CHKERR mField.getInterface<FieldBlas>()->setField(0, "H");
-  // CHKERR mField.getInterface<FieldBlas>()->setField(0, "G");
-
   CHKERR solve_init(bit_shift + max_nb_levels);
   CHKERR post_proc(bit_shift + max_nb_levels);
 
@@ -630,16 +635,16 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainLhsPipeline().clear();
 
-  // // Enforce boundary conditions by removing DOFs on symmetry axis and fixed
-  // // positions
-  // // CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
-  // //                                          "U", 0, 0);
-  // // CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
-  // //                                          "L", 0, 0);
-  // // CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "U",
-  // //                                          0, SPACE_DIM);
-  // // CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
-  // //                                          0, 0);
+  // Enforce boundary conditions by removing DOFs on symmetry axis and fixed
+  // positions
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
+                                           "L", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "U",
+                                           0, SPACE_DIM);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
+                                           0, 0);
 
   MoFEMFunctionReturn(0);
 }
