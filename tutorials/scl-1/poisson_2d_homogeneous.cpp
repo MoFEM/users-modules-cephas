@@ -24,8 +24,15 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
+static const int nb_ref_levels =
+    0; ///< if larger than zero set n-levels of random mesh refinements with
+       ///< hanging nodes
+
+constexpr auto field_name = "U";
+
 #include <BasicFiniteElements.hpp>
 #include <poisson_2d_homogeneous.hpp>
+#include <random_mesh_refine.hpp>
 
 using namespace MoFEM;
 using namespace Poisson2DHomogeneousOperators;
@@ -56,13 +63,12 @@ private:
   Simple *simpleInterface;
 
   // Field name and approximation order
-  std::string domainField;
   int oRder;
 
 };
 
 Poisson2DHomogeneous::Poisson2DHomogeneous(MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field) {}
+    : mField(m_field) {}
 
 //! [Read mesh]
 MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
@@ -80,14 +86,23 @@ MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
 MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
   MoFEMFunctionBegin;
 
-  CHKERR simpleInterface->addDomainField(domainField, H1,
-                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simpleInterface->addDomainField(field_name, H1,
+                                         AINSWORTH_LEGENDRE_BASE, 1);
 
   int oRder = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
-  CHKERR simpleInterface->setFieldOrder(domainField, oRder);
+  CHKERR simpleInterface->setFieldOrder(field_name, oRder);
+
+  // Refine random elements and create hanging nodes. This is only need if one
+  // like to refine mesh.
+  if (nb_ref_levels)
+    CHKERR random_mesh_refine(mField);
 
   CHKERR simpleInterface->setUp();
+
+  // Remove hanging nodes
+  if(nb_ref_levels)
+    CHKERR remove_hanging_dofs(mField);
 
   MoFEMFunctionReturn(0);
 }
@@ -114,7 +129,7 @@ MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
 
   // Remove DOFs as homogeneous boundary condition is used
   CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simpleInterface->getProblemName(), domainField, boundary_entities);
+      simpleInterface->getProblemName(), field_name, boundary_entities);
 
   MoFEMFunctionReturn(0);
 }
@@ -130,7 +145,6 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
-
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -140,14 +154,40 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(inv_jac_ptr));
 
+    if (nb_ref_levels) { // This part is advanced. Can be skipped for not
+                         // refined meshes with
+      // hanging nodes.
+      // Force integration on last refinement level, and add to top elements
+      // DOFs and based from underlying elements.
+      pipeline_mng->getDomainLhsFE()->exeTestHook = test_bit_child;
+      set_parent_dofs(mField, pipeline_mng->getDomainLhsFE(),
+                      OpFaceEle::OPSPACE, QUIET, Sev::noisy);
+      set_parent_dofs(mField, pipeline_mng->getDomainLhsFE(), OpFaceEle::OPROW,
+                      QUIET, Sev::noisy);
+      set_parent_dofs(mField, pipeline_mng->getDomainLhsFE(), OpFaceEle::OPCOL,
+                      QUIET, Sev::noisy);
+    }
+
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK(domainField, domainField));
+        new OpDomainLhsMatrixK(field_name, field_name));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS
 
+    if (nb_ref_levels) { // This part is advanced. Can be skipped for not
+                         // refined meshes with
+      // hanging nodes.
+      // Force integration on last refinement level, and add to top elements
+      // DOFs and based from underlying elements.
+      pipeline_mng->getDomainRhsFE()->exeTestHook = test_bit_child;
+      set_parent_dofs(mField, pipeline_mng->getDomainRhsFE(),
+                      OpFaceEle::OPSPACE, QUIET, Sev::noisy);
+      set_parent_dofs(mField, pipeline_mng->getDomainRhsFE(), OpFaceEle::OPROW,
+                      QUIET, Sev::noisy);
+    }
+
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDomainRhsVectorF(domainField));
+        new OpDomainRhsVectorF(field_name));
   }
 
   MoFEMFunctionReturn(0);
@@ -217,7 +257,16 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpSetInvJacH1ForFace(inv_jac_ptr));
 
-  post_proc_fe->addFieldValuesPostProc(domainField);
+  if (nb_ref_levels) { // This part is advanced. Can be skipped for not refined
+                       // meshes with
+    // hanging nodes.
+    post_proc_fe->exeTestHook = test_bit_child;
+    set_parent_dofs(mField, post_proc_fe, OpFaceEle::OPSPACE, QUIET,
+                    Sev::noisy);
+    set_parent_dofs(mField, post_proc_fe, OpFaceEle::OPCOL, QUIET, Sev::noisy);
+  }
+
+  post_proc_fe->addFieldValuesPostProc(field_name);
   constexpr auto SPACE_DIM = 2; // dimension of problem
   post_proc_fe->addFieldValuesGradientPostProc("U", SPACE_DIM);
 
