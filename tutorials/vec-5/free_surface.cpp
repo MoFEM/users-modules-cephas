@@ -530,12 +530,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     auto subdm = create_subdm();
 
     auto prb_ents = get_dofs_ents(subdm);
-    // CHKERR save_range(mField.get_moab(), "prb_verts_dofs.vtk",
-    //                   prb_ents.subset_by_dimension(0));
-    // CHKERR save_range(mField.get_moab(), "prb_edges_dofs.vtk",
-    //                   prb_ents.subset_by_dimension(1));
-    // CHKERR save_range(mField.get_moab(), "prb_faces_dofs.vtk",
-    //                   prb_ents.subset_by_dimension(2));
 
     pipeline_mng->getDomainRhsFE().reset();
     pipeline_mng->getDomainLhsFE().reset();
