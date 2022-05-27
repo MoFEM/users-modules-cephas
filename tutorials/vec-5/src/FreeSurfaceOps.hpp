@@ -630,6 +630,7 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
     auto t_base = data.getFTensor0N();
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
 
+#ifndef NDEBUG
     if(data.getDiffN().size1() != data.getN().size1())
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
     if (data.getDiffN().size2() != data.getN().size2() * SPACE_DIM) {
@@ -639,21 +640,12 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
       MOFEM_LOG("SELF", Sev::error) << data.getDiffN();
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
     }
-
-    // if(rowType == MBENTITYSET) {
-    //   MOFEM_LOG("SELF", Sev::verbose)
-    //       << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
-    //   MOFEM_LOG("SELF", Sev::error) << data.getN();
-    //   MOFEM_LOG("SELF", Sev::error) << data.getDiffN();
-    //   for(auto d : data.getFieldEntities())
-    //     MOFEM_LOG("SELF", Sev::error) << *d << endl; 
-    // }
+#endif
 
     if constexpr (I) {
 
       auto t_h = getFTensor0FromVec(*hPtr);
       auto t_grad_g = getFTensor1FromMat<SPACE_DIM>(*gradGPtr);
-      auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
 
       for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
@@ -663,13 +655,10 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
         const double set_h = init_h(t_coords(0), t_coords(1), t_coords(2));
         const double m = get_M(set_h) * alpha;
 
-        FTensor::Tensor1<double, 2> t_tmp{1e-1, 1e-1};
-
         int bb = 0;
         for (; bb != nbRows; ++bb) {
           locF[bb] += (t_base * alpha) * (t_h - set_h);
-          // locF[bb] += (t_diff_base(i) *alpha) * (/*t_grad_h(i)*/-t_tmp(i));//(t_diff_base(i) * m) * t_grad_g(i);
-          // locF[bb] += (t_diff_base(i) * alpha) * (t_grad_h(i)) * 1e-5;
+          locF[bb] += (t_diff_base(i) * m) * t_grad_g(i);
           ++t_base;
           ++t_diff_base;
         }
@@ -681,7 +670,6 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
 
         ++t_h;
         ++t_grad_g;
-        ++t_grad_h;
 
         ++t_coords;
         ++t_w;
@@ -817,6 +805,7 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
     auto t_row_base = row_data.getFTensor0N();
     auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
 
+#ifndef NDEBUG
     if (row_data.getDiffN().size1() != row_data.getN().size1())
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
     if (row_data.getDiffN().size2() != row_data.getN().size2() * SPACE_DIM) {
@@ -836,6 +825,7 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
       MOFEM_LOG("SELF", Sev::error) << col_data.getDiffN();
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
     }
+#endif
 
     if constexpr (I) {
 
@@ -856,10 +846,6 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
           for (int cc = 0; cc != nbCols; ++cc) {
 
             locMat(rr, cc) += (t_row_base * t_col_base * alpha);
-
-            FTensor::Tensor1<double, 2> t_tmp{1e-1, 1e-1};
-            // locMat(rr, cc) +=
-            //     (t_row_diff_base(i) * alpha) * (t_col_diff_base(i)) * 1e-5;
 
             ++t_col_base;
             ++t_col_diff_base;
@@ -1043,7 +1029,7 @@ template <bool I> struct OpRhsG : public AssemblyDomainEleOp {
       int bb = 0;
       for (; bb != nbRows; ++bb) {
         locF[bb] += (t_base * alpha) * (t_g - f);
-        // locF[bb] -= (t_diff_base(i) * (eta2 * alpha)) * t_grad_h(i);
+        locF[bb] -= (t_diff_base(i) * (eta2 * alpha)) * t_grad_h(i);
         ++t_base;
         ++t_diff_base;
       }

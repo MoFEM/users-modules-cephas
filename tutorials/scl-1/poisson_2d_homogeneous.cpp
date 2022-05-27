@@ -220,6 +220,7 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   post_proc_fe->addFieldValuesPostProc(domainField);
   constexpr auto SPACE_DIM = 2; // dimension of problem
   post_proc_fe->addFieldValuesGradientPostProc("U", SPACE_DIM);
+
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_result.h5m"); 
