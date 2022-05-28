@@ -216,9 +216,6 @@ auto init_h = [](double r, double y, double theta) {
   return kernel_eye(r, y, theta);
 };
 
-static constexpr int max_nb_levels = 2;
-static constexpr int bit_shift = 10;
-
 auto bit = [](auto b) { return BitRefLevel().set(b); };
 auto marker = [](auto b) { return BitRefLevel().set(BITREFLEVEL_SIZE - b); };
 
