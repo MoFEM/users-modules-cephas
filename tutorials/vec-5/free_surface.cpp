@@ -88,6 +88,8 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 static constexpr int max_nb_levels = 3;
 static constexpr int bit_shift = 10;
 
+constexpr int order = 2; ///< approximation order
+
 // Physical parameters
 constexpr double a0 = 0.98;
 constexpr double rho_m = 0.998;
@@ -257,10 +259,11 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
   auto det_ptr = boost::make_shared<VectorDouble>();
 
-  BitRefLevel bit_marker(0);
-  int nb_ref_levels = max_nb_levels;
-  for (auto l = 1; l <= max_nb_levels; ++l)
-    bit_marker |= marker(l);
+  // BitRefLevel bit_marker(0);
+  // for (auto l = 0; l <= max_nb_levels; ++l)
+  //   bit_marker |= bit(max_nb_levels + l); // marker(l);
+  BitRefLevel bit_marker;
+  bit_marker.set();
 
   boost::function<void(boost::shared_ptr<ForcesAndSourcesCore>, int)>
       add_parent_level =
@@ -404,21 +407,26 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   // Lagrange multiplier which constrains slip conditions
   CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-  constexpr int order = 1;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("P", order - 1);
   CHKERR simple->setFieldOrder("H", order);
   CHKERR simple->setFieldOrder("G", order);
   CHKERR simple->setFieldOrder("L", order);
 
-  // Simple interface will resolve adjacency to DOFs of parent of the element.
-  // Using that information MAtrixManager  allocate appropriately size of
-  // matrix.
+  // constexpr int order_hi = 3;
+  // Range l_all_but_not_l0;
+  // CHKERR mField.getInterface<BitRefManager>()->getEntitiesByRefLevel(
+  //     bit(max_nb_levels), BitRefLevel().set(), l_all_but_not_l0);
+  // CHKERR simple->setFieldOrder("U", order_hi, &l_all_but_not_l0);
+  // CHKERR simple->setFieldOrder("P", order_hi - 1,&l_all_but_not_l0);
+  // CHKERR simple->setFieldOrder("H", order_hi, &l_all_but_not_l0);
+  // CHKERR simple->setFieldOrder("G", order_hi, &l_all_but_not_l0);
+  // CHKERR simple->setFieldOrder("L", order_hi, &l_all_but_not_l0);
+
+  // Simple interface will resolve adjacency to DOFs of parent of the
+  // element. Using that information MAtrixManager  allocate appropriately
+  // size of matrix.
   simple->getParentAdjacencies() = true;
-  BitRefLevel bit_marker;
-  for (auto l = 1; l <= max_nb_levels; ++l)
-    bit_marker |= marker(l);
-  simple->getBitAdjEnt() = bit_marker;
   CHKERR simple->setUp();
 
   MoFEMFunctionReturn(0);
@@ -602,26 +610,26 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   CHKERR post_proc(0);
 
   CHKERR setBitLevels();
-  simple->getParentAdjacencies() = true;
 
   BitRefLevel bit_marker;
   for (auto l = 1; l <= max_nb_levels; ++l)
     bit_marker |= marker(l);
-  simple->getBitAdjEnt() = bit_marker;
+  simple->getBitAdjEnt() = BitRefLevel().set(); // bit_marker;
 
-  BitRefLevel bit_level;
+  BitRefLevel bit_level(0);
   for (auto l = 0; l <= max_nb_levels; ++l)
     bit_level |= bit(bit_shift + l);
   simple->getBitRefLevel() = bit_level;
   simple->getBitRefLevelMask() = BitRefLevel().set();
 
-  simple->reSetUp(false);
+  simple->reSetUp(true);
 
   for (auto field : {"U", "P", "H", "G", "L"}) {
     CHKERR
     mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
         simple->getProblemName(), field, BitRefLevel().set(),
-        (bit(bit_shift + max_nb_levels) | bit_marker).flip());
+        bit_level.flip());
+        // (bit(bit_shift + max_nb_levels) | bit_marker).flip());
     for (auto l = 1; l <= max_nb_levels; ++l) {
       CHKERR
       mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
@@ -629,6 +637,24 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
           bit(bit_shift + l - 1).flip());
     }
   }
+
+  for (auto field : {"U", "H", "G", "L"}) {
+    CHKERR
+    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        simple->getProblemName(), field, BitRefLevel().set(),
+        (bit(bit_shift + max_nb_levels) | bit_marker).flip(), nullptr, 0,
+        MAX_DOFS_ON_ENTITY, 2, std::max(2, order));
+  }
+  for (auto field : {"P"}) {
+    CHKERR
+    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        simple->getProblemName(), field, BitRefLevel().set(),
+        (bit(bit_shift + max_nb_levels) | bit_marker).flip(), nullptr, 0,
+        MAX_DOFS_ON_ENTITY, 1, std::max(1, order - 1));
+  }
+
+  CHKERR mField.getInterface<FieldBlas>()->setField(0, "H");
+  CHKERR mField.getInterface<FieldBlas>()->setField(0, "G");
 
   CHKERR solve_init(bit_shift + max_nb_levels);
   CHKERR post_proc(bit_shift + max_nb_levels);
@@ -964,7 +990,7 @@ Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
   auto field_bit_number = mField.get_field_bit_number("H");
 
   Range plus_range, minus_range;
-  std::vector<EntityHandle> plus, minus;
+  std::vector<EntityHandle> plus, minus, out_of_scope;
 
   for (auto p = vertices.pair_begin(); p != vertices.pair_end(); ++p) {
 
@@ -981,6 +1007,7 @@ Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
     minus.clear();
     plus.reserve(std::distance(it, hi_it));
     minus.reserve(std::distance(it, hi_it));
+    out_of_scope.reserve(std::distance(it, hi_it));
 
     for (; it != hi_it; ++it) {
       const auto v = (*it)->getFieldData();
@@ -988,6 +1015,9 @@ Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
         plus.push_back((*it)->getEnt());
       else
         minus.push_back((*it)->getEnt());
+
+      if(std::abs(v)>1.05)
+        out_of_scope.push_back((*it)->getEnt());
     }
 
     plus_range.insert_list(plus.begin(), plus.end());
@@ -1020,6 +1050,9 @@ Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
       "can not get vertices on bit 0");
   all = subtract(all, ele_plus);
   all = subtract(all, ele_minus);
+  Range out_of_scope_range;
+  out_of_scope_range.insert_list(out_of_scope.begin(), out_of_scope.end());
+  all.merge(out_of_scope_range);
 
   Range conn;
   CHK_MOAB_THROW(moab.get_connectivity(all, conn, true), "");
