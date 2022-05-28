@@ -84,6 +84,10 @@ FTensor::Index<'l', SPACE_DIM> l;
 
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
+// mesh refinement
+static constexpr int max_nb_levels = 3;
+static constexpr int bit_shift = 10;
+
 // Physical parameters
 constexpr double a0 = 0.98;
 constexpr double rho_m = 0.998;
@@ -93,8 +97,15 @@ constexpr double mu_p = 0.000182;
 constexpr double lambda = 7.4;
 constexpr double W = 0.25;
 
+template <int T> constexpr int powof2() {
+  if constexpr (T == 0)
+    return 1;
+  else
+    return powof2<T - 1>() * 2;
+};
+
 // Model parameters
-constexpr double h = 0.1; // mesh size
+constexpr double h = 0.05 / powof2<max_nb_levels>(); // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
