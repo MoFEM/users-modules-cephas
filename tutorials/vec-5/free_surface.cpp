@@ -413,16 +413,6 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->setFieldOrder("G", order);
   CHKERR simple->setFieldOrder("L", order);
 
-  // constexpr int order_hi = 3;
-  // Range l_all_but_not_l0;
-  // CHKERR mField.getInterface<BitRefManager>()->getEntitiesByRefLevel(
-  //     bit(max_nb_levels), BitRefLevel().set(), l_all_but_not_l0);
-  // CHKERR simple->setFieldOrder("U", order_hi, &l_all_but_not_l0);
-  // CHKERR simple->setFieldOrder("P", order_hi - 1,&l_all_but_not_l0);
-  // CHKERR simple->setFieldOrder("H", order_hi, &l_all_but_not_l0);
-  // CHKERR simple->setFieldOrder("G", order_hi, &l_all_but_not_l0);
-  // CHKERR simple->setFieldOrder("L", order_hi, &l_all_but_not_l0);
-
   // Simple interface will resolve adjacency to DOFs of parent of the
   // element. Using that information MAtrixManager  allocate appropriately
   // size of matrix.
