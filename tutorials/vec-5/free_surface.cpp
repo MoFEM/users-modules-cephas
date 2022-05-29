@@ -614,32 +614,41 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
   simple->reSetUp(true);
 
+  auto get_ents_bit_ref = [&](auto bit, auto mask) {
+    Range ents;
+    CHK_THROW_MESSAGE(
+        mField.getInterface<BitRefManager>()->getEntitiesByRefLevel(bit, mask,
+                                                                    ents),
+        "Can not get ents on bit ref level");
+    return ents;
+  };
+
+  Range ents_to_remove;
+  ents_to_remove.merge(get_ents_bit_ref(BitRefLevel().set(), bit_level.flip()));
+  for (auto l = 1; l <= max_nb_levels; ++l) {
+    ents_to_remove.merge(
+        get_ents_bit_ref(marker(l), bit(bit_shift + l - 1).flip()));
+  }
+
   for (auto field : {"U", "P", "H", "G", "L"}) {
     CHKERR
     mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-        simple->getProblemName(), field, BitRefLevel().set(),
-        bit_level.flip());
-        // (bit(bit_shift + max_nb_levels) | bit_marker).flip());
-    for (auto l = 1; l <= max_nb_levels; ++l) {
-      CHKERR
-      mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-          simple->getProblemName(), field, marker(l),
-          bit(bit_shift + l - 1).flip());
-    }
+        simple->getProblemName(), field, ents_to_remove);
   }
 
+  Range ent_to_remove_ho_order =
+      get_ents_bit_ref(BitRefLevel().set(),
+                       (bit(bit_shift + max_nb_levels) | bit_marker).flip());
   for (auto field : {"U", "H", "G", "L"}) {
-    CHKERR
-    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-        simple->getProblemName(), field, BitRefLevel().set(),
-        (bit(bit_shift + max_nb_levels) | bit_marker).flip(), nullptr, 0,
-        MAX_DOFS_ON_ENTITY, 2, std::max(2, order));
+      CHKERR
+      mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+          simple->getProblemName(), field, ent_to_remove_ho_order, 0,
+          MAX_DOFS_ON_ENTITY, 2, std::max(2, order));
   }
   for (auto field : {"P"}) {
     CHKERR
     mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-        simple->getProblemName(), field, BitRefLevel().set(),
-        (bit(bit_shift + max_nb_levels) | bit_marker).flip(), nullptr, 0,
+        simple->getProblemName(), field, ent_to_remove_ho_order, 0,
         MAX_DOFS_ON_ENTITY, 1, std::max(1, order - 1));
   }
 
