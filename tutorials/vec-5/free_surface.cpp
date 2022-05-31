@@ -43,6 +43,7 @@ template <> struct ElementsAndOps<2> {
   using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using BoundaryParentEle = EdgeElementForcesAndSourcesCoreOnChildParent;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
@@ -51,6 +52,7 @@ using DomianParentEle = ElementsAndOps<SPACE_DIM>::DomianParentEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
+using BoundaryParentEle = ElementsAndOps<SPACE_DIM>::BoundaryParentEle;
 
 using EntData = EntitiesFieldData::EntData;
 
@@ -85,7 +87,7 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // mesh refinement
-static constexpr int max_nb_levels = 3;
+static constexpr int max_nb_levels = 1;
 static constexpr int bit_shift = 10;
 
 constexpr int order = 2; ///< approximation order
@@ -107,7 +109,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.05 / powof2<max_nb_levels>(); // mesh size
+constexpr double h = 0.2 / powof2<max_nb_levels>(); // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -276,12 +278,14 @@ set_parent_dofs(MoFEM::Interface &m_field, boost::shared_ptr<ELE> &fe_top,
                   boost::shared_ptr<ForcesAndSourcesCore>(new PARENT(m_field));
 
               if (op == DomainEleOp::OPSPACE) {
-                fe_ptr_current->getOpPtrVector().push_back(
-                    new OpCalculateHOJacForFace(jac_ptr));
-                fe_ptr_current->getOpPtrVector().push_back(
-                    new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-                fe_ptr_current->getOpPtrVector().push_back(
-                    new OpSetInvJacH1ForFace(inv_jac_ptr));
+                if (typeid(PARENT) == typeid(DomianParentEle)) {
+                  fe_ptr_current->getOpPtrVector().push_back(
+                      new OpCalculateHOJacForFace(jac_ptr));
+                  fe_ptr_current->getOpPtrVector().push_back(
+                      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+                  fe_ptr_current->getOpPtrVector().push_back(
+                      new OpSetInvJacH1ForFace(inv_jac_ptr));
+                }
               }
 
               add_parent_level(
@@ -364,8 +368,8 @@ MoFEMErrorCode FreeSurface::runProblem() {
   CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR boundaryCondition();
-  // CHKERR assembleSystem();
-  // CHKERR solveSystem();
+  CHKERR assembleSystem();
+  CHKERR solveSystem();
   MoFEMFunctionReturn(0);
 }
 //! [Run programme]
@@ -644,7 +648,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
 
   // Push element from reference configuration to current configuration in 3d
   // space
-  auto set_domain_general = [&](auto &pipeline) {
+  auto set_domain_general = [&](auto &pipeline, auto &fe) {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
@@ -654,6 +658,11 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
 
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPSPACE,
+                           ExtractParentType<DomianParentEle>(), std::string());
+
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "U");
     pipeline.push_back(
         new OpCalculateVectorFieldValuesDot<U_FIELD_DIM>("U", dot_u_ptr));
     pipeline.push_back(
@@ -661,26 +670,43 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(
         new OpCalculateVectorFieldGradient<U_FIELD_DIM, SPACE_DIM>("U",
                                                                    grad_u_ptr));
+    pipeline.push_back(
+        new OpCalculateDivergenceVectorFieldValues<SPACE_DIM, coord_type>(
+            "U", div_u_ptr));
 
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "H");
     pipeline.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
     pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
     pipeline.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
+
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "G");
     pipeline.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
     pipeline.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
+
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "P");
     pipeline.push_back(new OpCalculateScalarFieldValues("P", p_ptr));
-    pipeline.push_back(
-        new OpCalculateDivergenceVectorFieldValues<SPACE_DIM, coord_type>(
-            "U", div_u_ptr));
   };
 
-  auto set_domain_rhs = [&](auto &pipeline) {
+  auto set_domain_rhs = [&](auto &pipeline, auto &fe) {
+    set_domain_general(pipeline, fe);
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "U");
     pipeline.push_back(new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr,
                                   grad_h_ptr, g_ptr, p_ptr));
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "H");
     pipeline.push_back(new OpRhsH<false>("H", u_ptr, dot_h_ptr, h_ptr,
                                          grad_h_ptr, grad_g_ptr));
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "G");
     pipeline.push_back(new OpRhsG<false>("G", h_ptr, grad_h_ptr, g_ptr));
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "P");
     pipeline.push_back(new OpBaseTimesScalarField(
         "P", div_u_ptr, [](const double r, const double, const double) {
           return cylindrical(r);
@@ -691,40 +717,86 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         }));
   };
 
-  auto set_domain_lhs = [&](auto &pipeline) {
+  auto set_domain_lhs = [&](auto &pipeline, auto &fe) {
+    set_domain_general(pipeline, fe);
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "U");
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                           ExtractParentType<DomianParentEle>(), "U");
     pipeline.push_back(new OpLhsU_dU("U", u_ptr, grad_u_ptr, h_ptr));
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                           ExtractParentType<DomianParentEle>(), "H");
     pipeline.push_back(
         new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr, g_ptr));
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                           ExtractParentType<DomianParentEle>(), "G");
     pipeline.push_back(new OpLhsU_dG("U", "G", grad_h_ptr));
 
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "H");
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                           ExtractParentType<DomianParentEle>(), "U");
     pipeline.push_back(new OpLhsH_dU("H", "U", grad_h_ptr));
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                           ExtractParentType<DomianParentEle>(), "H");
     pipeline.push_back(new OpLhsH_dH<false>("H", u_ptr, h_ptr, grad_g_ptr));
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                           ExtractParentType<DomianParentEle>(), "G");
     pipeline.push_back(new OpLhsH_dG<false>("H", "G", h_ptr));
 
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "G");
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                           ExtractParentType<DomianParentEle>(), "H");
     pipeline.push_back(new OpLhsG_dH<false>("G", "H", h_ptr));
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                           ExtractParentType<DomianParentEle>(), "G");
     pipeline.push_back(new OpLhsG_dG("G"));
 
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "P");
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                           ExtractParentType<DomianParentEle>(), "U");
     pipeline.push_back(new OpMixScalarTimesDiv(
         "P", "U",
         [](const double r, const double, const double) {
           return cylindrical(r);
         },
         true, false));
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                           ExtractParentType<DomianParentEle>(), "P");
     pipeline.push_back(
         new OpDomainMassP("P", "P", [](double r, double, double) {
           return eps * cylindrical(r);
         }));
   };
 
-  auto set_boundary_rhs = [&](auto &pipeline) {
+  auto set_boundary_rhs = [&](auto &pipeline, auto &fe) {
+    CHKERR set_parent_dofs(mField, fe, BoundaryEleOp::OPSPACE,
+                           ExtractParentType<BoundaryParentEle>(),
+                           std::string());
+
+    CHKERR set_parent_dofs(mField, fe, BoundaryEleOp::OPROW,
+                           ExtractParentType<BoundaryParentEle>(), "U");
     pipeline.push_back(
         new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
+    CHKERR set_parent_dofs(mField, fe, BoundaryEleOp::OPROW,
+                           ExtractParentType<BoundaryParentEle>(), "L");
     pipeline.push_back(new OpCalculateScalarFieldValues("L", lambda_ptr));
     pipeline.push_back(new OpNormalConstrainRhs("L", u_ptr));
+    CHKERR set_parent_dofs(mField, fe, BoundaryEleOp::OPROW,
+                           ExtractParentType<BoundaryParentEle>(), "U");
     pipeline.push_back(new OpNormalForcebRhs("U", lambda_ptr));
   };
 
-  auto set_boundary_lhs = [&](auto &pipeline) {
+  auto set_boundary_lhs = [&](auto &pipeline, auto &fe) {
+    CHKERR set_parent_dofs(mField, fe, BoundaryEleOp::OPSPACE,
+                           ExtractParentType<BoundaryParentEle>(),
+                           std::string());
+    CHKERR set_parent_dofs(mField, fe, BoundaryEleOp::OPROW,
+                           ExtractParentType<BoundaryParentEle>(), "L");
+    CHKERR set_parent_dofs(mField, fe, BoundaryEleOp::OPCOL,
+                           ExtractParentType<BoundaryParentEle>(), "U");
     pipeline.push_back(new OpNormalConstrainLhs("L", "U"));
   };
 
@@ -732,15 +804,28 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
 
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+  auto exe_test_hook = [&](FEMethod *fe_ptr) {
+    return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
+        bit_shift + max_nb_levels);
+  };
+  pipeline_mng->getDomainRhsFE()->exeTestHook = exe_test_hook;
+  pipeline_mng->getDomainLhsFE()->exeTestHook = exe_test_hook;
+
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
 
-  set_domain_general(pipeline_mng->getOpDomainRhsPipeline());
-  set_domain_general(pipeline_mng->getOpDomainLhsPipeline());
-  set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline());
-  set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline());
-  set_boundary_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
-  set_boundary_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
+  pipeline_mng->getBoundaryRhsFE()->exeTestHook = exe_test_hook;
+  pipeline_mng->getBoundaryLhsFE()->exeTestHook = exe_test_hook;
+
+  set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline(),
+                 pipeline_mng->getDomainRhsFE());
+  set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline(),
+                 pipeline_mng->getDomainLhsFE());
+
+  set_boundary_rhs(pipeline_mng->getOpBoundaryRhsPipeline(),
+                   pipeline_mng->getBoundaryRhsFE());
+  set_boundary_lhs(pipeline_mng->getOpBoundaryLhsPipeline(),
+                   pipeline_mng->getBoundaryLhsFE());
 
   domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
 
@@ -808,24 +893,54 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
     post_proc_fe->generateReferenceElementMesh();
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    auto h_ptr = boost::make_shared<VectorDouble>();
+    auto p_ptr = boost::make_shared<VectorDouble>();
+    auto g_ptr = boost::make_shared<VectorDouble>();
+
+    auto exe_test_hook = [&](FEMethod *fe_ptr) {
+      return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
+          bit_shift + max_nb_levels);
+    };
+    post_proc_fe->exeTestHook = exe_test_hook;
+
+    CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPSPACE,
+                           ExtractParentType<DomianParentEle>(), std::string());
+
+    CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "U");
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
+    CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "H");
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("H", h_ptr));
+    CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "P");
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("P", p_ptr));
+    CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "G");
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("G", g_ptr));
 
     post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
 
-    post_proc_fe->addFieldValuesPostProc("U");
-    post_proc_fe->addFieldValuesPostProc("H");
-    post_proc_fe->addFieldValuesPostProc("P");
-    post_proc_fe->addFieldValuesPostProc("G");
-    post_proc_fe->addFieldValuesGradientPostProc("U", 2);
-    post_proc_fe->addFieldValuesGradientPostProc("H", 2);
-    post_proc_fe->addFieldValuesGradientPostProc("G", 2);
+        new OpPostProcMap<2, 2>(post_proc_fe->postProcMesh,
+                                post_proc_fe->mapGaussPts,
+
+                                OpPostProcMap<2, 2>::DataMapVec{
+                                    {"H", h_ptr}, {"P", p_ptr}, {"G", g_ptr}},
+
+                                OpPostProcMap<2, 2>::DataMapMat{{"U", u_ptr}},
+
+                                OpPostProcMap<2, 2>::DataMapMat{}
+
+                                )
+
+    );
+
     return post_proc_fe;
   };
 
@@ -848,6 +963,18 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     MOFEM_LOG("FS", Sev::noisy) << "Lift ents " << (*ents_ptr);
 
+    auto exe_test_hook = [&](FEMethod *fe_ptr) {
+      return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
+          bit_shift + max_nb_levels);
+    };
+    fe->exeTestHook = exe_test_hook;
+
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPSPACE,
+                           ExtractParentType<BoundaryParentEle>(),
+                           std::string());
+
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<BoundaryParentEle>(), "P");
     fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("P", p_ptr));
     fe->getOpPtrVector().push_back(
@@ -964,7 +1091,7 @@ Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
       else
         minus.push_back((*it)->getEnt());
 
-      if(std::abs(v)>1.05)
+      if (std::abs(v) > 1.05)
         out_of_scope.push_back((*it)->getEnt());
     }
 
@@ -1152,8 +1279,9 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
     CHKERR mField.get_moab().get_connectivity(zero_mesh.subset_by_dimension(2),
                                               conn, true);
     Range edges;
-    CHKERR mField.get_moab().get_adjacencies(
-        zero_mesh.subset_by_dimension(2), 1, false, edges, moab::Interface::UNION);
+    CHKERR mField.get_moab().get_adjacencies(zero_mesh.subset_by_dimension(2),
+                                             1, false, edges,
+                                             moab::Interface::UNION);
     zero_mesh.merge(conn);
     zero_mesh.merge(edges);
     CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(zero_mesh,
