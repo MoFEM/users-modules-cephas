@@ -268,7 +268,6 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
   boost::function<void(boost::shared_ptr<ForcesAndSourcesCore>, int)>
       add_parent_level =
           [&](boost::shared_ptr<ForcesAndSourcesCore> parent_fe_pt, int level) {
-            
             if (level > 0) {
 
               auto fe_ptr_current = boost::shared_ptr<ForcesAndSourcesCore>(
@@ -636,20 +635,42 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
         simple->getProblemName(), field, ents_to_remove);
   }
 
-  Range ent_to_remove_ho_order =
-      get_ents_bit_ref(BitRefLevel().set(),
-                       (bit(bit_shift + max_nb_levels) | bit_marker).flip());
+  // Takes edges or faces, find their children which are also edges or faces, and
+  // remove higher order approximation from those entities. Since approximation
+  // is provided by parents (underlying entities).
+  Range children_edges;
+  for (auto l = 0; l != max_nb_levels; ++l) {
+    auto bit_mng = mField.getInterface<BitRefManager>();
+    Range bit_ents = get_ents_bit_ref(bit(bit_shift + l), BitRefLevel().set());
+    Range bit_children_edges;
+    CHKERR bit_mng->updateRangeByChildren(bit_ents.subset_by_dimension(1),
+                                          bit_children_edges);
+    CHKERR bit_mng->filterEntitiesByRefLevel(
+        bit(bit_shift + l + 1), bit(bit_shift + l).flip(), bit_children_edges);
+    children_edges.merge(bit_children_edges.subset_by_dimension(1));
+    Range bit_children_faces;
+    CHKERR bit_mng->updateRangeByChildren(bit_ents.subset_by_dimension(2),
+                                          bit_children_faces);
+    CHKERR bit_mng->filterEntitiesByRefLevel(
+        bit(bit_shift + l + 1), bit(bit_shift + l).flip(), bit_children_faces);
+    children_edges.merge(bit_children_faces.subset_by_dimension(2));
+  }
+
+#ifndef NDEBUG
+  CHKERR save_range(mField.get_moab(), "children_edges.vtk", children_edges);
+#endif
+
   for (auto field : {"U", "H", "G", "L"}) {
-      CHKERR
-      mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-          simple->getProblemName(), field, ent_to_remove_ho_order, 0,
-          MAX_DOFS_ON_ENTITY, 2, std::max(2, order));
+    CHKERR
+    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        simple->getProblemName(), field, children_edges, 0, MAX_DOFS_ON_ENTITY,
+        2, std::max(2, order));
   }
   for (auto field : {"P"}) {
     CHKERR
     mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-        simple->getProblemName(), field, ent_to_remove_ho_order, 0,
-        MAX_DOFS_ON_ENTITY, 1, std::max(1, order - 1));
+        simple->getProblemName(), field, children_edges, 0, MAX_DOFS_ON_ENTITY,
+        1, std::max(1, order - 1));
   }
 
   CHKERR mField.getInterface<FieldBlas>()->setField(0, "H");
