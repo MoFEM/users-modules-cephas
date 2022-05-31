@@ -197,7 +197,7 @@ OpCalculateContrainsRhs::iNtegrate(DataForcesAndSourcesCore::EntData &data) {
     size_t bb = 0;
     for (; bb != AssemblyDomainEleOp::nbRows; ++bb) {
       nf[bb] += beta * t_base;
-      nf[bb] += alpha * t_base * k_penalty(t_tau);
+      // nf[bb] += alpha * t_base * k_penalty(t_tau);
       ++t_base;
     }
     for (; bb < nb_base_functions; ++bb)
@@ -875,7 +875,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::iNtegrate(
       auto t_col_base = col_data.getFTensor0N(gg, 0);
       for (size_t cc = 0; cc != AssemblyDomainEleOp::nbCols; ++cc) {
         *mat_ptr += (c0 + c1) * t_row_base * t_col_base;
-        *mat_ptr += alpha * k_penalty(t_tau) * t_row_base * t_col_base;
+        // *mat_ptr += alpha * k_penalty(t_tau) * t_row_base * t_col_base;
         ++mat_ptr;
         ++t_col_base;
       }

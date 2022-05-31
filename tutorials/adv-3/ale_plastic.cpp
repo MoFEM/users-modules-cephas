@@ -136,7 +136,7 @@ PetscBool test_penalty = PETSC_TRUE;
 
 double petsc_time = 0;
 double scale = 1.;
-double max_load_time = 1.;
+double max_load_time = 1.3;
 
 double young_modulus = 206913;
 double poisson_ratio = 0.29;
@@ -150,14 +150,21 @@ double b_iso = 16.93;
 int order = 2;
 
 // for rotating body
-static double penalty = 1e4;
-static array<double, 3> angular_velocity{0, 0, 0.0};
+double penalty = 1e4;
+double density = 1.0;
+
+array<double, 3> angular_velocity{0, 0, 0.1};
 
 PetscBool test_H1 = PETSC_FALSE;
 
+TSTrajectory m_tr;
+enum INDICATORS { ENERGY = 0, DISSIPATION, ETA, LAST_INDIC };
+std::array<double, LAST_INDIC> error_indices;
+
 // 1 - symmetric Nitsche, 0 - nonsymmetric, -1 antisymmetrica
-static double phi = -1;
+static double phi = 1;
 static double nitsche = 0;
+PetscBool is_cut_off = PETSC_FALSE;
 
 inline long double hardening(long double tau, double temp) {
   return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
@@ -166,7 +173,6 @@ inline long double hardening(long double tau, double temp) {
 inline long double hardening_dtau(long double tau, double temp) {
   return H + Qinf * b_iso * std::exp(-b_iso * tau);
 }
-PetscBool is_cut_off = PETSC_FALSE;
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
@@ -200,6 +206,7 @@ private:
   boost::shared_ptr<DomainEle> reactionFe;
   boost::shared_ptr<DomainEle> feAxiatorRhs;
   boost::shared_ptr<DomainEle> feAxiatorLhs;
+  boost::shared_ptr<DomainEle> feErrorInd;
 
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
@@ -342,14 +349,13 @@ MoFEMErrorCode Example::createCommonData() {
                                &test_convection, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_H1", &test_H1,
                                PETSC_NULL);
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_cut_off", &is_cut_off,
-                               PETSC_NULL);
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-phi", &phi, PETSC_NULL);
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-nitsche", &nitsche,
-                                 PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-max_load_time",
                                  &max_load_time, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &penalty,
+                                 PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-nitsche", &nitsche,
+                                 PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-phi", &phi,
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-angular_velocity",
                                  &angular_velocity[2], PETSC_NULL);
@@ -362,9 +368,10 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Set cut_off " << is_cut_off;
+
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Set penalty: " << penalty;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Set nitsche: " << nitsche;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Set phi: " << phi;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Set nitche: " << nitsche;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
@@ -526,13 +533,27 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto integration_rule_skeleton = [](int, int, int approx_order) {
-    return 2 * order;
+    return 2 * order; 
   };
 
   auto add_skeleton_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBeginHot;
 
+    // pipeline.push_back(new OpSetPiolaTransformOnBoundary());
+    // domainSideFe->getRuleHook = [](double, double, double) { return -1; };
     domainSideFe = boost::make_shared<DomainSideEle>(mField);
+    if (SPACE_DIM == 2) {
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      domainSideFe->getOpPtrVector().push_back(
+          new OpCalculateHOJacForFace(jac_ptr));
+      domainSideFe->getOpPtrVector().push_back(
+          new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+      domainSideFe->getOpPtrVector().push_back(
+          new OpSetInvJacL2ForFace(inv_jac_ptr));
+    }
+
     domainSideFe->getOpPtrVector().push_back(
         new OpVolumeSideCalculateTAU("TAU", commonDataPtr));
     domainSideFe->getOpPtrVector().push_back(
@@ -546,6 +567,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_skeleton_rhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBeginHot;
+    // pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(
         new OpCalculateJumpOnSkeleton("U", commonDataPtr, domainSideFe));
@@ -553,6 +575,8 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculatePlasticFlowPenalty_Rhs("U", commonDataPtr));
     pipeline.push_back(
         new OpCalculateConstraintPenalty_Rhs("U", commonDataPtr));
+
+    // pipeline.push_back(new OpUnSetBc("U"));
 
     MoFEMFunctionReturnHot(0);
   };
@@ -562,6 +586,19 @@ MoFEMErrorCode Example::OPs() {
     // pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     auto domain_side_fe = boost::make_shared<DomainSideEle>(mField);
+
+    if (SPACE_DIM == 2) {
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      domain_side_fe->getOpPtrVector().push_back(
+          new OpCalculateHOJacForFace(jac_ptr));
+      domain_side_fe->getOpPtrVector().push_back(
+          new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+      domain_side_fe->getOpPtrVector().push_back(
+          new OpSetInvJacL2ForFace(inv_jac_ptr));
+    }
+
     domain_side_fe->getOpPtrVector().push_back(
         new OpVolumeSideCalculateTAU("TAU", commonDataPtr));
     domain_side_fe->getOpPtrVector().push_back(
@@ -592,7 +629,7 @@ MoFEMErrorCode Example::OPs() {
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
       pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      // pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
       pipeline.push_back(new OpSetInvJacL2ForFace(inv_jac_ptr));
     }
     
@@ -933,6 +970,12 @@ MoFEMErrorCode Example::OPs() {
     CHKERR pipeline_mng->setSkeletonRhsIntegrationRule(integration_rule_skeleton);
   }
 
+  feErrorInd = boost::make_shared<DomainEle>(mField);
+  CHKERR add_domain_base_ops(feErrorInd->getOpPtrVector());
+  CHKERR add_domain_stress_ops(feErrorInd->getOpPtrVector(),
+                               commonDataPtr->mDPtr);
+  feErrorInd->getRuleHook = integration_rule_axiator;
+  
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
@@ -1050,6 +1093,85 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
+  
+  std::fill(error_indices.begin(), error_indices.end(), 0);
+
+  auto do_work_rhs_domain_indicators = new DomainEleOp("U", DomainEleOp::OPROW);
+  do_work_rhs_domain_indicators->doWorkRhsHook =
+      [&](DataOperator *op_ptr, int side, EntityType type,
+          DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
+        auto o = static_cast<DomainEleOp *>(op_ptr);
+
+        FTensor::Index<'i', SPACE_DIM> i;
+        FTensor::Index<'j', SPACE_DIM> j;
+        FTensor::Index<'k', SPACE_DIM> k;
+        FTensor::Index<'l', SPACE_DIM> l;
+
+        if (commonDataPtr->tempVal.size() !=
+            commonDataPtr->plasticSurface.size()) {
+          commonDataPtr->tempVal.resize(commonDataPtr->plasticSurface.size(),
+                                        0);
+          commonDataPtr->tempVal.clear();
+        }
+
+        auto t_tau_dot =
+            getFTensor0FromVec(*(commonDataPtr->getPlasticTauDotPtr()));
+        auto t_tau = getFTensor0FromVec(*(commonDataPtr->getPlasticTauPtr()));
+        auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
+        auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
+        auto t_stress = getFTensor2SymmetricFromMat<SPACE_DIM>(
+            *(commonDataPtr->mStressPtr));
+        auto t_strain = getFTensor2SymmetricFromMat<SPACE_DIM>(
+            *(commonDataPtr->mStrainPtr));
+        auto t_plastic_strain = getFTensor2SymmetricFromMat<SPACE_DIM>(
+            commonDataPtr->plasticStrain);
+        auto t_plastic_strain_dot = getFTensor2SymmetricFromMat<SPACE_DIM>(
+            *(commonDataPtr->getPlasticStrainDotPtr()));
+
+        auto t_w = o->getFTensor0IntegrationWeight();
+        auto nb_integration_pts = o->getGaussPts().size2();
+        auto v = o->getMeasure();
+        double eta = 0;
+        for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+
+          const double alpha = v * t_w;
+          FTensor::Tensor2_symmetric<double, SPACE_DIM> estrain;
+          estrain(i, j) = t_strain(i, j) - t_plastic_strain(i, j);
+
+          error_indices[ENERGY] +=
+              alpha * 0.5 * (t_stress(i, j) * estrain(i, j));
+          error_indices[DISSIPATION] +=
+              alpha * (t_stress(i, j) * t_plastic_strain_dot(i, j));
+
+          const auto sigma_y = hardening(t_tau, t_temp);
+          eta += alpha * std::pow((t_tau_dot) * (t_f - sigma_y) / sigmaY, 2);
+
+          ++t_w;
+          ++t_stress;
+          ++t_tau_dot;
+          ++t_tau;
+          ++t_f;
+          ++t_temp;
+          ++t_strain;
+          ++t_plastic_strain;
+          ++t_plastic_strain_dot;
+        }
+        
+        error_indices[ETA] += sqrt(eta);
+        
+        MoFEMFunctionReturn(0);
+        
+      };
+
+  feErrorInd->getOpPtrVector().push_back(do_work_rhs_domain_indicators);
+
+  // auto dM = mField.getInterface<Simple>()->getDM();
+  // CHKERR MPIU_Allreduce(error_indices.data(), global_error_indices.data(),
+  //                       global_error_indices.size(), MPIU_REAL, MPIU_SUM,
+  //                       PetscObjectComm((PetscObject)dM));
+  // CHKERR DMoFEMLoopFiniteElements(dM, "dFE", feErrorInd);
+
   auto scatter_create = [&](auto D, auto coeff) {
     SmartPetscObj<IS> is;
     CHKERR is_manager->isCreateProblemFieldAndRank(simple->getProblemName(),
@@ -1071,6 +1193,7 @@ MoFEMErrorCode Example::tsSolve() {
 
     boost::shared_ptr<MonitorPostProcSkeleton> sk_monitor_ptr(
         new MonitorPostProcSkeleton(dm, postProcFeSkeletonFe));
+    sk_monitor_ptr->mErrorInd = feErrorInd;
 
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
@@ -1137,10 +1260,74 @@ MoFEMErrorCode Example::tsSolve() {
   CHKERR TSSetSolution(solver, D);
   CHKERR set_section_monitor(solver);
   CHKERR set_time_monitor(dm, solver);
+
+  auto set_evaluate_error = [&](TS solver) {
+    MoFEMFunctionBeginHot;
+
+    struct TSctx {
+      MoFEM::Interface *mFieldr;
+      boost::shared_ptr<DomainEle> mErrorInd;
+      std::array<double, LAST_INDIC> &error_indices;
+      // TSctx(MoFEM::Interface *m_field, boost::shared_ptr<DomainEle> error_ind,
+      //       std::array<double, LAST_INDIC> &error_indices)
+      //     : mFieldr(m_field), mErrorInd(error_ind),
+      //       error_indices(error_indices) {}
+    } ts_ctx{&mField, feErrorInd, error_indices};
+
+    // auto ts_ctx_ptr =
+    //     boost::shared_ptr<TSctx>(new TSctx{&mField, feErrorInd, error_indices});
+
+    // CHKERR TSSetApplicationContext(solver, &*ts_ctx_ptr);
+    CHKERR TSSetApplicationContext(solver, &ts_ctx);
+
+
+    auto test_func = [](TS a) {
+      MoFEMFunctionBeginHot;
+      TSctx *ctx;
+
+      CHKERR TSGetApplicationContext(a, &ctx);
+      auto &m_field = ctx->mFieldr;
+      auto &error_indices = ctx->error_indices;
+
+      auto s =  m_field->get_comm_size();
+      auto dM = m_field->getInterface<Simple>()->getDM();
+      
+      // CHKERR MPIU_Allreduce(error_indices.data(),
+      // global_error_indices.data(),
+      //                       global_error_indices.size(), MPIU_REAL, MPIU_SUM,
+      //                       PetscObjectComm((PetscObject)dM));
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", ctx->mErrorInd);
+      std::fill(error_indices.begin(), error_indices.end(), 0);
+
+      PetscPrintf(
+          PETSC_COMM_WORLD,
+          "Error energy %3.4e dissipation %3.4e eta %3.4g \n",
+          error_indices[ENERGY], error_indices[DISSIPATION],
+          error_indices[ETA]);
+
+      MoFEMFunctionReturnHot(0);
+    };
+  
+    // CHKERR TSSetPostEvaluate(solver, test_func);
+    //  CHKERR TSSetPostStage(solver, test_func);
+    //  CHKERR TSSetPostStep(solver, test_func);
+
+     MoFEMFunctionReturnHot(0);
+  };
+  // auto ts_trajectory_ptr = make_shared<TSTrajectory>();
+  // CHKERR TSTrajectoryCreate(PETSC_COMM_WORLD, ts_trajectory_ptr.get());
+
+
+  // CHKERR set_evaluate_error(solver);
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
   CHKERR set_fieldsplit_preconditioner(solver);
   CHKERR TSSetUp(solver);
+
+  CHKERR TSSetSaveTrajectory(solver);
+  CHKERR TSGetTrajectory(solver, &m_tr);
+  CHKERR TSTrajectorySetType(m_tr, solver, TSTRAJECTORYMEMORY);
+
   CHKERR TSSolve(solver, NULL);
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);

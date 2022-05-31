@@ -682,78 +682,80 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
   const double beta = static_cast<double>(nitsche) / (in_the_loop + 1);
 
   for (auto s0 : {LEFT_SIDE, RIGHT_SIDE}) {
+    for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
 
-    const size_t nb_dofs = idx_rmap.at(s0).size();
-    const size_t nb_integration_pts = getGaussPts().size2();
+      const size_t nb_dofs = idx_rmap.at(s0).size();
+      const size_t nb_integration_pts = getGaussPts().size2();
 
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
-    auto t_omega = getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
+      auto t_w = getFTensor0IntegrationWeight();
+      auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
+      auto t_omega = getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
 
-    auto t_ep_jump =
-        getFTensor2SymmetricFromMat<SPACE_DIM>(*cmdata.plasticStrainJumpPtr);
-    auto t_grad_ep_avg =
-        getFTensor3DgFromMat<SPACE_DIM, SPACE_DIM>(*cmdata.plasticStrainDiffAvgPtr);
+      auto t_ep_jump =
+          getFTensor2SymmetricFromMat<SPACE_DIM>(*cmdata.plasticStrainJumpPtr);
+      // auto t_grad_ep_avg = getFTensor3DgFromMat<SPACE_DIM, SPACE_DIM>(
+      //     *cmdata.plasticStrainDiffAvgPtr);
 
-    FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
-    FTensor::Dg<double, SPACE_DIM, size_symm> t_n;
-    FTensor::Tensor1<double, SPACE_DIM> t_vn;
+      FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
+      FTensor::Dg<double, SPACE_DIM, size_symm> t_n;
+      FTensor::Tensor1<double, SPACE_DIM> t_vn;
 
-    if (nb_dofs) {
+      if (nb_dofs) {
 
-      const auto sense_row = cmdata.senseMap[s0];
-      const auto nb_row_base_functions = cmdata.rowBaseSideMap[s0].size2();
+        const auto nb_row_base_functions = cmdata.rowBaseSideMap[s0].size2();
 
-      VectorDouble nf(nb_dofs, false);
-      nf.clear();
+        VectorDouble nf(nb_dofs, false);
+        nf.clear();
 
-      auto t_row_base = get_ntensor(cmdata.rowBaseSideMap[s0]);
-      auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
+        auto t_row_base = get_ntensor(cmdata.rowBaseSideMap[s0]);
+        auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
 
-      for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-        const double alpha = getMeasure() * t_w;
+        const auto sense_row = cmdata.senseMap[s0];
+        const auto sense_ep = cmdata.senseMap[s1];
+        auto t_ep = getFTensor2SymmetricFromMat<SPACE_DIM>(
+            commonDataPtr->strainSideMap.at(s1));
+        auto t_diff_ep = getFTensor3DgFromMat<SPACE_DIM, SPACE_DIM>(
+            commonDataPtr->strainDiffSideMap.at(s1));
 
-        auto t_nf = get_nf(nf, FTensor::Number<SPACE_DIM>());
+        for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+          const double alpha = getMeasure() * t_w;
 
-        size_t rr = 0;
-        for (; rr != nb_dofs / size_symm; ++rr) {
+          auto t_nf = get_nf(nf, FTensor::Number<SPACE_DIM>());
+          t_n(i, j, k) = -p * (t_ep(i, j) * t_normal(k) * sense_ep -
+                               (beta / p) * t_diff_ep(i, j, k));
 
-          // FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
-          // t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
-          // FTensor::Tensor1<double, SPACE_DIM> t_vn;
-          // t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
+          size_t rr = 0;
+          for (; rr != nb_dofs / size_symm; ++rr) {
 
-          // t_nf(i, j) -= alpha * (t_vn(k) * t_normal(k)) * t_ep_jump(i, j);
+            t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
+            t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
 
-          t_n(i, j, k) = p * t_ep_jump(i, j) * t_normal(k) * sense_row -
-                   (phi / p) * t_grad_ep_avg(i, j, k) ;
-          auto c = phi;
+            t_nf(i, j) -=
+                alpha * (t_vn(k) * t_omega(k)) * (t_n(i, j, k) * t_omega(k));
+            t_nf(i, j) -= alpha * t_vn_plus(i) * t_omega(i) * phi * beta *
+                          (t_diff_ep(i, j, k) * t_omega(k));
 
-          t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
-          t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
+            ++t_nf;
+            ++t_row_base;
+            ++t_diff_row_base;
+          }
+          for (; rr < nb_row_base_functions; ++rr) {
+            ++t_row_base;
+            ++t_diff_row_base;
+          }
 
-          t_nf(i, j) += alpha * (t_vn(k) * t_omega(k)) * (t_n(i, j, k) * t_omega(k));
-          t_nf(i, j) += alpha * p * t_vn_plus(i) * t_omega(i) *
-                        (t_grad_ep_avg(i, j, k) * t_omega(k));
-
-          ++t_nf;
-          ++t_row_base;
-          ++t_diff_row_base;
+          ++t_ep;
+          ++t_diff_ep;
+          ++t_w;
+          // ++t_grad_ep_avg;
+          ++t_X_dot_n;
+          ++t_omega;
+          // ++t_ep_jump;
         }
-        for (; rr < nb_row_base_functions; ++rr) {
-          ++t_row_base;
-          ++t_diff_row_base;
-        }
-        
-        ++t_w;
-        ++t_grad_ep_avg;
-        ++t_X_dot_n;
-        ++t_omega;
-        ++t_ep_jump;
+        CHKERR ::VecSetValues(getKSPf(), idx_rmap.at(s0).size(),
+                              &*idx_rmap.at(s0).begin(), &*nf.data().begin(),
+                              ADD_VALUES);
       }
-      CHKERR ::VecSetValues(getKSPf(), idx_rmap.at(s0).size(),
-                            &*idx_rmap.at(s0).begin(), &*nf.data().begin(),
-                            ADD_VALUES);
     }
   }
 
@@ -790,68 +792,77 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
   const double beta = static_cast<double>(nitsche) / (in_the_loop + 1);
 
   for (auto s0 : {LEFT_SIDE, RIGHT_SIDE}) {
+    for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
 
-    const size_t nb_dofs = idx_rmap.at(s0).size();
-    const size_t nb_integration_pts = getGaussPts().size2();
+      const size_t nb_dofs = idx_rmap.at(s0).size();
+      const size_t nb_integration_pts = getGaussPts().size2();
 
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
-    auto t_omega = getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
+      auto t_w = getFTensor0IntegrationWeight();
+      auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
+      auto t_omega = getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
 
-    auto t_tau_jump = getFTensor0FromVec(*cmdata.plasticTauJumpPtr);
-    auto t_grad_tau_avg =
-        getFTensor1FromMat<SPACE_DIM>(*cmdata.plasticTauDiffAvgPtr);
-
-    FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
-    FTensor::Tensor1<double, SPACE_DIM> t_n;
-    FTensor::Tensor1<double, SPACE_DIM> t_vn;
-
-    if (nb_dofs) {
+      // auto t_tau_jump = getFTensor0FromVec(*cmdata.plasticTauJumpPtr);
+      // auto t_grad_tau_avg =
+      //     getFTensor1FromMat<SPACE_DIM>(*cmdata.plasticTauDiffAvgPtr);
 
       const auto sense_row = cmdata.senseMap[s0];
-      const auto nb_row_base_functions = cmdata.rowBaseSideMap[s0].size2();
+      const auto sense_tau = cmdata.senseMap[s1];
+      auto t_tau = getFTensor0FromVec(commonDataPtr->tauSideMap.at(s1));
+      auto t_diff_tau =
+          getFTensor1FromMat<SPACE_DIM>(commonDataPtr->tauDiffSideMap.at(s1));
 
-      VectorDouble nf(nb_dofs, false);
-      nf.clear();
+      FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
+      FTensor::Tensor1<double, SPACE_DIM> t_n;
+      FTensor::Tensor1<double, SPACE_DIM> t_vn;
 
-      auto t_row_base = get_ntensor(cmdata.rowBaseSideMap[s0]);
-      auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
+      if (nb_dofs) {
 
-      for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-        const double alpha = getMeasure() * t_w;
-        auto t_nf = nf.data().begin();
+        const auto nb_row_base_functions = cmdata.rowBaseSideMap[s0].size2();
 
-        size_t rr = 0;
-        for (; rr != nb_dofs; ++rr) {
+        VectorDouble nf(nb_dofs, false);
+        nf.clear();
 
-          t_n(i) = p * t_tau_jump * t_normal(i) * sense_row -
-                   (phi / p) * t_grad_tau_avg(i);
+        auto t_row_base = get_ntensor(cmdata.rowBaseSideMap[s0]);
+        auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
 
-          t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
-          t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
+        for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+          const double alpha = getMeasure() * t_w;
+          auto t_nf = nf.data().begin();
+          t_n(i) = -p * (t_tau * t_normal(i) * sense_tau -
+                         (beta / p) * t_diff_tau(i));
 
-          *t_nf += alpha * t_vn(k) * t_omega(k) * (t_n(i) * t_omega(i));
-          *t_nf += alpha * p * t_vn_plus(i) * t_omega(i) *
-                  (t_grad_tau_avg(k) * t_omega(k));
+          size_t rr = 0;
+          for (; rr != nb_dofs; ++rr) {
 
-          ++t_nf;
-          ++t_row_base;
-          ++t_diff_row_base;
+            t_vn_plus(i) = beta * (phi * t_diff_row_base(i) / p);
+            t_vn(i) = t_row_base * t_normal(i) * sense_row - t_vn_plus(i);
+
+            *t_nf -= alpha * t_vn(k) * t_omega(k) * (t_n(i) * t_omega(i));
+            *t_nf -= alpha * (t_vn_plus(i) * t_omega(i) * beta *
+                     (t_diff_tau(k) * t_omega(k)));
+
+            ++t_nf;
+            ++t_row_base;
+            ++t_diff_row_base;
+          }
+
+          for (; rr < nb_row_base_functions; ++rr) {
+            ++t_row_base;
+            ++t_diff_row_base;
+          }
+
+          ++t_tau;
+          ++t_diff_tau;
+          ++t_w;
+          // ++t_grad_tau_avg;
+          ++t_X_dot_n;
+          ++t_omega;
+          // ++t_tau_jump;
         }
-        for (; rr < nb_row_base_functions; ++rr) {
-          ++t_row_base;
-          ++t_diff_row_base;
-        }
-        
-        ++t_w;
-        ++t_grad_tau_avg;
-        ++t_X_dot_n;
-        ++t_omega;
-        ++t_tau_jump;
+        CHKERR ::VecSetValues(getKSPf(), idx_rmap.at(s0).size(),
+                              &*idx_rmap.at(s0).begin(), &*nf.data().begin(),
+                              ADD_VALUES);
       }
-      CHKERR ::VecSetValues(getKSPf(), idx_rmap.at(s0).size(),
-                            &*idx_rmap.at(s0).begin(), &*nf.data().begin(),
-                            ADD_VALUES);
     }
   }
 
@@ -951,13 +962,13 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
         auto t_row_base = get_ntensor(cmdata.rowBaseSideMap[s0]);
         auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
         auto t_w = getFTensor0IntegrationWeight();
-        auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
+        // auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
         auto t_omega =
             getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
 
         for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
-          const double alpha = getMeasure() * t_w * t_X_dot_n;
+          const double alpha = getMeasure() * t_w;
 
           // iterate rows
           size_t rr = 0;
@@ -986,12 +997,13 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
                               beta * t_diff_col_base(i) / p);
 
               // assemble matrix
-              t_mat(i, j, k, l) -= (alpha * (t_vn(m) * t_un(m))) *
-                                   cmdata.Is(i, j, m, n) *
-                                   t_diff_plastic_strain(m, n, k, l);
+              t_mat(i, j, k, l) -=
+                  (alpha * ((t_vn(m) * t_omega(m)) * (t_un(j) * t_omega(j)))) *
+                  cmdata.Is(i, j, m, n) * t_diff_plastic_strain(m, n, k, l);
 
               t_mat(i, j, k, l) -=
-                  (alpha * (t_vn_plus(m) * (beta * t_diff_col_base(m)))) *
+                  (alpha * (t_vn_plus(i) * t_omega(i) *
+                            (beta * t_diff_col_base(j) * t_omega(j)))) *
                   cmdata.Is(i, j, m, n) * t_diff_plastic_strain(m, n, k, l);
 
               // move to next column base and element of matrix
@@ -1010,8 +1022,8 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
           }
 
           ++t_w;
-          ++t_X_dot_n;
           ++t_omega;
+          // ++t_X_dot_n;
         }
 
         // assemble system
@@ -1076,18 +1088,18 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
         auto t_row_base = get_ntensor(cmdata.rowBaseSideMap[s0]);
         auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
         auto t_w = getFTensor0IntegrationWeight();
-        auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
+        // auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
         auto t_omega =
             getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
 
         for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
-          const double alpha = getMeasure() * t_w * t_X_dot_n;
+          const double alpha = getMeasure() * t_w;
 
           // iterate rows
           auto t_mat = locMat.data().begin();
           size_t rr = 0;
-          for (; rr != nb_rows / size_symm; ++rr) {
+          for (; rr != nb_rows; ++rr) {
 
             // calculate tetting function
             FTensor::Tensor1<double, SPACE_DIM> t_vn_plus;
@@ -1101,7 +1113,7 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
                 get_diff_ntensor(cmdata.colDiffBaseSideMap[s1], gg, 0);
 
             // iterate columns
-            for (size_t cc = 0; cc != nb_cols / size_symm; ++cc) {
+            for (size_t cc = 0; cc != nb_cols; ++cc) {
 
               // calculate variance of tested function
               FTensor::Tensor1<double, SPACE_DIM> t_un;
@@ -1109,8 +1121,10 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
                               beta * t_diff_col_base(i) / p);
 
               // assemble matrix
-              t_mat -= (alpha * (t_vn(m) * t_un(m)));
-              t_mat -= (alpha * (t_vn_plus(m) * (beta * t_diff_col_base(m))));
+              *t_mat -=
+                  alpha * (t_vn(m) * t_omega(m)) * (t_un(j) * t_omega(j));
+              *t_mat -= alpha * (t_vn_plus(i) * t_omega(i) * beta *
+                                (t_diff_col_base(j) * t_omega(j)));
 
               // move to next column base and element of matrix
               ++t_col_base;
@@ -1129,7 +1143,7 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
 
           ++t_w;
           ++t_omega;
-          ++t_X_dot_n;
+          // ++t_X_dot_n;
         }
 
         // assemble system
@@ -1271,6 +1285,8 @@ struct MonitorPostProcSkeleton : public FEMethod {
                           boost::shared_ptr<PostProcEleSkeleton> &post_proc_fe)
       : dM(dm), postProcFeSkeletonFe(post_proc_fe){};
 
+  boost::shared_ptr<DomainEle> mErrorInd;
+
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
 
@@ -1294,6 +1310,35 @@ struct MonitorPostProcSkeleton : public FEMethod {
     };
 
     CHKERR make_vtk();
+    
+    if (mErrorInd) {
+
+      CHKERR VecDuplicate(ts_u, &ts_u_t);
+      double time = 0;
+      CHKERR TSTrajectoryGetVecs(m_tr, PETSC_NULL, ts_step, &time, PETSC_NULL,
+                                 ts_u_t);
+
+      std::fill(error_indices.begin(), error_indices.end(), 0);
+      // auto test1 = mErrorInd->CtxSetX_T;
+      // auto test2 = mErrorInd->data_ctx;
+      mErrorInd->data_ctx |= mErrorInd->CtxSetX_T;
+      mErrorInd->ts_u_t = ts_u_t;
+
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", mErrorInd);
+      std::array<double, LAST_INDIC> global_error_indices;
+      std::fill(global_error_indices.begin(), global_error_indices.end(), 0);
+
+      CHKERR MPIU_Allreduce(error_indices.data(), global_error_indices.data(),
+                            error_indices.size(), MPIU_REAL, MPIU_SUM,
+                            PetscObjectComm((PetscObject)dM));
+
+      CHKERR PetscPrintf(PETSC_COMM_WORLD,
+                  "Energy %3.4e dissipation %3.4e eta %3.4g \n",
+                  global_error_indices[ENERGY], global_error_indices[DISSIPATION],
+                  global_error_indices[ETA]);
+    // CHKERR VecView(ts_u, PETSC_VIEWER_STDOUT_WORLD);
+    // CHKERR VecView(ts_u_t, PETSC_VIEWER_STDOUT_WORLD);
+    }
 
     MoFEMFunctionReturn(0);
   }
