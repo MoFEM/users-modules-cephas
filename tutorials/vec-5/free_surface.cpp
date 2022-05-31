@@ -87,7 +87,7 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // mesh refinement
-static constexpr int max_nb_levels = 1;
+static constexpr int max_nb_levels = 3;
 static constexpr int bit_shift = 10;
 
 constexpr int order = 2; ///< approximation order
@@ -109,7 +109,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.2 / powof2<max_nb_levels>(); // mesh size
+constexpr double h = 0.1 / powof2<max_nb_levels>(); // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -895,7 +895,9 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     post_proc_fe->generateReferenceElementMesh();
 
     auto u_ptr = boost::make_shared<MatrixDouble>();
+    auto grad_u_ptr = boost::make_shared<MatrixDouble>();
     auto h_ptr = boost::make_shared<VectorDouble>();
+    auto grad_h_ptr = boost::make_shared<MatrixDouble>();
     auto p_ptr = boost::make_shared<VectorDouble>();
     auto g_ptr = boost::make_shared<VectorDouble>();
 
@@ -912,10 +914,17 @@ MoFEMErrorCode FreeSurface::solveSystem() {
                            ExtractParentType<DomianParentEle>(), "U");
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<U_FIELD_DIM, SPACE_DIM>("U",
+                                                                   grad_u_ptr));
+
     CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPROW,
                            ExtractParentType<DomianParentEle>(), "H");
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("H", h_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
+
     CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPROW,
                            ExtractParentType<DomianParentEle>(), "P");
     post_proc_fe->getOpPtrVector().push_back(
@@ -927,17 +936,18 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     post_proc_fe->getOpPtrVector().push_back(
 
-        new OpPostProcMap<2, 2>(post_proc_fe->postProcMesh,
-                                post_proc_fe->mapGaussPts,
+        new OpPostProcMap<2, 2>(
+            post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
 
-                                OpPostProcMap<2, 2>::DataMapVec{
-                                    {"H", h_ptr}, {"P", p_ptr}, {"G", g_ptr}},
+            OpPostProcMap<2, 2>::DataMapVec{
+                {"H", h_ptr}, {"P", p_ptr}, {"G", g_ptr}},
 
-                                OpPostProcMap<2, 2>::DataMapMat{{"U", u_ptr}},
+            OpPostProcMap<2, 2>::DataMapMat{{"U", u_ptr},
+                                            {"H_GRAD", grad_h_ptr}},
 
-                                OpPostProcMap<2, 2>::DataMapMat{}
+            OpPostProcMap<2, 2>::DataMapMat{{"GRAD_U", grad_u_ptr}}
 
-                                )
+            )
 
     );
 
