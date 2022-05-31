@@ -246,22 +246,24 @@ auto get_dofs_ents = [](auto dm) {
   return r;
 };
 
+template <typename PARENT> struct ExtractParentType { using Prent = PARENT; };
+
 /**
  * @brief set levels of projection operators, which project field data from
  * parent entities, to child, up to to level, i.e. last mesh refinement.
  *
  */
-auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
-                          auto field_name = std::string()) {
+template <typename ELE, typename PARENT>
+MoFEMErrorCode
+set_parent_dofs(MoFEM::Interface &m_field, boost::shared_ptr<ELE> &fe_top,
+                ForcesAndSourcesCore::UserDataOperator::OpType op,
+                ExtractParentType<PARENT>, std::string field_name = string()) {
   MoFEMFunctionBegin;
 
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
   auto det_ptr = boost::make_shared<VectorDouble>();
 
-  // BitRefLevel bit_marker(0);
-  // for (auto l = 0; l <= max_nb_levels; ++l)
-  //   bit_marker |= bit(max_nb_levels + l); // marker(l);
   BitRefLevel bit_marker;
   bit_marker.set();
 
@@ -270,8 +272,8 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op,
           [&](boost::shared_ptr<ForcesAndSourcesCore> parent_fe_pt, int level) {
             if (level > 0) {
 
-              auto fe_ptr_current = boost::shared_ptr<ForcesAndSourcesCore>(
-                  new DomianParentEle(m_field));
+              auto fe_ptr_current =
+                  boost::shared_ptr<ForcesAndSourcesCore>(new PARENT(m_field));
 
               if (op == DomainEleOp::OPSPACE) {
                 fe_ptr_current->getOpPtrVector().push_back(
@@ -352,6 +354,8 @@ private:
 
   Range bodySkinBit0;
   Range bodySkinBitAll;
+
+  MoFEMErrorCode makeRefProblem();
 };
 
 //! [Run programme]
@@ -445,14 +449,17 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
 
-    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPSPACE, std::string());
-    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "H");
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPSPACE,
+                           ExtractParentType<DomianParentEle>(), std::string());
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "H");
 
     pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
     pipeline.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
 
-    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "G");
+    CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                           ExtractParentType<DomianParentEle>(), "G");
     pipeline.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
     pipeline.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
@@ -496,23 +503,30 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
     auto set_domain_rhs = [&](auto &pipeline, auto &fe) {
       set_generic(pipeline, fe);
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "H");
+      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                             ExtractParentType<DomianParentEle>(), "H");
       pipeline.push_back(new OpRhsH<true>("H", nullptr, nullptr, h_ptr,
                                           grad_h_ptr, grad_g_ptr));
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "G");
+      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                             ExtractParentType<DomianParentEle>(), "G");
       pipeline.push_back(new OpRhsG<true>("G", h_ptr, grad_h_ptr, g_ptr));
     };
 
     auto set_domain_lhs = [&](auto &pipeline, auto &fe) {
       set_generic(pipeline, fe);
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "H");
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL, "H");
+      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                             ExtractParentType<DomianParentEle>(), "H");
+      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                             ExtractParentType<DomianParentEle>(), "H");
       pipeline.push_back(new OpLhsH_dH<true>("H", nullptr, h_ptr, grad_g_ptr));
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL, "G");
+      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                             ExtractParentType<DomianParentEle>(), "G");
       pipeline.push_back(new OpLhsH_dG<true>("H", "G", h_ptr));
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW, "G");
+      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPROW,
+                             ExtractParentType<DomianParentEle>(), "G");
       pipeline.push_back(new OpLhsG_dG("G"));
-      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL, "H");
+      CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPCOL,
+                             ExtractParentType<DomianParentEle>(), "H");
       pipeline.push_back(new OpLhsG_dH<true>("G", "H", h_ptr));
     };
 
@@ -598,83 +612,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   CHKERR solve_init(0);
   CHKERR post_proc(0);
 
-  CHKERR setBitLevels();
-
-  BitRefLevel bit_marker;
-  for (auto l = 1; l <= max_nb_levels; ++l)
-    bit_marker |= marker(l);
-  simple->getBitAdjEnt() = BitRefLevel().set(); // bit_marker;
-
-  BitRefLevel bit_level(0);
-  for (auto l = 0; l <= max_nb_levels; ++l)
-    bit_level |= bit(bit_shift + l);
-  simple->getBitRefLevel() = bit_level;
-  simple->getBitRefLevelMask() = BitRefLevel().set();
-
-  simple->reSetUp(true);
-
-  auto get_ents_bit_ref = [&](auto bit, auto mask) {
-    Range ents;
-    CHK_THROW_MESSAGE(
-        mField.getInterface<BitRefManager>()->getEntitiesByRefLevel(bit, mask,
-                                                                    ents),
-        "Can not get ents on bit ref level");
-    return ents;
-  };
-
-  Range ents_to_remove;
-  ents_to_remove.merge(get_ents_bit_ref(BitRefLevel().set(), bit_level.flip()));
-  for (auto l = 1; l <= max_nb_levels; ++l) {
-    ents_to_remove.merge(
-        get_ents_bit_ref(marker(l), bit(bit_shift + l - 1).flip()));
-  }
-
-  for (auto field : {"U", "P", "H", "G", "L"}) {
-    CHKERR
-    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-        simple->getProblemName(), field, ents_to_remove);
-  }
-
-  // Takes edges or faces, find their children which are also edges or faces, and
-  // remove higher order approximation from those entities. Since approximation
-  // is provided by parents (underlying entities).
-  Range children_edges;
-  for (auto l = 0; l != max_nb_levels; ++l) {
-    auto bit_mng = mField.getInterface<BitRefManager>();
-    Range bit_ents = get_ents_bit_ref(bit(bit_shift + l), BitRefLevel().set());
-    Range bit_children_edges;
-    CHKERR bit_mng->updateRangeByChildren(bit_ents.subset_by_dimension(1),
-                                          bit_children_edges);
-    CHKERR bit_mng->filterEntitiesByRefLevel(
-        bit(bit_shift + l + 1), bit(bit_shift + l).flip(), bit_children_edges);
-    children_edges.merge(bit_children_edges.subset_by_dimension(1));
-    Range bit_children_faces;
-    CHKERR bit_mng->updateRangeByChildren(bit_ents.subset_by_dimension(2),
-                                          bit_children_faces);
-    CHKERR bit_mng->filterEntitiesByRefLevel(
-        bit(bit_shift + l + 1), bit(bit_shift + l).flip(), bit_children_faces);
-    children_edges.merge(bit_children_faces.subset_by_dimension(2));
-  }
-
-#ifndef NDEBUG
-  CHKERR save_range(mField.get_moab(), "children_edges.vtk", children_edges);
-#endif
-
-  for (auto field : {"U", "H", "G", "L"}) {
-    CHKERR
-    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-        simple->getProblemName(), field, children_edges, 0, MAX_DOFS_ON_ENTITY,
-        2, std::max(2, order));
-  }
-  for (auto field : {"P"}) {
-    CHKERR
-    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-        simple->getProblemName(), field, children_edges, 0, MAX_DOFS_ON_ENTITY,
-        1, std::max(1, order - 1));
-  }
-
-  CHKERR mField.getInterface<FieldBlas>()->setField(0, "H");
-  CHKERR mField.getInterface<FieldBlas>()->setField(0, "G");
+  CHKERR makeRefProblem();
 
   CHKERR solve_init(bit_shift + max_nb_levels);
   CHKERR post_proc(bit_shift + max_nb_levels);
@@ -683,16 +621,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainLhsPipeline().clear();
 
-  // Enforce boundary conditions by removing DOFs on symmetry axis and fixed
-  // positions
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
-                                           "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
-                                           "L", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "U",
-                                           0, SPACE_DIM);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
-                                           0, 0);
 
   MoFEMFunctionReturn(0);
 }
@@ -1251,6 +1179,101 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
 
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode FreeSurface::makeRefProblem() {
+  auto simple = mField.getInterface<Simple>();
+  auto bc_mng = mField.getInterface<BcManager>();
+  MoFEMFunctionBegin;
+
+  CHKERR setBitLevels();
+
+  BitRefLevel bit_marker;
+  for (auto l = 1; l <= max_nb_levels; ++l)
+    bit_marker |= marker(l);
+  simple->getBitAdjEnt() = BitRefLevel().set(); // bit_marker;
+
+  BitRefLevel bit_level(0);
+  for (auto l = 0; l <= max_nb_levels; ++l)
+    bit_level |= bit(bit_shift + l);
+  simple->getBitRefLevel() = bit_level;
+  simple->getBitRefLevelMask() = BitRefLevel().set();
+
+  simple->reSetUp(true);
+
+  auto get_ents_bit_ref = [&](auto bit, auto mask) {
+    Range ents;
+    CHK_THROW_MESSAGE(
+        mField.getInterface<BitRefManager>()->getEntitiesByRefLevel(bit, mask,
+                                                                    ents),
+        "Can not get ents on bit ref level");
+    return ents;
+  };
+
+  Range ents_to_remove;
+  ents_to_remove.merge(get_ents_bit_ref(BitRefLevel().set(), bit_level.flip()));
+  for (auto l = 1; l <= max_nb_levels; ++l) {
+    ents_to_remove.merge(
+        get_ents_bit_ref(marker(l), bit(bit_shift + l - 1).flip()));
+  }
+
+  for (auto field : {"U", "P", "H", "G", "L"}) {
+    CHKERR
+    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        simple->getProblemName(), field, ents_to_remove);
+  }
+
+  // Takes edges or faces, find their children which are also edges or faces,
+  // and remove higher order approximation from those entities. Since
+  // approximation is provided by parents (underlying entities).
+  Range children_edges;
+  for (auto l = 0; l != max_nb_levels; ++l) {
+    auto bit_mng = mField.getInterface<BitRefManager>();
+    Range bit_ents = get_ents_bit_ref(bit(bit_shift + l), BitRefLevel().set());
+    Range bit_children_edges;
+    CHKERR bit_mng->updateRangeByChildren(bit_ents.subset_by_dimension(1),
+                                          bit_children_edges);
+    CHKERR bit_mng->filterEntitiesByRefLevel(
+        bit(bit_shift + l + 1), bit(bit_shift + l).flip(), bit_children_edges);
+    children_edges.merge(bit_children_edges.subset_by_dimension(1));
+    Range bit_children_faces;
+    CHKERR bit_mng->updateRangeByChildren(bit_ents.subset_by_dimension(2),
+                                          bit_children_faces);
+    CHKERR bit_mng->filterEntitiesByRefLevel(
+        bit(bit_shift + l + 1), bit(bit_shift + l).flip(), bit_children_faces);
+    children_edges.merge(bit_children_faces.subset_by_dimension(2));
+  }
+
+#ifndef NDEBUG
+  CHKERR save_range(mField.get_moab(), "children_edges.vtk", children_edges);
+#endif
+
+  for (auto field : {"U", "H", "G", "L"}) {
+    CHKERR
+    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        simple->getProblemName(), field, children_edges, 0, MAX_DOFS_ON_ENTITY,
+        2, std::max(2, order));
+  }
+  for (auto field : {"P"}) {
+    CHKERR
+    mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        simple->getProblemName(), field, children_edges, 0, MAX_DOFS_ON_ENTITY,
+        1, std::max(1, order - 1));
+  }
+
+  // Enforce boundary conditions by removing DOFs on symmetry axis and fixed
+  // positions
+  
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
+                                           "L", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "U",
+                                           0, SPACE_DIM);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
+                                           0, 0);
+
+  MoFEMFunctionReturn(0);
+};
 
 int main(int argc, char *argv[]) {
 
