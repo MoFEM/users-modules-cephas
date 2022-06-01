@@ -29,6 +29,24 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
+extern "C" {
+#include <petsc/private/tsimpl.h>
+typedef struct {
+  PetscReal stage_time;
+  PetscReal shift_V;
+  PetscReal scale_F;
+  Vec X0, Xa, X1;
+  Vec V0, Va, V1;
+  PetscReal Alpha_m;
+  PetscReal Alpha_f;
+  PetscReal Gamma;
+  PetscInt order;
+  Vec vec_sol_prev;
+  Vec vec_lte_work;
+  TSStepStatus status;
+} TS_Alpha;
+}
+
 constexpr int BASE_DIM = 1;
 constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
@@ -87,7 +105,7 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // mesh refinement
-static constexpr int max_nb_levels = 3;
+static constexpr int max_nb_levels = 1;
 static constexpr int bit_shift = 10;
 
 constexpr int order = 2; ///< approximation order
@@ -339,14 +357,22 @@ struct FreeSurface {
 
   MoFEMErrorCode runProblem();
 
+  MoFEMErrorCode makeRefProblem();
+
+  MoFEM::Interface &mField;
+
+  struct AlphaData : EntityStorage {
+    int localPetscIdx;
+  };
+
+  boost::shared_ptr<std::vector<AlphaData>> dofsIndices;
+
 private:
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
-
-  MoFEM::Interface &mField;
 
   boost::shared_ptr<FEMethod> domianLhsFEPtr;
 
@@ -358,8 +384,6 @@ private:
 
   Range bodySkinBit0;
   Range bodySkinBitAll;
-
-  MoFEMErrorCode makeRefProblem();
 };
 
 //! [Run programme]
@@ -625,7 +649,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainLhsPipeline().clear();
 
-
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -882,6 +905,8 @@ private:
   boost::shared_ptr<VectorDouble> liftVec;
 };
 
+static FreeSurface *free_surface_ptr = nullptr;
+
 //! [Solve]
 MoFEMErrorCode FreeSurface::solveSystem() {
   MoFEMFunctionBegin;
@@ -1055,6 +1080,136 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   CHKERR set_ts(ts);
   CHKERR set_section_monitor(ts);
   CHKERR TSSetUp(ts);
+
+  free_surface_ptr = this;
+  dofsIndices = boost::make_shared<std::vector<AlphaData>>();
+  auto prb_ptr = getProblemPtr(dm);
+  dofsIndices->resize(mField.get_field_ents()->size());
+
+  auto refine_mesh = [](TS ts) {
+    MoFEMFunctionBeginHot;
+    auto &m_field = free_surface_ptr->mField;
+    auto &dofs_indices = free_surface_ptr->dofsIndices;
+    auto simple = m_field.getInterface<Simple>();
+    auto dm = simple->getDM();
+    auto prb_ptr = getProblemPtr(dm);
+
+    auto field_ents_ptr = m_field.get_field_ents();
+    auto dofs_ptr = prb_ptr->numeredRowDofsPtr;
+
+    int ent_idx = 0;
+    for (auto &e_ptr : *field_ents_ptr) {
+      auto &uid = e_ptr->getLocalUniqueId();
+      auto it = dofs_ptr->get<Unique_mi_tag>().find(uid);
+      if (it != dofs_ptr->get<Unique_mi_tag>().end()) {
+        (*dofs_indices)[ent_idx].localPetscIdx = (*it)->getPetscLocalDofIdx();
+        e_ptr->getWeakStoragePtr() = boost::shared_ptr<AlphaData>(
+            dofs_indices, &((*dofs_indices)[ent_idx]));
+      }
+      ++ent_idx;
+    }
+
+    CHKERR free_surface_ptr->makeRefProblem();
+
+    TS_Alpha *th = (TS_Alpha *)ts->data;
+
+    Vec X0 = th->X0;
+    Vec Xa = th->Xa;
+    Vec X1 = th->X1;
+    Vec V0 = th->V0;
+    Vec Va = th->Va;
+    Vec V1 = th->V1;
+    Vec vec_sol_prev = th->vec_sol_prev;
+    Vec vec_lte_work = th->vec_lte_work;
+
+    Vec T;
+    CHKERR DMCreateGlobalVector_MoFEM(dm, &T);
+    Vec nX0;
+    CHKERR VecDuplicate(T, &nX0);
+    Vec nXa;
+    CHKERR VecDuplicate(T, &nXa);
+    Vec nX1;
+    CHKERR VecDuplicate(T, &nX1);
+    Vec nV0;
+    CHKERR VecDuplicate(T, &nV0);
+    Vec nVa;
+    CHKERR VecDuplicate(T, &nVa);
+    Vec nV1;
+    CHKERR VecDuplicate(T, &nV1);
+    Vec n_vec_sol_prev;
+    CHKERR VecDuplicate(T, &n_vec_sol_prev);
+    Vec n_vec_lte_work;
+    CHKERR VecDuplicate(T, &n_vec_lte_work);
+
+    auto copy_data = [&](Vec v_old, Vec v_new) {
+      MoFEMFunctionBegin;
+      if (v_old) {
+        double *a_new;
+        const double *a_old;
+        CHKERR VecGetArray(v_new, &a_new);
+        CHKERR VecGetArrayRead(v_old, &a_old);
+        for (auto &dof : *dofs_ptr) {
+          auto e_ptr = dof->getFieldEntityPtr();
+          if (auto ptr = e_ptr->getWeakStoragePtr().lock()) {
+            if (auto alpha_ptr = boost::dynamic_pointer_cast<AlphaData>(ptr)) {
+              auto ent_idx = dof->getEntDofIdx();
+              auto new_local_idx = dof->getPetscLocalDofIdx();
+              auto old_local_idx = alpha_ptr->localPetscIdx + ent_idx;
+              a_new[new_local_idx] = a_old[old_local_idx];
+            }
+          }
+        }
+        CHKERR VecRestoreArray(v_new, &a_new);
+        CHKERR VecRestoreArrayRead(v_old, &a_old);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR copy_data(X0, nX0);
+    CHKERR copy_data(Xa, nXa);
+    CHKERR copy_data(X1, nX1);
+    CHKERR copy_data(V0, nV0);
+    CHKERR copy_data(Va, nVa);
+    CHKERR copy_data(V1, nV1);
+    CHKERR copy_data(vec_sol_prev, n_vec_sol_prev);
+    CHKERR copy_data(vec_lte_work, n_vec_lte_work);
+
+    CHKERR VecDestroy(&X0);
+    CHKERR VecDestroy(&Xa);
+    CHKERR VecDestroy(&X1);
+    CHKERR VecDestroy(&V0);
+    CHKERR VecDestroy(&Va);
+    CHKERR VecDestroy(&V1);
+    CHKERR VecDestroy(&vec_sol_prev);
+    CHKERR VecDestroy(&vec_lte_work);
+
+    th->X0 = nX0;
+    th->Xa = nXa;
+    th->X1 = nX1;
+    th->V0 = nV0;
+    th->Va = nV1;
+    th->V1 = nVa;
+    th->vec_sol_prev = n_vec_sol_prev;
+    th->vec_lte_work = n_vec_lte_work;
+
+    Vec solution;
+    CHKERR DMCreateGlobalVector(dm, &solution);
+    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
+                                   SCATTER_FORWARD);
+    CHKERR TSSetSolution(ts, solution);
+    for(auto f : {"U", "P", "H", "G", "L"}) {
+      m_field.getInterface<FieldBlas>()->setField(0, f);
+    }
+    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
+                                   SCATTER_REVERSE);
+
+    CHKERR VecDestroy(&solution);
+
+    MoFEMFunctionReturnHot(0);
+  };
+
+  CHKERR TSSetPreStep(ts, refine_mesh);
+
   CHKERR TSSolve(ts, NULL);
   CHKERR TSGetTime(ts, &ftime);
 
@@ -1400,7 +1555,7 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
 
   // Enforce boundary conditions by removing DOFs on symmetry axis and fixed
   // positions
-  
+
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
                                            "U", 0, 0);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
