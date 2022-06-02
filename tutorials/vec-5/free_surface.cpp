@@ -1585,7 +1585,7 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
 
   // mField.getInterface<ProblemsManager>()->synchroniseProblemEntities =
   //     PETSC_TRUE;
-  simple->reSetUp(false);
+  simple->reSetUp(true);
 
   auto get_ents_bit_ref = [&](auto bit, auto mask) {
     Range ents;
