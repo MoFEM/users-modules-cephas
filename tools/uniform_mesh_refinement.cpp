@@ -21,14 +21,14 @@
 #include <MoFEM.hpp>
 using namespace MoFEM;
 
-static char help[] =
-    "Uniform mesh refinement\n\n"
+static char help[] = "Uniform mesh refinement\n\n"
 
-    "Usage example:\n"
+                     "Usage example:\n"
 
-    "$ ./uniform_mesh_refinement -my_file mesh.h5m -output_file refined_mesh.h5m"
-    
-    "\n\n";
+                     "$ ./uniform_mesh_refinement -my_file mesh.h5m "
+                     "-output_file refined_mesh.h5m"
+
+                     "\n\n";
 
 int main(int argc, char *argv[]) {
 
@@ -52,8 +52,8 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsString("-output_file", "output mesh file name", "",
                               "mesh.h5m", mesh_out_file, 255, PETSC_NULL);
     CHKERR PetscOptionsInt("-dim", "entities dim", "", dim, &dim, PETSC_NULL);
-    CHKERR PetscOptionsInt("-nb_levels", "number of refinement levels", "", nb_levels,
-                           &nb_levels, PETSC_NULL);
+    CHKERR PetscOptionsInt("-nb_levels", "number of refinement levels", "",
+                           nb_levels, &nb_levels, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-shift",
                             "shift bits, squash entities of refined elements",
@@ -106,7 +106,7 @@ int main(int argc, char *argv[]) {
                                                    bit(l + 1));
       if (dim == 3) {
         CHKERR refine->refineTets(ents, bit(l + 1));
-      } else if(dim == 2) {
+      } else if (dim == 2) {
         CHKERR refine->refineTris(ents, bit(l + 1));
       } else {
         SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
