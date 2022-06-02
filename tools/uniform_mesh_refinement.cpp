@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
               CHKERR bit_ref_manager->updateRangeByChildren(ents, children);
               CHKERR bit_ref_manager->filterEntitiesByRefLevel(
                   bit(l + 1), BitRefLevel().set(), children);
-              children = children.subset_by_type(t);
+              children = subtract(children, children.subset_by_type(MBVERTEX));
 
               CHKERR moab.add_entities(m, children);
               CHKERR moab.tag_clear_data(part_tag, children, &part);
@@ -165,8 +165,8 @@ int main(int argc, char *argv[]) {
         MoFEMFunctionReturn(0);
       };
 
-      CHKERR update_meshsets();
       CHKERR update_partition_sets();
+      CHKERR update_meshsets();
 
       CHKERR moab.delete_entities(&meshset_ref_edges, 1);
     }
