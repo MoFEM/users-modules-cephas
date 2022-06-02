@@ -837,10 +837,11 @@ struct PostProcTemplateVolumeOnRefinedMesh
       ParallelComm *pcomm_post_proc_mesh =
           ParallelComm::get_pcomm(&(T::postProcMesh), MYPCOMM_INDEX);
       if (pcomm_post_proc_mesh == NULL) {
-        T::wrapRefMeshComm =
-            boost::make_shared<WrapMPIComm>(T::mField.get_comm(), false);
+        // T::wrapRefMeshComm =
+            // boost::make_shared<WrapMPIComm>(T::mField.get_comm(), false);
         pcomm_post_proc_mesh = new ParallelComm(
-            &(T::postProcMesh), (T::wrapRefMeshComm)->get_comm());
+            &(T::postProcMesh),
+            PETSC_COMM_WORLD /*(T::wrapRefMeshComm)->get_comm()*/);
       }
 
       Range edges;

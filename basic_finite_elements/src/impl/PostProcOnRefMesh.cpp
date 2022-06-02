@@ -531,9 +531,9 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::postProcess() {
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    // wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
     pcomm_post_proc_mesh =
-        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+        new ParallelComm(&postProcMesh, PETSC_COMM_WORLD/*wrapRefMeshComm->get_comm()*/);
   }
 
   Range prims;
@@ -917,10 +917,10 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
     ParallelComm *pcomm_post_proc_mesh =
         ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
     if (pcomm_post_proc_mesh == NULL) {
-      wrapRefMeshComm =
-          boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-      pcomm_post_proc_mesh =
-          new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+      // wrapRefMeshComm =
+      //     boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+      pcomm_post_proc_mesh = new ParallelComm(
+          &postProcMesh, PETSC_COMM_WORLD /* wrapRefMeshComm->get_comm()*/);
     }
 
     Range faces;
@@ -1168,9 +1168,10 @@ MoFEMErrorCode PostProcEdgeOnRefinedMesh::postProcess() {
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-    pcomm_post_proc_mesh =
-        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+    // wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    // pcomm_post_proc_mesh =
+    new ParallelComm(&postProcMesh,
+                     PETSC_COMM_WORLD /*wrapRefMeshComm->get_comm()*/);
   }
 
   Range edges;
