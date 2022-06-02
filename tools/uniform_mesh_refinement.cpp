@@ -137,18 +137,28 @@ int main(int argc, char *argv[]) {
             moab::Interface::UNION);
 
         for (auto m : tagged_sets) {
-          for (auto t = CN::TypeDimensionMap[dim].first;
-               t != CN::TypeDimensionMap[dim].second; t++) {
 
-            // Refinemnt is only implemented for simplexes in 2d and 3d
+          int part;
+          CHKERR moab.tag_get_data(part_tag, &m, 1, &part);
+
+          for (auto t = CN::TypeDimensionMap[dim].first;
+               t <= CN::TypeDimensionMap[dim].second; t++) {
+
+            // Refinement is only implemented for simplexes in 2d and 3d
             if (t == MBTRI || t == MBTET) {
-              CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
-                  m, bit(l + 1), m, MBMAXTYPE, true);
               Range ents;
-              CHKERR moab.get_entities_by_dimension(m, t, ents, true);
-              int part;
-              CHKERR moab.tag_get_data(part_tag, &m, 1, &part);
-              CHKERR moab.tag_clear_data(part_tag, ents, &part);
+              CHKERR moab.get_entities_by_type(m, t, ents, true);
+              CHKERR bit_ref_manager->filterEntitiesByRefLevel(
+                  bit(l), BitRefLevel().set(), ents);
+
+              Range children;
+              CHKERR bit_ref_manager->updateRangeByChildren(ents, children);
+              CHKERR bit_ref_manager->filterEntitiesByRefLevel(
+                  bit(l + 1), BitRefLevel().set(), children);
+              children = children.subset_by_type(t);
+
+              CHKERR moab.add_entities(m, children);
+              CHKERR moab.tag_clear_data(part_tag, children, &part);
             }
           }
         }

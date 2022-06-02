@@ -103,8 +103,8 @@ private:
   boost::shared_ptr<MatrixDouble> uPtr;
 };
 
-struct OpNormalForcebRhs : public AssemblyBoundaryEleOp {
-  OpNormalForcebRhs(const std::string field_name,
+struct OpNormalForceRhs : public AssemblyBoundaryEleOp {
+  OpNormalForceRhs(const std::string field_name,
                     boost::shared_ptr<VectorDouble> lambda_ptr)
       : AssemblyBoundaryEleOp(field_name, field_name,
                               AssemblyDomainEleOp::OPROW),

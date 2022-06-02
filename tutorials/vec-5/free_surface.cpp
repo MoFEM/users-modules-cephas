@@ -105,10 +105,10 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // mesh refinement
-static constexpr int max_nb_levels = 1;
+static constexpr int max_nb_levels = 2;
 static constexpr int bit_shift = 10;
 
-constexpr int order = 2; ///< approximation order
+constexpr int order = 3; ///< approximation order
 
 // Physical parameters
 constexpr double a0 = 0.98;
@@ -127,7 +127,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.1 / powof2<max_nb_levels>(); // mesh size
+constexpr double h = 0.05 / powof2<max_nb_levels>(); // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -284,8 +284,9 @@ set_parent_dofs(MoFEM::Interface &m_field, boost::shared_ptr<ELE> &fe_top,
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
   auto det_ptr = boost::make_shared<VectorDouble>();
 
-  BitRefLevel bit_marker;
-  bit_marker.set();
+  BitRefLevel bit_marker(0);
+  for(auto l = 0; l<=max_nb_levels;++l )
+    bit_marker |= bit(bit_shift + l);
 
   boost::function<void(boost::shared_ptr<ForcesAndSourcesCore>, int)>
       add_parent_level =
@@ -409,6 +410,20 @@ MoFEMErrorCode FreeSurface::readMesh() {
   CHKERR simple->loadFile();
 
   simple->getBitRefLevel() = bit(0);
+
+  bodySkinBit0 = getBitSkin(bit(0), BitRefLevel().set());
+  bodySkinBitAll = bodySkinBit0;
+  for (auto l = 0; l != max_nb_levels; ++l)
+    CHKERR mField.getInterface<BitRefManager>()->updateRangeByChildren(
+        bodySkinBitAll, bodySkinBitAll);
+
+  EntityHandle &boundary_meshset = simple->getBoundaryMeshSet();
+  CHKERR mField.get_moab().create_meshset(MESHSET_SET, boundary_meshset);
+  CHKERR mField.get_moab().add_entities(boundary_meshset, bodySkinBitAll);
+  Range conn;
+  CHKERR mField.get_moab().get_connectivity(
+      bodySkinBitAll.subset_by_dimension(1), conn, true);
+  CHKERR mField.get_moab().add_entities(boundary_meshset, conn);
 
   MoFEMFunctionReturn(0);
 }
@@ -631,12 +646,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     MoFEMFunctionReturn(0);
   };
 
-  bodySkinBit0 = getBitSkin(bit(0), BitRefLevel().set());
-  bodySkinBitAll = bodySkinBit0;
-  for (auto l = 0; l != max_nb_levels; ++l)
-    CHKERR mField.getInterface<BitRefManager>()->updateRangeByChildren(
-        bodySkinBitAll, bodySkinBitAll);
-
   CHKERR solve_init(0);
   CHKERR post_proc(0);
 
@@ -809,7 +818,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(new OpNormalConstrainRhs("L", u_ptr));
     CHKERR set_parent_dofs(mField, fe, BoundaryEleOp::OPROW,
                            ExtractParentType<BoundaryParentEle>(), "U");
-    pipeline.push_back(new OpNormalForcebRhs("U", lambda_ptr));
+    pipeline.push_back(new OpNormalForceRhs("U", lambda_ptr));
   };
 
   auto set_boundary_lhs = [&](auto &pipeline, auto &fe) {
@@ -919,6 +928,10 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
     post_proc_fe->generateReferenceElementMesh();
 
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
     auto u_ptr = boost::make_shared<MatrixDouble>();
     auto grad_u_ptr = boost::make_shared<MatrixDouble>();
     auto h_ptr = boost::make_shared<VectorDouble>();
@@ -931,6 +944,13 @@ MoFEMErrorCode FreeSurface::solveSystem() {
           bit_shift + max_nb_levels);
     };
     post_proc_fe->exeTestHook = exe_test_hook;
+
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateHOJacForFace(jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
 
     CHKERR set_parent_dofs(mField, post_proc_fe, DomainEleOp::OPSPACE,
                            ExtractParentType<DomianParentEle>(), std::string());
@@ -1082,6 +1102,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   CHKERR TSSetUp(ts);
 
   free_surface_ptr = this;
+  // We create vector with AlphaData. AlphaData is storage for previous indexing
+  // of entities.
   dofsIndices = boost::make_shared<std::vector<AlphaData>>();
   auto prb_ptr = getProblemPtr(dm);
   dofsIndices->resize(mField.get_field_ents()->size());
@@ -1097,11 +1119,18 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     auto field_ents_ptr = m_field.get_field_ents();
     auto dofs_ptr = prb_ptr->numeredRowDofsPtr;
 
+    // Here we use functionality which allows to attach week pointer to field
+    // entity. We use property, that nodes are number contiguously on given
+    // entity, so we have to store only first index.
     int ent_idx = 0;
     for (auto &e_ptr : *field_ents_ptr) {
       auto &uid = e_ptr->getLocalUniqueId();
       auto it = dofs_ptr->get<Unique_mi_tag>().find(uid);
       if (it != dofs_ptr->get<Unique_mi_tag>().end()) {
+        if ((*it)->getEntDofIdx()) {
+          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                  "Expected zero dof index on entity");
+        }
         (*dofs_indices)[ent_idx].localPetscIdx = (*it)->getPetscLocalDofIdx();
         e_ptr->getWeakStoragePtr() = boost::shared_ptr<AlphaData>(
             dofs_indices, &((*dofs_indices)[ent_idx]));
@@ -1110,6 +1139,10 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     }
 
     CHKERR free_surface_ptr->makeRefProblem();
+
+    SNES snes;
+    CHKERR TSGetSNES(ts, &snes);
+    CHKERR SNESReset(snes);
 
     TS_Alpha *th = (TS_Alpha *)ts->data;
 
@@ -1122,25 +1155,25 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     Vec vec_sol_prev = th->vec_sol_prev;
     Vec vec_lte_work = th->vec_lte_work;
 
-    Vec T;
-    CHKERR DMCreateGlobalVector_MoFEM(dm, &T);
     Vec nX0;
-    CHKERR VecDuplicate(T, &nX0);
+    CHKERR DMCreateGlobalVector_MoFEM(dm, &nX0);
     Vec nXa;
-    CHKERR VecDuplicate(T, &nXa);
+    CHKERR VecDuplicate(nX0, &nXa);
     Vec nX1;
-    CHKERR VecDuplicate(T, &nX1);
+    CHKERR VecDuplicate(nX0, &nX1);
     Vec nV0;
-    CHKERR VecDuplicate(T, &nV0);
+    CHKERR VecDuplicate(nX0, &nV0);
     Vec nVa;
-    CHKERR VecDuplicate(T, &nVa);
+    CHKERR VecDuplicate(nX0, &nVa);
     Vec nV1;
-    CHKERR VecDuplicate(T, &nV1);
+    CHKERR VecDuplicate(nX0, &nV1);
     Vec n_vec_sol_prev;
-    CHKERR VecDuplicate(T, &n_vec_sol_prev);
+    CHKERR VecDuplicate(nX0, &n_vec_sol_prev);
     Vec n_vec_lte_work;
-    CHKERR VecDuplicate(T, &n_vec_lte_work);
+    CHKERR VecDuplicate(nX0, &n_vec_lte_work);
 
+    // Copy internal vector of Alpha method, to new vector. Using storage
+    // AlphaData.
     auto copy_data = [&](Vec v_old, Vec v_new) {
       MoFEMFunctionBegin;
       if (v_old) {
@@ -1149,13 +1182,16 @@ MoFEMErrorCode FreeSurface::solveSystem() {
         CHKERR VecGetArray(v_new, &a_new);
         CHKERR VecGetArrayRead(v_old, &a_old);
         for (auto &dof : *dofs_ptr) {
-          auto e_ptr = dof->getFieldEntityPtr();
-          if (auto ptr = e_ptr->getWeakStoragePtr().lock()) {
-            if (auto alpha_ptr = boost::dynamic_pointer_cast<AlphaData>(ptr)) {
-              auto ent_idx = dof->getEntDofIdx();
-              auto new_local_idx = dof->getPetscLocalDofIdx();
-              auto old_local_idx = alpha_ptr->localPetscIdx + ent_idx;
-              a_new[new_local_idx] = a_old[old_local_idx];
+          auto new_local_idx = dof->getPetscLocalDofIdx();
+          auto ent_idx = dof->getEntDofIdx();
+          if (new_local_idx < prb_ptr->nbLocDofsRow) {
+            auto e_ptr = dof->getFieldEntityPtr();
+            if (auto ptr = e_ptr->getWeakStoragePtr().lock()) {
+              if (auto alpha_ptr =
+                      boost::dynamic_pointer_cast<AlphaData>(ptr)) {
+                auto old_local_idx = alpha_ptr->localPetscIdx + ent_idx;
+                a_new[new_local_idx] = a_old[old_local_idx];
+              }
             }
           }
         }
@@ -1196,9 +1232,12 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     CHKERR DMCreateGlobalVector(dm, &solution);
     CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
                                    SCATTER_FORWARD);
+    CHKERR VecGhostUpdateBegin(solution, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(solution, INSERT_VALUES, SCATTER_FORWARD);
+
     CHKERR TSSetSolution(ts, solution);
     for(auto f : {"U", "P", "H", "G", "L"}) {
-      m_field.getInterface<FieldBlas>()->setField(0, f);
+      CHKERR m_field.getInterface<FieldBlas>()->setField(0, f);
     }
     CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
                                    SCATTER_REVERSE);
@@ -1247,7 +1286,6 @@ Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
     minus.clear();
     plus.reserve(std::distance(it, hi_it));
     minus.reserve(std::distance(it, hi_it));
-    out_of_scope.reserve(std::distance(it, hi_it));
 
     for (; it != hi_it; ++it) {
       const auto v = (*it)->getFieldData();
@@ -1255,9 +1293,6 @@ Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
         plus.push_back((*it)->getEnt());
       else
         minus.push_back((*it)->getEnt());
-
-      if (std::abs(v) > 1.05)
-        out_of_scope.push_back((*it)->getEnt());
     }
 
     plus_range.insert_list(plus.begin(), plus.end());
@@ -1278,6 +1313,9 @@ Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
     return adj;
   };
 
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(plus_range);
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(minus_range);
+
   auto ele_plus = get_elems(plus_range);
   auto ele_minus = get_elems(minus_range);
   auto common = intersect(ele_plus, ele_minus);
@@ -1290,12 +1328,11 @@ Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
       "can not get vertices on bit 0");
   all = subtract(all, ele_plus);
   all = subtract(all, ele_minus);
-  Range out_of_scope_range;
-  out_of_scope_range.insert_list(out_of_scope.begin(), out_of_scope.end());
-  all.merge(out_of_scope_range);
 
   Range conn;
   CHK_MOAB_THROW(moab.get_connectivity(all, conn, true), "");
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(conn);
+
   all = get_elems(conn);
 
   return all;
@@ -1326,11 +1363,24 @@ Range FreeSurface::findEntitiesOnNextLevel(const Range &ents) {
       ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   Range level_skin;
   CHK_MOAB_THROW(skin.find_skin(0, ents, false, level_skin), "can't get skin");
-  CHK_MOAB_THROW(pcomm->filter_pstatus(level_skin,
-                                       PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                                       PSTATUS_NOT, -1, nullptr),
-                 "can't filter");
   level_skin = subtract(level_skin, bodySkinBitAll);
+  Range level_skin_owned;
+  CHKERR pcomm->filter_pstatus(level_skin, PSTATUS_NOT_OWNED, PSTATUS_NOT, -1,
+                               &level_skin_owned);
+  Range level_skin_not_owned;
+  CHKERR pcomm->filter_pstatus(level_skin, PSTATUS_NOT_OWNED, PSTATUS_AND, -1,
+                               &level_skin_not_owned);
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+      level_skin_owned);
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+      level_skin_not_owned);
+  auto level_skin_sync = intersect(level_skin_owned, level_skin_not_owned);
+  CHK_MOAB_THROW(pcomm->filter_pstatus(level_skin_sync,
+                                       PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                       PSTATUS_OR, -1, nullptr),
+                 "can't filter");
+  level_skin = subtract(level_skin, level_skin_sync);
+
   CHK_MOAB_THROW(moab.get_connectivity(level_skin, level_skin),
                  "can't get connectivity of from skin edges");
   Range adj;
@@ -1343,29 +1393,8 @@ Range FreeSurface::findEntitiesOnNextLevel(const Range &ents) {
 
 MoFEMErrorCode FreeSurface::setBitLevels() {
   auto &moab = mField.get_moab();
-  MoFEMFunctionBegin;
-
-  auto update_and_filter = [&](auto ents, auto bit, auto mask) {
-    CHKERR mField.getInterface<BitRefManager>()->updateRangeByChildren(ents,
-                                                                       ents);
-    CHKERR mField.getInterface<BitRefManager>()->filterEntitiesByRefLevel(
-        bit, mask, ents);
-    return ents.subset_by_dimension(2);
-  };
-
   std::vector<Range> levels;
-
-  levels.push_back(findEntitiesCrossedByPhaseInterface());
-  levels.back() = update_and_filter(levels.back(), bit(1), BitRefLevel().set());
-  CHKERR save_range(moab, "1_level.vtk", levels.back());
-
-  for (auto l = 2; l <= max_nb_levels; ++l) {
-    levels.push_back(findEntitiesOnNextLevel(levels.back()));
-    levels.back() =
-        update_and_filter(levels.back(), bit(l), BitRefLevel().set());
-    CHKERR save_range(moab, boost::lexical_cast<std::string>(l) + "_level.vtk",
-                      levels.back());
-  }
+  MoFEMFunctionBegin;
 
   auto reset_bits = [&]() {
     MoFEMFunctionBegin;
@@ -1380,6 +1409,14 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
     MoFEMFunctionReturn(0);
   };
 
+  auto update_and_filter = [&](auto ents, auto bit, auto mask) {
+    CHKERR mField.getInterface<BitRefManager>()->updateRangeByChildren(ents,
+                                                                       ents);
+    CHKERR mField.getInterface<BitRefManager>()->filterEntitiesByRefLevel(
+        bit, mask, ents);
+    return ents.subset_by_dimension(2);
+  };
+
   auto mark_skins = [&](auto &&ents, auto m) {
     auto &moab = mField.get_moab();
     moab::Skinner skin(&moab);
@@ -1388,12 +1425,32 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
     MoFEMFunctionBegin;
     Range level_skin;
     CHKERR skin.find_skin(0, ents, false, level_skin);
-    CHKERR pcomm->filter_pstatus(level_skin,
-                                 PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                                 PSTATUS_NOT, -1, nullptr);
+    // CHKERR pcomm->filter_pstatus(level_skin,
+    //                              PSTATUS_SHARED | PSTATUS_MULTISHARED,
+    //                              PSTATUS_NOT, -1, nullptr);
+
+    Range level_skin_owned;
+    CHKERR pcomm->filter_pstatus(level_skin, PSTATUS_NOT_OWNED, PSTATUS_NOT, -1,
+                                 &level_skin_owned);
+    Range level_skin_not_owned;
+    CHKERR pcomm->filter_pstatus(level_skin, PSTATUS_NOT_OWNED, PSTATUS_AND, -1,
+                                 &level_skin_not_owned);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+        level_skin_owned);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+        level_skin_not_owned);
+    auto level_skin_sync = intersect(level_skin_owned, level_skin_not_owned);
+    CHK_MOAB_THROW(pcomm->filter_pstatus(level_skin_sync,
+                                         PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                         PSTATUS_OR, -1, nullptr),
+                   "can't filter");
+    level_skin = subtract(level_skin, level_skin_sync);
+
     level_skin = subtract(level_skin, bodySkinBitAll);
     CHKERR mField.get_moab().get_adjacencies(level_skin, 0, false, level_skin,
                                              moab::Interface::UNION);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+        level_skin);
     CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(level_skin,
                                                                 marker(m));
     MoFEMFunctionReturn(0);
@@ -1426,6 +1483,7 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
       l_mesh.merge(conn);
       l_mesh.merge(edges);
 
+      CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(l_mesh);
       CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(
           l_mesh, bit(bit_shift + l));
 
@@ -1435,6 +1493,22 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
   };
 
   CHKERR reset_bits();
+
+  levels.push_back(findEntitiesCrossedByPhaseInterface());
+  levels.back() = update_and_filter(levels.back(), bit(1), BitRefLevel().set());
+#ifndef NDEBUG
+  CHKERR save_range(moab, "1_level.vtk", levels.back());
+#endif
+
+  for (auto l = 2; l <= max_nb_levels; ++l) {
+    levels.push_back(findEntitiesOnNextLevel(levels.back()));
+    levels.back() =
+        update_and_filter(levels.back(), bit(l), BitRefLevel().set());
+#ifndef NDEBUG
+    CHKERR save_range(moab, boost::lexical_cast<std::string>(l) + "_level.vtk",
+                      levels.back());
+#endif
+  }
 
   {
     Range zero_mesh;
@@ -1449,26 +1523,36 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
                                              moab::Interface::UNION);
     zero_mesh.merge(conn);
     zero_mesh.merge(edges);
+
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(zero_mesh);
     CHKERR mField.getInterface<BitRefManager>()->addBitRefLevel(zero_mesh,
                                                                 bit(bit_shift));
   }
 
   CHKERR set_bits();
 
+#ifndef NDEBUG
   for (auto l = 1; l <= max_nb_levels; ++l) {
     CHKERR mField.getInterface<BitRefManager>()->writeBitLevelByDim(
         bit(bit_shift + l), BitRefLevel().set(), SPACE_DIM,
-        (boost::lexical_cast<std::string>(l) + "_level_mesh.vtk").c_str(),
+        (boost::lexical_cast<std::string>(l) + "_level_mesh" +
+         boost::lexical_cast<std::string>(mField.get_comm_rank()) + ".vtk")
+            .c_str(),
         "VTK", "");
     CHKERR mField.getInterface<BitRefManager>()->writeBitLevelByDim(
         BitRefLevel().set(), bit(bit_shift + l).flip(), 0,
-        (boost::lexical_cast<std::string>(l) + "_level_remove.vtk").c_str(),
+        (boost::lexical_cast<std::string>(l) + "_level_remove" +
+         boost::lexical_cast<std::string>(mField.get_comm_rank()) + ".vtk")
+            .c_str(),
         "VTK", "");
     CHKERR mField.getInterface<BitRefManager>()->writeBitLevelByDim(
         marker(l), bit(bit_shift + l - 1).flip(), 0,
-        (boost::lexical_cast<std::string>(l) + "_level_marker.vtk").c_str(),
+        (boost::lexical_cast<std::string>(l) + "_level_marker" +
+         boost::lexical_cast<std::string>(mField.get_comm_rank()) + ".vtk")
+            .c_str(),
         "VTK", "");
   }
+#endif
 
   MoFEMFunctionReturn(0);
 }
@@ -1491,7 +1575,17 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
   simple->getBitRefLevel() = bit_level;
   simple->getBitRefLevelMask() = BitRefLevel().set();
 
-  simple->reSetUp(true);
+  // auto ref_fe_ptr = mField.get_ref_finite_elements();
+  // const_cast<RefElement_multiIndex *>(ref_fe_ptr)->clear();
+  // auto fe_ptr = mField.get_finite_elements();
+  // const_cast<FiniteElement_multiIndex *>(fe_ptr)->clear();
+  // auto fe_adj_ptr = mField.get_ents_elements_adjacency();
+  // const_cast<FieldEntityEntFiniteElementAdjacencyMap_multiIndex *>(fe_adj_ptr)
+  //     ->clear();
+
+  // mField.getInterface<ProblemsManager>()->synchroniseProblemEntities =
+  //     PETSC_TRUE;
+  simple->reSetUp(false);
 
   auto get_ents_bit_ref = [&](auto bit, auto mask) {
     Range ents;
