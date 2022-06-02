@@ -1427,9 +1427,6 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
     MoFEMFunctionBegin;
     Range level_skin;
     CHKERR skin.find_skin(0, ents, false, level_skin);
-    // CHKERR pcomm->filter_pstatus(level_skin,
-    //                              PSTATUS_SHARED | PSTATUS_MULTISHARED,
-    //                              PSTATUS_NOT, -1, nullptr);
 
     Range level_skin_owned;
     CHKERR pcomm->filter_pstatus(level_skin, PSTATUS_NOT_OWNED, PSTATUS_NOT, -1,
@@ -1577,16 +1574,6 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
   simple->getBitRefLevel() = bit_level;
   simple->getBitRefLevelMask() = BitRefLevel().set();
 
-  // auto ref_fe_ptr = mField.get_ref_finite_elements();
-  // const_cast<RefElement_multiIndex *>(ref_fe_ptr)->clear();
-  // auto fe_ptr = mField.get_finite_elements();
-  // const_cast<FiniteElement_multiIndex *>(fe_ptr)->clear();
-  // auto fe_adj_ptr = mField.get_ents_elements_adjacency();
-  // const_cast<FieldEntityEntFiniteElementAdjacencyMap_multiIndex *>(fe_adj_ptr)
-  //     ->clear();
-
-  // mField.getInterface<ProblemsManager>()->synchroniseProblemEntities =
-  //     PETSC_TRUE;
   simple->reSetUp(true);
 
   auto get_ents_bit_ref = [&](auto bit, auto mask) {
