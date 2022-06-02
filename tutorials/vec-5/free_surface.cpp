@@ -1332,7 +1332,9 @@ Range FreeSurface::findEntitiesCrossedByPhaseInterface() {
   Range conn;
   CHK_MOAB_THROW(moab.get_connectivity(all, conn, true), "");
   CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(conn);
-
+  all = get_elems(conn);
+  CHK_MOAB_THROW(moab.get_connectivity(all, conn, true), "");
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(conn);
   all = get_elems(conn);
 
   return all;
