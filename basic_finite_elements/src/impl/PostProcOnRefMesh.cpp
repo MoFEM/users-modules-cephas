@@ -1169,9 +1169,8 @@ MoFEMErrorCode PostProcEdgeOnRefinedMesh::postProcess() {
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
     // wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-    // pcomm_post_proc_mesh =
-    new ParallelComm(&postProcMesh,
-                     PETSC_COMM_WORLD /*wrapRefMeshComm->get_comm()*/);
+    pcomm_post_proc_mesh = new ParallelComm(
+        &postProcMesh, PETSC_COMM_WORLD /*wrapRefMeshComm->get_comm()*/);
   }
 
   Range edges;
