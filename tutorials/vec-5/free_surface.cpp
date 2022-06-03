@@ -422,6 +422,7 @@ MoFEMErrorCode FreeSurface::readMesh() {
           bodySkinBitAll, bodySkinBitAll);
 
     EntityHandle &boundary_meshset = simple->getBoundaryMeshSet();
+    CHKERR mField.get_moab().clear_meshset(&boundary_meshset, 1);
     CHKERR mField.get_moab().add_entities(boundary_meshset, bodySkinBitAll);
     Range conn;
     CHKERR mField.get_moab().get_connectivity(
