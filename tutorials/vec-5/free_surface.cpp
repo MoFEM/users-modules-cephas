@@ -1659,7 +1659,10 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
   }
 
   Range hi_ents = get_ents_bit_ref(BitRefLevel().set(), bit(bit_shift).flip());
-  hi_ents = subtract(hi_ents, hi_ents.subset_by_dimension(0));
+  hi_ents = subtract(hi_ents, hi_ents.subset_by_type(MBVERTEX));
+
+  // if(mField.get_comm_rank()==0)
+  //   CHKERR save_range(mField.get_moab(), "hi_ents.vtk", hi_ents);
 
   for (auto field : {"U", "P", "H", "G", "L"}) {
     CHKERR
@@ -1667,11 +1670,16 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
         simple->getProblemName(), field, hi_ents, 0, MAX_DOFS_ON_ENTITY);
   }
 
-  BitRefLevel p_bit(0);
-  for(auto l = 0; l!=max_nb_levels; ++l)
-    p_bit |= bit(bit_shift + l);
+  BitRefLevel p_ent_mask(0);
+  for (auto l = 0; l != max_nb_levels; ++l) {
+    p_ent_mask |= bit(l);
+  }
+  Range p_ents =
+      get_ents_bit_ref(bit(bit_shift + max_nb_levels), p_ent_mask.flip());
+  // if(mField.get_comm_rank()==0)
+  //   CHKERR save_range(mField.get_moab(), "p_ents.vtk",
+  //                     p_ents.subset_by_type(MBVERTEX));
 
-  Range p_ents = get_ents_bit_ref(BitRefLevel().set(), p_bit.flip());
   for (auto field : {"P"}) {
     CHKERR
     mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
