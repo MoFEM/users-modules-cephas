@@ -413,19 +413,24 @@ MoFEMErrorCode FreeSurface::readMesh() {
 
   simple->getBitRefLevel() = bit(0);
 
-  bodySkinBit0 = getBitSkin(bit(0), BitRefLevel().set());
-  bodySkinBitAll = bodySkinBit0;
-  for (auto l = 0; l != max_nb_levels; ++l)
-    CHKERR mField.getInterface<BitRefManager>()->updateRangeByChildren(
-        bodySkinBitAll, bodySkinBitAll);
+  auto add_boundary_entities = [&]() {
+    MoFEMFunctionBegin;
+    bodySkinBit0 = getBitSkin(bit(0), BitRefLevel().set());
+    bodySkinBitAll = bodySkinBit0;
+    for (auto l = 0; l != max_nb_levels; ++l)
+      CHKERR mField.getInterface<BitRefManager>()->updateRangeByChildren(
+          bodySkinBitAll, bodySkinBitAll);
 
-  EntityHandle &boundary_meshset = simple->getBoundaryMeshSet();
-  CHKERR mField.get_moab().create_meshset(MESHSET_SET, boundary_meshset);
-  CHKERR mField.get_moab().add_entities(boundary_meshset, bodySkinBitAll);
-  Range conn;
-  CHKERR mField.get_moab().get_connectivity(
-      bodySkinBitAll.subset_by_dimension(1), conn, true);
-  CHKERR mField.get_moab().add_entities(boundary_meshset, conn);
+    EntityHandle &boundary_meshset = simple->getBoundaryMeshSet();
+    CHKERR mField.get_moab().add_entities(boundary_meshset, bodySkinBitAll);
+    Range conn;
+    CHKERR mField.get_moab().get_connectivity(
+        bodySkinBitAll.subset_by_dimension(1), conn, true);
+    CHKERR mField.get_moab().add_entities(boundary_meshset, conn);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR add_boundary_entities();
 
   MoFEMFunctionReturn(0);
 }
@@ -1627,6 +1632,7 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
 
   // mField.getInterface<ProblemsManager>()->synchroniseProblemEntities =
   //     PETSC_TRUE;
+  simple->buildFiniteElements();
   simple->reSetUp(true);
 
   auto get_ents_bit_ref = [&](auto bit, auto mask) {
