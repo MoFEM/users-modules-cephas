@@ -63,6 +63,7 @@ template <> struct ElementsAndOps<2> {
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using BoundaryParentEle = EdgeElementForcesAndSourcesCoreOnChildParent;
   using PostProcEle = PostProcFaceOnRefinedMesh;
+  using PostProcEdgeEle = PostProcEdgeOnRefinedMesh;
 };
 
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -75,6 +76,8 @@ using BoundaryParentEle = ElementsAndOps<SPACE_DIM>::BoundaryParentEle;
 using EntData = EntitiesFieldData::EntData;
 
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+using PostProcEdgeEle = ElementsAndOps<SPACE_DIM>::PostProcEdgeEle;
+
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
 using AssemblyBoundaryEleOp =
@@ -108,7 +111,12 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 static constexpr int max_nb_levels = 2;
 static constexpr int bit_shift = 10;
 
-constexpr int order = 3; ///< approximation order
+auto exe_test_hook = [](FEMethod *fe_ptr) {
+  return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
+      bit_shift + max_nb_levels);
+};
+
+constexpr int order = 4; ///< approximation order
 
 // Physical parameters
 constexpr double a0 = 0.98;
@@ -143,9 +151,7 @@ constexpr double mu_diff = (mu_p - mu_m) / 2;
 
 const double kappa = (3. / (4. * std::sqrt(2. * W))) * (lambda / eta);
 
-auto integration_rule = [](int, int, int approx_order) {
-  return 2 * approx_order;
-};
+auto integration_rule = [](int, int, int) { return 2 * order; };
 
 auto cylindrical = [](const double r) {
   // When we move to C++17 add if constexpr()
@@ -207,8 +213,8 @@ auto get_M3_dh = [](auto h_tmp) {
     return md * (-6 * h * (h + 1)) * d_cut_off(h_tmp);
 };
 
-auto get_M = [](auto h) { return get_M0(h); };
-auto get_M_dh = [](auto h) { return get_M0_dh(h); };
+auto get_M = [](auto h) { return get_M3(h); };
+auto get_M_dh = [](auto h) { return get_M3_dh(h); };
 
 auto get_D = [](const double A) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
@@ -432,6 +438,18 @@ MoFEMErrorCode FreeSurface::readMesh() {
   };
 
   CHKERR add_boundary_entities();
+
+#ifndef NDEBUG
+  Range bdy_ents;
+  CHKERR mField.get_moab().get_entities_by_handle(simple->getBoundaryMeshSet(),
+                                                  bdy_ents);
+  CHKERR mField.getInterface<BitRefManager>()->filterEntitiesByRefLevel(
+      bit(max_nb_levels), BitRefLevel().set(), bdy_ents);
+  CHKERR save_range(mField.get_moab(),
+                    boost::lexical_cast<std::string>(mField.get_comm_rank()) +
+                        "_bdy_ents.vtk",
+                    bdy_ents);
+#endif
 
   MoFEMFunctionReturn(0);
 }
@@ -844,10 +862,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
 
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
-  auto exe_test_hook = [&](FEMethod *fe_ptr) {
-    return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
-        bit_shift + max_nb_levels);
-  };
+
   pipeline_mng->getDomainRhsFE()->exeTestHook = exe_test_hook;
   pipeline_mng->getDomainLhsFE()->exeTestHook = exe_test_hook;
 
@@ -882,9 +897,11 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
 struct Monitor : public FEMethod {
   Monitor(
       SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc,
+      boost::shared_ptr<PostProcEdgeEle> post_proc_edge,
       std::pair<boost::shared_ptr<BoundaryEle>, boost::shared_ptr<VectorDouble>>
           p)
-      : dM(dm), postProc(post_proc), liftFE(p.first), liftVec(p.second) {}
+      : dM(dm), postProc(post_proc), postProcEdge(post_proc_edge),
+        liftFE(p.first), liftVec(p.second) {}
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
     constexpr int save_every_nth_step = 1;
@@ -893,6 +910,11 @@ struct Monitor : public FEMethod {
                                       this->getCacheWeakPtr());
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+
+      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcEdge,
+                                      this->getCacheWeakPtr());
+      CHKERR postProcEdge->writeFile(
+          "out_step_bdy_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
 
       // MOFEM_LOG("FS", Sev::verbose)
       //     << "writing vector in binary to vector.dat ...";
@@ -918,6 +940,7 @@ struct Monitor : public FEMethod {
 private:
   SmartPetscObj<DM> dM;
   boost::shared_ptr<PostProcEle> postProc;
+  boost::shared_ptr<PostProcEdgeEle> postProcEdge;
   boost::shared_ptr<BoundaryEle> liftFE;
   boost::shared_ptr<VectorDouble> liftVec;
 };
@@ -947,10 +970,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     auto p_ptr = boost::make_shared<VectorDouble>();
     auto g_ptr = boost::make_shared<VectorDouble>();
 
-    auto exe_test_hook = [&](FEMethod *fe_ptr) {
-      return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
-          bit_shift + max_nb_levels);
-    };
     post_proc_fe->exeTestHook = exe_test_hook;
 
     post_proc_fe->getOpPtrVector().push_back(
@@ -1007,6 +1026,52 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     return post_proc_fe;
   };
 
+  auto get_bdy_post_proc_fe = [&]() {
+    auto post_proc_fe = boost::make_shared<PostProcEdgeEle>(mField);
+    post_proc_fe->generateReferenceElementMesh();
+
+    post_proc_fe->exeTestHook = exe_test_hook;
+
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    auto p_ptr = boost::make_shared<VectorDouble>();
+    auto lambda_ptr = boost::make_shared<VectorDouble>();
+
+    CHKERR set_parent_dofs(mField, post_proc_fe, BoundaryEleOp::OPSPACE,
+                           ExtractParentType<BoundaryParentEle>(),
+                           std::string());
+
+    CHKERR set_parent_dofs(mField, post_proc_fe, BoundaryEleOp::OPROW,
+                           ExtractParentType<BoundaryParentEle>(), "U");
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
+    CHKERR set_parent_dofs(mField, post_proc_fe, BoundaryEleOp::OPROW,
+                           ExtractParentType<BoundaryParentEle>(), "L");
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("L", lambda_ptr));
+    CHKERR set_parent_dofs(mField, post_proc_fe, BoundaryEleOp::OPROW,
+                           ExtractParentType<BoundaryParentEle>(), "P");
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("P", p_ptr));
+
+    post_proc_fe->getOpPtrVector().push_back(
+
+        new OpPostProcMap<2, 2>(
+            post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+
+            OpPostProcMap<2, 2>::DataMapVec{{"L", lambda_ptr}, {"P", p_ptr}},
+
+            OpPostProcMap<2, 2>::DataMapMat{{"U", u_ptr}},
+
+            OpPostProcMap<2, 2>::DataMapMat()
+
+                )
+
+    );
+
+    return post_proc_fe;
+ 
+  };
+
   auto get_lift_fe = [&]() {
     auto fe = boost::make_shared<BoundaryEle>(mField);
     auto lift_ptr = boost::make_shared<VectorDouble>();
@@ -1025,12 +1090,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     }
 
     MOFEM_LOG("FS", Sev::noisy) << "Lift ents " << (*ents_ptr);
-
-    auto exe_test_hook = [&](FEMethod *fe_ptr) {
-      return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
-          bit_shift + max_nb_levels);
-    };
-    fe->exeTestHook = exe_test_hook;
 
     CHKERR set_parent_dofs(mField, fe, DomainEleOp::OPSPACE,
                            ExtractParentType<BoundaryParentEle>(),
@@ -1061,8 +1120,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto set_post_proc_monitor = [&](auto dm) {
     MoFEMFunctionBegin;
     boost::shared_ptr<FEMethod> null_fe;
-    auto monitor_ptr =
-        boost::make_shared<Monitor>(dm, get_fe_post_proc(), get_lift_fe());
+    auto monitor_ptr = boost::make_shared<Monitor>(
+        dm, get_fe_post_proc(), get_bdy_post_proc_fe(), get_lift_fe());
     CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                                null_fe, monitor_ptr);
     MoFEMFunctionReturn(0);
