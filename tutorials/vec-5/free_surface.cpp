@@ -108,7 +108,7 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 static constexpr int max_nb_levels = 2;
 static constexpr int bit_shift = 10;
 
-constexpr int order = 3; ///< approximation order
+constexpr int order = 1; ///< approximation order
 
 // Physical parameters
 constexpr double a0 = 0.98;
@@ -127,7 +127,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.05 / powof2<max_nb_levels>(); // mesh size
+constexpr double h = 0.025 / powof2<max_nb_levels>(); // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -280,6 +280,8 @@ set_parent_dofs(MoFEM::Interface &m_field, boost::shared_ptr<ELE> &fe_top,
                 ExtractParentType<PARENT>, std::string field_name = string()) {
   MoFEMFunctionBegin;
 
+  using OpType = ForcesAndSourcesCore::UserDataOperator::OpType;
+
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
   auto det_ptr = boost::make_shared<VectorDouble>();
@@ -296,7 +298,7 @@ set_parent_dofs(MoFEM::Interface &m_field, boost::shared_ptr<ELE> &fe_top,
               auto fe_ptr_current =
                   boost::shared_ptr<ForcesAndSourcesCore>(new PARENT(m_field));
 
-              if (op == DomainEleOp::OPSPACE) {
+              if (op == OpType::OPSPACE) {
                 if (typeid(PARENT) == typeid(DomianParentEle)) {
                   fe_ptr_current->getOpPtrVector().push_back(
                       new OpCalculateHOJacForFace(jac_ptr));
@@ -312,13 +314,13 @@ set_parent_dofs(MoFEM::Interface &m_field, boost::shared_ptr<ELE> &fe_top,
                       fe_ptr_current),
                   level - 1);
 
-              if (op == DomainEleOp::OPSPACE) {
+              if (op == OpType::OPSPACE) {
 
                 parent_fe_pt->getOpPtrVector().push_back(
 
                     new OpAddParentEntData(
 
-                        H1, DomainEleOp::OPSPACE, fe_ptr_current,
+                        H1, OpType::OPSPACE, fe_ptr_current,
 
                         BitRefLevel().set(), bit(0).flip(),
 
@@ -1061,32 +1063,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   };
   CHKERR set_post_proc_monitor(dm);
 
-  auto set_section_monitor = [&](auto solver) {
-    MoFEMFunctionBegin;
-    SNES snes;
-    CHKERR TSGetSNES(solver, &snes);
-    PetscViewerAndFormat *vf;
-    CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
-                                      PETSC_VIEWER_DEFAULT, &vf);
-    CHKERR SNESMonitorSet(
-        snes,
-        (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal, void *))SNESMonitorFields,
-        vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
-
-    auto section = mField.getInterface<ISManager>()->sectionCreate(
-        simple->getProblemName());
-    PetscInt num_fields;
-    CHKERR PetscSectionGetNumFields(section, &num_fields);
-    for (int f = 0; f < num_fields; ++f) {
-      const char *field_name;
-      CHKERR PetscSectionGetFieldName(section, f, &field_name);
-      MOFEM_LOG("FS", Sev::inform)
-          << "Field " << f << " " << std::string(field_name);
-    }
-
-    MoFEMFunctionReturn(0);
-  };
-
   // Add monitor to time solver
   double ftime = 1;
   // CHKERR TSSetMaxTime(ts, ftime);
@@ -1098,7 +1074,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   CHKERR TSSetSolution(ts, T);
   CHKERR TSSetFromOptions(ts);
   CHKERR set_ts(ts);
-  CHKERR set_section_monitor(ts);
   CHKERR TSSetUp(ts);
 
   free_surface_ptr = this;
@@ -1119,135 +1094,204 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     auto field_ents_ptr = m_field.get_field_ents();
     auto dofs_ptr = prb_ptr->numeredRowDofsPtr;
 
-    // Here we use functionality which allows to attach week pointer to field
-    // entity. We use property, that nodes are number contiguously on given
-    // entity, so we have to store only first index.
-    int ent_idx = 0;
-    for (auto &e_ptr : *field_ents_ptr) {
-      auto &uid = e_ptr->getLocalUniqueId();
-      auto it = dofs_ptr->get<Unique_mi_tag>().find(uid);
-      if (it != dofs_ptr->get<Unique_mi_tag>().end()) {
-        if ((*it)->getEntDofIdx()) {
-          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                  "Expected zero dof index on entity");
-        }
-        (*dofs_indices)[ent_idx].localPetscIdx = (*it)->getPetscLocalDofIdx();
-        e_ptr->getWeakStoragePtr() = boost::shared_ptr<AlphaData>(
-            dofs_indices, &((*dofs_indices)[ent_idx]));
-      }
-      ++ent_idx;
-    }
-
-    CHKERR free_surface_ptr->makeRefProblem();
-
-    SNES snes;
-    CHKERR TSGetSNES(ts, &snes);
-    CHKERR SNESReset(snes);
-
-    TS_Alpha *th = (TS_Alpha *)ts->data;
-
-    Vec X0 = th->X0;
-    Vec Xa = th->Xa;
-    Vec X1 = th->X1;
-    Vec V0 = th->V0;
-    Vec Va = th->Va;
-    Vec V1 = th->V1;
-    Vec vec_sol_prev = th->vec_sol_prev;
-    Vec vec_lte_work = th->vec_lte_work;
-
-    Vec nX0;
-    CHKERR DMCreateGlobalVector_MoFEM(dm, &nX0);
-    Vec nXa;
-    CHKERR VecDuplicate(nX0, &nXa);
-    Vec nX1;
-    CHKERR VecDuplicate(nX0, &nX1);
-    Vec nV0;
-    CHKERR VecDuplicate(nX0, &nV0);
-    Vec nVa;
-    CHKERR VecDuplicate(nX0, &nVa);
-    Vec nV1;
-    CHKERR VecDuplicate(nX0, &nV1);
-    Vec n_vec_sol_prev;
-    CHKERR VecDuplicate(nX0, &n_vec_sol_prev);
-    Vec n_vec_lte_work;
-    CHKERR VecDuplicate(nX0, &n_vec_lte_work);
-
-    // Copy internal vector of Alpha method, to new vector. Using storage
-    // AlphaData.
-    auto copy_data = [&](Vec v_old, Vec v_new) {
+    auto set_data_on_entity_with_current_indices = [&]() {
       MoFEMFunctionBegin;
-      if (v_old) {
-        double *a_new;
-        const double *a_old;
-        CHKERR VecGetArray(v_new, &a_new);
-        CHKERR VecGetArrayRead(v_old, &a_old);
-        for (auto &dof : *dofs_ptr) {
-          auto new_local_idx = dof->getPetscLocalDofIdx();
-          auto ent_idx = dof->getEntDofIdx();
-          if (new_local_idx < prb_ptr->nbLocDofsRow) {
-            auto e_ptr = dof->getFieldEntityPtr();
-            if (auto ptr = e_ptr->getWeakStoragePtr().lock()) {
-              if (auto alpha_ptr =
-                      boost::dynamic_pointer_cast<AlphaData>(ptr)) {
-                auto old_local_idx = alpha_ptr->localPetscIdx + ent_idx;
-                a_new[new_local_idx] = a_old[old_local_idx];
-              }
-            }
+      // Here we use functionality which allows to attach week pointer to field
+      // entity. We use property, that nodes are number contiguously on given
+      // entity, so we have to store only first index.
+      int ent_idx = 0;
+      for (auto &e_ptr : *field_ents_ptr) {
+        auto &uid = e_ptr->getLocalUniqueId();
+        auto it = dofs_ptr->get<Unique_mi_tag>().find(uid);
+        if (it != dofs_ptr->get<Unique_mi_tag>().end()) {
+          if ((*it)->getEntDofIdx()) {
+            SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                    "Expected zero dof index on entity");
           }
+          (*dofs_indices)[ent_idx].localPetscIdx = (*it)->getPetscLocalDofIdx();
+          e_ptr->getWeakStoragePtr() = boost::shared_ptr<AlphaData>(
+              dofs_indices, &((*dofs_indices)[ent_idx]));
         }
-        CHKERR VecRestoreArray(v_new, &a_new);
-        CHKERR VecRestoreArrayRead(v_old, &a_old);
+        ++ent_idx;
       }
       MoFEMFunctionReturn(0);
     };
 
-    CHKERR copy_data(X0, nX0);
-    CHKERR copy_data(Xa, nXa);
-    CHKERR copy_data(X1, nX1);
-    CHKERR copy_data(V0, nV0);
-    CHKERR copy_data(Va, nVa);
-    CHKERR copy_data(V1, nV1);
-    CHKERR copy_data(vec_sol_prev, n_vec_sol_prev);
-    CHKERR copy_data(vec_lte_work, n_vec_lte_work);
+    CHKERR set_data_on_entity_with_current_indices();
 
-    CHKERR VecDestroy(&X0);
-    CHKERR VecDestroy(&Xa);
-    CHKERR VecDestroy(&X1);
-    CHKERR VecDestroy(&V0);
-    CHKERR VecDestroy(&Va);
-    CHKERR VecDestroy(&V1);
-    CHKERR VecDestroy(&vec_sol_prev);
-    CHKERR VecDestroy(&vec_lte_work);
+    CHKERR free_surface_ptr->makeRefProblem();
 
-    th->X0 = nX0;
-    th->Xa = nXa;
-    th->X1 = nX1;
-    th->V0 = nV0;
-    th->Va = nV1;
-    th->V1 = nVa;
-    th->vec_sol_prev = n_vec_sol_prev;
-    th->vec_lte_work = n_vec_lte_work;
+    auto reset_snes = [&]() {
+      MoFEMFunctionBegin;
+      SNES snes;
+      CHKERR TSGetSNES(ts, &snes);
+      CHKERR SNESReset(snes);
 
-    Vec solution;
-    CHKERR DMCreateGlobalVector(dm, &solution);
-    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
-                                   SCATTER_FORWARD);
-    CHKERR VecGhostUpdateBegin(solution, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(solution, INSERT_VALUES, SCATTER_FORWARD);
+      auto set_section_monitor = [&](auto snes)  {
+        MoFEMFunctionBegin;
+        PetscViewerAndFormat *vf;
+        CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
+                                          PETSC_VIEWER_DEFAULT, &vf);
+        CHKERR SNESMonitorSet(
+            snes,
+            (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
+                               void *))SNESMonitorFields,
+            vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
 
-    CHKERR TSSetSolution(ts, solution);
-    for(auto f : {"U", "P", "H", "G", "L"}) {
-      CHKERR m_field.getInterface<FieldBlas>()->setField(0, f);
-    }
-    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
-                                   SCATTER_REVERSE);
 
-    CHKERR VecDestroy(&solution);
+        MoFEMFunctionReturn(0);
+      };
+
+      CHKERR set_section_monitor(snes);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto set_dm_section = [&](auto dm) {
+      MoFEMFunctionBegin;
+      auto section =
+          m_field.getInterface<ISManager>()->sectionCreate(prb_ptr->getName());
+      CHKERR DMSetSection(dm, section);
+      MoFEMFunctionReturn(0);
+    };
+
+    auto update_private_alpha_method_data = [&]() {
+      MoFEMFunctionBegin;
+
+      TS_Alpha *th = (TS_Alpha *)ts->data;
+
+      Vec X0 = th->X0;
+      Vec Xa = th->Xa;
+      Vec X1 = th->X1;
+      Vec V0 = th->V0;
+      Vec Va = th->Va;
+      Vec V1 = th->V1;
+      Vec vec_sol_prev = th->vec_sol_prev;
+      Vec vec_lte_work = th->vec_lte_work;
+
+      Vec nX0;
+      CHKERR DMCreateGlobalVector_MoFEM(dm, &nX0);
+      Vec nXa;
+      CHKERR VecDuplicate(nX0, &nXa);
+      Vec nX1;
+      CHKERR VecDuplicate(nX0, &nX1);
+      Vec nV0;
+      CHKERR VecDuplicate(nX0, &nV0);
+      Vec nVa;
+      CHKERR VecDuplicate(nX0, &nVa);
+      Vec nV1;
+      CHKERR VecDuplicate(nX0, &nV1);
+      Vec n_vec_sol_prev;
+      CHKERR VecDuplicate(nX0, &n_vec_sol_prev);
+      Vec n_vec_lte_work;
+      CHKERR VecDuplicate(nX0, &n_vec_lte_work);
+
+      // Copy internal vector of Alpha method, to new vector. Using storage
+      // AlphaData.
+      auto copy_data = [&](Vec v_old, Vec v_new) {
+        MoFEMFunctionBegin;
+        if (v_old) {
+          double *a_new;
+          const double *a_old;
+          CHKERR VecGetArray(v_new, &a_new);
+          CHKERR VecGetArrayRead(v_old, &a_old);
+          for (auto &dof : *dofs_ptr) {
+            auto new_local_idx = dof->getPetscLocalDofIdx();
+            auto ent_idx = dof->getEntDofIdx();
+            if (new_local_idx < prb_ptr->nbLocDofsRow) {
+              auto e_ptr = dof->getFieldEntityPtr();
+              if (auto ptr = e_ptr->getWeakStoragePtr().lock()) {
+                if (auto alpha_ptr =
+                        boost::dynamic_pointer_cast<AlphaData>(ptr)) {
+                  auto old_local_idx = alpha_ptr->localPetscIdx + ent_idx;
+                  a_new[new_local_idx] = a_old[old_local_idx];
+                }
+              }
+            }
+          }
+          CHKERR VecRestoreArray(v_new, &a_new);
+          CHKERR VecRestoreArrayRead(v_old, &a_old);
+        }
+        MoFEMFunctionReturn(0);
+      };
+
+      CHKERR copy_data(X0, nX0);
+      CHKERR copy_data(Xa, nXa);
+      CHKERR copy_data(X1, nX1);
+      CHKERR copy_data(V0, nV0);
+      CHKERR copy_data(Va, nVa);
+      CHKERR copy_data(V1, nV1);
+      CHKERR copy_data(vec_sol_prev, n_vec_sol_prev);
+      CHKERR copy_data(vec_lte_work, n_vec_lte_work);
+
+      CHKERR VecDestroy(&X0);
+      CHKERR VecDestroy(&Xa);
+      CHKERR VecDestroy(&X1);
+      CHKERR VecDestroy(&V0);
+      CHKERR VecDestroy(&Va);
+      CHKERR VecDestroy(&V1);
+      CHKERR VecDestroy(&vec_sol_prev);
+      CHKERR VecDestroy(&vec_lte_work);
+
+      th->X0 = nX0;
+      th->Xa = nXa;
+      th->X1 = nX1;
+      th->V0 = nV0;
+      th->Va = nV1;
+      th->V1 = nVa;
+      th->vec_sol_prev = n_vec_sol_prev;
+      th->vec_lte_work = n_vec_lte_work;
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto update_solution = [&]() {
+      MoFEMFunctionBegin;
+      Vec solution;
+      CHKERR DMCreateGlobalVector(dm, &solution);
+      CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
+                                     SCATTER_FORWARD);
+      CHKERR VecGhostUpdateBegin(solution, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(solution, INSERT_VALUES, SCATTER_FORWARD);
+
+      CHKERR TSSetSolution(ts, solution);
+      for (auto f : {"U", "P", "H", "G", "L"}) {
+        CHKERR m_field.getInterface<FieldBlas>()->setField(0, f);
+      }
+      CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
+                                     SCATTER_REVERSE);
+
+      CHKERR VecDestroy(&solution);
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR set_dm_section(dm);
+    CHKERR reset_snes();
+    CHKERR update_private_alpha_method_data();
+    CHKERR update_solution();
 
     MoFEMFunctionReturnHot(0);
   };
 
   CHKERR TSSetPreStep(ts, refine_mesh);
+
+  auto print_fields_in_section = [&]() {
+    MoFEMFunctionBegin;
+
+    auto section = mField.getInterface<ISManager>()->sectionCreate(
+        simple->getProblemName());
+    PetscInt num_fields;
+    CHKERR PetscSectionGetNumFields(section, &num_fields);
+    for (int f = 0; f < num_fields; ++f) {
+      const char *field_name;
+      CHKERR PetscSectionGetFieldName(section, f, &field_name);
+      MOFEM_LOG("FS", Sev::inform)
+          << "Field " << f << " " << std::string(field_name);
+    }
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR print_fields_in_section();
 
   CHKERR TSSolve(ts, NULL);
   CHKERR TSGetTime(ts, &ftime);
@@ -1427,7 +1471,6 @@ MoFEMErrorCode FreeSurface::setBitLevels() {
     MoFEMFunctionBegin;
     Range level_skin;
     CHKERR skin.find_skin(0, ents, false, level_skin);
-
     Range level_skin_owned;
     CHKERR pcomm->filter_pstatus(level_skin, PSTATUS_NOT_OWNED, PSTATUS_NOT, -1,
                                  &level_skin_owned);
@@ -1574,6 +1617,16 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
   simple->getBitRefLevel() = bit_level;
   simple->getBitRefLevelMask() = BitRefLevel().set();
 
+  // auto ref_fe_ptr = mField.get_ref_finite_elements();
+  // const_cast<RefElement_multiIndex *>(ref_fe_ptr)->clear();
+  // auto fe_ptr = mField.get_finite_elements();
+  // const_cast<FiniteElement_multiIndex *>(fe_ptr)->clear();
+  // auto fe_adj_ptr = mField.get_ents_elements_adjacency();
+  // const_cast<FieldEntityEntFiniteElementAdjacencyMap_multiIndex *>(fe_adj_ptr)
+  //     ->clear();
+
+  // mField.getInterface<ProblemsManager>()->synchroniseProblemEntities =
+  //     PETSC_TRUE;
   simple->reSetUp(true);
 
   auto get_ents_bit_ref = [&](auto bit, auto mask) {
