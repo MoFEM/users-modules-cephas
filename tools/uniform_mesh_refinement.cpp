@@ -157,6 +157,14 @@ int main(int argc, char *argv[]) {
                   bit(l + 1), BitRefLevel().set(), children);
               children = subtract(children, children.subset_by_type(MBVERTEX));
 
+              Range adj;
+              for (auto d = 1; d != dim; ++d) {
+                CHKERR moab.get_adjacencies(children.subset_by_dimension(dim),
+                                            d, false, adj,
+                                            moab::Interface::UNION);
+              }
+              children.merge(adj);
+
               CHKERR moab.add_entities(m, children);
               CHKERR moab.tag_clear_data(part_tag, children, &part);
             }
