@@ -108,7 +108,7 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 static constexpr int max_nb_levels = 2;
 static constexpr int bit_shift = 10;
 
-constexpr int order = 1; ///< approximation order
+constexpr int order = 3; ///< approximation order
 
 // Physical parameters
 constexpr double a0 = 0.98;
@@ -1658,42 +1658,57 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
         simple->getProblemName(), field, ents_to_remove);
   }
 
-  // Takes edges or faces, find their children which are also edges or faces,
-  // and remove higher order approximation from those entities. Since
-  // approximation is provided by parents (underlying entities).
-  Range children_edges;
-  for (auto l = 0; l != max_nb_levels; ++l) {
-    auto bit_mng = mField.getInterface<BitRefManager>();
-    Range bit_ents = get_ents_bit_ref(bit(bit_shift + l), BitRefLevel().set());
-    Range bit_children_edges;
-    CHKERR bit_mng->updateRangeByChildren(bit_ents.subset_by_dimension(1),
-                                          bit_children_edges);
-    CHKERR bit_mng->filterEntitiesByRefLevel(
-        bit(bit_shift + l + 1), bit(bit_shift + l).flip(), bit_children_edges);
-    children_edges.merge(bit_children_edges.subset_by_dimension(1));
-    Range bit_children_faces;
-    CHKERR bit_mng->updateRangeByChildren(bit_ents.subset_by_dimension(2),
-                                          bit_children_faces);
-    CHKERR bit_mng->filterEntitiesByRefLevel(
-        bit(bit_shift + l + 1), bit(bit_shift + l).flip(), bit_children_faces);
-    children_edges.merge(bit_children_faces.subset_by_dimension(2));
-  }
+//   // Takes edges or faces, find their children which are also edges or faces,
+//   // and remove higher order approximation from those entities. Since
+//   // approximation is provided by parents (underlying entities).a
+//   auto get_children_edges = [&]() {
+//     Range children_edges;
+//     for (auto l = 0; l != max_nb_levels; ++l) {
+//       auto bit_mng = mField.getInterface<BitRefManager>();
+//       Range bit_ents =
+//           get_ents_bit_ref(bit(bit_shift + l), BitRefLevel().set());
+//       Range bit_children_edges;
+//       CHKERR bit_mng->updateRangeByChildren(bit_ents.subset_by_dimension(1),
+//                                             bit_children_edges);
+//       CHKERR bit_mng->filterEntitiesByRefLevel(bit(bit_shift + l + 1),
+//                                                bit(bit_shift + l).flip(),
+//                                                bit_children_edges);
+//       children_edges.merge(bit_children_edges.subset_by_dimension(1));
+//       Range bit_children_faces;
+//       CHKERR bit_mng->updateRangeByChildren(bit_ents.subset_by_dimension(2),
+//                                             bit_children_faces);
+//       CHKERR bit_mng->filterEntitiesByRefLevel(bit(bit_shift + l + 1),
+//                                                bit(bit_shift + l).flip(),
+//                                                bit_children_faces);
+//       children_edges.merge(bit_children_faces.subset_by_dimension(2));
+//     }
+//     return children_edges;
+//   };
 
-#ifndef NDEBUG
-  CHKERR save_range(mField.get_moab(), "children_edges.vtk", children_edges);
-#endif
+//   auto children_edges = get_children_edges();
 
-  for (auto field : {"U", "H", "G", "L"}) {
+// #ifndef NDEBUG
+//   CHKERR save_range(mField.get_moab(), "children_edges.vtk", children_edges);
+// #endifa
+
+  Range hi_ents = get_ents_bit_ref(BitRefLevel().set(), bit(bit_shift).flip());
+  hi_ents = subtract(hi_ents, hi_ents.subset_by_dimension(0));
+
+  for (auto field : {"U", "P", "H", "G", "L"}) {
     CHKERR
     mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-        simple->getProblemName(), field, children_edges, 0, MAX_DOFS_ON_ENTITY,
-        2, std::max(2, order));
+        simple->getProblemName(), field, hi_ents, 0, MAX_DOFS_ON_ENTITY);
   }
+
+  BitRefLevel p_bit(0);
+  for(auto l = 0; l!=max_nb_levels; ++l)
+    p_bit |= bit(bit_shift + l);
+
+  Range p_ents = get_ents_bit_ref(BitRefLevel().set(), p_bit.flip());
   for (auto field : {"P"}) {
     CHKERR
     mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-        simple->getProblemName(), field, children_edges, 0, MAX_DOFS_ON_ENTITY,
-        1, std::max(1, order - 1));
+        simple->getProblemName(), field, p_ents, 0, MAX_DOFS_ON_ENTITY);
   }
 
   // Enforce boundary conditions by removing DOFs on symmetry axis and fixed
