@@ -1217,6 +1217,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       auto section =
           m_field.getInterface<ISManager>()->sectionCreate(prb_ptr->getName());
       CHKERR DMSetSection(dm, section);
+      CHKERR DMSetSection(dm, section); 
       MoFEMFunctionReturn(0);
     };
 
