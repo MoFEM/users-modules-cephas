@@ -213,8 +213,8 @@ auto get_M3_dh = [](auto h_tmp) {
     return md * (-6 * h * (h + 1)) * d_cut_off(h_tmp);
 };
 
-auto get_M = [](auto h) { return get_M3(h); };
-auto get_M_dh = [](auto h) { return get_M3_dh(h); };
+auto get_M = [](auto h) { return get_M0(h); };
+auto get_M_dh = [](auto h) { return get_M0_dh(h); };
 
 auto get_D = [](const double A) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_D;
