@@ -146,7 +146,7 @@ struct BcEntMethodDisp : public MoFEM::EntityMethod {
       if (bc_it.bc_flags[i]) {
         if (entPtr->getEntType() == MBVERTEX) {
           entPtr->getEntFieldData()[i] = bc_it.scaled_values[i];
-        } else {
+        } else if (!entPtr->getEntFieldData().empty()) {
           entPtr->getEntFieldData()[i] = 0;
         }
       }
@@ -198,7 +198,7 @@ struct BcEntMethodSpatial : public BcEntMethodDisp {
       if (bc_it.bc_flags[i]) {
         if (entPtr->getEntType() == MBVERTEX) {
           entPtr->getEntFieldData()[i] = coords(i) + bc_it.scaled_values[i];
-        } else {
+        } else if (!entPtr->getEntFieldData().empty()) {
           entPtr->getEntFieldData()[i] = 0;
         }
       }
