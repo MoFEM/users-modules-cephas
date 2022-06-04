@@ -1191,6 +1191,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       SNES snes;
       CHKERR TSGetSNES(ts, &snes);
       CHKERR SNESReset(snes);
+      CHKERR SNESMonitorCancel(snes);
 
       auto set_section_monitor = [&](auto snes)  {
         MoFEMFunctionBegin;
@@ -1217,6 +1218,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       auto section =
           m_field.getInterface<ISManager>()->sectionCreate(prb_ptr->getName());
       CHKERR DMSetSection(dm, section);
+      CHKERR DMSetLocalSection(dm, section);
       MoFEMFunctionReturn(0);
     };
 
