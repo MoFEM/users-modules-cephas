@@ -11,7 +11,7 @@
 // We are solving Poisson's equation in 2D so Face element is used
 using FaceEle = MoFEM::FaceElementForcesAndSourcesCore;
 using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 // Namespace that contains necessary UDOs, will be included in the main program
 namespace Poisson2DHomogeneousOperators {

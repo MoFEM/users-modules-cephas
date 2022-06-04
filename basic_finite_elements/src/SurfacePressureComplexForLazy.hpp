@@ -34,7 +34,7 @@ struct NeumannForcesSurfaceComplexForLazy {
     AuxMethodSpatial(const string &field_name, MyTriangleSpatialFE *my_ptr,
                      const char type);
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   struct AuxMethodMaterial
@@ -44,7 +44,7 @@ struct NeumannForcesSurfaceComplexForLazy {
     AuxMethodMaterial(const string &field_name, MyTriangleSpatialFE *my_ptr,
                       const char type);
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   struct MyTriangleSpatialFE : public MoFEM::FaceElementForcesAndSourcesCore {

@@ -141,8 +141,8 @@ struct OpAssembleP
 
   PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
 
     MoFEMFunctionBegin;
     const int row_nb_dofs = row_data.getIndices().size();
@@ -241,8 +241,8 @@ struct OpAssembleG
 
   PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
 
     MoFEMFunctionBegin;
 
@@ -339,8 +339,8 @@ struct OpAssembleK
 
   PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
@@ -462,7 +462,7 @@ struct OpPostProcStress
   }
 
   PetscErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     if (type != MBVERTEX)
       PetscFunctionReturn(9);

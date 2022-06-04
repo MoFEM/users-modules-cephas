@@ -12,10 +12,8 @@ The `*.h5m` meshes in this directory are copied from the directory `../msh-1/`
 and `../msh-2/`
 # Mesh partition
 
-mofem_part -my_file mesh2d.cub -output_file mesh_2parts.h5m -my_nparts 2
+mofem_part -my_file mesh2d.cub -output_file mesh_1parts.h5m -my_nparts 1
 
 *Note:* `mofem_part` is located at `/mofem_install/mofem-cephas/mofem/users_modules/um-build-RelWithDebInfo-abcd1234/tools/`
 # Run the program
-./poisson_2d_dis_galerkin -file_name mesh2d.cub -order 4 -penalty 1e5
-
-mpirun -np 2 ./poisson_2d_dis_galerkin -file_name mesh_2parts.h5m -order 4 -penalty 1e5
+./poisson_2d_dis_galerkin -file_name mesh_1parts.h5m -order 4 -penalty 1e1 -phi -1 -nitsche 0 -log_sl inform

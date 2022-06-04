@@ -268,7 +268,7 @@ struct KelvinVoigtDamper {
      *
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
 
       int nb_dofs = data.getFieldData().size();
@@ -508,7 +508,7 @@ struct KelvinVoigtDamper {
     }
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data) {
+                          EntitiesFieldData::EntData &row_data) {
       MoFEMFunctionBegin;
 
       if (row_type != MBVERTEX)
@@ -539,7 +539,7 @@ struct KelvinVoigtDamper {
 
     VectorDouble nF;
     MoFEMErrorCode aSemble(int row_side, EntityType row_type,
-                           DataForcesAndSourcesCore::EntData &row_data) {
+                           EntitiesFieldData::EntData &row_data) {
       MoFEMFunctionBegin;
       int nb_dofs = row_data.getIndices().size();
       int *indices_ptr = &row_data.getIndices()[0];
@@ -559,7 +559,7 @@ struct KelvinVoigtDamper {
         : AssembleVector(common_data.spatialPositionName),
           commonData(common_data) {}
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data) {
+                          EntitiesFieldData::EntData &row_data) {
       MoFEMFunctionBegin;
 
       if (commonData.skipThis) {
@@ -600,8 +600,8 @@ struct KelvinVoigtDamper {
     MatrixDouble K, transK;
     MoFEMErrorCode aSemble(int row_side, int col_side, EntityType row_type,
                            EntityType col_type,
-                           DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+                           EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
       int nb_row = row_data.getIndices().size();
       int nb_col = col_data.getIndices().size();
@@ -632,7 +632,7 @@ struct KelvinVoigtDamper {
                          common_data.spatialPositionName),
           commonData(common_data) {}
     MatrixDouble dStress_dx;
-    MoFEMErrorCode get_dStress_dx(DataForcesAndSourcesCore::EntData &col_data,
+    MoFEMErrorCode get_dStress_dx(EntitiesFieldData::EntData &col_data,
                                   int gg) {
       MoFEMFunctionBegin;
       int nb_col = col_data.getIndices().size();
@@ -655,8 +655,8 @@ struct KelvinVoigtDamper {
     }
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       if (commonData.skipThis) {
@@ -711,7 +711,7 @@ struct KelvinVoigtDamper {
                          common_data.spatialPositionName),
           commonData(common_data) {}
     MatrixDouble dStress_dot;
-    MoFEMErrorCode get_dStress_dot(DataForcesAndSourcesCore::EntData &col_data,
+    MoFEMErrorCode get_dStress_dot(EntitiesFieldData::EntData &col_data,
                                    int gg) {
       MoFEMFunctionBegin;
       int nb_col = col_data.getIndices().size();
@@ -735,8 +735,8 @@ struct KelvinVoigtDamper {
     }
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       if (commonData.skipThis) {

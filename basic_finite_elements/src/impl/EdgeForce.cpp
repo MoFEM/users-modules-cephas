@@ -31,7 +31,7 @@ EdgeForce::OpEdgeForce::OpEdgeForce(
 
 MoFEMErrorCode
 EdgeForce::OpEdgeForce::doWork(int side, EntityType type,
-                               DataForcesAndSourcesCore::EntData &data) {
+                               EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0) {

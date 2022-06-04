@@ -11,11 +11,9 @@ sys.path.append("/usr/local/lib/python3.8/site-packages/gmsh-4.8.3-Linux64-sdk/l
 ```
 
 ```python
-import os
-os.system('/usr/bin/Xvfb :%d -screen 0 1024x768x24 &' % os.getuid())
-os.environ['DISPLAY'] = ':%d' % os.getuid()
-os.environ['PYVISTA_USE_IPYVTK'] = 'true'
-print(os.environ['DISPLAY'])
+from pyvirtualdisplay import Display
+display = Display(backend="xvfb", visible=False, size=(800, 600))
+display.start()
 ```
 
 ```python
@@ -33,10 +31,13 @@ gmsh.model.add("HoledPlate2D")
 ```
 
 ```python
-# Parameters
-L = 150
-H = 100
-R = 50
+# Geometrical parameters from examples from:
+# Computational Methods For Plasticity: Theory and Application
+# Souza Neto 2009
+
+L = 18
+H = 10
+R = 5
 ```
 
 ```python
@@ -81,7 +82,7 @@ gmsh.model.setPhysicalName(1, 303, 'REACTION')
 
 ```python
 # Mesh 
-mesh_size = 40
+mesh_size =20 # change to improve the mesh of the plate
 gmsh.model.mesh.setSize(
     gmsh.model.getEntitiesInBoundingBox(0, 0, 0, L, H, 0), mesh_size)
 gmsh.model.mesh.setSize(

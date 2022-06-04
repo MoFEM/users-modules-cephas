@@ -104,7 +104,7 @@ ConvectiveMassElement::OpGetDataAtGaussPts::OpGetDataAtGaussPts(
       gradientAtGaussPts(gardient_at_gauss_pts), zeroAtType(MBVERTEX) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpGetDataAtGaussPts::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBeginHot;
 
   int nb_dofs = data.getFieldData().size();
@@ -178,7 +178,7 @@ ConvectiveMassElement::OpMassJacobian::OpMassJacobian(
 
 MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -404,7 +404,7 @@ ConvectiveMassElement::OpMassRhs::OpMassRhs(const std::string field_name,
 
 MoFEMErrorCode ConvectiveMassElement::OpMassRhs::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -465,7 +465,7 @@ ConvectiveMassElement::OpMassLhs_dM_dv::OpMassLhs_dM_dv(
 }
 
 MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dv::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
   int nb_col = col_data.getIndices().size();
   jac.clear();
@@ -535,8 +535,8 @@ MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dv::getJac(
 
 MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dv::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -630,7 +630,7 @@ ConvectiveMassElement::OpMassLhs_dM_dx::OpMassLhs_dM_dx(
     : OpMassLhs_dM_dv(field_name, col_field, data, common_data) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dx::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
@@ -682,7 +682,7 @@ ConvectiveMassElement::OpMassLhs_dM_dX::OpMassLhs_dM_dX(
     : OpMassLhs_dM_dv(field_name, col_field, data, common_data) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dX::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
   int nb_col = col_data.getIndices().size();
   jac.clear();
@@ -750,7 +750,7 @@ ConvectiveMassElement::OpEnergy::OpEnergy(const std::string field_name,
 
 MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (row_type != MBVERTEX) {
@@ -810,7 +810,7 @@ ConvectiveMassElement::OpVelocityJacobian::OpVelocityJacobian(
 
 MoFEMErrorCode ConvectiveMassElement::OpVelocityJacobian::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -1028,7 +1028,7 @@ ConvectiveMassElement::OpVelocityRhs::OpVelocityRhs(
 
 MoFEMErrorCode ConvectiveMassElement::OpVelocityRhs::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -1079,7 +1079,7 @@ ConvectiveMassElement::OpVelocityLhs_dV_dv::OpVelocityLhs_dV_dv(
     : OpMassLhs_dM_dv(vel_field, field_name, data, common_data) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpVelocityLhs_dV_dv::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
   int nb_col = col_data.getIndices().size();
   jac.clear();
@@ -1113,7 +1113,7 @@ ConvectiveMassElement::OpVelocityLhs_dV_dx::OpVelocityLhs_dV_dx(
     : OpVelocityLhs_dV_dv(vel_field, field_name, data, common_data) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpVelocityLhs_dV_dx::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
   int nb_col = col_data.getIndices().size();
   jac.clear();
@@ -1188,7 +1188,7 @@ ConvectiveMassElement::OpVelocityLhs_dV_dX::OpVelocityLhs_dV_dX(
     : OpVelocityLhs_dV_dv(vel_field, field_name, data, common_data) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpVelocityLhs_dV_dX::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
   int nb_col = col_data.getIndices().size();
   jac.clear();
@@ -1260,7 +1260,7 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumJacobian::
 MoFEMErrorCode
 ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumJacobian::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -1483,7 +1483,7 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumRhs::
 MoFEMErrorCode
 ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumRhs::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -1561,7 +1561,7 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumLhs_dv::
 
 MoFEMErrorCode
 ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumLhs_dv::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
   int nb_col = col_data.getIndices().size();
   jac.clear();
@@ -1629,7 +1629,7 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumLhs_dx::
 
 MoFEMErrorCode
 ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumLhs_dx::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
   int nb_col = col_data.getIndices().size();
   jac.clear();
@@ -1686,7 +1686,7 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumLhs_dX::
 
 MoFEMErrorCode
 ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumLhs_dX::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
   int nb_col = col_data.getIndices().size();
   jac.clear();

@@ -473,8 +473,8 @@ struct MagneticElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       if (row_type == MBVERTEX)
@@ -587,8 +587,8 @@ struct MagneticElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       if (row_type == MBVERTEX)
@@ -702,7 +702,7 @@ struct MagneticElement {
      * @return          error code
      */
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data) {
+                          EntitiesFieldData::EntData &row_data) {
       MoFEMFunctionBegin;
 
       if (row_type == MBVERTEX)
@@ -776,7 +776,7 @@ struct MagneticElement {
           mapGaussPts(map_gauss_pts) {}
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data) {
+                          EntitiesFieldData::EntData &row_data) {
       MoFEMFunctionBegin;
 
       if (row_type == MBVERTEX)

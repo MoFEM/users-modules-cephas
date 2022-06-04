@@ -266,7 +266,7 @@ struct PoissonExample::OpK: public VolumeElementForcesAndSourcesCore::UserDataOp
   MoFEMErrorCode doWork(
     int row_side,int col_side,
     EntityType row_type,EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,DataForcesAndSourcesCore::EntData &col_data
+    EntitiesFieldData::EntData &row_data,EntitiesFieldData::EntData &col_data
   );
 
 private:
@@ -288,7 +288,7 @@ private:
    * @return          error code
    */
   inline MoFEMErrorCode iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,DataForcesAndSourcesCore::EntData &col_data
+    EntitiesFieldData::EntData &row_data,EntitiesFieldData::EntData &col_data
   );
 
   /**
@@ -298,7 +298,7 @@ private:
    * @return          error code
    */
   inline MoFEMErrorCode aSsemble(
-    DataForcesAndSourcesCore::EntData &row_data,DataForcesAndSourcesCore::EntData &col_data
+    EntitiesFieldData::EntData &row_data,EntitiesFieldData::EntData &col_data
   );
 
 };
@@ -369,7 +369,7 @@ Now we can dissect overloaded function
 MoFEMErrorCode PoissonExample::OpK::doWork(
   int row_side,int col_side,
   EntityType row_type,EntityType col_type,
-  DataForcesAndSourcesCore::EntData &row_data,DataForcesAndSourcesCore::EntData &col_data
+  EntitiesFieldData::EntData &row_data,EntitiesFieldData::EntData &col_data
 ) {
   MoFEMFunctionBegin;
   // get number of dofs on row
@@ -401,7 +401,7 @@ MoFEMErrorCode PoissonExample::OpK::doWork(
 This is a virtual function from MoFEM::ForcesAndSourcesCore is executed by finite
 element while iterating over lower dimension entities. As an argument passes a
 reference to data structures on rows and columns. Data structure
-MoFEM::DataForcesAndSourcesCore::EntData gives user access DOFs indices and base
+MoFEM::EntitiesFieldData::EntData gives user access DOFs indices and base
 functions. First, we check if we have DOFs on given entity
 \code
 nbRows = row_data.getIndices().size();
@@ -435,7 +435,7 @@ CHKERR aSsemble(row_data,col_data);
 The PoissonExample::OpK::iNtegrate method
 \code
 inline MoFEMErrorCode iNtegrate(
-  DataForcesAndSourcesCore::EntData &row_data,DataForcesAndSourcesCore::EntData &col_data
+  EntitiesFieldData::EntData &row_data,EntitiesFieldData::EntData &col_data
 ) {
   MoFEMFunctionBegin;
   // set size of local entity bock
@@ -490,7 +490,7 @@ where the grad-grad term is added to the local matrix.
 Finally, we assemble local matrix using PoissonExample::OpK::aSsemble
 \code
 inline MoFEMErrorCode PoissonExample::OpK::aSsemble(
-  DataForcesAndSourcesCore::EntData &row_data,DataForcesAndSourcesCore::EntData &col_data
+  EntitiesFieldData::EntData &row_data,EntitiesFieldData::EntData &col_data
 ) {
   MoFEMFunctionBegin;
   // get pointer to first global index on row
@@ -544,7 +544,7 @@ is type OPROW, that means its iterator is over entities
 Another element is an overloaded PoissonExample::OpBaseRhs::doWork function
 \code
 MoFEMErrorCode PoissonExample::OpBaseRhs::doWork(
-  int row_side,EntityType row_type,DataForcesAndSourcesCore::EntData &row_data
+  int row_side,EntityType row_type,EntitiesFieldData::EntData &row_data
 ) {
   MoFEMFunctionBegin;
   // get number of dofs on row
@@ -584,9 +584,9 @@ private:
 
   VectorDouble locVec;
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data);
 
-  MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode aSsemble(EntitiesFieldData::EntData &data);
 
 };
 \endcode
@@ -595,7 +595,7 @@ private:
 The constructor of this operator takes as an argument pointer to function where
 Laplacian is defined. Then the local right-hand side vector is integrated
 \code
-MoFEMErrorCode PoissonExample::OpF::iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode PoissonExample::OpF::iNtegrate(EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
   // set size of local vector
   locVec.resize(nbRows,false);
@@ -630,7 +630,7 @@ MoFEMErrorCode PoissonExample::OpF::iNtegrate(DataForcesAndSourcesCore::EntData 
 \endcode
 and assembled
 \code
-MoFEMErrorCode PoissonExample::OpF::aSsemble(DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode PoissonExample::OpF::aSsemble(EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
   // get global indices of local vector
   const int* indices = &*data.getIndices().data().begin();
@@ -690,7 +690,7 @@ with one element only, i.e. TETRAHEDRA.
 
 To integrate error, we have the following code
 \code
-MoFEMErrorCode PoissonExample::OpError::iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode PoissonExample::OpError::iNtegrate(EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
   // clear field dofs
   data.getFieldData().clear();
@@ -758,7 +758,7 @@ available functions from volume operator.
 
 Next, we accumulate error for all elements and processors
 \code
-MoFEMErrorCode PoissonExample::OpError::aSsemble(DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode PoissonExample::OpError::aSsemble(EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
   // set error on mesh
   data.getFieldDofs()[0]->getFieldData() = sqrt(data.getFieldData()[0]);

@@ -183,7 +183,7 @@ struct Smoother {
     ublas::vector<int> frontIndices;
 
     MoFEMErrorCode aSemble(int row_side, EntityType row_type,
-                           DataForcesAndSourcesCore::EntData &row_data) {
+                           EntitiesFieldData::EntData &row_data) {
       MoFEMFunctionBegin;
 
       int nb_dofs = row_data.getIndices().size();
@@ -245,8 +245,8 @@ struct Smoother {
 
     MoFEMErrorCode aSemble(int row_side, int col_side, EntityType row_type,
                            EntityType col_type,
-                           DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+                           EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       int nb_row = row_data.getIndices().size();

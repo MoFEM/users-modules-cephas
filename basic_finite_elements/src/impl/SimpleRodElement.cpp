@@ -140,8 +140,8 @@ struct OpSimpleRodK : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     // check if the edge have associated degrees of freedom
@@ -242,7 +242,7 @@ struct OpSimpleRodPreStress
         commonDataPtr(common_data_ptr), dAta(data) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
 
     MoFEMFunctionBegin;
 

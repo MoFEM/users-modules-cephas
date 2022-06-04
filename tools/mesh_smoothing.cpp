@@ -208,7 +208,7 @@ int main(int argc, char *argv[]) {
                   "MESH_NODE_POSITIONS", UserDataOperator::OPROW),
               minQualityPtr(min_quality_ptr) {}
         MoFEMErrorCode doWork(int side, EntityType type,
-                              DataForcesAndSourcesCore::EntData &data) {
+                              EntitiesFieldData::EntData &data) {
           MoFEMFunctionBeginHot;
           if (type != MBVERTEX)
             MoFEMFunctionReturnHot(0);

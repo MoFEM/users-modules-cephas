@@ -58,8 +58,8 @@ struct AnalyticalDirichletBC {
       MatrixDouble NN, transNN;
       MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                             EntityType col_type,
-                            DataForcesAndSourcesCore::EntData &row_data,
-                            DataForcesAndSourcesCore::EntData &col_data);
+                            EntitiesFieldData::EntData &row_data,
+                            EntitiesFieldData::EntData &col_data);
     };
 
     /** \brief Rhs operator used to build matrix
@@ -82,7 +82,7 @@ struct AnalyticalDirichletBC {
       VectorInt iNdices;
 
       MoFEMErrorCode doWork(int side, EntityType type,
-                            DataForcesAndSourcesCore::EntData &data) {
+                            EntitiesFieldData::EntData &data) {
         MoFEMFunctionBegin;
 
         unsigned int nb_row = data.getIndices().size();

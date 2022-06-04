@@ -260,7 +260,7 @@ aliases, and declaration/initialisation as commented below.
 // We are solving Poisson's equation in 2D so Face element is used
 using FaceEle = MoFEM::FaceElementForcesAndSourcesCore;
 using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 // Namespace that contains necessary UDOs, will be included in the main program
 namespace Poisson2DHomogeneousOperators {
@@ -457,7 +457,7 @@ this particular case, as we solve 2D Poisson problem using triangular mesh, we
 use MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator (alias
 `OpFaceEle`) as seen previously at the first lines of the code for the struct
 `OpDomainLhsMatrixK`. And the data structure of the entities (elements) are
-provided accordingly thanks to DataForcesAndSourcesCore::EntData (alias
+provided accordingly thanks to EntitiesFieldData::EntData (alias
 `EntData`).
 
 The arguments are divided in three groups

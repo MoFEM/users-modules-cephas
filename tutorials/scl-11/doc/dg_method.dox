@@ -1,0 +1,23 @@
+/*! \page tutorial_dg_poisson SCL-11: Discountinous Galrekin for Poisson problem
+
+\note Prerequisites of this tutorial include \ref basic_tutorials_poisson_homogeneous
+
+<br>
+
+\note Intended learning outcome:
+- general structure of a program developed using MoFEM
+- idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
+- integartion skeleton
+
+\tableofcontents
+
+\section source_scl_11 Source code main code
+
+\include poisson_2d_dis_galerkin.cpp
+
+\section source_scl_11 DG operator source code
+
+\include PoissonDiscontinousGalerkin.hpp
+
+
+*/

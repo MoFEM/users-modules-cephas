@@ -38,7 +38,7 @@ template <> struct ElementsAndOps<2> {
 
 constexpr int FE_DIM = 2;
 
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<FE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<FE_DIM>::DomainEleOp;
 using PostProcEle = ElementsAndOps<FE_DIM>::PostProcEle;
@@ -104,7 +104,7 @@ struct OpURhs : public AssemblyDomainEleOp {
         uPtr(u_ptr), uDotPtr(u_dot_ptr), uGradPtr(grad_u_ptr),
         hGradPtr(grad_h_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -191,8 +191,8 @@ struct OpULhs_dU : public AssemblyDomainEleOp {
     this->sYmm = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -287,8 +287,8 @@ struct OpULhs_dH : public AssemblyDomainEleOp {
     this->sYmm = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     // get element volume

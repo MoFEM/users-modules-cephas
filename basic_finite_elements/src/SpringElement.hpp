@@ -21,7 +21,7 @@
 
 using VolOnSideUserDataOperator =
     MoFEM::VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using FaceDataOperator =
     MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
 /** \brief Set of functions declaring elements and setting operators
@@ -69,7 +69,7 @@ struct MetaSpringBC {
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
 
-    DataForcesAndSourcesCore::EntData *faceRowData;
+    EntitiesFieldData::EntData *faceRowData;
 
     std::map<int, BlockOptionDataSprings> mapSpring;
     //   ~DataAtIntegrationPtsSprings() {}
@@ -106,8 +106,8 @@ struct MetaSpringBC {
 
           const int id = bit->getMeshsetId();
           mapSpring[id].tRis.clear();
-          CHKERR mField.get_moab().get_entities_by_type(
-              bit->getMeshset(), MBTRI, mapSpring[id].tRis, true);
+          CHKERR mField.get_moab().get_entities_by_dimension(
+              bit->getMeshset(), 2, mapSpring[id].tRis, true);
 
           std::vector<double> attributes;
           bit->getAttributes(attributes);

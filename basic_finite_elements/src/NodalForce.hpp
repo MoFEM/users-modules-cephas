@@ -61,7 +61,7 @@ struct NodalForce {
       has only one entity, that is vertex
     */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   MoFEMErrorCode addForce(const std::string field_name, Vec F, int ms_id,
