@@ -1777,6 +1777,9 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
                                            0, SPACE_DIM);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
                                            0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO", "L",
+                                           0, 0);
+
 
   MoFEMFunctionReturn(0);
 };
