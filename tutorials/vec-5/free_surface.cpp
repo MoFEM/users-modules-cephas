@@ -637,17 +637,14 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
     auto D = smartCreateDMVector(subdm);
     auto snes = pipeline_mng->createSNES(subdm);
+    auto snes_ctx_ptr = smartGetDMSnesCtx(simple->getDM());
 
     auto set_section_monitor = [&](auto solver) {
       MoFEMFunctionBegin;
-      PetscViewerAndFormat *vf;
-      CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
-                                        PETSC_VIEWER_DEFAULT, &vf);
-      CHKERR SNESMonitorSet(
-          solver,
-          (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
-                             void *))SNESMonitorFields,
-          vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
+      CHKERR SNESMonitorSet(snes,
+                            (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
+                                               void *))MoFEMSNESMonitorFields,
+                            (void *)(snes_ctx_ptr.get()), nullptr);
       auto section = mField.getInterface<ISManager>()->sectionCreate("SUB");
       PetscInt num_fields;
       CHKERR PetscSectionGetNumFields(section, &num_fields);
@@ -906,13 +903,19 @@ struct Monitor : public FEMethod {
     MoFEMFunctionBegin;
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
+      postProc->elementsMap
+          .clear(); // clear map of post-processed elements, new set is
+                    // created each time mesh is refined.
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
                                       this->getCacheWeakPtr());
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
 
+      postProcEdge->elementsMap
+          .clear(); // clear map and post proc mesh after each mesh refinment
+      postProcEdge->postProcMesh.delete_mesh();
       CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcEdge,
-                                      this->getCacheWeakPtr());
+                                      this->getCacheWeakPtr()); 
       CHKERR postProcEdge->writeFile(
           "out_step_bdy_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
 

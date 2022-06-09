@@ -791,17 +791,16 @@ MoFEMErrorCode Example::tsSolve() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   ISManager *is_manager = mField.getInterface<ISManager>();
 
+  auto snes_ctx_ptr = smartGetDMSnesCtx(simple->getDM());
+
   auto set_section_monitor = [&](auto solver) {
     MoFEMFunctionBegin;
     SNES snes;
     CHKERR TSGetSNES(solver, &snes);
-    PetscViewerAndFormat *vf;
-    CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
-                                      PETSC_VIEWER_DEFAULT, &vf);
-    CHKERR SNESMonitorSet(
-        snes,
-        (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal, void *))SNESMonitorFields,
-        vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
+    CHKERR SNESMonitorSet(snes,
+                          (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
+                                             void *))MoFEMSNESMonitorFields,
+                          (void *)(snes_ctx_ptr.get()), nullptr);
     MoFEMFunctionReturn(0);
   };
 
