@@ -637,7 +637,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
     auto D = smartCreateDMVector(subdm);
     auto snes = pipeline_mng->createSNES(subdm);
-    auto snes_ctx_ptr = smartGetDMSnesCtx(simple->getDM());
+    auto snes_ctx_ptr = smartGetDMSnesCtx(subdm);
 
     auto set_section_monitor = [&](auto solver) {
       MoFEMFunctionBegin;
@@ -1197,18 +1197,13 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       CHKERR SNESSetDM(snes, dm);
       CHKERR SNESMonitorCancel(snes);
 
-      auto set_section_monitor = [&](auto snes)  {
+      auto set_section_monitor = [&](auto snes) {
         MoFEMFunctionBegin;
-        PetscViewerAndFormat *vf;
-        CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
-                                          PETSC_VIEWER_DEFAULT, &vf);
-        CHKERR SNESMonitorSet(
-            snes,
-            (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
-                               void *))SNESMonitorFields,
-            vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
-
-
+        auto snes_ctx_ptr = smartGetDMSnesCtx(simple->getDM());
+        CHKERR SNESMonitorSet(snes,
+                              (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
+                                                 void *))MoFEMSNESMonitorFields,
+                              (void *)(snes_ctx_ptr.get()), nullptr);
         MoFEMFunctionReturn(0);
       };
 
