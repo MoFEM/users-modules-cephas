@@ -371,10 +371,11 @@ struct FreeSurface {
   MoFEM::Interface &mField;
 
   struct AlphaData : EntityStorage {
-    int localPetscIdx;
+    int adjIdx;
   };
 
   boost::shared_ptr<std::vector<AlphaData>> dofsIndices;
+  std::vector<DofIdx> dofsIndicesIdx;
 
 private:
   MoFEMErrorCode readMesh();
@@ -1149,11 +1150,14 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   dofsIndices = boost::make_shared<std::vector<AlphaData>>();
   auto prb_ptr = getProblemPtr(dm);
   dofsIndices->resize(mField.get_field_ents()->size());
+  dofsIndicesIdx.clear();
+  dofsIndicesIdx.reserve(prb_ptr->numeredRowDofsPtr->size());
 
   auto refine_mesh = [](TS ts) {
     MoFEMFunctionBeginHot;
     auto &m_field = free_surface_ptr->mField;
     auto &dofs_indices = free_surface_ptr->dofsIndices;
+    auto &dofs_indices_idx = free_surface_ptr->dofsIndicesIdx;
     auto simple = m_field.getInterface<Simple>();
     auto dm = simple->getDM();
     auto prb_ptr = getProblemPtr(dm);
@@ -1168,17 +1172,17 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       // entity, so we have to store only first index.
       int ent_idx = 0;
       for (auto &e_ptr : *field_ents_ptr) {
-        auto &uid = e_ptr->getLocalUniqueId();
-        auto it = dofs_ptr->get<Unique_mi_tag>().find(uid);
-        if (it != dofs_ptr->get<Unique_mi_tag>().end()) {
-          if ((*it)->getEntDofIdx()) {
-            SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                    "Expected zero dof index on entity");
-          }
-          (*dofs_indices)[ent_idx].localPetscIdx = (*it)->getPetscLocalDofIdx();
-          e_ptr->getWeakStoragePtr() = boost::shared_ptr<AlphaData>(
-              dofs_indices, &((*dofs_indices)[ent_idx]));
+        const auto &uid = e_ptr->getLocalUniqueId();
+        const auto lo_uid = FieldEntity::getLoFieldEntityUId(uid);
+        const auto hi_uid = FieldEntity::getHiFieldEntityUId(uid);
+        const auto hi = dofs_ptr->get<Unique_mi_tag>().upper_bound(hi_uid);
+        (*dofs_indices)[ent_idx].adjIdx = dofs_indices_idx.size();
+        for (auto lo = dofs_ptr->get<Unique_mi_tag>().lower_bound(lo_uid);
+             lo != hi; ++lo) {
+          dofs_indices_idx.push_back((*lo)->getPetscLocalDofIdx());
         }
+        e_ptr->getWeakStoragePtr() = boost::shared_ptr<AlphaData>(
+            dofs_indices, &((*dofs_indices)[ent_idx]));
         ++ent_idx;
       }
       MoFEMFunctionReturn(0);
@@ -1195,20 +1199,37 @@ MoFEMErrorCode FreeSurface::solveSystem() {
         const double *a_old;
         CHKERR VecGetArray(v_new, &a_new);
         CHKERR VecGetArrayRead(v_old, &a_old);
-        for (auto &dof : *dofs_ptr) {
-          auto new_local_idx = dof->getPetscLocalDofIdx();
-          auto ent_idx = dof->getEntDofIdx();
-          if (new_local_idx < prb_ptr->nbLocDofsRow) {
-            auto e_ptr = dof->getFieldEntityPtr();
-            if (auto ptr = e_ptr->getWeakStoragePtr().lock()) {
-              if (auto alpha_ptr =
-                      boost::dynamic_pointer_cast<AlphaData>(ptr)) {
-                auto old_local_idx = alpha_ptr->localPetscIdx + ent_idx;
-                a_new[new_local_idx] = a_old[old_local_idx];
+
+        int ent_idx = 0;
+        for (auto &e_ptr : *field_ents_ptr) {
+          if (auto ptr = e_ptr->getWeakStoragePtr().lock()) {
+            if (auto alpha_ptr = boost::dynamic_pointer_cast<AlphaData>(ptr)) {
+              auto adj = alpha_ptr->adjIdx;
+              const auto &uid = e_ptr->getLocalUniqueId();
+              const auto lo_uid = FieldEntity::getLoFieldEntityUId(uid);
+              const auto hi_uid = FieldEntity::getHiFieldEntityUId(uid);
+              const auto hi =
+                  dofs_ptr->get<Unique_mi_tag>().upper_bound(hi_uid);
+              for (auto lo = dofs_ptr->get<Unique_mi_tag>().lower_bound(lo_uid);
+                   lo != hi; ++lo) {
+                a_new[(*lo)->getPetscLocalDofIdx()] =
+                    a_old[dofs_indices_idx[adj + (*lo)->getEntDofIdx()]];
               }
+            } else {
+#ifndef NDEBUG
+              SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                      "Expected alpha data on entity");
+#endif
             }
+          } else {
+#ifndef NDEBUG
+            SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                    "Expected data on entity");
+#endif
           }
+          ++ent_idx;
         }
+
         CHKERR VecRestoreArray(v_new, &a_new);
         CHKERR VecRestoreArrayRead(v_old, &a_old);
       }
@@ -1325,7 +1346,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       for (auto f : {"U", "P", "H", "G", "L"}) {
         CHKERR m_field.getInterface<FieldBlas>()->setField(0, f);
       }
-
       auto solution_new = smartCreateDMVector(dm);
       CHKERR copy_data(solution_current, solution_new);
       CHKERR VecGhostUpdateBegin(solution_current, INSERT_VALUES,
