@@ -293,7 +293,7 @@ set_parent_dofs(MoFEM::Interface &m_field, boost::shared_ptr<ELE> &fe_top,
   auto det_ptr = boost::make_shared<VectorDouble>();
 
   BitRefLevel bit_marker(0);
-  for(auto l = 0; l<=max_nb_levels;++l )
+  for (auto l = 0; l <= max_nb_levels; ++l)
     bit_marker |= bit(bit_shift + l);
 
   boost::function<void(boost::shared_ptr<ForcesAndSourcesCore>, int)>
@@ -915,7 +915,7 @@ struct Monitor : public FEMethod {
           .clear(); // clear map and post proc mesh after each mesh refinment
       postProcEdge->postProcMesh.delete_mesh();
       CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcEdge,
-                                      this->getCacheWeakPtr()); 
+                                      this->getCacheWeakPtr());
       CHKERR postProcEdge->writeFile(
           "out_step_bdy_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
 
@@ -1072,7 +1072,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     );
 
     return post_proc_fe;
- 
   };
 
   auto get_lift_fe = [&]() {
@@ -1187,6 +1186,46 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     CHKERR set_data_on_entity_with_current_indices();
 
+    // Copy internal vector of Alpha method, to new vector. Using storage
+    // AlphaData.
+    auto copy_data = [&](Vec v_old, Vec v_new) {
+      MoFEMFunctionBegin;
+      if (v_old) {
+        double *a_new;
+        const double *a_old;
+        CHKERR VecGetArray(v_new, &a_new);
+        CHKERR VecGetArrayRead(v_old, &a_old);
+        for (auto &dof : *dofs_ptr) {
+          auto new_local_idx = dof->getPetscLocalDofIdx();
+          auto ent_idx = dof->getEntDofIdx();
+          if (new_local_idx < prb_ptr->nbLocDofsRow) {
+            auto e_ptr = dof->getFieldEntityPtr();
+            if (auto ptr = e_ptr->getWeakStoragePtr().lock()) {
+              if (auto alpha_ptr =
+                      boost::dynamic_pointer_cast<AlphaData>(ptr)) {
+                auto old_local_idx = alpha_ptr->localPetscIdx + ent_idx;
+                a_new[new_local_idx] = a_old[old_local_idx];
+              }
+            }
+          }
+        }
+        CHKERR VecRestoreArray(v_new, &a_new);
+        CHKERR VecRestoreArrayRead(v_old, &a_old);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    auto get_current_solution = [&]() {
+      auto solution = smartCreateDMVector(dm);
+      CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
+                                     SCATTER_FORWARD);
+      CHKERR VecGhostUpdateBegin(solution, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(solution, INSERT_VALUES, SCATTER_FORWARD);
+      return solution;
+    };
+
+    auto solution_current = get_current_solution();
+
     CHKERR free_surface_ptr->makeRefProblem();
 
     auto reset_snes = [&]() {
@@ -1216,7 +1255,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       MoFEMFunctionBegin;
       auto section =
           m_field.getInterface<ISManager>()->sectionCreate(prb_ptr->getName());
-      CHKERR DMSetSection(dm, section); 
+      CHKERR DMSetSection(dm, section);
       MoFEMFunctionReturn(0);
     };
 
@@ -1251,35 +1290,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       Vec n_vec_lte_work;
       CHKERR VecDuplicate(nX0, &n_vec_lte_work);
 
-      // Copy internal vector of Alpha method, to new vector. Using storage
-      // AlphaData.
-      auto copy_data = [&](Vec v_old, Vec v_new) {
-        MoFEMFunctionBegin;
-        if (v_old) {
-          double *a_new;
-          const double *a_old;
-          CHKERR VecGetArray(v_new, &a_new);
-          CHKERR VecGetArrayRead(v_old, &a_old);
-          for (auto &dof : *dofs_ptr) {
-            auto new_local_idx = dof->getPetscLocalDofIdx();
-            auto ent_idx = dof->getEntDofIdx();
-            if (new_local_idx < prb_ptr->nbLocDofsRow) {
-              auto e_ptr = dof->getFieldEntityPtr();
-              if (auto ptr = e_ptr->getWeakStoragePtr().lock()) {
-                if (auto alpha_ptr =
-                        boost::dynamic_pointer_cast<AlphaData>(ptr)) {
-                  auto old_local_idx = alpha_ptr->localPetscIdx + ent_idx;
-                  a_new[new_local_idx] = a_old[old_local_idx];
-                }
-              }
-            }
-          }
-          CHKERR VecRestoreArray(v_new, &a_new);
-          CHKERR VecRestoreArrayRead(v_old, &a_old);
-        }
-        MoFEMFunctionReturn(0);
-      };
-
       CHKERR copy_data(X0, nX0);
       CHKERR copy_data(Xa, nXa);
       CHKERR copy_data(X1, nX1);
@@ -1312,21 +1322,18 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     auto update_solution = [&]() {
       MoFEMFunctionBegin;
-      Vec solution;
-      CHKERR DMCreateGlobalVector(dm, &solution);
-      CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
-                                     SCATTER_FORWARD);
-      CHKERR VecGhostUpdateBegin(solution, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateEnd(solution, INSERT_VALUES, SCATTER_FORWARD);
-
-      CHKERR TSSetSolution(ts, solution);
       for (auto f : {"U", "P", "H", "G", "L"}) {
         CHKERR m_field.getInterface<FieldBlas>()->setField(0, f);
       }
-      CHKERR DMoFEMMeshToLocalVector(simple->getDM(), solution, INSERT_VALUES,
-                                     SCATTER_REVERSE);
 
-      CHKERR VecDestroy(&solution);
+      auto solution_new = smartCreateDMVector(dm);
+      CHKERR copy_data(solution_current, solution_new);
+      CHKERR VecGhostUpdateBegin(solution_current, INSERT_VALUES,
+                                 SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(solution_current, INSERT_VALUES,
+                               SCATTER_FORWARD);
+
+      CHKERR TSSetSolution(ts, solution_new);
       MoFEMFunctionReturn(0);
     };
 
@@ -1687,7 +1694,8 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
   // auto fe_ptr = mField.get_finite_elements();
   // const_cast<FiniteElement_multiIndex *>(fe_ptr)->clear();
   // auto fe_adj_ptr = mField.get_ents_elements_adjacency();
-  // const_cast<FieldEntityEntFiniteElementAdjacencyMap_multiIndex *>(fe_adj_ptr)
+  // const_cast<FieldEntityEntFiniteElementAdjacencyMap_multiIndex
+  // *>(fe_adj_ptr)
   //     ->clear();
 
   // mField.getInterface<ProblemsManager>()->synchroniseProblemEntities =
@@ -1775,9 +1783,8 @@ MoFEMErrorCode FreeSurface::makeRefProblem() {
                                            0, SPACE_DIM);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
                                            0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO", "L",
-                                           0, 0);
-
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO",
+                                           "L", 0, 0);
 
   MoFEMFunctionReturn(0);
 };
