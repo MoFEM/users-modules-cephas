@@ -266,9 +266,30 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
     set_parent_dofs(mField, post_proc_fe, OpFaceEle::OPCOL, QUIET, Sev::noisy);
   }
 
-  post_proc_fe->addFieldValuesPostProc(field_name);
+  auto u_ptr = boost::make_shared<VectorDouble>();
+  auto grad_u_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues(field_name, u_ptr));
+
   constexpr auto SPACE_DIM = 2; // dimension of problem
-  post_proc_fe->addFieldValuesGradientPostProc("U", SPACE_DIM);
+
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldGradient<SPACE_DIM>(field_name, grad_u_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPostProcMap<SPACE_DIM, SPACE_DIM>(
+          post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+
+          OpPostProcMap<SPACE_DIM, SPACE_DIM>::DataMapVec{{"U", u_ptr}},
+
+          OpPostProcMap<SPACE_DIM, SPACE_DIM>::DataMapMat{
+              {"GRAD_U", grad_u_ptr}},
+
+          OpPostProcMap<SPACE_DIM, SPACE_DIM>::DataMapMat{}
+
+          )
+
+  );
 
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
