@@ -25,7 +25,7 @@
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
 static const int nb_ref_levels =
-    0; ///< if larger than zero set n-levels of random mesh refinements with
+    1; ///< if larger than zero set n-levels of random mesh refinements with
        ///< hanging nodes
 
 constexpr auto field_name = "U";
@@ -250,10 +250,12 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
+  constexpr auto SPACE_DIM = 2; // dimension of problem
+
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateHOJacForFace(jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpSetInvJacH1ForFace(inv_jac_ptr));
 
@@ -263,7 +265,7 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
     post_proc_fe->exeTestHook = test_bit_child;
     set_parent_dofs(mField, post_proc_fe, OpFaceEle::OPSPACE, QUIET,
                     Sev::noisy);
-    set_parent_dofs(mField, post_proc_fe, OpFaceEle::OPCOL, QUIET, Sev::noisy);
+    set_parent_dofs(mField, post_proc_fe, OpFaceEle::OPROW, QUIET, Sev::noisy);
   }
 
   auto u_ptr = boost::make_shared<VectorDouble>();
@@ -271,7 +273,6 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateScalarFieldValues(field_name, u_ptr));
 
-  constexpr auto SPACE_DIM = 2; // dimension of problem
 
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateScalarFieldGradient<SPACE_DIM>(field_name, grad_u_ptr));
