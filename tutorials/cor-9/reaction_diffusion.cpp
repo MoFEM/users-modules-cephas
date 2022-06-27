@@ -385,11 +385,12 @@ int main(int argc, char *argv[]) {
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     // Add operators to calculate the stiff right-hand side
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    vol_ele_stiff_rhs->getOpPtrVector().push_back(new OpSetHOWeights(det_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValuesDot("u", dot_val_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
@@ -399,11 +400,12 @@ int main(int argc, char *argv[]) {
 
     // Add operators to calculate the stiff left-hand side
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    vol_ele_stiff_lhs->getOpPtrVector().push_back(new OpSetHOWeights(det_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpAssembleStiffLhs<2>(data));
 

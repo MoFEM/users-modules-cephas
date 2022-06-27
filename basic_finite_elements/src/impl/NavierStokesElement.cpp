@@ -3,6 +3,8 @@
  * \example NavierStokesElement.cpp
  *
  * \brief Implementation of operators for fluid flow
+ * 
+ * FIXME: Code does not handle higher order geometry
  *
  * Implementation of operators for simulation of the fluid flow governed by
  * Stokes and Navier-Stokes equations, and computation of the drag
@@ -173,10 +175,12 @@ MoFEMErrorCode NavierStokesElement::setCalcDragOperators(
     sideDragFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
-    dragFe->getOpPtrVector().push_back(new OpCalculateHOJacForFace(jac_ptr));
+    dragFe->getOpPtrVector().push_back(new OpCalculateHOJac<2>(jac_ptr));
     dragFe->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    dragFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+    dragFe->getOpPtrVector().push_back(
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+
     dragFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         pressure_field, common_data->pressPtr));
 
@@ -206,11 +210,12 @@ MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
     postProcDragPtr->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     postProcDragPtr->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     postProcDragPtr->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+
     postProcDragPtr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(velocity_field,
                                             common_data->velPtr));

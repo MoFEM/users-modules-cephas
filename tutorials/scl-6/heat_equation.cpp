@@ -223,10 +223,10 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(new OpCalculateHOJac<2>(jac_ptr));
     pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-    pipeline.push_back(new OpSetHOWeightsOnFace());
+    pipeline.push_back(new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    pipeline.push_back(new OpSetHOWeights(det_ptr));
   };
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {
@@ -321,12 +321,11 @@ MoFEMErrorCode HeatEquation::solveSystem() {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    post_froc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+    post_froc_fe->getOpPtrVector().push_back(new OpCalculateHOJac<2>(jac_ptr));
     post_froc_fe->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     post_froc_fe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
     post_froc_fe->addFieldValuesPostProc("U");
     return post_froc_fe;
   };

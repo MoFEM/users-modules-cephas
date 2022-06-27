@@ -351,10 +351,11 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
     pipeline.push_back(
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+    pipeline.push_back(
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
     pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
     pipeline.push_back(
@@ -520,11 +521,12 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpSetHOWeightsOnFace());
-    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
     pipeline.push_back(
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+    pipeline.push_back(
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+    pipeline.push_back(new OpSetHOWeights(det_ptr));
 
     pipeline.push_back(
         new OpCalculateVectorFieldValuesDot<U_FIELD_DIM>("U", dot_u_ptr));
@@ -709,11 +711,11 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     auto grad_g_ptr = boost::make_shared<MatrixDouble>();
 
     post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(inv_jac_ptr));
 
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));

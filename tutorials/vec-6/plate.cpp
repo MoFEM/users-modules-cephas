@@ -288,12 +288,12 @@ MoFEMErrorCode Plate::assembleSystem() {
    */
   auto push_jacobian = [&](auto &pipeline) {
     pipeline.push_back(new OpSetHOWeightsOnFace());
-    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
     pipeline.push_back(
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    // push first base direvatives tp physical element shape
+    // push first base derivatives tp physical element shape
     pipeline.push_back(new OpSetInvJacH1ForFace<1>(inv_jac_ptr));
-    // push second base direvatives tp physical element shape
+    // push second base directives tp physical element shape
     pipeline.push_back(new OpSetInvJacH1ForFace<2>(inv_jac_ptr));
   };
 

@@ -85,11 +85,13 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op, auto verbosity,
                   new DomainParentEle(m_field));
               if (op == OpFaceEle::OPSPACE) {
                 fe_ptr_current->getOpPtrVector().push_back(
-                    new OpCalculateHOJacForFace(jac_ptr));
+                    new OpCalculateHOJac<2>(jac_ptr));
                 fe_ptr_current->getOpPtrVector().push_back(
                     new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
                 fe_ptr_current->getOpPtrVector().push_back(
-                    new OpSetInvJacH1ForFace(inv_jac_ptr));
+                    new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+                fe_ptr_current->getOpPtrVector().push_back(
+                    new OpSetHOWeights(det_ptr));
               }
 
               add_parent_level(

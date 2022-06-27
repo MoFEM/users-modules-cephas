@@ -284,9 +284,9 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     auto det_ptr = boost::make_shared<VectorDouble>();
-    pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
+    pipeline.push_back(new OpCalculateHOJac<3>(jac_ptr));
     pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
+    pipeline.push_back(new OpSetHOInvJacToScalarBases<3>(H1, inv_jac_ptr));
     pipeline.push_back(new OpSetHOWeights(det_ptr));
   };
 

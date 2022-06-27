@@ -148,11 +148,13 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetHOWeights(det_ptr));
 
     if (nb_ref_levels) { // This part is advanced. Can be skipped for not
                          // refined meshes with
@@ -253,11 +255,11 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   constexpr auto SPACE_DIM = 2; // dimension of problem
 
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateHOJacForFace(jac_ptr));
+      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpSetInvJacH1ForFace(inv_jac_ptr));
+      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
   if (nb_ref_levels) { // This part is advanced. Can be skipped for not refined
                        // meshes with
