@@ -203,7 +203,13 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
                                            "U", 0, 3);
 
-  //! [Pushing gravity load operator]
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, nullptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeights(det_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
       "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
   //! [Pushing gravity load operator]
@@ -226,8 +232,7 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeights(det_ptr));
-  
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeights(det_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
 
   auto integration_rule = [](int, int, int approx_order) {
