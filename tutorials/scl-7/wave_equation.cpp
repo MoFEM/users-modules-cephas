@@ -203,7 +203,7 @@ MoFEMErrorCode WaveEquation::assembleSystem() {
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline.push_back(new OpCalculateHOJac<2>(jac_ptr));
     pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOInvJacToScalarBases<2>(H1, ina_jac_ptr));
+    pipeline.push_back(new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
     pipeline.push_back(new OpSetHOWeights(det_ptr));
   };
 
@@ -293,7 +293,7 @@ MoFEMErrorCode WaveEquation::solveSystem() {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    post_froc_fe->getOpPtrVector().push_back(new OpCalculateHO<2>(jac_ptr));
+    post_froc_fe->getOpPtrVector().push_back(new OpCalculateHOJac<2>(jac_ptr));
     post_froc_fe->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     post_froc_fe->getOpPtrVector().push_back(

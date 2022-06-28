@@ -300,6 +300,9 @@ MoFEMErrorCode Example::assembleSystem() {
     MoFEMFunctionBegin;
     pipeline_mng->getDomainLhsFE().reset();
 
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(

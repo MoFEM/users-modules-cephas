@@ -715,7 +715,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     post_proc_fe->getOpPtrVector().push_back(
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));

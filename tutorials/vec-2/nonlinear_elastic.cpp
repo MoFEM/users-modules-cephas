@@ -255,7 +255,7 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline.push_back(
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(iH1, nv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
     pipeline.push_back(new OpSetHOWeights(det_ptr));
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
