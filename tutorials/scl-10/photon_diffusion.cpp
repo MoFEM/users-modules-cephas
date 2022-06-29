@@ -125,7 +125,6 @@ private:
     enum VecElements {
       VALUES_INTEG = 0,
       FLUX_NORM_INTEG,
-      FLUX_MAGN_INTEG,
       TOTAL_AREA,
       LAST_ELEMENT
     };
@@ -240,9 +239,10 @@ private:
       MOFEM_LOG("PHOTON", Sev::inform) << "Fluence rate integral: " << array[0];
       MOFEM_LOG("PHOTON", Sev::inform)
           << "Normal flux integral: " << array[1];
-      MOFEM_LOG("PHOTON", Sev::inform)
-          << "Flux magnitude integral: " << array[2];
-      MOFEM_LOG("PHOTON", Sev::inform) << "Total area: " << array[3];
+
+      if (ts_step == 0) {
+        MOFEM_LOG("PHOTON", Sev::inform) << "Total area: " << array[2];
+      }
 
       if (ts_step % save_every_nth_step == 0) {
         if (output_volume) {
@@ -315,13 +315,13 @@ MoFEMErrorCode PhotonDiffusion::readMesh() {
 MoFEMErrorCode PhotonDiffusion::createCommonData() {
   MoFEMFunctionBegin;
   commonDataPtr = boost::make_shared<CommonData>();
-  PetscInt ghosts[4] = {0, 1, 2, 3};
+  PetscInt ghosts[3] = {0, 1, 2};
   if (!mField.get_comm_rank())
     commonDataPtr->petscVec =
-        createSmartGhostVector(mField.get_comm(), 4, 4, 0, ghosts);
+        createSmartGhostVector(mField.get_comm(), 3, 3, 0, ghosts);
   else
     commonDataPtr->petscVec =
-        createSmartGhostVector(mField.get_comm(), 0, 4, 4, ghosts);
+        createSmartGhostVector(mField.get_comm(), 0, 3, 3, ghosts);
   commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
   commonDataPtr->approxValsGrad = boost::make_shared<MatrixDouble>();
   MoFEMFunctionReturn(0);
@@ -761,7 +761,6 @@ MoFEMErrorCode PhotonDiffusion::OpCameraInteg::doWork(int side, EntityType type,
 
   double values_integ = 0;
   double flux_norm_integ = 0;
-  double flux_magn_integ = 0;
   double total_area = 0;
 
   FTensor::Index<'i', 3> i;
@@ -776,8 +775,6 @@ MoFEMErrorCode PhotonDiffusion::OpCameraInteg::doWork(int side, EntityType type,
     values_integ += alpha * t_val;
     flux_norm_integ -=
         alpha * commonDataPtr->coeffD * t_val_grad(i) * t_normal(i);
-    flux_magn_integ +=
-        alpha * commonDataPtr->coeffD * sqrt(t_val_grad(i) * t_val_grad(i));
     total_area += alpha;
 
     ++t_w;
@@ -785,16 +782,14 @@ MoFEMErrorCode PhotonDiffusion::OpCameraInteg::doWork(int side, EntityType type,
     ++t_val_grad;
   }
 
-  constexpr std::array<int, 4> indices = {CommonData::VALUES_INTEG,
+  constexpr std::array<int, 3> indices = {CommonData::VALUES_INTEG,
                                           CommonData::FLUX_NORM_INTEG,
-                                          CommonData::FLUX_MAGN_INTEG,
                                           CommonData::TOTAL_AREA};
-  std::array<double, 4> values;
+  std::array<double, 3> values;
   values[0] = values_integ;
   values[1] = flux_norm_integ;
-  values[2] = flux_magn_integ;
-  values[3] = total_area;
-  CHKERR VecSetValues(commonDataPtr->petscVec, 4, indices.data(), values.data(),
+  values[2] = total_area;
+  CHKERR VecSetValues(commonDataPtr->petscVec, 3, indices.data(), values.data(),
                       ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
