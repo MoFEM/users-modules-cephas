@@ -32,8 +32,8 @@ AnalyticalDirichletBC::ApproxField::OpLhs::OpLhs(const std::string field_name)
 
 MoFEMErrorCode AnalyticalDirichletBC::ApproxField::OpLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   if (row_data.getIndices().size() == 0)

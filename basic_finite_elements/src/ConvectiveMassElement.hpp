@@ -178,7 +178,7 @@ struct ConvectiveMassElement {
      *
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   struct OpGetCommonDataAtGaussPts : public OpGetDataAtGaussPts {
@@ -215,7 +215,7 @@ struct ConvectiveMassElement {
    std::vector<double> active;
 
    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                         DataForcesAndSourcesCore::EntData &row_data);
+                         EntitiesFieldData::EntData &row_data);
   };
 
   struct OpMassRhs : public VolumeElementForcesAndSourcesCore::UserDataOperator,
@@ -230,7 +230,7 @@ struct ConvectiveMassElement {
     VectorDouble nf;
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
   };
 
   struct OpMassLhs_dM_dv
@@ -247,13 +247,13 @@ struct ConvectiveMassElement {
 
     MatrixDouble k, jac;
 
-    virtual MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data,
+    virtual MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data,
                                   int gg);
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data);
   };
 
   struct OpMassLhs_dM_dx : public OpMassLhs_dM_dv {
@@ -261,7 +261,7 @@ struct ConvectiveMassElement {
     OpMassLhs_dM_dx(const std::string field_name, const std::string col_field,
                     BlockData &data, CommonData &common_data);
 
-    MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data, int gg);
+    MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data, int gg);
   };
 
   struct OpMassLhs_dM_dX : public OpMassLhs_dM_dv {
@@ -269,7 +269,7 @@ struct ConvectiveMassElement {
     OpMassLhs_dM_dX(const std::string field_name, const std::string col_field,
                     BlockData &data, CommonData &common_data);
 
-    MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data, int gg);
+    MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data, int gg);
   };
 
   struct OpEnergy : public VolumeElementForcesAndSourcesCore::UserDataOperator,
@@ -287,7 +287,7 @@ struct ConvectiveMassElement {
     VectorDouble3 v;
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
   };
 
   struct OpVelocityJacobian
@@ -309,7 +309,7 @@ struct ConvectiveMassElement {
     std::vector<double> active;
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
   };
 
   struct OpVelocityRhs
@@ -325,7 +325,7 @@ struct ConvectiveMassElement {
     VectorDouble nf;
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
   };
 
   struct OpVelocityLhs_dV_dv : public OpMassLhs_dM_dv {
@@ -334,7 +334,7 @@ struct ConvectiveMassElement {
                         const std::string field_name, BlockData &data,
                         CommonData &common_data);
 
-    virtual MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data,
+    virtual MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data,
                                   int gg);
   };
 
@@ -344,7 +344,7 @@ struct ConvectiveMassElement {
                         const std::string field_name, BlockData &data,
                         CommonData &common_data);
 
-    virtual MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data,
+    virtual MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data,
                                   int gg);
   };
 
@@ -354,7 +354,7 @@ struct ConvectiveMassElement {
                         const std::string field_name, BlockData &data,
                         CommonData &common_data);
 
-    virtual MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data,
+    virtual MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data,
                                   int gg);
   };
 
@@ -378,7 +378,7 @@ struct ConvectiveMassElement {
     VectorDouble active;
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
   };
 
   struct OpEshelbyDynamicMaterialMomentumRhs
@@ -397,7 +397,7 @@ struct ConvectiveMassElement {
     VectorDouble nf;
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
   };
 
   struct OpEshelbyDynamicMaterialMomentumLhs_dv : public OpMassLhs_dM_dv {
@@ -408,7 +408,7 @@ struct ConvectiveMassElement {
                                            CommonData &common_data,
                                            Range *forcesonlyonentities_ptr);
 
-    virtual MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data,
+    virtual MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data,
                                   int gg);
   };
 
@@ -421,7 +421,7 @@ struct ConvectiveMassElement {
                                            CommonData &common_data,
                                            Range *forcesonlyonentities_ptr);
 
-    virtual MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data,
+    virtual MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data,
                                   int gg);
   };
 
@@ -434,7 +434,7 @@ struct ConvectiveMassElement {
                                            CommonData &common_data,
                                            Range *forcesonlyonentities_ptr);
 
-    virtual MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data,
+    virtual MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data,
                                   int gg);
   };
 

@@ -31,8 +31,8 @@ OpCalculatePlasticFlowLhs_LogStrain_dU::OpCalculatePlasticFlowLhs_LogStrain_dU(
 }
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
@@ -152,8 +152,8 @@ OpCalculateContrainsLhs_LogStrain_dU::OpCalculateContrainsLhs_LogStrain_dU(
 }
 
 MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
   constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
 

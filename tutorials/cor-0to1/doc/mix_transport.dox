@@ -988,13 +988,13 @@ operator classes associated with vertices and edges. User operator class has two
 types of functions which need to be overloaded to do calculations, and they are
 \code virtual MoFEMErrorCode MoFEM::DataOperator::doWork( int row_side,int
 col_side, EntityType row_type,EntityType col_type,
-DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData
+EntitiesFieldData::EntData &row_data, EntitiesFieldData::EntData
 &col_data ); 
 \endcode 
 and 
 \code virtual MoFEMErrorCode
 MoFEM::DataOperator::doWork( int side, EntityType type,
-DataForcesAndSourcesCore::EntData &data ) 
+EntitiesFieldData::EntData &data ) 
 \endcode 
 You have seen how we use those operators in the previous section. Here we show how to implement particular
 cases. The first \b doWork(int row_side, int col_side, ...) function is usually
@@ -1057,8 +1057,8 @@ struct MixTransport::MixTransportElement::OpVDivSigma_L2Hdiv: public MoFEM::Volu
   MoFEMErrorCode doWork(
     int row_side,int col_side,
     EntityType row_type,EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data
   ) {
     MoFEMFunctionBegin;
     int nb_row = row_data.getFieldData().size();
@@ -1073,7 +1073,7 @@ struct MixTransport::MixTransportElement::OpVDivSigma_L2Hdiv: public MoFEM::Volu
       double w = getGaussPts()(3,gg)*getVolume();
       /// FIXME:
       /// This in newer versions is removed. Using FTensor you can directly calulate 
-      /// trace of direvative of HDiv base function.
+      /// trace of derivative of HDiv base function.
       CHKERR getDivergenceOfHDivBaseFunctions(
         row_side,row_type,col_data,gg,divVec);   
       noalias(C) += w*outer_prod(divVec,row_data.getN(gg));
@@ -1106,8 +1106,8 @@ The real work is done in
 MoFEMErrorCode MixTransport::MixTransportElement::OpVDivSigma_L2Hdiv::doWork(
   int row_side,int col_side,
   EntityType row_type,EntityType col_type,
-  DataForcesAndSourcesCore::EntData &row_data,
-  DataForcesAndSourcesCore::EntData &col_data
+  EntitiesFieldData::EntData &row_data,
+  EntitiesFieldData::EntData &col_data
 );
 \endcode
 MoFEM executes this method, in this particular case, for each combination of pairs
@@ -1127,7 +1127,7 @@ example, tetrahedra or triangle in this case.  To see more details about a type
 of entities, local indices and canonical numeration see  \cite tautges2010canonical.
 
 The \b row_data and \b col_data are data structures
-MoFEM::DataForcesAndSourcesCore::EntData carrying information about values of base
+MoFEM::EntitiesFieldData::EntData carrying information about values of base
 functions, global and local DOF indices, DOF values on evaluated entities. For
 example, you can get indices on the row using \b row_data.getIndices(), or matrix
 of base functions at integration point as follows
@@ -1136,7 +1136,7 @@ MatrixDouble &base_row_hdiv = row_data.getVectorN(gg);
 \endcode
 In this case, each row of the matrix \b base_row_hdiv represents base function, where columns
 represent values of the element of base function vector. Look to
-MoFEM::DataForcesAndSourcesCore::EntData to see a range of data which is accessible by
+MoFEM::EntitiesFieldData::EntData to see a range of data which is accessible by
 this data structure.
 
 From inside MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator, we
@@ -1156,7 +1156,7 @@ for(int gg = 0;gg<nb_gauss_pts;gg++) {
   double w = getGaussPts()(3,gg)*getVolume();
   /// FIXME:
   /// This in newer versions is removed. Using FTensor you can directly calulate 
-  /// trace of direvative of HDiv base function. 
+  /// trace of derivative of HDiv base function. 
   CHKERR getDivergenceOfHDivBaseFunctions(
     row_side,row_type,col_data,gg,divVec
   ); 
@@ -1208,7 +1208,7 @@ struct MixTransport::MixTransportElement::OpRhsBcOnValues: public MoFEM::FaceEle
   cTx(ctx),
   F(f) {}
   VectorDouble Nf;
-  MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     if(data.getFieldData().size()==0) MoFEMFunctionReturnHot(0);
     Nf.resize(data.getIndices().size());
@@ -1242,7 +1242,7 @@ MoFEM::ForcesAndSourcesCore::UserDataOperator::OpType.
 The real work is done in
 \code
 MoFEMErrorCode MixTransport::MixTransportElement::OpRhsBcOnValues::doWork(
-  int side,EntityType type,DataForcesAndSourcesCore::EntData &data
+  int side,EntityType type,EntitiesFieldData::EntData &data
 );
 \endcode
 Since we loop only over row entities, the function \b doWork, looks different that
@@ -1495,7 +1495,7 @@ struct MixTransport::MixTransportElement::OpSkeleton: public MoFEM::FaceElementF
   cTx(ctx) {
     volSideFe.getOpPtrVector().push_back(new OpSkeleton::OpVolSide(valMap));
   }
-  MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data);
 };
 \endcode
 
@@ -1528,7 +1528,7 @@ struct MixTransport::MixTransportElement::OpSkeleton::OpVolSide: public MoFEM::V
   VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator("VALUES",UserDataOperator::OPROW),
   valMap(val_map) {
   }
-  MoFEMErrorCode doWork(int side, EntityType type,DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode doWork(int side, EntityType type,EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     if(data.getFieldData().size() == 0)  MoFEMFunctionReturnHot(0);
     int nb_gauss_pts = data.getN().size1();
@@ -1550,7 +1550,7 @@ accessed by \b getFaceSense().
 Once we evaluated approximation function values at each face, we can calculate
 error \f$\eta_{e,R}\f$, using face operator
 \code{.cpp}
-MoFEMErrorCode MixTransport::MixTransportElement::OpSkeleton::doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode MixTransport::MixTransportElement::OpSkeleton::doWork(int side,EntityType type,EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
   if(type == MBTRI) {
     EntityHandle fe_ent = getNumeredEntFiniteElementPtr()->getEnt();
@@ -1642,7 +1642,7 @@ struct MixTransport::MixTransportElement::OpError: public MoFEM::VolumeElementFo
   VectorDouble deltaFlux;
   MatrixDouble invK;
   MoFEMErrorCode doWork(
-    int side,EntityType type,DataForcesAndSourcesCore::EntData &data
+    int side,EntityType type,EntitiesFieldData::EntData &data
   ) {
     MoFEMFunctionBegin;
     if(type != MBTET) MoFEMFunctionReturnHot(0);

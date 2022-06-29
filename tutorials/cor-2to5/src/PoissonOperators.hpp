@@ -52,8 +52,8 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
    */
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // get number of dofs on row
     nbRows = row_data.getIndices().size();
@@ -98,8 +98,8 @@ protected:
    * @return          error code
    */
   virtual MoFEMErrorCode
-  iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-            DataForcesAndSourcesCore::EntData &col_data) {
+  iNtegrate(EntitiesFieldData::EntData &row_data,
+            EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // set size of local entity bock
     locMat.resize(nbRows, nbCols, false);
@@ -144,8 +144,8 @@ protected:
    * @param  col_data column data (consist base functions on column entity)
    * @return          error code
    */
-  virtual MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data,
-                                  DataForcesAndSourcesCore::EntData &col_data) {
+  virtual MoFEMErrorCode aSsemble(EntitiesFieldData::EntData &row_data,
+                                  EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // get pointer to first global index on row
     const int *row_indices = &*row_data.getIndices().data().begin();
@@ -183,7 +183,7 @@ template <typename OPBASE> struct OpBaseRhs : public OPBASE {
    *
    */
   MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                        DataForcesAndSourcesCore::EntData &row_data) {
+                        EntitiesFieldData::EntData &row_data) {
     MoFEMFunctionBegin;
     // get number of dofs on row
     nbRows = row_data.getIndices().size();
@@ -203,14 +203,14 @@ template <typename OPBASE> struct OpBaseRhs : public OPBASE {
    * @param  data entity data on element row
    * @return      error code
    */
-  virtual MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) = 0;
+  virtual MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) = 0;
 
   /**
    * \brief Class dedicated to assemble operator to global system vector
    * @param  data entity data (indices, base functions, etc. ) on element row
    * @return      error code
    */
-  virtual MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &data) = 0;
+  virtual MoFEMErrorCode aSsemble(EntitiesFieldData::EntData &data) = 0;
 
 protected:
   ///< error code
@@ -249,7 +249,7 @@ protected:
    * @param  data entity data on element row
    * @return      error code
    */
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     // set size of local vector
     locVec.resize(nbRows, false);
@@ -289,7 +289,7 @@ protected:
    * @param  data entity data, i.e. global indices of local vector
    * @return      error code
    */
-  MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode aSsemble(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     // get global indices of local vector
     const int *indices = &*data.getIndices().data().begin();
@@ -321,8 +321,8 @@ struct OpC : public FaceElementForcesAndSourcesCore::UserDataOperator {
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // get number of dofs on row
     nbRows = row_data.getIndices().size();
@@ -355,8 +355,8 @@ private:
 
   /** \brief Integrate local constrains matrix
    */
-  inline MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                                  DataForcesAndSourcesCore::EntData &col_data) {
+  inline MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                                  EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // set size of local constrains matrix
     locMat.resize(nbRows, nbCols, false);
@@ -395,8 +395,8 @@ private:
   /**
    * \brief integrate local constrains matrix
    */
-  inline MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data,
-                                 DataForcesAndSourcesCore::EntData &col_data) {
+  inline MoFEMErrorCode aSsemble(EntitiesFieldData::EntData &row_data,
+                                 EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // get indices on row
     const int *row_indices = &*row_data.getIndices().data().begin();
@@ -449,7 +449,7 @@ protected:
   /**
    * \brief Integrate local constrains vector
    */
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     // set size to local vector
     locVec.resize(nbRows, false);
@@ -487,7 +487,7 @@ protected:
   /**
    * \brief assemble constrains vectors
    */
-  MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode aSsemble(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     const int *indices = &*data.getIndices().data().begin();
     const double *vals = &*locVec.data().begin();
@@ -518,7 +518,7 @@ struct OpError
         fieldVals(field_vals), gradVals(grad_vals) {}
 
   MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                        DataForcesAndSourcesCore::EntData &row_data) {
+                        EntitiesFieldData::EntData &row_data) {
     MoFEMFunctionBegin;
     nbRows = row_data.getFieldData().size();
     if (!nbRows)
@@ -545,7 +545,7 @@ private:
   /**
    * \brief Integrate error
    */
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     // clear field dofs
     data.getFieldData().clear();
@@ -585,7 +585,7 @@ private:
   /**
    * \brief Assemble error
    */
-  MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode aSsemble(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     // set error on mesh
     data.getFieldDofs()[0]->getFieldData() = sqrt(data.getFieldData()[0]);
@@ -611,8 +611,8 @@ protected:
    * @param  col_data column data (consist base functions on column entity)
    * @return          error code
    */
-  inline MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                                  DataForcesAndSourcesCore::EntData &col_data) {
+  inline MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                                  EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // set size of local entity bock
     locMat.resize(nbRows, nbCols, false);
@@ -684,7 +684,7 @@ protected:
    * @param  data entity data on element row
    * @return      error code
    */
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     // set size of local vector
     locVec.resize(nbRows, false);
@@ -747,7 +747,7 @@ protected:
   /**
    * \brief Integrate local constrains vector
    */
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     // set size to local vector
     locVec.resize(nbRows, false);
@@ -796,7 +796,7 @@ protected:
   /**
    * \brief Integrate local constrains vector
    */
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     // set size to local vector
     locVec.resize(nbRows, false);

@@ -1,0 +1,26 @@
+/*! \page phase_field_doc VEC-5: Phase field model and Navier-Stokes
+
+\note Prerequisites of this tutorial include \ref tutorial_elastic_problem
+
+<br>
+
+\note Intended learning outcome:
+- handling multiple fields
+- setting inital boundary conditions
+- material time derivative
+- hyperbolic equation
+
+\section tut_sw_solution Example solution
+
+\htmlonly
+<center>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/S1yce018vAE" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+\endhtmlonly
+
+\tableofcontents
+
+\section tut_sw_main_prog Plain program
+
+\include free_surface.cpp
+
+*/

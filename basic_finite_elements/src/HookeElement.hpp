@@ -84,7 +84,7 @@ struct HookeElement {
   using BlockData = NonlinearElasticElement::BlockData;
   using MassBlockData = ConvectiveMassElement::BlockData;
 
-  using EntData = DataForcesAndSourcesCore::EntData;
+  using EntData = EntitiesFieldData::EntData;
   using UserDataOperator = ForcesAndSourcesCore::UserDataOperator;
   using VolUserDataOperator =
       VolumeElementForcesAndSourcesCore::UserDataOperator;
@@ -243,8 +243,8 @@ struct HookeElement {
 
     PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
@@ -664,7 +664,7 @@ struct HookeElement {
                            bool is_ale = false, bool is_field_disp = true);
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   static MoFEMErrorCode
@@ -1407,7 +1407,7 @@ HookeElement::OpPostProcHookeElement<ELEMENT>::OpPostProcHookeElement(
 
 template <class ELEMENT>
 MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBVERTEX) {
@@ -1450,22 +1450,45 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   dataAtPts->stiffnessMat->resize(36, 1, false);
   FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
       MAT_TO_DDG(dataAtPts->stiffnessMat));
-  for (auto &m : (blockSetsPtr)) {
-    const double young = m.second.E;
-    const double poisson = m.second.PoissonRatio;
 
-    const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
-
-    t_D(i, j, k, l) = 0.;
-    t_D(0, 0, 0, 0) = t_D(1, 1, 1, 1) = t_D(2, 2, 2, 2) = 1 - poisson;
-    t_D(0, 1, 0, 1) = t_D(0, 2, 0, 2) = t_D(1, 2, 1, 2) =
-        0.5 * (1 - 2 * poisson);
-    t_D(0, 0, 1, 1) = t_D(1, 1, 0, 0) = t_D(0, 0, 2, 2) = t_D(2, 2, 0, 0) =
-        t_D(1, 1, 2, 2) = t_D(2, 2, 1, 1) = poisson;
-    t_D(i, j, k, l) *= coefficient;
-
-    break; // FIXME: calculates only first block
+  EntityHandle ent = this->getFEEntityHandle();
+  auto type = type_from_handle(ent);
+  EntityHandle ent_3d = ent;
+  if (type == MBTRI || type == MBQUAD) {
+    Range ents;
+    auto &m_field = this->getPtrFE()->mField;
+    CHKERR m_field.get_moab().get_adjacencies(&ent, 1, 3, false, ents,
+                                              moab::Interface::UNION);
+#ifndef NDEBUG
+    if (ents.empty())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "Could not find a 3D element adjacent to a given face element");
+#endif
+    ent_3d = ents.front();
   }
+
+  bool found_block = false;
+  for (auto &m : (blockSetsPtr)) {
+    if (m.second.tEts.find(ent_3d) != m.second.tEts.end()) {
+      const double young = m.second.E;
+      const double poisson = m.second.PoissonRatio;
+      const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+
+      t_D(i, j, k, l) = 0.;
+      t_D(0, 0, 0, 0) = t_D(1, 1, 1, 1) = t_D(2, 2, 2, 2) = 1 - poisson;
+      t_D(0, 1, 0, 1) = t_D(0, 2, 0, 2) = t_D(1, 2, 1, 2) =
+          0.5 * (1 - 2 * poisson);
+      t_D(0, 0, 1, 1) = t_D(1, 1, 0, 0) = t_D(0, 0, 2, 2) = t_D(2, 2, 0, 0) =
+          t_D(1, 1, 2, 2) = t_D(2, 2, 1, 1) = poisson;
+      t_D(i, j, k, l) *= coefficient;
+
+      found_block = true;
+      break;
+    }
+  }
+  if (!found_block)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "Element not found in any of material blocksets");
 
   double detH = 0.;
   FTensor::Tensor2<double, 3, 3> t_invH;

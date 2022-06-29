@@ -150,7 +150,7 @@ struct PostProcHookStress
    * \brief Here real work is done
    */
   MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
 
     if (type != MBVERTEX)

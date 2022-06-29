@@ -38,7 +38,7 @@ template <> struct ElementsAndOps<2> {
 
 using DomainEle = ElementsAndOps<FM_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
@@ -88,7 +88,7 @@ struct OpRhs : public AssemblyDomainEleOp {
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
         xPtr(x_ptr), xDotPtr(dot_x_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data) {
     MoFEMFunctionBegin;
 
     auto t_w = getFTensor0IntegrationWeight();
@@ -157,8 +157,8 @@ struct OpLhs : public AssemblyDomainEleOp {
     this->sYmm = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     auto t_w = getFTensor0IntegrationWeight();

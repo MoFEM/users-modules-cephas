@@ -40,7 +40,7 @@ struct CommonData : public PlasticOps::CommonData {
 struct OpPlasticHeatProduction : public AssemblyDomainEleOp {
   OpPlasticHeatProduction(const std::string field_name,
                           boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data);
 
 protected:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -50,8 +50,8 @@ struct OpPlasticHeatProduction_dEP : public AssemblyDomainEleOp {
   OpPlasticHeatProduction_dEP(const std::string row_field_name,
                               const std::string col_field_name,
                               boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -61,8 +61,8 @@ struct OpCalculateContrainsLhs_dT : public AssemblyDomainEleOp {
   OpCalculateContrainsLhs_dT(const std::string row_field_name,
                              const std::string col_field_name,
                              boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -74,7 +74,7 @@ OpPlasticHeatProduction::OpPlasticHeatProduction(
       commonDataPtr(common_data_ptr) {}
 
 MoFEMErrorCode
-OpPlasticHeatProduction::iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+OpPlasticHeatProduction::iNtegrate(EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   const size_t nb_integration_pts = data.getN().size1();
@@ -122,8 +122,8 @@ OpPlasticHeatProduction_dEP::OpPlasticHeatProduction_dEP(
 }
 
 MoFEMErrorCode OpPlasticHeatProduction_dEP::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
@@ -190,8 +190,8 @@ OpCalculateContrainsLhs_dT::OpCalculateContrainsLhs_dT(
 }
 
 MoFEMErrorCode OpCalculateContrainsLhs_dT::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;

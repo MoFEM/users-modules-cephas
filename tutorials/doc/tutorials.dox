@@ -138,7 +138,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td>\ref basic_tutorials_heat_equation</td>
        <td> This is the first tutorial to solve a time-dependent problem with first-order time derivative
-       <br/> *Keywords:* [TS](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/index.html) solver, implicit scheme
+       <br/> *Keywords:* [TS](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/index.html) solver, implicit scheme, remove dofs on skin
        </td>
   </tr>
 
@@ -166,7 +166,14 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td>\ref tutorials_photon_diffusion</td>
        <td> Photon diffusion equation
-       <br/> *Keywords:*  Inital boundary conditions, parabolic equation, adding user element, postprocessing on skin, initial vector
+       <br/> *Keywords:*  inital boundary conditions, parabolic equation, adding user element, postprocessing on skin, initial vector
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref tutorial_dg_poisson</td>
+       <td> Discountinous Galerkin for Poisson problem
+       <br/> *Keywords:* integartion on skeleton
        </td>
   </tr>
 
@@ -179,7 +186,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tutorial_hemholtz_problem</td>
        <td> Helmholtz problem for acoustics
-       <br/> *Keywords:* Complex variable, Linear Solver, boundary markers
+       <br/> *Keywords:* complex variable, linear solver, boundary markers, remove dofs on skin
        </td>
   </tr>
 
@@ -199,14 +206,14 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tutorial_eigen_elastic</td>
        <td> Eigen elastic
-       <br/> *Keywords:* Eigen values, SLEPC
+       <br/> *Keywords:* eigen values, SLEPC
        </td>
   </tr>
 
   <tr valign="top">
        <td width="350px">\ref tutorial_nonlinear_elastic</td>
        <td> Nonlinear elastic with Hencky material
-       <br/> *Keywords:* Nonlinear problem, [SNES](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/index.html)
+       <br/> *Keywords:* nonlinear problem, [SNES](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/index.html)
        </td>
   </tr>
 
@@ -224,6 +231,21 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
+  <tr valign="top">
+       <td width="350px">\ref phase_field_doc</td>
+       <td> Phase field model and Navier-Sokes equations
+       <br/> *Keywords:* phase field, Navier-Stokes, hyberbolic equation, inital boundary condition
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_plate</td>
+       <td> Solving forth order eliptic equation describing plate bending
+       <br/> *Keywords:* discountinous Galerkin method, plate theroy
+       </td>
+  </tr>
+
+
 </table>
 
 
@@ -235,6 +257,17 @@ continuing with the one you are most excited about.
        <td width="350px">\ref tut_mix_poisson</td>
        <td> A mixed problem
        <br/> *Keywords:* H-div space, homogenous boundary conditions by DOFs removal 
+       </td>
+  </tr>
+
+</table>
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_phase </td>
+       <td> A mixed problem for transport intensity equation
+       <br/> *Keywords:* Hetergenous paramterers and source function
        </td>
   </tr>
 
@@ -293,7 +326,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tutorial_thermo_plastic</td>
        <td> Solve thermo-elasto-plastic probelm
-       <br/> *Keywords:* *Keywords:* Multi-physiscs, Nonlinear problem, linearisation
+       <br/> *Keywords:* *Keywords:* multi-physiscs, nonlinear problem, remove dofs on skin
        </td>
   </tr>
 
@@ -327,7 +360,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\subpage mix_us_flow</td>
        <td> Mix formulation for capillary flow
-       <br/> *Keywords:* Capillary flow in unsaturated soil. Nonlinear mix-formulation
+       <br/> *Keywords:* capillary flow, unsaturated soil, nonlinear mix-formulation
        </td>
   </tr>
 
@@ -369,7 +402,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
         <td width="350px">\subpage elasticity_mixed_formulation</td>
         <td> Older implementation of mixed elastic problem
-        <br/> *Keywords:* Pressure field and incompressibility
+        <br/> *Keywords:* pressure field, incompressibility
         </td>
   </tr>
 
@@ -383,7 +416,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
         <td width="350px">\subpage reaction_diffusion_imp</td>
         <td> Reaction-diffusion Fisher's equation
-        <br/> *Keywords:* Time solver, Monitor, nonlinearity, 
+        <br/> *Keywords:* time solver, monitor, nonlinearity
         </td>
   </tr>
 

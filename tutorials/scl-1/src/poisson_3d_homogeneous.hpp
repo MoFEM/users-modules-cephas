@@ -8,7 +8,7 @@ using VolEle = MoFEM::VolumeElementForcesAndSourcesCore;
 
 using OpVolEle = MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator;
 
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 namespace Poisson3DHomogeneousOperators {
 

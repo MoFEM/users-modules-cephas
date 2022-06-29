@@ -276,7 +276,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
      * @return      error code
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
@@ -328,7 +328,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     FTensor::Index<'i', 3> i;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       const int nb_dofs = data.getIndices().size();
       if (nb_dofs == 0)
@@ -416,7 +416,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     VectorDouble nF;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       const int nb_dofs = data.getIndices().size();
       if (nb_dofs == 0)
@@ -500,8 +500,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
       const int nb_row = row_data.getIndices().size();
       const int nb_col = col_data.getIndices().size();
@@ -595,8 +595,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
       int nb_row = row_data.getIndices().size();
       int nb_col = col_data.getIndices().size();
@@ -708,8 +708,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
       int nb_row = row_data.getFieldData().size();
       int nb_col = col_data.getFieldData().size();
@@ -727,7 +727,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       nN.resize(nb_row, nb_col, false);
       divVec.resize(nb_col, false);
       nN.clear();
-      // take direvatives of base functions
+      // take derivatives of base functions
       FTensor::Index<'i', 3> i;
       auto t_base_diff_hdiv = col_data.getFTensor2DiffN<3, 3>();
       // Scale eq.
@@ -781,8 +781,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
       int nb_row = row_data.getFieldData().size();
       int nb_col = col_data.getFieldData().size();
@@ -810,7 +810,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       auto t_w = getFTensor0IntegrationWeight();
       // Get base function
       auto t_n_hdiv_row = row_data.getFTensor1N<3>();
-      // Get direvatives of base functions
+      // Get derivatives of base functions
       FTensor::Index<'i', 3> i;
       auto t_base_diff_hdiv = row_data.getFTensor2DiffN<3, 3>();
       // Get volume
@@ -869,7 +869,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     VectorDouble nF;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
@@ -940,7 +940,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
      * @return      error code
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       int nb_dofs = data.getFieldData().size();
       if (nb_dofs == 0)
@@ -988,7 +988,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
           cTx(ctx), postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       int nb_dofs = data.getFieldData().size();
       if (nb_dofs == 0)
@@ -1287,8 +1287,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
 
     PetscSection section;
     CHKERR mField.getInterface<ISManager>()->sectionCreate("MIX", &section);
-    CHKERR DMSetDefaultSection(dM, section);
-    CHKERR DMSetDefaultGlobalSection(dM, section);
+    CHKERR DMSetSection(dM, section);
     // CHKERR PetscSectionView(section,PETSC_VIEWER_STDOUT_WORLD);
     CHKERR PetscSectionDestroy(&section);
 

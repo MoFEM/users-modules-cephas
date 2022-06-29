@@ -80,7 +80,7 @@ struct PostProcCommonOnRefMesh {
     VectorDouble *vAluesPtr;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   /**
@@ -116,7 +116,7 @@ struct PostProcCommonOnRefMesh {
     VectorDouble *vAluesPtr;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 };
 
@@ -899,7 +899,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
           postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
 
       if (data.getIndices().size() == 0)
@@ -1106,7 +1106,7 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
           tagName(tag_name), fieldName(field_name), saveOnTag(save_on_tag) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   typedef struct OpGetFieldValuesOnSkinImpl<3> OpGetFieldGradientValuesOnSkin;

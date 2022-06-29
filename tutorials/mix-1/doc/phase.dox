@@ -1,0 +1,27 @@
+/*! \page tutorial_phase MIX-1: Retrive phase solving transport-of-intensity equation.
+
+\note Prerequisites of this tutorial include \ref tut_mix_poisson
+\note Idae based on the paper \cite parvizi2015practical 
+\note Data taken from paper \cite baldini2019biomechanics
+
+<br>
+
+\note Intended learning outcome:
+- Hetergounous source and parameters
+- Mixed formulation
+
+\section example_mix_1 Example solution
+
+\anchor mix_1_figure_1
+\image html mix_1_flux.png "Figure 1: Flux magnitued" width=1000px
+
+\anchor mix_1_figure_2
+\image html mix_1_phi.png "Figure 2: Value of phase" width=1000px
+
+\tableofcontents
+
+\section source_mix_1 Source code main code
+
+\include phase.cpp
+
+*/

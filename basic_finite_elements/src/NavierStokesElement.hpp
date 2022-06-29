@@ -40,7 +40,7 @@ struct NavierStokesElement {
       MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator;
   using FaceUserDataOperator =
       MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
-  using EntData = DataForcesAndSourcesCore::EntData;
+  using EntData = EntitiesFieldData::EntData;
 
   struct BlockData {
     int iD;

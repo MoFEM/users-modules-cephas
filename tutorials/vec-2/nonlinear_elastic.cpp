@@ -45,7 +45,7 @@ template <> struct ElementsAndOps<3> {
 
 constexpr int SPACE_DIM = 3; //< Space dimension of problem, mesh
 
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;

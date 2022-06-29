@@ -29,8 +29,8 @@ OpCalculatePlasticFlowLhs_dU::OpCalculatePlasticFlowLhs_dU(
 }
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
@@ -115,8 +115,8 @@ OpCalculateContrainsLhs_dU::OpCalculateContrainsLhs_dU(
 }
 
 MoFEMErrorCode OpCalculateContrainsLhs_dU::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
