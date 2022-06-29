@@ -178,9 +178,13 @@ struct KelvinVoigtDamper {
 
     string spatialPositionName;
     string spatialPositionNameDot;
+    string meshNodePositionName;
 
     std::map<std::string, std::vector<VectorDouble>> dataAtGaussPts;
     std::map<std::string, std::vector<MatrixDouble>> gradAtGaussPts;
+
+    boost::shared_ptr<MatrixDouble> dataAtGaussTmpPtr;
+    boost::shared_ptr<MatrixDouble> gradDataAtGaussTmpPtr;
 
     std::vector<MatrixDouble> dashpotFirstPiolaKirchhoffStress;
 
@@ -191,7 +195,13 @@ struct KelvinVoigtDamper {
     bool skipThis;
     std::map<int, int> nbActiveVariables, nbActiveResults;
 
-    CommonData() : recordOn(true), skipThis(true) {}
+    CommonData() : recordOn(true), skipThis(true) {
+      dataAtGaussTmpPtr = boost::make_shared<MatrixDouble>();
+      dataAtGaussTmpPtr->resize(3, 1);
+      gradDataAtGaussTmpPtr = boost::make_shared<MatrixDouble>();
+      gradDataAtGaussTmpPtr->resize(9, 1);
+      meshNodePositionName = "MESH_NODE_POSITIONS";
+    }
   };
   CommonData commonData;
 
@@ -212,13 +222,13 @@ struct KelvinVoigtDamper {
       MoFEMFunctionBegin;
       CHKERR MoFEM::VolumeElementForcesAndSourcesCore::preProcess();
 
-      if (ts_ctx == CTX_TSSETIFUNCTION) {
+      // if (ts_ctx == CTX_TSSETIFUNCTION) {
 
-        CHKERR mField.getInterface<VecManager>()->setOtherLocalGhostVector(
-            problemPtr, commonData.spatialPositionName,
-            commonData.spatialPositionNameDot, COL, ts_u_t, INSERT_VALUES,
-            SCATTER_REVERSE);
-      }
+      //   CHKERR mField.getInterface<VecManager>()->setOtherLocalGhostVector(
+      //       problemPtr, commonData.spatialPositionName,
+      //       commonData.spatialPositionNameDot, COL, ts_u_t, INSERT_VALUES,
+      //       SCATTER_REVERSE);
+      // }
 
       MoFEMFunctionReturn(0);
     }
@@ -254,15 +264,16 @@ struct KelvinVoigtDamper {
     CommonData &commonData;
     bool calcVal;
     bool calcGrad;
+    bool calcDot;
     EntityType zeroAtType;
 
     OpGetDataAtGaussPts(const std::string field_name, CommonData &common_data,
-                        bool calc_val, bool calc_grad,
+                        bool calc_val, bool calc_grad, bool calc_dot = false,
                         EntityType zero_at_type = MBVERTEX)
         : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL),
           commonData(common_data), calcVal(calc_val), calcGrad(calc_grad),
-          zeroAtType(zero_at_type) {}
+          calcDot(calc_dot), zeroAtType(zero_at_type) {}
 
     /** \brief Operator field value
      *
@@ -278,52 +289,56 @@ struct KelvinVoigtDamper {
       int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
       int nb_gauss_pts = data.getN().size1();
 
+      string field_name = commonData.spatialPositionName;
+      if (calcDot)
+        field_name = commonData.spatialPositionNameDot;
       // Initialize
       if (calcVal) {
-        commonData.dataAtGaussPts[rowFieldName].resize(nb_gauss_pts);
+        commonData.dataAtGaussPts[field_name].resize(nb_gauss_pts);
         for (int gg = 0; gg < nb_gauss_pts; gg++) {
-          commonData.dataAtGaussPts[rowFieldName][gg].resize(rank, false);
+          commonData.dataAtGaussPts[field_name][gg].resize(rank, false);
+          commonData.dataAtGaussPts[field_name][gg].clear();
         }
       }
       if (calcGrad) {
-        commonData.gradAtGaussPts[rowFieldName].resize(nb_gauss_pts);
+        commonData.gradAtGaussPts[field_name].resize(nb_gauss_pts);
         for (int gg = 0; gg < nb_gauss_pts; gg++) {
-          commonData.gradAtGaussPts[rowFieldName][gg].resize(rank, 3, false);
+          commonData.gradAtGaussPts[field_name][gg].resize(rank, 3, false);
+          commonData.gradAtGaussPts[field_name][gg].clear();
         }
       }
 
       // Zero values
-      if (type == zeroAtType) {
-        for (int gg = 0; gg < nb_gauss_pts; gg++) {
-          if (calcVal) {
-            commonData.dataAtGaussPts[rowFieldName][gg].clear();
-          }
-          if (calcGrad) {
-            commonData.gradAtGaussPts[rowFieldName][gg].clear();
-          }
-        }
-      }
+      // if (type == zeroAtType) {
+      //   for (int gg = 0; gg < nb_gauss_pts; gg++) {
+      //     if (calcVal) {
+      //       commonData.dataAtGaussPts[rowFieldName][gg].clear();
+      //     }
+      //     if (calcGrad) {
+      //       commonData.gradAtGaussPts[rowFieldName][gg].clear();
+      //     }
+      //   }
+      // }
 
-      VectorDouble &values = data.getFieldData();
+      auto t_disp = getFTensor1FromMat<3>(*commonData.dataAtGaussTmpPtr);
+      auto t_diff_disp =
+          getFTensor2FromMat<3, 3>(*commonData.gradDataAtGaussTmpPtr);
 
       // Calculate values at integration points
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
-        VectorDouble N = data.getN(gg, nb_dofs / rank);
-        MatrixDouble diffN = data.getDiffN(gg, nb_dofs / rank);
-        for (int dd = 0; dd < nb_dofs / rank; dd++) {
           for (int rr1 = 0; rr1 < rank; rr1++) {
             if (calcVal) {
-              commonData.dataAtGaussPts[rowFieldName][gg][rr1] +=
-                  N[dd] * values[rank * dd + rr1];
+              commonData.dataAtGaussPts[field_name][gg][rr1] = t_disp(rr1);
             }
             if (calcGrad) {
               for (int rr2 = 0; rr2 < 3; rr2++) {
-                commonData.gradAtGaussPts[rowFieldName][gg](rr1, rr2) +=
-                    diffN(dd, rr2) * values[rank * dd + rr1];
+                commonData.gradAtGaussPts[field_name][gg](rr1, rr2) =
+                    t_diff_disp(rr1, rr2);
               }
             }
           }
-        }
+          ++t_disp;
+          ++t_diff_disp;
       }
 
       MoFEMFunctionReturn(0);
@@ -805,14 +820,23 @@ struct KelvinVoigtDamper {
   MoFEMErrorCode setOperators(const int tag) {
     MoFEMFunctionBegin;
 
-    DamperFE *fe_ptr[] = {&feRhs, &feLhs};
-    for (int ss = 0; ss < 2; ss++) {
-      fe_ptr[ss]->getOpPtrVector().push_back(new OpGetDataAtGaussPts(
-          commonData.spatialPositionName, commonData, false, true));
-      fe_ptr[ss]->getOpPtrVector().push_back(new OpGetDataAtGaussPts(
-          commonData.spatialPositionNameDot, commonData, false, true));
+    for (auto &&fe_ptr : {&feRhs, &feLhs}) {
+      // CHKERR addHOOpsVol(commonData.meshNodePositionName, *fe_ptr, true, false,
+      //                    false, false);
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(
+              commonData.spatialPositionName,
+              commonData.gradDataAtGaussTmpPtr));
+      fe_ptr->getOpPtrVector().push_back(new OpGetDataAtGaussPts(
+          commonData.spatialPositionName, commonData, false, true, false));
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradientDot<3, 3>(
+              commonData.spatialPositionName,
+              commonData.gradDataAtGaussTmpPtr));
+      fe_ptr->getOpPtrVector().push_back(new OpGetDataAtGaussPts(
+          commonData.spatialPositionName, commonData, false, true, true));
     }
-
+       
     // attach tags for each recorder
     std::vector<int> tags;
     tags.push_back(tag);

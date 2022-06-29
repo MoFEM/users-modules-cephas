@@ -156,14 +156,20 @@ struct BcEntMethodDisp : public MoFEM::EntityMethod {
   }
 };
 
-struct BcEntMethodSpatial : public BcEntMethodDisp {
+struct BcEntMethodSpatial : public MoFEM::EntityMethod {
   // using BcEntMethodDisp::BcEntMethodDisp;
   string materialPositions;
+  DirichletDisplacementBc *dirichletBcPtr;
+  DataFromBc &dataFromDirichletBc;
   BcEntMethodSpatial(DirichletDisplacementBc *dirichlet_bc_ptr,
                      DataFromBc &data_from_dirichlet_bc,
                      string material_positions)
-      : BcEntMethodDisp(dirichlet_bc_ptr, data_from_dirichlet_bc),
+      : dirichletBcPtr(dirichlet_bc_ptr),
+        dataFromDirichletBc(data_from_dirichlet_bc),
         materialPositions(material_positions) {}
+
+  MoFEMErrorCode preProcess() { return 0; }
+  MoFEMErrorCode postProcess() { return 0; }
 
   MoFEMErrorCode operator()() {
     MoFEMFunctionBegin;
@@ -177,7 +183,7 @@ struct BcEntMethodSpatial : public BcEntMethodDisp {
     auto &field_ents_by_uid = field_ents->get<Unique_mi_tag>();
 
     auto get_coords = [&]() {
-      VectorDouble3 coords(3);
+      VectorDouble coords({0, 0, 0});
       if (entPtr->getEntType() == MBVERTEX) {
         auto eit =
             field_ents_by_uid.find(FieldEntity::getLocalUniqueIdCalculate(
@@ -302,7 +308,7 @@ struct DirichletDisplacementRemoveDofsBc : public DirichletDisplacementBc {
 
   MoFEMErrorCode iNitialize();
 
-  boost::shared_ptr<EntityMethod> getEntMethodPtr(DataFromBc &data) {
+  virtual boost::shared_ptr<EntityMethod> getEntMethodPtr(DataFromBc &data) {
     return boost::make_shared<BcEntMethodDisp>(this, data);
   }
 
@@ -327,7 +333,7 @@ struct DirichletSpatialRemoveDofsBc : public DirichletDisplacementRemoveDofsBc {
                                           is_partitioned),
         materialPositions(material_positions) {}
 
-  boost::shared_ptr<EntityMethod> getEntMethodPtr(DataFromBc &data) {
+  boost::shared_ptr<EntityMethod> getEntMethodPtr(DataFromBc &data) override {
     return boost::make_shared<BcEntMethodSpatial>(this, data,
                                                   materialPositions);
   }

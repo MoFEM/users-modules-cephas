@@ -71,9 +71,6 @@ int main(int argc, char *argv[]) {
         CHKERR m_field.add_field("SPATIAL_POSITION", H1,
                                  AINSWORTH_LEGENDRE_BASE, 3, MB_TAG_SPARSE,
                                  MF_ZERO);
-        CHKERR m_field.add_field("SPATIAL_POSITION_DOT", H1,
-                                 AINSWORTH_LEGENDRE_BASE, 3, MB_TAG_SPARSE,
-                                 MF_ZERO);
 
         // meshset consisting all entities in mesh
         EntityHandle root_set = moab.get_root_set();
@@ -81,8 +78,6 @@ int main(int argc, char *argv[]) {
         // are approx.)
         CHKERR m_field.add_ents_to_field_by_type(root_set, MBTET,
                                                  "SPATIAL_POSITION");
-        CHKERR m_field.add_ents_to_field_by_type(root_set, MBTET,
-                                                 "SPATIAL_POSITION_DOT");
 
         PetscBool flg;
         PetscInt order;
@@ -105,15 +100,6 @@ int main(int argc, char *argv[]) {
         CHKERR m_field.set_field_order(root_set, MBVERTEX, "SPATIAL_POSITION",
                                        1);
 
-        CHKERR m_field.set_field_order(root_set, MBTET, "SPATIAL_POSITION_DOT",
-                                       order);
-        CHKERR m_field.set_field_order(root_set, MBTRI, "SPATIAL_POSITION_DOT",
-                                       order);
-        CHKERR m_field.set_field_order(root_set, MBEDGE, "SPATIAL_POSITION_DOT",
-                                       order);
-        CHKERR m_field.set_field_order(root_set, MBVERTEX,
-                                       "SPATIAL_POSITION_DOT", 1);
-
         CHKERR m_field.build_fields();
 
         // Sett geometry approximation and initial spatial positions
@@ -135,8 +121,7 @@ int main(int argc, char *argv[]) {
 
         CHKERR m_field.modify_finite_element_add_field_data("DAMPER_FE",
                                                             "SPATIAL_POSITION");
-        CHKERR m_field.modify_finite_element_add_field_data(
-            "DAMPER_FE", "SPATIAL_POSITION_DOT");
+                                                            
         EntityHandle root_set = moab.get_root_set();
         CHKERR m_field.add_ents_to_finite_element_by_type(root_set, MBTET,
                                                           "DAMPER_FE");
@@ -166,16 +151,27 @@ int main(int argc, char *argv[]) {
 
       KelvinVoigtDamper::CommonData &common_data = damper.commonData;
       common_data.spatialPositionName = "SPATIAL_POSITION";
-      common_data.spatialPositionNameDot = "SPATIAL_POSITION_DOT";
+      common_data.spatialPositionNameDot = "DOT_SPATIAL_POSITION";
 
-      KelvinVoigtDamper::DamperFE *fe_ptr[] = {&damper.feRhs, &damper.feLhs};
-      for (int ss = 0; ss < 2; ss++) {
-        fe_ptr[ss]->getOpPtrVector().push_back(
+      for (auto &&fe_ptr : {&damper.feRhs, &damper.feLhs}) {
+        // fe_ptr->getOpPtrVector().push_back(
+        //     new OpCalculateVectorFieldValuesDot<3>(
+        //         common_data.spatialPositionName,
+        //         common_data.dataAtGaussTmpPtr));
+        fe_ptr->getOpPtrVector().push_back(
+            new OpCalculateVectorFieldGradient<3, 3>(
+                common_data.spatialPositionName,
+                common_data.gradDataAtGaussTmpPtr));
+        fe_ptr->getOpPtrVector().push_back(
             new KelvinVoigtDamper::OpGetDataAtGaussPts(
-                "SPATIAL_POSITION", common_data, false, true));
-        fe_ptr[ss]->getOpPtrVector().push_back(
+                common_data.spatialPositionName, common_data, false, true, false));
+        fe_ptr->getOpPtrVector().push_back(
+            new OpCalculateVectorFieldGradientDot<3, 3>(
+                common_data.spatialPositionName,
+                common_data.gradDataAtGaussTmpPtr));
+        fe_ptr->getOpPtrVector().push_back(
             new KelvinVoigtDamper::OpGetDataAtGaussPts(
-                "SPATIAL_POSITION_DOT", common_data, false, true));
+                common_data.spatialPositionName, common_data, false, true, true));
       }
 
       // attach tags for each recorder
@@ -232,6 +228,7 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMLoopFiniteElements(dm, "DAMPER_FE", &damper.feRhs);
       damper.feLhs.ts_B = M;   // Set matrix M
       damper.feLhs.ts_a = 1.0; // Set time step parameter
+      damper.feLhs.ts_u_t = U_t;
       CHKERR DMoFEMLoopFiniteElements(dm, "DAMPER_FE", &damper.feLhs);
       CHKERR VecAssemblyBegin(F);
       CHKERR VecAssemblyEnd(F);

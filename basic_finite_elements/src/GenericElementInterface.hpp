@@ -24,11 +24,24 @@
  */
 struct GenericElementInterface {
 
+  // typedef const char *TSType;
   enum TSType { EX, IM, IM2, IMEX, DEFAULT };
+  using BcMarkerPtr = boost::shared_ptr<std::vector<char unsigned>>;
+
+  // static BcMarkerPtr mBoundaryMarker;
+  BcMarkerPtr mBoundaryMarker;
 
   // GenericElementInterface() = delete;
   GenericElementInterface() {}
   virtual ~GenericElementInterface() {}
+
+  virtual MoFEMErrorCode setGlobalBoundaryMarker(BcMarkerPtr mark) {
+    MoFEMFunctionBeginHot;
+    mBoundaryMarker = mark;
+    MoFEMFunctionReturnHot(0);
+  }
+
+  virtual BcMarkerPtr getGlobalBoundaryMarker() { return mBoundaryMarker; };
 
   virtual MoFEMErrorCode getCommandLineParameters() { return 0; };
   virtual MoFEMErrorCode addElementFields() = 0;
@@ -43,13 +56,13 @@ struct GenericElementInterface {
 
   virtual MoFEMErrorCode setupSolverJacobianSNES() {
     MoFEMFunctionBeginHot;
-    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "SNES not implemented");
     MoFEMFunctionReturnHot(0);
   };
 
   virtual MoFEMErrorCode setupSolverFunctionSNES() {
     MoFEMFunctionBeginHot;
-    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "SNES not implemented");
     MoFEMFunctionReturnHot(0);
   };
 

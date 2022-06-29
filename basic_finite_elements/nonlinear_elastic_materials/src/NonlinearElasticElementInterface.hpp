@@ -106,17 +106,28 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
 
   MoFEMErrorCode setOperators() {
     MoFEMFunctionBegin;
+    auto &pipeline_rhs = elasticElementPtr->feRhs.getOpPtrVector();
+    auto &pipeline_lhs = elasticElementPtr->feLhs.getOpPtrVector();
+
+    pipeline_rhs.push_back(new OpSetBc(positionField, true, mBoundaryMarker));
+    pipeline_lhs.push_back(new OpSetBc(positionField, true, mBoundaryMarker));
+
     CHKERR elasticElementPtr->setOperators(positionField, meshNodeField, false,
                                            isDisplacementField);
+                                           
+    pipeline_rhs.push_back(new OpUnSetBc(positionField));
+    pipeline_lhs.push_back(new OpUnSetBc(positionField));
     MoFEMFunctionReturn(0);
   }
-  
+
   BitRefLevel getBitRefLevel() { return bIt; };
   MoFEMErrorCode addElementsToDM(SmartPetscObj<DM> dm) {
     MoFEMFunctionBeginHot;
     this->dM = dm;
     CHKERR DMMoFEMAddElement(dM, "ELASTIC");
-
+    mField.getInterface<Simple>()->getOtherFiniteElements().push_back(
+        "ELASTIC");
+        
     MoFEMFunctionReturnHot(0);
   };
 
@@ -138,18 +149,20 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
 
   MoFEMErrorCode setupSolverJacobianTS(const TSType type) {
     MoFEMFunctionBegin;
-
+    auto &method = elasticElementPtr->getLoopFeLhs();
     switch (type) {
     case IM:
-      CHKERR DMMoFEMTSSetIJacobian(
-          dM, "ELASTIC", &elasticElementPtr->getLoopFeLhs(), NULL, NULL);
+      CHKERR DMMoFEMTSSetIJacobian(dM, "ELASTIC", &method, &method, &method);
       break;
     case IM2:
-      CHKERR DMMoFEMTSSetI2Jacobian(
-          dM, "ELASTIC", &elasticElementPtr->getLoopFeLhs(), NULL, NULL);
+      CHKERR DMMoFEMTSSetI2Jacobian(dM, "ELASTIC", &method, &method, &method);
+      break;
+    case EX:
+      CHKERR DMMoFEMTSSetRHSJacobian(dM, "ELASTIC", &method, &method, &method);
       break;
     default:
-      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "This TS is not yet implemented");
       break;
     }
     MoFEMFunctionReturn(0);
@@ -157,15 +170,16 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
 
   MoFEMErrorCode setupSolverFunctionTS(const TSType type) {
     MoFEMFunctionBegin;
-
+    auto &method = elasticElementPtr->getLoopFeRhs();
     switch (type) {
     case IM:
-      CHKERR DMMoFEMTSSetIFunction(
-          dM, "ELASTIC", &elasticElementPtr->getLoopFeLhs(), NULL, NULL);
+      CHKERR DMMoFEMTSSetIFunction(dM, "ELASTIC", &method, &method, &method);
       break;
     case IM2:
-      CHKERR DMMoFEMTSSetI2Function(
-          dM, "ELASTIC", &elasticElementPtr->getLoopFeLhs(), NULL, NULL);
+      CHKERR DMMoFEMTSSetI2Function(dM, "ELASTIC", &method, &method, &method);
+      break;
+    case EX:
+      CHKERR DMMoFEMTSSetRHSFunction(dM, "ELASTIC", &method, &method, &method);
       break;
     default:
       SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
@@ -180,6 +194,10 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
     MoFEMFunctionBegin;
     if (!postProcMeshPtr) {
       postProcMeshPtr = boost::make_shared<PostProcVolumeOnRefinedMesh>(mField);
+
+      if (mField.check_field("MESH_NODE_POSITIONS"))
+        CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *postProcMeshPtr, true, false,
+                           false, false);
       CHKERR postProcMeshPtr->generateReferenceElementMesh();
       CHKERR postProcMeshPtr->addFieldValuesPostProc(positionField);
       CHKERR postProcMeshPtr->addFieldValuesPostProc(meshNodeField);
@@ -195,7 +213,7 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
 
     elasticElementPtr->getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
     elasticElementPtr->getLoopFeEnergy().eNergy = 0;
-    MOFEM_LOG("WORLD", Sev::inform) << "Loop energy\n";
+    // MOFEM_LOG("WORLD", Sev::inform) << "Loop energy\n";
     CHKERR DMoFEMLoopFiniteElements(dM, "ELASTIC",
                                     &elasticElementPtr->getLoopFeEnergy());
     // Print elastic energy
