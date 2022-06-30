@@ -14,7 +14,7 @@
 cmake_minimum_required (VERSION 3.1.3)
 
 project(MoFEM-UserModules 
-  VERSION 0.13.0
+  VERSION 0.13.1
   DESCRIPTION "Finite element framework" 
   LANGUAGES C CXX)
 
