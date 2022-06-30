@@ -343,17 +343,7 @@ int main(int argc, char *argv[]) {
           CHKERR m_field.getInterface<BitRefManager>()
               ->updateMeshsetByEntitiesChildren(cubit_meshset,
                                                 bit_levels.back(),
-                                                cubit_meshset, MBVERTEX, true);
-          CHKERR m_field.getInterface<BitRefManager>()
-              ->updateMeshsetByEntitiesChildren(cubit_meshset,
-                                                bit_levels.back(),
-                                                cubit_meshset, MBEDGE, true);
-          CHKERR m_field.getInterface<BitRefManager>()
-              ->updateMeshsetByEntitiesChildren(
-                  cubit_meshset, bit_levels.back(), cubit_meshset, MBTRI, true);
-          CHKERR m_field.getInterface<BitRefManager>()
-              ->updateMeshsetByEntitiesChildren(
-                  cubit_meshset, bit_levels.back(), cubit_meshset, MBTET, true);
+                                                cubit_meshset, MBMAXTYPE, true);
         }
       }
 

@@ -207,11 +207,13 @@ MoFEMErrorCode NonlinearPoisson::assembleSystem() {
     // implementation of 2D problem but not 3D ones)
 
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    domainTangentMatrixPipeline->getOpPtrVector().push_back(
+        new OpSetHOWeights(det_ptr));
 
     // Add default operator to calculate field values at integration points
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
@@ -232,11 +234,13 @@ MoFEMErrorCode NonlinearPoisson::assembleSystem() {
     // Add default operators to calculate inverse of Jacobian (needed for
     // implementation of 2D problem but not 3D ones)
     domainResidualVectorPipeline->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     domainResidualVectorPipeline->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     domainResidualVectorPipeline->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    domainResidualVectorPipeline->getOpPtrVector().push_back(
+        new OpSetHOWeights(det_ptr));
 
     // Add default operator to calculate field values at integration points
     domainResidualVectorPipeline->getOpPtrVector().push_back(

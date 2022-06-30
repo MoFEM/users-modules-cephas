@@ -140,11 +140,13 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::assembleSystem() {
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // domain elements
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetHOWeights(det_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsK(domainField, domainField, boundaryMarker));
   }

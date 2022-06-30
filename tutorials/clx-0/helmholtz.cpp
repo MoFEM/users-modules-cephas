@@ -28,9 +28,9 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEle = FaceElementForcesAndSourcesCore;
 using DomainEleOp = DomainEle::UserDataOperator;
-using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
+using EdgeEle = EdgeElementForcesAndSourcesCore;
 using EdgeEleOp = EdgeEle::UserDataOperator;
 
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
@@ -178,11 +178,13 @@ MoFEMErrorCode Example::assembleSystem() {
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetHOWeights(det_ptr));
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetBc("P_REAL", true, boundaryMarker));

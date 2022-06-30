@@ -247,14 +247,16 @@ MoFEMErrorCode Example::assembleSystem() {
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    if (SPACE_DIM == 2) {
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
-      pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-    }
+
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    pipeline.push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline.push_back(
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+    pipeline.push_back(new OpSetHOWeights(det_ptr));
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", matGradPtr));
@@ -345,17 +347,17 @@ MoFEMErrorCode Example::solveSystem() {
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  if (SPACE_DIM == 2) {
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
-  }
+
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
           "U", commonHenckyDataPtr->matGradPtr));

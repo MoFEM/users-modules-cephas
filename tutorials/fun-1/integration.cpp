@@ -29,7 +29,7 @@ using namespace MoFEM;
 
 static char help[] = "...\n\n";
 
-using Element = MoFEM::VolumeElementForcesAndSourcesCoreBase;
+using Element = MoFEM::VolumeElementForcesAndSourcesCore;
 using OpElement = Element::UserDataOperator;
 using EntData = EntitiesFieldData::EntData;
 

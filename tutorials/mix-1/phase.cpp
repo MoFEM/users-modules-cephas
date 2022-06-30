@@ -32,9 +32,9 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEle = FaceElementForcesAndSourcesCore;
 using DomainEleOp = DomainEle::UserDataOperator;
-using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
+using EdgeEle = EdgeElementForcesAndSourcesCore;
 using EdgeEleOp = EdgeEle::UserDataOperator;
 
 constexpr std::array<int, 3> d1_savitzky_golay_w3_p2 = {-1, 0, 1};
@@ -184,7 +184,7 @@ double Example::lhsFlux(const double x, const double y, const double) {
 
 struct Example::BoundaryOp : public EdgeEleOp {
   BoundaryOp(boost::shared_ptr<MatrixDouble> flux_ptr, double &glob_flux)
-      : EdgeEleOp(NOSPACE, OPLAST), fluxPtr(flux_ptr), globFlux(glob_flux) {}
+      : EdgeEleOp(NOSPACE, OPSPACE), fluxPtr(flux_ptr), globFlux(glob_flux) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;

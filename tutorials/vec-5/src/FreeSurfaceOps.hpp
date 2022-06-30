@@ -103,8 +103,8 @@ private:
   boost::shared_ptr<MatrixDouble> uPtr;
 };
 
-struct OpNormalForcebRhs : public AssemblyBoundaryEleOp {
-  OpNormalForcebRhs(const std::string field_name,
+struct OpNormalForceRhs : public AssemblyBoundaryEleOp {
+  OpNormalForceRhs(const std::string field_name,
                     boost::shared_ptr<VectorDouble> lambda_ptr)
       : AssemblyBoundaryEleOp(field_name, field_name,
                               AssemblyDomainEleOp::OPROW),
@@ -630,6 +630,18 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
     auto t_base = data.getFTensor0N();
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
 
+#ifndef NDEBUG
+    if(data.getDiffN().size1() != data.getN().size1())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
+    if (data.getDiffN().size2() != data.getN().size2() * SPACE_DIM) {
+      MOFEM_LOG("SELF", Sev::error)
+          << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
+      MOFEM_LOG("SELF", Sev::error) << data.getN();
+      MOFEM_LOG("SELF", Sev::error) << data.getDiffN();
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
+    }
+#endif
+
     if constexpr (I) {
 
       auto t_h = getFTensor0FromVec(*hPtr);
@@ -792,6 +804,28 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
     auto t_coords = getFTensor1CoordsAtGaussPts();
     auto t_row_base = row_data.getFTensor0N();
     auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
+
+#ifndef NDEBUG
+    if (row_data.getDiffN().size1() != row_data.getN().size1())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
+    if (row_data.getDiffN().size2() != row_data.getN().size2() * SPACE_DIM) {
+      MOFEM_LOG("SELF", Sev::error)
+          << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
+      MOFEM_LOG("SELF", Sev::error) << row_data.getN();
+      MOFEM_LOG("SELF", Sev::error) << row_data.getDiffN();
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
+    }
+
+    if (col_data.getDiffN().size1() != col_data.getN().size1())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
+    if (col_data.getDiffN().size2() != col_data.getN().size2() * SPACE_DIM) {
+      MOFEM_LOG("SELF", Sev::error)
+          << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
+      MOFEM_LOG("SELF", Sev::error) << col_data.getN();
+      MOFEM_LOG("SELF", Sev::error) << col_data.getDiffN();
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
+    }
+#endif
 
     if constexpr (I) {
 
@@ -1146,5 +1180,7 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
 
 private:
 };
+
+
 
 } // namespace FreeSurfaceOps

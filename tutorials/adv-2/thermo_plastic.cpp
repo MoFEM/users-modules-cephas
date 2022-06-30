@@ -158,6 +158,8 @@ double scale = 1.;
 
 double young_modulus = 206913;
 double poisson_ratio = 0.29;
+double coeff_expansion = 10e-6;
+double ref_temp = 0.0;
 double rho = 0;
 double sigmaY = 450;
 double H = 129;
@@ -276,7 +278,7 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->addDomainField("TAU", L2, base, 1);
   CHKERR simple->addDomainField("EP", L2, base, size_symm);
   CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
-  // Temerature
+  // Temperature
   const auto flux_space = (SPACE_DIM == 2) ? HCURL : HDIV;
   CHKERR simple->addDomainField("T", L2, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addDomainField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
@@ -305,6 +307,10 @@ MoFEMErrorCode Example::createCommonData() {
                                  &young_modulus, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-poisson_ratio",
                                  &poisson_ratio, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-coeff_expansion",
+                                 &coeff_expansion, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-ref_temp", &ref_temp,
+                                 PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-hardening", &H, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-hardening_viscous", &visH,
                                  PETSC_NULL);
@@ -336,6 +342,8 @@ MoFEMErrorCode Example::createCommonData() {
                                  &amplitude_shift, PETSC_NULL);
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Coeff_expansion " << coeff_expansion;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Reference_temperature  " << ref_temp;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " << sigmaY;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Hardening " << H;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
@@ -552,13 +560,16 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    pipeline.push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline.push_back(
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+
     if (SPACE_DIM == 2) {
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
-      pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
       pipeline.push_back(new OpMakeHdivFromHcurl());
       pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
@@ -593,8 +604,8 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
-    pipeline.push_back(
-        new OpPlasticStress("U", commonPlasticDataPtr, m_D_ptr, 1));
+    pipeline.push_back(new PlasticThermalOps::OpPlasticStressThermal(
+        "U", commonPlasticDataPtr, m_D_ptr, 1));
 
     if (m_D_ptr != commonPlasticDataPtr->mDPtr_Axiator)
       pipeline.push_back(
@@ -608,6 +619,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(new OpKCauchy("U", "U", m_D_ptr));
+    pipeline.push_back(new PlasticThermalOps::OpKCauchyThermoElasticity(
+        "U", "T", commonPlasticDataPtr, m_D_ptr));
     pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
         "U", "EP", commonPlasticDataPtr, m_D_ptr));
 
@@ -930,15 +943,14 @@ MoFEMErrorCode Example::OPs() {
 
     if (reactionMarker) {
 
-      if (SPACE_DIM == 2) {
-        auto det_ptr = boost::make_shared<VectorDouble>();
-        auto jac_ptr = boost::make_shared<MatrixDouble>();
-        auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-        pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
-        pipeline.push_back(
-            new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-        pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-      }
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+      pipeline.push_back(
+          new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+      pipeline.push_back(
+          new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
       pipeline.push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -948,8 +960,8 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
                                             commonPlasticDataPtr->mStrainPtr));
-      pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr,
-                                             commonPlasticDataPtr->mDPtr, 1));
+      pipeline.push_back(new PlasticThermalOps::OpPlasticStressThermal(
+          "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
       pipeline.push_back(new OpSetBc("U", false, reactionMarker));
 
       // Calculate internal forece
@@ -997,17 +1009,16 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
-    if (SPACE_DIM == 2) {
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      postProcFe->getOpPtrVector().push_back(
-          new OpCalculateHOJacForFace(jac_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpSetInvJacH1ForFace(inv_jac_ptr));
-    }
+
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -1022,8 +1033,9 @@ MoFEMErrorCode Example::tsSolve() {
 
     postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
-    postProcFe->getOpPtrVector().push_back(new OpPlasticStress(
-        "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
+    postProcFe->getOpPtrVector().push_back(
+        new PlasticThermalOps::OpPlasticStressThermal(
+            "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
     postProcFe->getOpPtrVector().push_back(
         new Tutorial::OpPostProcElastic<SPACE_DIM>(
             "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,

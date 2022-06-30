@@ -115,13 +115,7 @@ int main(int argc, char *argv[]) {
       for (_IT_CUBITMESHSETS_FOR_LOOP_(m_field, ciit)) {
         EntityHandle cubit_meshset = ciit->meshset;
         CHKERR bit_mng->updateMeshsetByEntitiesChildren(
-            cubit_meshset, bit_levels.back(), cubit_meshset, MBVERTEX, true);
-        CHKERR bit_mng->updateMeshsetByEntitiesChildren(
-            cubit_meshset, bit_levels.back(), cubit_meshset, MBEDGE, true);
-        CHKERR bit_mng->updateMeshsetByEntitiesChildren(
-            cubit_meshset, bit_levels.back(), cubit_meshset, MBTRI, true);
-        CHKERR bit_mng->updateMeshsetByEntitiesChildren(
-            cubit_meshset, bit_levels.back(), cubit_meshset, MBTET, true);
+            cubit_meshset, bit_levels.back(), cubit_meshset, MBMAXTYPE, true);
       }
       MoFEMFunctionReturn(0);
     };

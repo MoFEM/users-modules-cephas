@@ -21,14 +21,14 @@
 #include <MoFEM.hpp>
 using namespace MoFEM;
 
-static char help[] =
-    "Uniform mesh refinement\n\n"
+static char help[] = "Uniform mesh refinement\n\n"
 
-    "Usage example:\n"
+                     "Usage example:\n"
 
-    "$ ./uniform_mesh_refinement -my_file mesh.h5m -output_file refined_mesh.h5m"
-    
-    "\n\n";
+                     "$ ./uniform_mesh_refinement -my_file mesh.h5m "
+                     "-output_file refined_mesh.h5m"
+
+                     "\n\n";
 
 int main(int argc, char *argv[]) {
 
@@ -39,6 +39,9 @@ int main(int argc, char *argv[]) {
     // global variables
     char mesh_file_name[255];
     char mesh_out_file[255] = "out.h5m";
+    int dim = 3;
+    int nb_levels = 1;
+    PetscBool shift = PETSC_TRUE;
     PetscBool flg_file = PETSC_FALSE;
 
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "none", "none");
@@ -48,6 +51,13 @@ int main(int argc, char *argv[]) {
                               mesh_file_name, 255, &flg_file);
     CHKERR PetscOptionsString("-output_file", "output mesh file name", "",
                               "mesh.h5m", mesh_out_file, 255, PETSC_NULL);
+    CHKERR PetscOptionsInt("-dim", "entities dim", "", dim, &dim, PETSC_NULL);
+    CHKERR PetscOptionsInt("-nb_levels", "number of refinement levels", "",
+                           nb_levels, &nb_levels, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-shift",
+                            "shift bits, squash entities of refined elements",
+                            "", shift, &shift, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -67,47 +77,112 @@ int main(int argc, char *argv[]) {
     MoFEM::Interface &m_field = core;
 
     if (flg_file != PETSC_TRUE) {
-      SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "*** ERROR -my_file (-file_name) (mesh file needed)");
     }
 
     BitRefManager *bit_ref_manager;
     CHKERR m_field.getInterface(bit_ref_manager);
 
-    CHKERR bit_ref_manager->setBitRefLevelByDim(0, 3, BitRefLevel().set(0));
+    auto bit = [](auto l) { return BitRefLevel().set(l); };
 
-    Range ents3d;
-    rval = moab.get_entities_by_dimension(0, 3, ents3d, false);
-    Range edges;
-    CHKERR moab.get_adjacencies(ents3d, 1, true, edges, moab::Interface::UNION);
+    CHKERR bit_ref_manager->setBitRefLevelByDim(0, dim, bit(0));
 
-    EntityHandle meshset_ref_edges;
-    CHKERR moab.create_meshset(MESHSET_SET, meshset_ref_edges);
-    CHKERR moab.add_entities(meshset_ref_edges, edges);
+    for (auto l = 0; l != nb_levels; ++l) {
+      Range ents;
+      CHKERR bit_ref_manager->getEntitiesByDimAndRefLevel(
+          bit(l), BitRefLevel().set(), dim, ents);
 
-    MeshRefinement *refine;
-    CHKERR m_field.getInterface(refine);
+      Range edges;
+      CHKERR moab.get_adjacencies(ents, 1, true, edges, moab::Interface::UNION);
 
-    CHKERR refine->addVerticesInTheMiddleOfEdges(meshset_ref_edges,
-                                                      BitRefLevel().set(1));
-    CHKERR refine->refineTets(0, BitRefLevel().set(1));
+      EntityHandle meshset_ref_edges;
+      CHKERR moab.create_meshset(MESHSET_SET, meshset_ref_edges);
+      CHKERR moab.add_entities(meshset_ref_edges, edges);
 
-    // update cubit meshsets
-    for (_IT_CUBITMESHSETS_FOR_LOOP_(m_field, ciit)) {
-      EntityHandle cubit_meshset = ciit->meshset;
-      CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
-          cubit_meshset, BitRefLevel().set(1), cubit_meshset, MBVERTEX, true);
-      CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
-          cubit_meshset, BitRefLevel().set(1), cubit_meshset, MBEDGE, true);
-      CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
-          cubit_meshset, BitRefLevel().set(1), cubit_meshset, MBTRI, true);
-      CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
-          cubit_meshset, BitRefLevel().set(1), cubit_meshset, MBTET, true);
+      MeshRefinement *refine = m_field.getInterface<MeshRefinement>();
+
+      CHKERR refine->addVerticesInTheMiddleOfEdges(meshset_ref_edges,
+                                                   bit(l + 1));
+      if (dim == 3) {
+        CHKERR refine->refineTets(ents, bit(l + 1));
+      } else if (dim == 2) {
+        CHKERR refine->refineTris(ents, bit(l + 1));
+      } else {
+        SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+                "Refinment implemented only for three and two dimensions");
+      }
+
+      auto update_meshsets = [&]() {
+        MoFEMFunctionBegin;
+        // update cubit meshsets
+        for (_IT_CUBITMESHSETS_FOR_LOOP_(m_field, ciit)) {
+          EntityHandle cubit_meshset = ciit->meshset;
+          CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
+              cubit_meshset, bit(l + 1), cubit_meshset, MBMAXTYPE, true);
+        }
+        MoFEMFunctionReturn(0);
+      };
+
+      auto update_partition_sets = [&]() {
+        MoFEMFunctionBegin;
+
+        ParallelComm *pcomm = ParallelComm::get_pcomm(
+            &m_field.get_moab(), m_field.get_basic_entity_data_ptr()->pcommID);
+        Tag part_tag = pcomm->part_tag();
+
+        Range tagged_sets;
+        CHKERR m_field.get_moab().get_entities_by_type_and_tag(
+            0, MBENTITYSET, &part_tag, NULL, 1, tagged_sets,
+            moab::Interface::UNION);
+
+        for (auto m : tagged_sets) {
+
+          int part;
+          CHKERR moab.tag_get_data(part_tag, &m, 1, &part);
+
+          for (auto t = CN::TypeDimensionMap[dim].first;
+               t <= CN::TypeDimensionMap[dim].second; t++) {
+
+            // Refinement is only implemented for simplexes in 2d and 3d
+            if (t == MBTRI || t == MBTET) {
+              Range ents;
+              CHKERR moab.get_entities_by_type(m, t, ents, true);
+              CHKERR bit_ref_manager->filterEntitiesByRefLevel(
+                  bit(l), BitRefLevel().set(), ents);
+
+              Range children;
+              CHKERR bit_ref_manager->updateRangeByChildren(ents, children);
+              CHKERR bit_ref_manager->filterEntitiesByRefLevel(
+                  bit(l + 1), BitRefLevel().set(), children);
+              children = subtract(children, children.subset_by_type(MBVERTEX));
+
+              Range adj;
+              for (auto d = 1; d != dim; ++d) {
+                CHKERR moab.get_adjacencies(children.subset_by_dimension(dim),
+                                            d, false, adj,
+                                            moab::Interface::UNION);
+              }
+              children.merge(adj);
+
+              CHKERR moab.add_entities(m, children);
+              CHKERR moab.tag_clear_data(part_tag, children, &part);
+            }
+          }
+        }
+        MoFEMFunctionReturn(0);
+      };
+
+      CHKERR update_partition_sets();
+      CHKERR update_meshsets();
+
+      CHKERR moab.delete_entities(&meshset_ref_edges, 1);
     }
 
-    CHKERR core.getInterface<BitRefManager>()->shiftRightBitRef(
-        1, BitRefLevel().set(), VERBOSE);
+    if (shift == PETSC_TRUE)
+      CHKERR core.getInterface<BitRefManager>()->shiftRightBitRef(
+          nb_levels, BitRefLevel().set(), VERBOSE);
 
-    CHKERR moab.delete_entities(&meshset_ref_edges, 1);
     CHKERR moab.write_file(mesh_out_file);
   }
   CATCH_ERRORS;
