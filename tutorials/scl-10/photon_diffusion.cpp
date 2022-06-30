@@ -470,7 +470,7 @@ MoFEMErrorCode PhotonDiffusion::boundaryCondition() {
   auto *simple = mField.getInterface<Simple>();
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "EXT",
                                         "PHOTON_FLUENCE_RATE", 0, 0, false);
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "LASER",
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "LSR",
                                         "PHOTON_FLUENCE_RATE", 0, 0, false);
 
   // Get boundary edges marked in block named "BOUNDARY_CONDITION"
@@ -585,7 +585,7 @@ MoFEMErrorCode PhotonDiffusion::assembleSystem() {
 
             b.second->getBcEntsPtr()));
       }
-      if (std::regex_match(b.first, std::regex("(.*)LASER(.*)"))) {
+      if (std::regex_match(b.first, std::regex("(.*)LSR(.*)"))) {
         pipeline.push_back(new OpBoundarySource(
             "PHOTON_FLUENCE_RATE",
 
