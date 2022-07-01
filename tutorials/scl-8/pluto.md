@@ -155,15 +155,10 @@ When problem is expressed in that form, we call it that it is strong form. For c
 
 This is a nonlinear partial differential equation since radiation is a nonlinear function of unknown distribution of temperature. You can notice as well that time does not explicitly is involved in the equations. This is a consequence of the assumptions above. We are looking at long periods, like time over several Plutos years (Pluto orbit has ~248 years), where average values are our initial interest.
 
-+++
 
 # Part II
 
-+++
-
-## Running code. 
-
-```{code-cell} ipython3
+```python
 # Running code
 
 # -ts_dt step size
@@ -201,17 +196,13 @@ wd='%s/um_view/tutorials/scl-8' % home_dir
 -snes_linesearch_type bt 2>&1 | tee {log_file}
 ```
 
-## Creating VTK file
-
-```{code-cell} ipython3
+```python
 # Convert h5m file into VTK file
 !cd {wd} && /mofem_install/um_view/bin/mbconvert out_radiation.h5m out_radiation.vtk
 !ls {wd}
 ```
 
-## Printing Newton iterations and time stepping
-
-```{code-cell} ipython3
+```python
 newton_log_file="newton_log_file.txt"
 !cd {wd} && grep "SNES Function norm" {log_file} > {newton_log_file} 
 
@@ -230,18 +221,18 @@ plt.grid(True)
 plt.show()
 ```
 
-## Plotting solution on mesh and temperature distribution
+```python
+# Plotting solution on mesh and temperature distribution
 
-```{code-cell} ipython3
 import os
-from pyvirtualdisplay import Display
-display = Display(backend="xvfb", visible=False, size=(1200, 800))
-display.start()
+
 
 # Plot solution
 import pyvista as pv
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+pv.start_xvfb()
+
 mesh = pv.read(wd+'/'+'out_radiation.vtk')
 my_cmap = plt.cm.get_cmap("jet", 12)
 
@@ -253,16 +244,15 @@ mesh.plot(
     cpos="xy",
     scalars="T", 
     smooth_shading=True, 
-    cmap=my_cmap)
+    cmap=my_cmap,jupyter_backend='pythreejs')
 
-# Print a screen shot
+# Print a screen shotOOO
 # import matplotlib.pyplot as plt
 # import matplotlib.image as mpimg
 # img = mpimg.imread(wd+'/myscreenshot.png')
 # imgplot = plt.imshow(img)
 # plt.show()
 ```
-
 
 # Part III
 
@@ -458,34 +448,13 @@ where $\mathbf{r}^h_a$ is vector of size $N$, and $\mathbf{k}^h_{ba}$ is matrix 
 which we can solve for $\delta\overline{T}_{k+1}$. Note that $\mathbf{k}_k^h$ and $\mathbf{r}^h_k$ for step $k$, and calculated value of unknown vector $\delta\overline{T}_{k+1}$  is for step $k+1$. Equation ($\ref{eq:approx4}$) is series of linear equation, which can solved efficiently.  
 
 
-# Axisymmetric problem  
-
-For computational efficiency, we assume that problem is axisymmetric. This is a case when the problem conveniently can be expressed in [cylindrical coordinate system](https://en.wikipedia.org/wiki/Cylindrical_coordinate_system). Temperature field can be expressed in the Cartesian coordinate system $T(\mathbf{x})=T(x,y,z)$, or equivalently in the cylindrical coordinate system $T(\mathbf{x})=T(r,z,\theta)$. When $T(r,z,0)=T(r,z,\theta)$ for all $\theta$, there is no change of temperature in the radial direction, then the problem can be simplified, and solved as an axisymmetric problem. That is justified because we are looking at longer times than single Pluto day, and we neglect the topological changes on the planet surface. The analysis can be done then calculated on 2d mesh, where the only slice of the planned is meshed, as in the example above.  
-
-In axisymmetric case, in the finite element implementation, in all volume integrals above are expressed as follows,
-
-\begin{equation}
-\int_\Omega (\cdot) \textrm{d}V =
-2\pi \int_r \int_z (\cdot) r \textrm{d}r\textrm{d}z  
-\end{equation}
-
-and surface integral is
-
-\begin{equation}
-\int_\Gamma (\cdot) \textrm{d}S =
-2\pi \int_L (\cdot) r \textrm{d}l 
-\tag{23}
-\end{equation}
-
-+++
-
 # Part IV
 
 ## Algorithm for the Newton method
 
 Now we will make loops for the Newton method and time stepping. First, we will start with an internal loop of Newton method:
 
-```{code-cell} ipython3
+```python
 # max_it - maximal number of iterations
 # snes_atol - absolut tolerance
 # snes_rtol - relative tolerance
@@ -557,8 +526,6 @@ This is how Newton method looks; it is evaluating residual $\mathbf{r}$, matrix 
 
 Here we have a relatively simple function. In general, the key difficulty for more complex problems is to calculate correctly tangent matrix $\mathbf{k}$. That is essential to achieve a quadratic rate of convergence. The Newton method iterations are costly for big problems, and "quadratic" order of convergence allows to obtain solution fast.  
 
-+++
-
 ## Substepping
 
 Newton method is conditionally stable; it converges if the initial guess is close enough to the solution. The initial solution has to be in so-called "convergence ball" if it is outside of it, Newton methods diverge, i.e. not yield a meaning solution. In that case, substepping can help. Another technique improving convergence is a line-searcher method, which is used in Pluto example. However, we will skip the description of line-searcher for another occasion. 
@@ -567,7 +534,7 @@ If Pluto is not subjected to sun irradiation, then it is easy to guess the solut
 
 Algorithms can look as follows:
 
-```{code-cell} ipython3
+```python
 step_arr = []
 for t in np.arange(0.0, 1.25, 0.25):
     print("Psudo time %f" % t)
@@ -583,7 +550,7 @@ for t in np.arange(0.0, 1.25, 0.25):
     print()
 ```
 
-```{code-cell} ipython3
+```python
 plt.rcParams['figure.figsize'] = [15, 10]
 plt.plot(step_arr,'r^-')
 plt.title('Neton method convergence')
@@ -599,3 +566,7 @@ Note that this plot looks very similar to plot obtained for axisymmetric model o
 # Final remarks
 
 Look into the C++ code.
+
+```python
+
+```

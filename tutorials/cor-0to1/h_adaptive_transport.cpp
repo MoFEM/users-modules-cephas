@@ -357,16 +357,7 @@ struct MyTransport : public MixTransportElement {
       EntityHandle meshset = it->meshset;
       CHKERR mField.getInterface<BitRefManager>()
           ->updateMeshsetByEntitiesChildren(meshset, ref_level, meshset,
-                                            MBVERTEX, true);
-      CHKERR mField.getInterface<BitRefManager>()
-          ->updateMeshsetByEntitiesChildren(meshset, ref_level, meshset, MBEDGE,
-                                            true);
-      CHKERR mField.getInterface<BitRefManager>()
-          ->updateMeshsetByEntitiesChildren(meshset, ref_level, meshset, MBTRI,
-                                            true);
-      CHKERR mField.getInterface<BitRefManager>()
-          ->updateMeshsetByEntitiesChildren(meshset, ref_level, meshset, MBTET,
-                                            true);
+                                            MBMAXTYPE, true);
     }
     MoFEMFunctionReturn(0);
   }

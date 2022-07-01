@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
                                 mesh_file_name, 255, &flg_file);
     if (flg_file != PETSC_TRUE)
       SETERRQ(PETSC_COMM_SELF, 1,
-              "*** ERROR -my_file (-file_name) (MESH FILE NEEDED)");
+              "*** ERROR -my_file (-file_name) (mesh file needed)");
 
     const char *option;
     option = "";

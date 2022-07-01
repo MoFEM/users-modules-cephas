@@ -203,7 +203,13 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
                                            "U", 0, 3);
 
-  //! [Pushing gravity load operator]
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, nullptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeights(det_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
       "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
   //! [Pushing gravity load operator]
@@ -217,17 +223,16 @@ MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  if (SPACE_DIM == 2) {
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
-  }
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeights(det_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
 
   auto integration_rule = [](int, int, int approx_order) {
@@ -271,14 +276,13 @@ MoFEMErrorCode Example::outputResults() {
   pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  if (SPACE_DIM == 2) {
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
-  }
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
@@ -307,17 +311,17 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getDomainLhsFE().reset();
 
-  if (SPACE_DIM == 2) {
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
-  }
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeights(det_ptr));
+
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));

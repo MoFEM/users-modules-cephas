@@ -461,10 +461,10 @@ Each of those user data operators are added to finite element, for example to
 auto det_ptr = boost::make_shared<VectorDouble>();
 auto jac_ptr = boost::make_shared<MatrixDouble>();
 auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-vol_ele_stiff_rhs->getOpPtrVector().push_back(new OpCalculateHOJacForFace(jac_ptr));
+vol_ele_stiff_rhs->getOpPtrVector().push_back(new OpCalculateHOJac<2>(jac_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
-MoFEM::OpSetInvJacH1ForFace(inv_jac_ptr));
+MoFEM::OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
 MoFEM::OpCalculateScalarFieldValuesDot("u", dot_val_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
@@ -472,7 +472,7 @@ MoFEM::OpCalculateScalarFieldGradient<2>("u", grad_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
 ReactionDiffusionEquation::OpAssembleStiffRhs<2>(data)); 
 \endcode 
-where MoFEM::OpCalculateJacForFace,  and MoFEM::OpSetInvJacH1ForFace are
+where MoFEM::OpCalculateJacForFace,  and MoFEM::OpSetHOInvJacToScalarBases<2> are
 standard operators to calculate element inverse of jacobian, and pull
 derivatives of base functions to element reference configuration \f[
 \frac{\partial \pmb\Phi}{\partial \mathbf{x}} = \frac{\partial

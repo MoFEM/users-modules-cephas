@@ -30,13 +30,13 @@ static char help[] = "...\n\n";
 template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
-  using DomainEle = FaceElementForcesAndSourcesCoreBase;
+  using DomainEle = FaceElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
 template <> struct ElementsAndOps<3> {
-  using DomainEle = VolumeElementForcesAndSourcesCoreBase;
+  using DomainEle = VolumeElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };

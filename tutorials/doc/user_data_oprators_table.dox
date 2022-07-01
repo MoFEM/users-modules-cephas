@@ -407,7 +407,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 <td>
 
 Push face base function to physical element configuration.
-\ref MoFEM::OpSetInvJacH1ForFace
+\ref MoFEM::OpSetHOInvJacToScalarBases<2>
 This operator assumes that the face element is on the XY plane.
 
 \f[
@@ -421,7 +421,7 @@ This operator assumes that the face element is on the XY plane.
 \code
 auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpSetInvJacH1ForFace(inv_jac_ptr));
+  new OpSetHOInvJacToScalarBases<2>(inv_jac_ptr));
 \endcode
 
 <tr>

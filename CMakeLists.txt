@@ -14,7 +14,7 @@
 cmake_minimum_required (VERSION 3.1.3)
 
 project(MoFEM-UserModules 
-  VERSION 0.13.0
+  VERSION 0.13.1
   DESCRIPTION "Finite element framework" 
   LANGUAGES C CXX)
 
@@ -42,7 +42,7 @@ if(NOT MPI_RUN_FLAGS)
 endif(NOT MPI_RUN_FLAGS)
 
 # This is obsolete option should not be used, is set for back compatibility
-# with some old modules. You should replace UM_SOURCE_DIR by PROJECT_SOURCE_DIR
+# with some old D_LIBCPP_DISABLE_DEPRECATION_WARNINGSmodules. You should replace UM_SOURCE_DIR by PROJECT_SOURCE_DIR
 # when you spot it in your code.
 set(UM_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 
@@ -60,6 +60,7 @@ add_definitions(
   -DMoFEM_VERSION_BUILD=${MoFEM_VERSION_BUILD})
 
 add_definitions(${MoFEM_DEFINE_RESTRICT})
+add_definitions("-D_LIBCPP_DISABLE_DEPRECATION_WARNINGS")
 
 # Find mbconvert
 find_program(

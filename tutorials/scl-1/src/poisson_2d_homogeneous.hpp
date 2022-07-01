@@ -1,11 +1,32 @@
-// Define name if it has not been defined yet
-#ifndef __POISSON2DHOMOGENEOUS_HPP__
-#define __POISSON2DHOMOGENEOUS_HPP__
+/**
+ * \file poisson_2d_homogeneous.hpp
+ * \example poisson_2d_homogeneous.hpp
+ *
+ * Solution of poisson equation. Direct implementation of User Data Operators
+ * for teaching proposes.
+ *
+ * \note In practical application we suggest use form integrators to generalise
+ * and simplify code. However, here we like to expose user to ways how to
+ * implement data operator from scratch.
+ */
 
-// Include standard library and Header file for basic finite elements
-// implementation
-#include <stdlib.h>
-#include <BasicFiniteElements.hpp>
+/* This file is part of MoFEM.
+ * MoFEM is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * MoFEM is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+ * License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
+// Define name if it has not been defined yet
+#ifndef __POISSON_2D_HOMOGENEOUS_HPP__
+#define __POISSON_2D_HOMOGENEOUS_HPP__
 
 // Use of alias for some specific functions
 // We are solving Poisson's equation in 2D so Face element is used
@@ -150,4 +171,4 @@ private:
 
 }; // namespace Poisson2DHomogeneousOperators
 
-#endif //__POISSON2DHOMOGENEOUS_HPP__
+#endif //__POISSON_2D_HOMOGENEOUS_HPP__

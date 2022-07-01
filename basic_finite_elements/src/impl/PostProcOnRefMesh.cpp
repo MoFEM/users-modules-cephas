@@ -531,9 +531,9 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::postProcess() {
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    // wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
     pcomm_post_proc_mesh =
-        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+        new ParallelComm(&postProcMesh, PETSC_COMM_WORLD/*wrapRefMeshComm->get_comm()*/);
   }
 
   Range prims;
@@ -823,15 +823,14 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
     postProcMesh.delete_mesh();
 
     auto get_number_of_computational_elements = [&]() {
-      auto fe_name = this->feName;
       auto fe_ptr = this->problemPtr->numeredFiniteElementsPtr;
 
       auto miit =
           fe_ptr->template get<Composite_Name_And_Part_mi_tag>().lower_bound(
-              boost::make_tuple(fe_name, this->getLoFERank()));
+              boost::make_tuple(this->getFEName(), this->getLoFERank()));
       auto hi_miit =
           fe_ptr->template get<Composite_Name_And_Part_mi_tag>().upper_bound(
-              boost::make_tuple(fe_name, this->getHiFERank()));
+              boost::make_tuple(this->getFEName(), this->getHiFERank()));
 
       const int number_of_ents_in_the_loop = this->getLoopSize();
       if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
@@ -844,8 +843,17 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
       std::fill(nb_elemms_by_type.begin(), nb_elemms_by_type.end(), 0);
 
       for (; miit != hi_miit; ++miit) {
-        auto type = (*miit)->getEntType();
-        ++nb_elemms_by_type[type];
+
+        bool add = true;
+        if (exeTestHook) {
+          numeredEntFiniteElementPtr = *miit;
+          add = exeTestHook(this);
+        }
+
+        if (add) {
+          auto type = (*miit)->getEntType();
+          ++nb_elemms_by_type[type];
+        }
       }
 
       return nb_elemms_by_type;
@@ -909,10 +917,10 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
     ParallelComm *pcomm_post_proc_mesh =
         ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
     if (pcomm_post_proc_mesh == NULL) {
-      wrapRefMeshComm =
-          boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-      pcomm_post_proc_mesh =
-          new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+      // wrapRefMeshComm =
+      //     boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+      pcomm_post_proc_mesh = new ParallelComm(
+          &postProcMesh, PETSC_COMM_WORLD /* wrapRefMeshComm->get_comm()*/);
     }
 
     Range faces;
@@ -1116,10 +1124,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
-  return opSwitch<0>();
-}
-
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::generateReferenceElementMesh() {
   MoFEMFunctionBegin;
 
@@ -1164,9 +1168,9 @@ MoFEMErrorCode PostProcEdgeOnRefinedMesh::postProcess() {
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-    pcomm_post_proc_mesh =
-        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+    // wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh = new ParallelComm(
+        &postProcMesh, PETSC_COMM_WORLD /*wrapRefMeshComm->get_comm()*/);
   }
 
   Range edges;
