@@ -14,7 +14,7 @@
 cmake_minimum_required (VERSION 3.1.3)
 
 project(MoFEM-UserModules 
-  VERSION 0.13.0
+  VERSION 0.13.1
   DESCRIPTION "Finite element framework" 
   LANGUAGES C CXX)
 
@@ -60,9 +60,12 @@ add_definitions(
   -DMoFEM_VERSION_BUILD=${MoFEM_VERSION_BUILD})
 
 add_definitions(${MoFEM_DEFINE_RESTRICT})
-# suppres C++17 warrnings in Boost and other libs, mostly related to std::iterator
-add_definitions("-D_LIBCPP_DISABLE_DEPRECATION_WARNINGS")
-add_definitions("-D_LIBCPP_SUPPRESS_DEPRECATED_PUSH")
+
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  # suppres C++17 warrnings in Boost and other libs, mostly related to std::iterator
+  add_definitions("-D_LIBCPP_DISABLE_DEPRECATION_WARNINGS")
+  add_definitions("-D_LIBCPP_SUPPRESS_DEPRECATED_PUSH")
+endif()
 
 # Find mbconvert
 find_program(
