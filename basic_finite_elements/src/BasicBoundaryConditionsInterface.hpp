@@ -162,6 +162,11 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
     // CHKERR mField.add_finite_element(domainElementName, "FLUID_PRESSURE_FE");
 
+    fluidPressureElementPtr = boost::make_shared<FluidPressure>(mField);
+    fluidPressureElementPtr->addNeumannFluidPressureBCElements(positionField);
+    CHKERR addHOOpsFace3D(meshNodeField, fluidPressureElementPtr->getLoopFe(),
+                          false, false);
+                          
     damperElementPtr = boost::make_shared<KelvinVoigtDamper>(mField);
     damperElementPtr->commonData.meshNodePositionName = meshNodeField;
 
@@ -201,10 +206,8 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
     CHKERR MetaSpringBC::setSpringOperators(mField, springLhsPtr, springRhsPtr,
                                             positionField,
                                             meshNodeField);
-    fluidPressureElementPtr = boost::make_shared<FluidPressure>(mField);
-    fluidPressureElementPtr->addNeumannFluidPressureBCElements(positionField);
-    CHKERR addHOOpsFace3D(meshNodeField, fluidPressureElementPtr->getLoopFe(),
-                          false, false);
+
+    
     fluidPressureElementPtr->setNeumannFluidPressureFiniteElementOperators(
         positionField, PETSC_NULL, true, true);
 
@@ -387,8 +390,8 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
       simple->getOtherFiniteElements().push_back(el);
     }
     // if (!fluidPressureElementPtr->setOfFluids.empty())
-    //   CHKERR mField.modify_problem_add_finite_element(domainProblemName,
-    //                                                   "FLUID_PRESSURE_FE");
+      CHKERR mField.modify_problem_add_finite_element(domainProblemName,
+                                                      "FLUID_PRESSURE_FE");
     MoFEMFunctionReturnHot(0);
   };
 
