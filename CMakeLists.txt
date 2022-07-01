@@ -42,7 +42,7 @@ if(NOT MPI_RUN_FLAGS)
 endif(NOT MPI_RUN_FLAGS)
 
 # This is obsolete option should not be used, is set for back compatibility
-# with some old modules. You should replace UM_SOURCE_DIR by PROJECT_SOURCE_DIR
+# with some old D_LIBCPP_DISABLE_DEPRECATION_WARNINGSmodules. You should replace UM_SOURCE_DIR by PROJECT_SOURCE_DIR
 # when you spot it in your code.
 set(UM_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 
@@ -60,12 +60,7 @@ add_definitions(
   -DMoFEM_VERSION_BUILD=${MoFEM_VERSION_BUILD})
 
 add_definitions(${MoFEM_DEFINE_RESTRICT})
-
-if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  # suppres C++17 warrnings in Boost and other libs, mostly related to std::iterator
-  add_definitions("-D_LIBCPP_DISABLE_DEPRECATION_WARNINGS")
-  add_definitions("-D_LIBCPP_SUPPRESS_DEPRECATED_PUSH")
-endif()
+add_definitions("-D_LIBCPP_DISABLE_DEPRECATION_WARNINGS")
 
 # Find mbconvert
 find_program(
