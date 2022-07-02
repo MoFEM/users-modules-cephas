@@ -61,8 +61,10 @@ struct KelvinVoigtDamper {
     FTensor::Index<'k', 3> k;
 
     BlockMaterialData &dAta;
+    bool isDisplacement;
 
-    ConstitutiveEquation(BlockMaterialData &data) : dAta(data) {}
+    ConstitutiveEquation(BlockMaterialData &data, bool is_displacement = true)
+        : dAta(data), isDisplacement(is_displacement) {}
     virtual ~ConstitutiveEquation() = default;
 
     MatrixBoundedArray<TYPE, 9> F;    ///< Gradient of deformation
@@ -95,9 +97,12 @@ struct KelvinVoigtDamper {
       MoFEMFunctionBegin;
       gradientUDot.resize(3, 3, false);
       noalias(gradientUDot) = FDot;
-      for (int ii = 0; ii < 3; ii++) {
-        gradientUDot(ii, ii) -= 1;
-      }
+
+      //TODO: verify if this correct
+      if (!isDisplacement)
+        for (int ii = 0; ii < 3; ii++)
+          gradientUDot(ii, ii) -= 1;
+
       traceEngineeringStrainDot = 0;
       for (int ii = 0; ii < 3; ii++) {
         traceEngineeringStrainDot += gradientUDot(ii, ii);
@@ -155,13 +160,16 @@ struct KelvinVoigtDamper {
             dashpotCauchyStress, FTensor::Number<0>(), 0);
         auto t_F = getFTensor2FromArray3by3(F, FTensor::Number<0>(), 0);
         auto t_invF = getFTensor2FromArray3by3(invF, FTensor::Number<0>(), 0);
+        if (isDisplacement) {
+          t_F(0, 0) += 1;
+          t_F(1, 1) += 1;
+          t_F(2, 2) += 1;
+        }
 
         J = determinantTensor3by3(t_F);
         CHKERR invertTensor3by3(t_F, J, t_invF);
-
         t_dashpotFirstPiolaKirchhoffStress(i, j) =
-            J * (t_dashpotFirstPiolaKirchhoffStress(i, k) * t_invF(j, k));
-
+            J * (t_dashpotCauchyStress(i, k) * t_invF(j, k));
       }
       MoFEMFunctionReturn(0);
     }
