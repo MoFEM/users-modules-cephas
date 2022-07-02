@@ -166,20 +166,21 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
     fluidPressureElementPtr->addNeumannFluidPressureBCElements(positionField);
     CHKERR addHOOpsFace3D(meshNodeField, fluidPressureElementPtr->getLoopFe(),
                           false, false);
-                          
+
     damperElementPtr = boost::make_shared<KelvinVoigtDamper>(mField);
     damperElementPtr->commonData.meshNodePositionName = meshNodeField;
 
     auto &common_data = damperElementPtr->commonData;
+
     common_data.spatialPositionName = positionField;
     common_data.spatialPositionNameDot = "DOT_" + positionField;
     damperElementPtr->setBlockDataMap(); FIXME:
 
     for (auto &[id, data] : damperElementPtr->blockMaterialDataMap) {
-      // data.lInear = true; //FIXME: //TODO: 
+      data.lInear = false; //FIXME: //TODO: needs fix
       int cid = id;
       damperElementPtr->constitutiveEquationMap.insert(
-          cid, new KelvinVoigtDamper::ConstitutiveEquation<adouble>(data));
+          cid, new KelvinVoigtDamper::ConstitutiveEquation<adouble>(data, isDisplacementField));
       CHKERR mField.add_ents_to_finite_element_by_type(data.tEts, MBTET,
                                                        "DAMPER_FE");
     }
@@ -242,7 +243,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
     mBoundaryMarker =
         bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE"});
 
-    auto get_id_history_param = [&](string base_name, int id) {
+    auto get_id_block_param = [&](string base_name, int id) {
       char load_hist_file[255] = "hist.in";
       PetscBool ctg_flag = PETSC_FALSE;
       string param_name_with_id = "-" + base_name + "_" + to_string(id);
@@ -251,6 +252,14 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                                    255, &ctg_flag);
       if (ctg_flag)
         return param_name_with_id;
+      
+      param_name_with_id = "-" + base_name;
+      CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL,
+                                   param_name_with_id.c_str(), load_hist_file,
+                                   255, &ctg_flag);
+      if (ctg_flag)
+        return param_name_with_id;
+      
       return string("");
     };
 
@@ -285,7 +294,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
           // use whatever is in that block TODO:
           boost::shared_ptr<MethodForForceScaling> method_for_scaling;
           auto param_name_for_scaling =
-              get_id_history_param("accelerogram", id);
+              get_id_block_param("accelerogram", id);
 
           if (!param_name_for_scaling.empty())
             method_for_scaling = boost::shared_ptr<MethodForForceScaling>(

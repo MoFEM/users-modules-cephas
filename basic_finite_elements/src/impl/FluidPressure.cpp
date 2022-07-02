@@ -60,6 +60,9 @@ MoFEMErrorCode FluidPressure::OpCalculatePressure::doWork(
                   &data.getN()(gg, 0), 1, &Nf[rr], rank);
     }
   }
+  
+  // Scale force using user defined scaling operator
+  CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
 
   auto get_f = [&]() {
     if (F == PETSC_NULL)
