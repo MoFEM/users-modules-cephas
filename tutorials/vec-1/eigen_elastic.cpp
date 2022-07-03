@@ -83,9 +83,6 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  boost::shared_ptr<MatrixDouble> matGradPtr;
-  boost::shared_ptr<MatrixDouble> matStrainPtr;
-  boost::shared_ptr<MatrixDouble> matStressPtr;
   boost::shared_ptr<MatrixDouble> matDPtr;
 
   SmartPetscObj<Mat> M;
@@ -125,8 +122,6 @@ MoFEMErrorCode Example::createCommonData() {
     MoFEMFunctionReturn(0);
   };
 
-  matStrainPtr = boost::make_shared<MatrixDouble>();
-  matStressPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
 
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
