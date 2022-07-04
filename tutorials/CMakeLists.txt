@@ -128,8 +128,12 @@ foreach(LOOP_DIR ${TUTORIALS_DIRS})
 
   message(STATUS "Build status ${OP_NAME} ${VAR_OP_NAME}")
 
-  set(TUTORIALS_MOD_DIR ${LOOP_DIR})
-  add_subdirectory(${LOOP_DIR})
-  tutorials_install(${LOOP_DIR})
+  if(VAR_OP_NAME)
+
+    set(TUTORIALS_MOD_DIR ${LOOP_DIR})
+    add_subdirectory(${LOOP_DIR})
+    PDotutorials_install(${LOOP_DIR})
+
+  endif(VAR_OP_NAME)
 
 endforeach(LOOP_DIR)
