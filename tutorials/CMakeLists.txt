@@ -132,7 +132,7 @@ foreach(LOOP_DIR ${TUTORIALS_DIRS})
 
     set(TUTORIALS_MOD_DIR ${LOOP_DIR})
     add_subdirectory(${LOOP_DIR})
-    PDotutorials_install(${LOOP_DIR})
+    tutorials_install(${LOOP_DIR})
 
   endif(VAR_OP_NAME)
 
