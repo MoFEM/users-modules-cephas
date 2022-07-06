@@ -98,6 +98,9 @@ struct KelvinVoigtDamper {
       gradientUDot.resize(3, 3, false);
       noalias(gradientUDot) = FDot;
 
+      // for (int ii = 0; ii < 3; ii++)
+      //   gradientUDot(ii, ii) -= 1;
+        
       traceEngineeringStrainDot = 0;
       for (int ii = 0; ii < 3; ii++) {
         traceEngineeringStrainDot += gradientUDot(ii, ii);

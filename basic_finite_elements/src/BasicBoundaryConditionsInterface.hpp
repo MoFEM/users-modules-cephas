@@ -17,7 +17,9 @@
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
 // TODO: This is still work in progress !!!
-// FIX and ROTATE BOUNDARY CONDITIONS
+
+// FIX and ROTATE Boundary conditions
+// include SurfacePressureComplexForLazy for following load
 
 
 #ifndef __BASICBOUNDARYCONDIONSINTERFACE_HPP__
@@ -66,6 +68,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
   bool isDisplacementField;
   bool isQuasiStatic;
   bool isPartitioned;
+  bool isLinear;
 
   BitRefLevel bIt;
 
@@ -113,7 +116,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
         isDisplacementField(is_displacement_field),
         isQuasiStatic(is_quasi_static),
         snesLambdaLoadFactorPtr(snes_load_factor),
-        isPartitioned(is_partitioned) {}
+        isPartitioned(is_partitioned), isLinear(PETSC_FALSE) {}
 
   ~BasicBoundaryConditionsInterface() {}
 
@@ -121,9 +124,14 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
     MoFEMFunctionBegin;
 
     PetscBool quasi_static = PETSC_FALSE;
+    PetscBool is_linear = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "-is_quasi_static", &quasi_static,
                                PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "-is_linear", &is_linear,
+                               PETSC_NULL);
+
     isQuasiStatic = quasi_static;
+    isLinear = is_linear;
 
     MoFEMFunctionReturn(0);
   };
@@ -177,7 +185,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
     damperElementPtr->setBlockDataMap(); FIXME:
 
     for (auto &[id, data] : damperElementPtr->blockMaterialDataMap) {
-      data.lInear = false; //FIXME: //TODO: needs fix
+      data.lInear = isLinear;
       int cid = id;
       damperElementPtr->constitutiveEquationMap.insert(
           cid, new KelvinVoigtDamper::ConstitutiveEquation<adouble>(data, isDisplacementField));

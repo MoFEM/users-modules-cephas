@@ -222,7 +222,7 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
 
     CHKERR DMoFEMLoopFiniteElements(dM, "ELASTIC", postProcMeshPtr);
     auto out_name = "out_" + to_string(step) + ".h5m";
-    MOFEM_LOG_C("WORLD", Sev::inform, "out file %s\n", out_name.c_str());
+    // MOFEM_LOG_C("WORLD", Sev::inform, "out file %s\n", out_name.c_str());
     CHKERR postProcMeshPtr->writeFile(out_name);
 
     MoFEMFunctionReturn(0);
