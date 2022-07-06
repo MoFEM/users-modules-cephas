@@ -1206,17 +1206,18 @@ struct OpPostProcMap : public ForcesAndSourcesCore::UserDataOperator {
    * @param data_map_scalar hash map of scalar values (string is name of the
    * tag)
    * @param data_map_vec hash map of vector values
-   * @param data_map_mat hash map of vector values
+   * @param data_map_mat hash map of second order tensor values
+   * @param data_symm_map_mat hash map of symmetric second order tensor values
    */
   OpPostProcMap(moab::Interface &post_proc_mesh,
                 std::vector<EntityHandle> &map_gauss_pts,
                 DataMapVec data_map_scalar, DataMapMat data_map_vec,
-                DataMapMat data_map_mat)
+                DataMapMat data_map_mat, DataMapMat data_symm_map_mat)
       : ForcesAndSourcesCore::UserDataOperator(
             NOSPACE, ForcesAndSourcesCore::UserDataOperator::OPSPACE),
         postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
         dataMapScalar(data_map_scalar), dataMapVec(data_map_vec),
-        dataMapMat(data_map_mat) {
+        dataMapMat(data_map_mat), dataMapSymmMat(data_symm_map_mat) {
     // Operator is only executed for vertices
     std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
   }
@@ -1229,6 +1230,7 @@ private:
   DataMapVec dataMapScalar;
   DataMapMat dataMapVec;
   DataMapMat dataMapMat;
+  DataMapMat dataMapSymmMat;
 };
 
 template <int DIM1, int DIM2>
@@ -1261,6 +1263,14 @@ OpPostProcMap<DIM1, DIM2>::doWork(int side, EntityType type,
     mat.clear();
     for (size_t r = 0; r != DIM1; ++r)
       for (size_t c = 0; c != DIM2; ++c)
+        mat(r, c) = t(r, c);
+    return mat;
+  };
+
+  auto set_matrix_symm_3d = [&](auto &t) -> MatrixDouble3by3 & {
+    mat.clear();
+    for (size_t r = 0; r != DIM1; ++r)
+      for (size_t c = 0; c != DIM1; ++c)
         mat(r, c) = t(r, c);
     return mat;
   };
@@ -1298,7 +1308,7 @@ OpPostProcMap<DIM1, DIM2>::doWork(int side, EntityType type,
 
   for (auto &m : dataMapVec) {
     auto th = get_tag(m.first, 3);
-    auto t_vec = getFTensor1FromMat<2>(*m.second);
+    auto t_vec = getFTensor1FromMat<DIM1>(*m.second);
     auto nb_integration_pts = getGaussPts().size2();
     size_t gg = 0;
     for (int gg = 0; gg != nb_integration_pts; ++gg) {
@@ -1314,6 +1324,17 @@ OpPostProcMap<DIM1, DIM2>::doWork(int side, EntityType type,
     size_t gg = 0;
     for (int gg = 0; gg != nb_integration_pts; ++gg) {
       CHKERR set_tag(th, gg, set_matrix_3d(t_mat));
+      ++t_mat;
+    }
+  }
+
+  for (auto &m : dataMapSymmMat) {
+    auto th = get_tag(m.first, 9);
+    auto t_mat = getFTensor2SymmetricFromMat<DIM1>(*m.second);
+    auto nb_integration_pts = getGaussPts().size2();
+    size_t gg = 0;
+    for (int gg = 0; gg != nb_integration_pts; ++gg) {
+      CHKERR set_tag(th, gg, set_matrix_symm_3d(t_mat));
       ++t_mat;
     }
   }

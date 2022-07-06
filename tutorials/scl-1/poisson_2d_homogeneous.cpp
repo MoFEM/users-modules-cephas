@@ -277,19 +277,22 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateScalarFieldGradient<SPACE_DIM>(field_name, grad_u_ptr));
+
+  using OpPPMap = OpPostProcMap<SPACE_DIM, SPACE_DIM>;
+
   post_proc_fe->getOpPtrVector().push_back(
 
-      new OpPostProcMap<SPACE_DIM, SPACE_DIM>(
-          post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+      new OpPPMap(post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
 
-          OpPostProcMap<SPACE_DIM, SPACE_DIM>::DataMapVec{{"U", u_ptr}},
+                  OpPPMap::DataMapVec{{"U", u_ptr}},
 
-          OpPostProcMap<SPACE_DIM, SPACE_DIM>::DataMapMat{
-              {"GRAD_U", grad_u_ptr}},
+                  OpPPMap::DataMapMat{{"GRAD_U", grad_u_ptr}},
 
-          OpPostProcMap<SPACE_DIM, SPACE_DIM>::DataMapMat{}
+                  OpPPMap::DataMapMat{},
 
-          )
+                  OpPPMap::DataMapMat{}
+
+                  )
 
   );
 

@@ -269,7 +269,6 @@ private:
   MoFEMErrorCode solveSystem();
 
   boost::shared_ptr<FEMethod> domianLhsFEPtr;
-
 };
 
 //! [Run programme]
@@ -373,17 +372,20 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
     set_generic(post_proc_fe->getOpPtrVector(), post_proc_fe);
 
+    using OpPPMap = OpPostProcMap<2, 2>;
+
     post_proc_fe->getOpPtrVector().push_back(
 
-        new OpPostProcMap<2, 2>(
+        new OpPPMap(
             post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
 
-            OpPostProcMap<2, 2>::DataMapVec{{"H", h_ptr}, {"G", g_ptr}},
+            OpPPMap::DataMapVec{{"H", h_ptr}, {"G", g_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat{{"GRAD_H", grad_h_ptr},
-                                            {"GRAD_G", grad_g_ptr}},
+            OpPPMap::DataMapMat{{"GRAD_H", grad_h_ptr}, {"GRAD_G", grad_g_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat{}
+            OpPPMap::DataMapMat{},
+
+            OpPPMap::DataMapMat{}
 
             )
 
@@ -663,7 +665,6 @@ struct Monitor : public FEMethod {
                                       this->getCacheWeakPtr());
       CHKERR postProcEdge->writeFile(
           "out_step_bdy_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
-
     }
 
     liftVec->resize(SPACE_DIM, false);
@@ -735,18 +736,21 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
 
+    using OpPPMap = OpPostProcMap<2, 2>;
+
     post_proc_fe->getOpPtrVector().push_back(
 
-        new OpPostProcMap<2, 2>(
+        new OpPPMap(
             post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
 
-            OpPostProcMap<2, 2>::DataMapVec{
-                {"H", h_ptr}, {"P", p_ptr}, {"G", g_ptr}},
+            OpPPMap::DataMapVec{{"H", h_ptr}, {"P", p_ptr}, {"G", g_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat{
+            OpPPMap::DataMapMat{
                 {"U", u_ptr}, {"H_GRAD", grad_h_ptr}, {"G_GRAD", grad_g_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat{{"GRAD_U", grad_u_ptr}}
+            OpPPMap::DataMapMat{{"GRAD_U", grad_u_ptr}},
+
+            OpPPMap::DataMapMat{}
 
             )
 
@@ -770,18 +774,21 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("P", p_ptr));
 
+    using OpPPMap = OpPostProcMap<2, 2>;
+
     post_proc_fe->getOpPtrVector().push_back(
 
-        new OpPostProcMap<2, 2>(
-            post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+        new OpPPMap(post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
 
-            OpPostProcMap<2, 2>::DataMapVec{{"L", lambda_ptr}, {"P", p_ptr}},
+                    OpPPMap::DataMapVec{{"L", lambda_ptr}, {"P", p_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat{{"U", u_ptr}},
+                    OpPPMap::DataMapMat{{"U", u_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat()
+                    OpPPMap::DataMapMat(),
 
-                )
+                    OpPPMap::DataMapMat()
+
+                        )
 
     );
 
