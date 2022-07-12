@@ -1751,7 +1751,7 @@ MoFEMErrorCode NeumannForcesSurface::addForceAle(
   }
 
   /*  LEFT-HAND SIDE (SPATIAL) */
-
+  cerr << "Bouble LHS\n";
   feLhs.getOpPtrVector().push_back(new OpGetTangent(X_field, data_at_pts));
 
   feLhs.getOpPtrVector().push_back(new OpNeumannSurfaceForceLhs_dx_dX(
@@ -1759,7 +1759,7 @@ MoFEMErrorCode NeumannForcesSurface::addForceAle(
 
   /* RIGHT-HAND SIDE (MATERIAL) */
   if (!bubble_only) {
-  
+  cerr << "In bouble\b";
     // Side volume element computes the deformation gradient F=hH^-1
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideRhs =
         boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
