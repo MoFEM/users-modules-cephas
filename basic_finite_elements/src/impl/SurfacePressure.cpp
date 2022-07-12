@@ -451,7 +451,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannSurfaceForceLhs_dx_dX::doWork(
 
         // TODO: handle hoGeometry
         t_assemble(i, k) += val * t_force(i) * t_base * t_d_n(j, k) * t_normal(j) ;
-
+      
         ++t_base;
       }
       ++t_N;
@@ -1007,7 +1007,7 @@ NeumannForcesSurface::OpNeumannSurfaceForceMaterialLhs_dX_dX::iNtegrate(
   auto t_w = getFTensor0IntegrationWeight();
   auto t_1 = getFTensor1FromMat<3>(dataAtPts->tangent1);
   auto t_2 = getFTensor1FromMat<3>(dataAtPts->tangent2);
-  //Ignatios this is what is left!!!!!
+  
   auto t_normal = getFTensor1NormalsAtGaussPts();
   FTensor1 t_force(dAta.data.data.value3, dAta.data.data.value4, dAta.data.data.value5);
   t_force(i) *= dAta.data.data.value1;
@@ -1034,7 +1034,7 @@ NeumannForcesSurface::OpNeumannSurfaceForceMaterialLhs_dX_dX::iNtegrate(
 
         t_assemble(i, k) -=
             val * t_base * t_force(j) *  t_F(j, i) * (t_d_n(j, k) * t_normal(j));
-
+      
         ++t_base;
       }
       ++t_N;
@@ -1430,6 +1430,7 @@ NeumannForcesSurface::OpNeumannSurfaceForceMaterialVolOnSideLhs::aSsemble(
 
   Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
                                              : getFEMethod()->snes_B;
+  cerr << "row_indices: " << row_indices << " col_indices: " << col_indices<< "\n";                                            
   // assemble local matrix
   CHKERR MatSetValues(B, row_nb_dofs, row_indices, col_nb_dofs, col_indices,
                       &*NN.data().begin(), ADD_VALUES);
