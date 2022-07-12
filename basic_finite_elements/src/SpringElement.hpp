@@ -121,12 +121,12 @@ struct MetaSpringBC {
           mapSpring[id].springStiffnessTangent = attributes[1];
 
           // Print spring blocks after being read
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nSpring block %d\n", id);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tNormal stiffness %3.4g\n",
-                             attributes[0]);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tTangent stiffness %3.4g\n",
-                             attributes[1]);
-        }
+          MOFEM_LOG_C("WORLD", Sev::verbose, "\nSpring block %d\n", id);
+          MOFEM_LOG_C("WORLD", Sev::verbose, "\tNormal stiffness %3.4g\n",
+                      attributes[0]);
+          MOFEM_LOG_C("WORLD", Sev::verbose, "\tTangent stiffness %3.4g\n",
+                      attributes[1]);
+                }
       }
 
       MoFEMFunctionReturn(0);

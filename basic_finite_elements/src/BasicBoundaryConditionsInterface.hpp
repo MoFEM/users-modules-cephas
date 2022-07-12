@@ -318,7 +318,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
             auto *pipeline_mng = mField.getInterface<PipelineManager>();
             FTensor::Index<'i', 3> i;
             auto acc_c = acc;
-            auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+            auto fe_domain_rhs = bodyForceRhsPtr;
             if (method)
               CHKERR MethodForForceScaling::applyScale(fe_domain_rhs.get(),
                                                        method, acc_c);
@@ -330,7 +330,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
           auto get_rho = [&](double, double, double) {
             auto *pipeline_mng = mField.getInterface<PipelineManager>();
-            auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+            auto &fe_domain_lhs = bodyForceLhsPtr;
             return rho(0) * fe_domain_lhs->ts_aa;
           };
 
@@ -407,8 +407,9 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
       simple->getOtherFiniteElements().push_back(el);
     }
     // if (!fluidPressureElementPtr->setOfFluids.empty())
-      CHKERR mField.modify_problem_add_finite_element(domainProblemName,
-                                                      "FLUID_PRESSURE_FE");
+    //FIXME: 
+      // CHKERR mField.modify_problem_add_finite_element(domainProblemName,
+      //                                                 "FLUID_PRESSURE_FE");
     MoFEMFunctionReturnHot(0);
   };
 
