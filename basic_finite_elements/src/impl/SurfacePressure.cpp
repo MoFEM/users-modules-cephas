@@ -636,18 +636,18 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannSurfaceForceMaterialRhs_dX::doWork
     int side, EntityType type, EntitiesFieldData::EntData &row_data) {
 
   MoFEMFunctionBegin;
-
+  cerr << "One\n";
   if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
       dAta.tRis.end()) {
     MoFEMFunctionReturnHot(0);
   }
-
+  cerr << "Two\n";
   // get number of dofs on row
   nbRows = row_data.getIndices().size();
   // if no dofs on row, exit that work, nothing to do here
   if (!nbRows)
     MoFEMFunctionReturnHot(0);
-
+  cerr << "Three\n";
   nF.resize(nbRows, false);
   nF.clear();
 
