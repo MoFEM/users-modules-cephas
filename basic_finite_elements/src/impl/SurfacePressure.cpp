@@ -636,18 +636,18 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannSurfaceForceMaterialRhs_dX::doWork
     int side, EntityType type, EntitiesFieldData::EntData &row_data) {
 
   MoFEMFunctionBegin;
-  cerr << "One\n";
+  
   if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
       dAta.tRis.end()) {
     MoFEMFunctionReturnHot(0);
   }
-  cerr << "Two\n";
+  
   // get number of dofs on row
   nbRows = row_data.getIndices().size();
   // if no dofs on row, exit that work, nothing to do here
   if (!nbRows)
     MoFEMFunctionReturnHot(0);
-  cerr << "Three\n";
+  
   nF.resize(nbRows, false);
   nF.clear();
 
@@ -1184,10 +1184,9 @@ NeumannForcesSurface::OpNeumannSurfaceForceMaterialVolOnSideLhs::doWork(
     EntitiesFieldData::EntData &col_data) {
 
   MoFEMFunctionBegin;
-cerr << "In OpNeumannSurfaceForceMaterialVolOnSideLhs\n";
+
   if (dataAtPts->faceRowData == nullptr)
     MoFEMFunctionReturnHot(0);
-  cerr << "Still in\n";
 
   if (row_type != MBVERTEX)
     MoFEMFunctionReturnHot(0);
@@ -1431,7 +1430,7 @@ NeumannForcesSurface::OpNeumannSurfaceForceMaterialVolOnSideLhs::aSsemble(
 
   Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
                                              : getFEMethod()->snes_B;
-  cerr << "row_indices: " << row_indices << " col_indices: " << col_indices<< "\n";                                            
+
   // assemble local matrix
   CHKERR MatSetValues(B, row_nb_dofs, row_indices, col_nb_dofs, col_indices,
                       &*NN.data().begin(), ADD_VALUES);
@@ -1752,7 +1751,6 @@ MoFEMErrorCode NeumannForcesSurface::addForceAle(
   }
 
   /*  LEFT-HAND SIDE (SPATIAL) */
-  cerr << "Bouble LHS\n";
   feLhs.getOpPtrVector().push_back(new OpGetTangent(X_field, data_at_pts));
 
   feLhs.getOpPtrVector().push_back(new OpNeumannSurfaceForceLhs_dx_dX(
@@ -1760,7 +1758,6 @@ MoFEMErrorCode NeumannForcesSurface::addForceAle(
 
   /* RIGHT-HAND SIDE (MATERIAL) */
   if (!bubble_only) {
-  cerr << "In bouble\n";
     // Side volume element computes the deformation gradient F=hH^-1
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideRhs =
         boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
