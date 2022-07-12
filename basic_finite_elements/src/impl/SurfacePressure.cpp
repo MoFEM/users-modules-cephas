@@ -1184,9 +1184,10 @@ NeumannForcesSurface::OpNeumannSurfaceForceMaterialVolOnSideLhs::doWork(
     EntitiesFieldData::EntData &col_data) {
 
   MoFEMFunctionBegin;
-
+cerr << "In OpNeumannSurfaceForceMaterialVolOnSideLhs\n";
   if (dataAtPts->faceRowData == nullptr)
     MoFEMFunctionReturnHot(0);
+  cerr << "Still in\n";
 
   if (row_type != MBVERTEX)
     MoFEMFunctionReturnHot(0);
@@ -1759,7 +1760,7 @@ MoFEMErrorCode NeumannForcesSurface::addForceAle(
 
   /* RIGHT-HAND SIDE (MATERIAL) */
   if (!bubble_only) {
-  cerr << "In bouble\b";
+  cerr << "In bouble\n";
     // Side volume element computes the deformation gradient F=hH^-1
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideRhs =
         boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
