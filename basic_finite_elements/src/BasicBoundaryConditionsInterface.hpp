@@ -228,14 +228,15 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
     auto bc_mng = mField.getInterface<BcManager>();
     auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
-    CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_X",
-                                             positionField, 0, 0);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_Y",
-                                             positionField, 1, 1);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_Z",
-                                             positionField, 2, 2);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_ALL",
-                                             positionField, 0, 3);
+    // FIXME: this has to also work with removeDofsOnEntitiesNotDistributed !!! 
+    // CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_X",
+    //                                          positionField, 0, 0);
+    // CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_Y",
+    //                                          positionField, 1, 1);
+    // CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_Z",
+    //                                          positionField, 2, 2);
+    // CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_ALL",
+    //                                          positionField, 0, 3);
 
     CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "FIX_X",
                                           positionField, 0, 0);
@@ -407,9 +408,11 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
       simple->getOtherFiniteElements().push_back(el);
     }
     // if (!fluidPressureElementPtr->setOfFluids.empty())
-    //FIXME: 
-      // CHKERR mField.modify_problem_add_finite_element(domainProblemName,
-      //                                                 "FLUID_PRESSURE_FE");
+    // FIXME:
+    // CHKERR mField.modify_problem_add_finite_element(domainProblemName,
+    //                                                 "FLUID_PRESSURE_FE");
+    // CHKERR dynamic_cast<DirichletDisplacementRemoveDofsBc &>(
+    //     *dirichletBcPtr).iNitialize();
     MoFEMFunctionReturnHot(0);
   };
 

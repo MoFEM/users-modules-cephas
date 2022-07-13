@@ -243,16 +243,16 @@ struct KelvinVoigtDamper {
 
       MoFEMFunctionBegin;
 
-      CHKERR MoFEM::VolumeElementForcesAndSourcesCore::postProcess();
+      // CHKERR MoFEM::VolumeElementForcesAndSourcesCore::postProcess();
 
-      if (ts_ctx == CTX_TSSETIFUNCTION) {
-        CHKERR VecAssemblyBegin(ts_F);
-        CHKERR VecAssemblyEnd(ts_F);
-      }
-      if (ts_ctx == CTX_TSSETIJACOBIAN) {
-        CHKERR MatAssemblyBegin(ts_B, MAT_FLUSH_ASSEMBLY);
-        CHKERR MatAssemblyEnd(ts_B, MAT_FLUSH_ASSEMBLY);
-      }
+      // if (ts_ctx == CTX_TSSETIFUNCTION) {
+      //   CHKERR VecAssemblyBegin(ts_F);
+      //   CHKERR VecAssemblyEnd(ts_F);
+      // }
+      // if (ts_ctx == CTX_TSSETIJACOBIAN) {
+      //   CHKERR MatAssemblyBegin(ts_B, MAT_FLUSH_ASSEMBLY);
+      //   CHKERR MatAssemblyEnd(ts_B, MAT_FLUSH_ASSEMBLY);
+      // }
 
       MoFEMFunctionReturn(0);
     }
