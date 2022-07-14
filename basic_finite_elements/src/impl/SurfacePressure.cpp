@@ -1698,7 +1698,7 @@ MoFEMErrorCode NeumannForcesSurface::addForceAle(
     const std::string x_field, const std::string X_field,
     boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
     std::string side_fe_name, Vec F, Mat aij, int ms_id, bool ho_geometry,
-    bool block_set, bool bubble_only) {
+    bool block_set, bool ignore_material_force) {
   const CubitMeshSets *cubit_meshset_ptr;
   MeshsetsManager *mmanager_ptr;
   MoFEMFunctionBegin;
@@ -1757,7 +1757,7 @@ MoFEMErrorCode NeumannForcesSurface::addForceAle(
       x_field, X_field, data_at_pts, aij, mapForce[ms_id], ho_geometry));
 
   /* RIGHT-HAND SIDE (MATERIAL) */
-  if (!bubble_only) {
+  if (!ignore_material_force) {
     // Side volume element computes the deformation gradient F=hH^-1
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideRhs =
         boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);

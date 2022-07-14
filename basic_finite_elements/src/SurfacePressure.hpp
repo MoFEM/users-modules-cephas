@@ -339,32 +339,39 @@ struct NeumannForcesSurface {
      * Virtual work of the surface force corresponding to a test function
      * of the spatial configuration \f$(\delta\mathbf{x})\f$:
      * \f[
-     * \delta W^\text{spatial}_p(\mathbf{X}, \delta\mathbf{x}) =
-     * \int\limits_\mathcal{T} \mathbf{f}(\mathbf{X}) \cdot
+     * \delta W^\text{spatial}_{\mathbf t}(\mathbf{X}, \delta\mathbf{x}) =
+     * \int\limits_\mathcal{T} \mathbf{t}(\mathbf{X}) \cdot
      * \delta\mathbf{x}\, \textrm{d}\mathcal{T} =
      * \dfrac{1}{2}\int\limits_{\mathcal{T}_{\xi}}
-     * \mathbf{f} \cdot \delta\mathbf{x} \left\|
+     * \mathbf{t} \cdot \delta\mathbf{x} \left\|
      * \left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
      * \mathbf{X}} {\partial\eta}\right) \right\| \,
-     * \textrm{d}\xi\textrm{d}\eta, \f] where \f$\mathbf{f}\f$ is the force
+     * \textrm{d}\xi\textrm{d}\eta, \f] where \f$\mathbf{t}\f$ is the force
      * vector, \f$ \left\|
      * \left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
      * \mathbf{X}} {\partial\eta}\right) \right\|\f$ is the determinant of the
-     * Jacobian of the triangular face in the material configuration and \f$\xi,
-     * \eta\f$ are coordinates in the parent space \f$(\mathcal{T}_\xi)\f$.
+     * Jacobian of the triangular face in the material configuration equal to
+     * the norm of the normal vector \f$\|\mathbf{N}\|$\f since \f$\mathbf{N} =
+     * \frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial \mathbf{X}}
+     * {\partial\eta}$\f and \f$\xi, \eta\f$ are coordinates in the parent space
+     * \f$(\mathcal{T}_\xi)\f$.
      *
      * Linearisation with respect to a variation of material coordinates
      * \f$(\Delta\mathbf{X})\f$:
      *
      * \f[
-     * \textrm{D} \delta W^\text{spatial}_p(\mathbf{X}, \delta\mathbf{x})
-     * [\Delta\mathbf{X}] = \int\limits_{\mathcal{T}_{\xi}} p\left[
-     * \frac{\partial\mathbf{X}}{\partial\xi} \cdot \left(\frac{\partial
-     * \Delta \mathbf{X}}{\partial\eta}\times\delta\mathbf{x}\right)
+     * \textrm{D} \delta W^\text{spatial}_{\mathbf t}(\mathbf{X}, \delta\mathbf{x})
+     * [\Delta\mathbf{X}] = \int\limits_{\mathcal{T}_{\xi}}
+     * \dfrac{\mathbf{t}\cdot \delta \mathbf{x}}{\left\|
+     * \left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}}
+     * {\partial\eta}\right) \right\|}\left[
+     * \frac{\partial\mathbf{X}}{\partial\xi} \cdot \left(\frac{\partial \Delta
+     * \mathbf{X}}{\partial\eta}\times\mathbf{N}\right)
      * -\frac{\partial\mathbf{X}}
      *  {\partial\eta} \cdot \left(\frac{\partial\Delta
-     * \mathbf{X}}{\partial\xi}\times \delta\mathbf{x}\right)\right]
-     * \textrm{d}\xi\textrm{d}\eta \f]
+     * \mathbf{X}}{\partial\xi}\times\mathbf{N}\right)\right]
+     * \textrm{d}\xi\textrm{d}\eta\f]
      *
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -480,9 +487,9 @@ struct NeumannForcesSurface {
 
 
   /**
-   * @brief RHS-operator for the pressure element (material configuration)
+   * @brief RHS-operator for the surface force element (material configuration)
    *
-   * Integrates pressure in the material configuration.
+   * Integrates surface force in the material configuration.
    *
    */
   struct OpNeumannSurfaceForceMaterialRhs_dX : public UserDataOperator {
@@ -502,26 +509,31 @@ struct NeumannForcesSurface {
     int nbIntegrationPts; ///< number of integration points
 
     /**
-     * @brief Integrate pressure in the material configuration.
+     * @brief Integrate surface force in the material configuration.
      *
-     * Virtual work of the surface pressure corresponding to a test function
+     * Virtual work of the surface surface force corresponding to a test function
      * of the material configuration \f$(\delta\mathbf{X})\f$:
      *
      * \f[
-     * \delta W^\text{material}_p(\mathbf{x}, \mathbf{X}, \delta\mathbf{X}) =
-     * -\int\limits_\mathcal{T} p\left\{\mathbf{F}^{\intercal}\cdot
-     * \mathbf{N}(\mathbf{X}) \right\} \cdot \delta\mathbf{X}\,
+     * \delta W^\text{material}_{\mathbf{t}}(\mathbf{x}, \mathbf{X},
+     * \delta\mathbf{X}) =
+     * -\int\limits_\mathcal{T} \left\{\mathbf{F}^{\intercal}\cdot
+     * \mathbf{t} \right\} \cdot \delta\mathbf{X}\,
      * \textrm{d}\mathcal{T} =
-     * -\int\limits_{\mathcal{T}_{\xi}} p\left\{\mathbf{F}^{\intercal}\cdot
-     * \left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
-     * \mathbf{X}} {\partial\eta}\right) \right\} \cdot \delta\mathbf{X}\,
-     * \textrm{d}\xi\textrm{d}\eta
+     * -\dfrac{1}{2}\int\limits_{\mathcal{T}_{\xi}}
+     * \left\{\mathbf{F}^{\intercal}\cdot \mathbf{t} \right\} \cdot
+     * \delta\mathbf{X}\,
+     * \left\|\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}} {\partial\eta}\right\| \textrm{d}\xi\textrm{d}\eta
+     * = -\dfrac{1}{2}\int\limits_{\mathcal{T}_{\xi}}
+     * \left\{\mathbf{F}^{\intercal}\cdot \mathbf{t} \right\} \cdot
+     * \delta\mathbf{X}\, \left\|\mathbf{N}\right\| \textrm{d}\xi\textrm{d}\eta
      *  \f]
      *
-     * where \f$p\f$ is pressure, \f$\mathbf{N}\f$ is a normal to the face
-     * in the material configuration, \f$\xi, \eta\f$ are coordinates in the
-     * parent space
-     * \f$(\mathcal{T}_\xi)\f$ and \f$\mathbf{F}\f$ is the deformation gradient:
+     * where \f$\mathbf t\f$ surface force, \f$\mathbf{N}\f$ is a normal to the
+     * face in the material configuration, \f$\xi, \eta\f$ are coordinates in
+     * the parent space \f$(\mathcal{T}_\xi)\f$ and \f$\mathbf{F}\f$ is the
+     * deformation gradient:
      *
      * \f[
      * \mathbf{F} = \mathbf{h}(\mathbf{x})\,\mathbf{H}(\mathbf{X})^{-1} =
@@ -750,7 +762,7 @@ struct NeumannForcesSurface {
   };
 
 /**
-   * @brief LHS-operator for the pressure element (material configuration)
+   * @brief LHS-operator for the surface force element (material configuration)
    *
    * Computes linearisation of the material component with respect to
    * material coordinates (also triggers a loop over operators
@@ -778,16 +790,18 @@ struct NeumannForcesSurface {
      * \f$(\Delta\mathbf{X})\f$:
      *
      * \f[
-     * \textrm{D} \delta W^\text{(face)}_p(\mathbf{x}, \mathbf{X},
-     * \delta\mathbf{x})
-     * [\Delta\mathbf{X}] = -\int\limits_{\mathcal{T}_{\xi}} p \,
-     * \mathbf{F}^{\intercal}\cdot \left[ \frac{\partial\mathbf{X}}
-     * {\partial\xi} \cdot \left(\frac{\partial\Delta
-     *  \mathbf{X}}{\partial\eta}\times\delta\mathbf{x}\right)
-     * -\frac{\partial\mathbf{X}}
-     *  {\partial\eta} \cdot \left(\frac{\partial\Delta
-     * \mathbf{X}}{\partial\xi}\times \delta\mathbf{x}\right)\right]
-     * \textrm{d}\xi\textrm{d}\eta
+     * \textrm{D} \delta W^\text{(face)}_{\mathbf{t}}(\mathbf{x}, \mathbf{X},
+     *  \delta\mathbf{x})
+     *  [\Delta\mathbf{X}] = -\int\limits_{\mathcal{T}_{\xi}}  \,
+     *  \dfrac{\left\{\mathbf{F}^{\intercal}\cdot \mathbf{t} \right\} \cdot
+     * \delta\mathbf{x}}{\left\|\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}}  {\partial\eta} \right\|} \left[ \frac{\partial\mathbf{X}}
+     *  {\partial\xi} \cdot \left(\frac{\partial\Delta
+     *   \mathbf{X}}{\partial\eta}\times\mathbf{N}\right)
+     *  -\frac{\partial\mathbf{X}}
+     *   {\partial\eta} \cdot \left(\frac{\partial\Delta
+     *   \mathbf{X}}{\partial\xi}\times \mathbf{N}\right)\right]
+     *   \textrm{d}\xi\textrm{d}\eta
      * \f]
      *
      */
@@ -838,7 +852,7 @@ struct NeumannForcesSurface {
   };
 
   /**
-   * @brief LHS-operator for the pressure element (material configuration)
+   * @brief LHS-operator for the surface force element (material configuration)
    *
    * Triggers loop over operators from the side volume
    *
@@ -1019,14 +1033,14 @@ struct NeumannForcesSurface {
      * with respect to a variation of spatial coordinates:
      *
      * \f[
-     * \textrm{D} \delta W^\text{(side volume)}_p(\mathbf{x}, \mathbf{X},
+     * \textrm{D} \delta W^\text{(side volume)}_{\mathbf{t}}(\mathbf{x}, \mathbf{X},
      * \delta\mathbf{x})
-     * [\Delta\mathbf{x}] = -\int\limits_{\mathcal{T}_{\xi}} p
+     * [\Delta\mathbf{x}] = -\int\limits_{\mathcal{T}_{\xi}} 
      * \left\{\left[
      * \frac{\partial\Delta\mathbf{x}}{\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
-     * \right]^{\intercal}\cdot\left(\frac{\partial\mathbf{X}}{\partial\xi}
-     * \times\frac{\partial\mathbf{X}}{\partial\eta}\right)\right\}
-     * \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta
+     * \right]^{\intercal}\cdot \mathbf{t}\right\}
+     * \cdot \delta\mathbf{X} \left\|\frac{\partial\mathbf{X}}{\partial\xi}
+     * \times\frac{\partial\mathbf{X}}{\partial\eta}\right\| \, \textrm{d}\xi\textrm{d}\eta
      * \f]
      *
      */
@@ -1100,16 +1114,16 @@ struct NeumannForcesSurface {
      * with respect to a variation of material coordinates:
      *
      * \f[
-     * \textrm{D} \delta W^\text{(side volume)}_p(\mathbf{x}, \mathbf{X},
-     * \delta\mathbf{x})
-     * [\Delta\mathbf{X}] = \int\limits_{\mathcal{T}_{\xi}} p
+     * \textrm{D} \delta W^\text{(side volume)}_{\mathbf t}(\mathbf{x},
+     * \mathbf{X}, \delta\mathbf{x})
+     * [\Delta\mathbf{X}] = \int\limits_{\mathcal{T}_{\xi}}
      * \left\{\left[
      * \mathbf{h}\,\mathbf{H}^{-1}\,\frac{\partial\Delta\mathbf{X}}
      * {\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
-     * \right]^{\intercal}\cdot\left(\frac{\partial\mathbf{X}}{\partial\xi}
-     * \times\frac{\partial\mathbf{X}}{\partial\eta}\right)\right\}
-     * \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta
-     * \f]
+     * \right]^{\intercal}\cdot \mathbf{t}\right\}
+     * \cdot \delta\mathbf{X}\left\|\frac{\partial\mathbf{X}}{\partial\xi}
+     * \times\frac{\partial\mathbf{X}}{\partial\eta}\right\| \,
+     * \textrm{d}\xi\textrm{d}\eta \f]
      */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
 
@@ -1166,14 +1180,14 @@ struct NeumannForcesSurface {
    * @param  ho_geometry   Use higher order shape functions to define curved
    * geometry
    * @param  block_set   If true get data from block set
-   * @param  bubble_only If true then crack front force is not added
+   * @param  ignore_material_force If true then crack front force is not added
    * @return             ErrorCode
    */
   MoFEMErrorCode
   addForceAle(const std::string field_name_1, const std::string field_name_2,
               boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
               std::string side_fe_name, Vec F,  Mat aij, int ms_id,
-              bool ho_geometry = false, bool block_set = false, bool bubble_only = false);
+              bool ho_geometry = false, bool block_set = false, bool ignore_material_force = false);
 
   /**
    * \brief Add operator to calculate pressure on element
