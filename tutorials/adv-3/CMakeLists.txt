@@ -30,7 +30,6 @@ set(permissions_execute
 
 tutorials_copy_and_install("*.msh" "${permissions_default}")
 tutorials_copy_and_install("*.cfg" "${permissions_default}")
-# tutorials_copy_and_install("*.jou" "${permissions_default}")
 tutorials_copy_and_install("*.cub" "${permissions_default}")
 tutorials_copy_and_install("*.h5m" "${permissions_default}")
 tutorials_copy_and_install("*.petsc" "${permissions_default}")
@@ -41,6 +40,7 @@ tutorials_copy_and_install("*.md" "${permissions_execute}")
 tutorials_copy_and_install("*.cfg" "${permissions_execute}")
 tutorials_copy_and_install("*.jou" "${permissions_execute}")
 tutorials_copy_and_install("meshes/*" "${permissions_execute}")
+tutorials_copy_and_install("*.ipynb" "${permissions_default}")
 
 tutorials_build_and_install(
   ale_plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/ale_plastic.cpp)
@@ -48,21 +48,16 @@ tutorials_build_and_install(
 set_target_properties(
   ale_plastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
-# set(DEBUG false)
-# if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
-#   set(DEBUG true)
-# endif ()
-
 # tutorials_build_and_install(
-#   thermo_plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+#   ale_plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
   
 # set_target_properties(
-#   thermo_plastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+#   ale_plastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
 
 # add_test(
-#   plastic_3d_necking
+#   simple_ale_plastic
 #   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-#   plastic_3d 
+#   ale_plastic 
 #   -file_name necking_3D_p2.h5m
 #   -ts_dt 0.02
 #   -ts_max_time 1.2
