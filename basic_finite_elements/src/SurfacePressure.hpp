@@ -1179,9 +1179,9 @@ struct NeumannForcesSurface {
    * @param  ms_id         Set id (SideSet or BlockSet if block_set = true)
    * @param  ho_geometry   Use higher order shape functions to define curved
    * geometry
-   * @param  block_set   If true get data from block set
+   * @param  block_set     If true get data from block set
    * @param  ignore_material_force If true then crack front force is not added
-   * @return             ErrorCode
+   * @return               ErrorCode
    */
   MoFEMErrorCode
   addForceAle(const std::string field_name_1, const std::string field_name_2,
