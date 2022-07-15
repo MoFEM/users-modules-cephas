@@ -354,16 +354,17 @@ MoFEMErrorCode Example::OPs() {
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(
         new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOWeights(det_ptr));
 
     if (SPACE_DIM == 2) {
       pipeline.push_back(new OpMakeHdivFromHcurl());
       pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
+      pipeline.push_back(new OpSetHOWeightsOnFace());
     } else {
       pipeline.push_back(
           new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
       pipeline.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
+      pipeline.push_back(new OpSetHOWeights(det_ptr));
     }
   };
 

@@ -416,7 +416,10 @@ MoFEMErrorCode Example::OPs() {
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(
         new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOWeights(det_ptr));
+    if (SPACE_DIM == 2)
+      pipeline.push_back(new OpSetHOWeightsOnFace());
+    else 
+      pipeline.push_back(new OpSetHOWeights(det_ptr));
 
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
         "TAU", commonPlasticDataPtr->getPlasticTauDotPtr()));
@@ -727,7 +730,11 @@ MoFEMErrorCode Example::OPs() {
           new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
       pipeline.push_back(
           new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-      pipeline.push_back(new OpSetHOWeights(det_ptr));
+      if (SPACE_DIM == 2)
+        pipeline.push_back(new OpSetHOWeightsOnFace());
+      else
+        pipeline.push_back(new OpSetHOWeights(det_ptr));
+
 
       pipeline.push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
