@@ -493,3 +493,11 @@ add_test(
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_surface_pressure_element
   -file_name 2_tets_surface_force.cub -snes_test_jacobian_display
 )
+
+cm_export_file("2_tets_blockset_surface_force.cub" export_atom_tests_basic_fe)
+add_test(
+  testing_jacobian_of_blockset_surface_force_element_ale
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_surface_pressure_element
+  -file_name 2_tets_blockset_surface_force.cub -snes_test_jacobian_display
+)
