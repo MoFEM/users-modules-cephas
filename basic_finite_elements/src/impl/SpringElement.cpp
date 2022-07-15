@@ -437,7 +437,7 @@ MetaSpringBC::SpringALEMaterialVolOnSideLhs::aSsemble(EntData &row_data,
   const int *col_indices = &*col_data.getIndices().data().begin();
 
   auto &data = *dataAtSpringPts;
-  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+  {
     rowIndices.resize(row_nb_dofs, false);
     noalias(rowIndices) = row_data.getIndices();
     row_indices = &rowIndices[0];
@@ -451,7 +451,7 @@ MetaSpringBC::SpringALEMaterialVolOnSideLhs::aSsemble(EntData &row_data,
     }
   }
 
-  if (!data.forcesOnlyOnEntitiesCol.empty()) {
+  {
     colIndices.resize(col_nb_dofs, false);
     noalias(colIndices) = col_data.getIndices();
     col_indices = &colIndices[0];
@@ -578,7 +578,7 @@ MetaSpringBC::OpSpringALEMaterialLhs::aSsemble(EntData &row_data,
   const int *col_indices = &*col_data.getIndices().data().begin();
 
   auto &data = *dataAtSpringPts;
-  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+  {
     rowIndices.resize(row_nb_dofs, false);
     noalias(rowIndices) = row_data.getIndices();
     row_indices = &rowIndices[0];
@@ -592,7 +592,7 @@ MetaSpringBC::OpSpringALEMaterialLhs::aSsemble(EntData &row_data,
     }
   }
 
-  if (!data.forcesOnlyOnEntitiesCol.empty()) {
+  {
     colIndices.resize(col_nb_dofs, false);
     noalias(colIndices) = col_data.getIndices();
     col_indices = &colIndices[0];
@@ -1055,7 +1055,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringFsMaterial::aSsemble(EntData &row_data) {
   const int *row_indices = &*row_data.getIndices().data().begin();
 
   auto &data = *dataAtPts;
-  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+  {
     rowIndices.resize(nbRows, false);
     noalias(rowIndices) = row_data.getIndices();
     row_indices = &rowIndices[0];
