@@ -1300,12 +1300,13 @@ MoFEMErrorCode Example::tsSolve() {
       //                       PetscObjectComm((PetscObject)dM));
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", ctx->mErrorInd);
       std::fill(error_indices.begin(), error_indices.end(), 0);
+      auto ts_step = ctx->mErrorInd->ts_step;
+      auto ts_time = ctx->mErrorInd->ts_t;
 
-      PetscPrintf(
-          PETSC_COMM_WORLD,
-          "Error energy %3.4e dissipation %3.4e eta %3.4g \n",
-          error_indices[ENERGY], error_indices[DISSIPATION],
-          error_indices[ETA]);
+      PetscPrintf(PETSC_COMM_WORLD,
+                  "Error energy %3.4e dissipation %3.4e eta %3.4g \n",
+                  error_indices[ENERGY], error_indices[DISSIPATION],
+                  error_indices[ETA]);
 
       MoFEMFunctionReturnHot(0);
     };

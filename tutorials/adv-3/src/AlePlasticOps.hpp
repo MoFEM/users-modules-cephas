@@ -1349,12 +1349,14 @@ struct MonitorPostProcSkeleton : public FEMethod {
                             error_indices.size(), MPIU_REAL, MPIU_SUM,
                             PetscObjectComm((PetscObject)dM));
 
-      CHKERR PetscPrintf(PETSC_COMM_WORLD,
-                  "Energy %3.4e dissipation %3.4e eta %3.4g \n",
-                  global_error_indices[ENERGY], global_error_indices[DISSIPATION],
-                  global_error_indices[ETA]);
-    // CHKERR VecView(ts_u, PETSC_VIEWER_STDOUT_WORLD);
-    // CHKERR VecView(ts_u_t, PETSC_VIEWER_STDOUT_WORLD);
+      PetscPrintf(
+          PETSC_COMM_WORLD,
+          "Time %3.4e error energy %3.4e dissipation %3.4e eta %3.4e \n", ts_t,
+          error_indices[ENERGY], error_indices[DISSIPATION],
+          error_indices[ETA]);
+
+      // CHKERR VecView(ts_u, PETSC_VIEWER_STDOUT_WORLD);
+      // CHKERR VecView(ts_u_t, PETSC_VIEWER_STDOUT_WORLD);
     }
 
     MoFEMFunctionReturn(0);
