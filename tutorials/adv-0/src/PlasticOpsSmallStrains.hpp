@@ -151,11 +151,10 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::iNtegrate(
 
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
     double alpha = getMeasure() * t_w;
-    const double tau = cut_off(t_tau);
 
     auto t_diff_constrain_dstrain = diff_constrain_dstrain(
         t_D_Op, diff_constrain_dstress(
-                    diff_constrain_df(t_tau_dot, t_f, hardening(tau, t_temp)),
+                    diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
                     t_flow));
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_diff_constrain_dgrad;
     t_diff_constrain_dgrad(k, l) =

@@ -164,7 +164,6 @@ std::array<double, LAST_INDIC> error_indices;
 // 1 - symmetric Nitsche, 0 - nonsymmetric, -1 antisymmetrica
 static double phi = 1;
 static double nitsche = 0;
-PetscBool is_cut_off = PETSC_FALSE;
 
 inline long double hardening(long double tau, double temp) {
   return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;

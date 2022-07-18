@@ -199,8 +199,6 @@ inline long double hardening_dtemp(long double tau, double temp) {
          sigmaY * omega_0;
 }
 
-PetscBool is_cut_off = PETSC_FALSE;
-
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
 #include <OpPostProcElastic.hpp>
