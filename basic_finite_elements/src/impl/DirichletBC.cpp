@@ -668,14 +668,34 @@ MoFEMErrorCode DirichletDisplacementRemoveDofsBc::iNitialize() {
   CHKERR getRotationBcFromBlock(*bcDataPtr);
   CHKERR getBcDataFromSetsAndBlocks(*bcDataPtr);
 
+  auto get_dim = [&](const Range &ents) {
+    for (auto d : {3, 2, 1})
+      if (ents.num_of_dimension(d))
+        return d;
+    return 0;
+  };
+
+  auto get_adj_ents = [&](const Range &ents) {
+    Range verts;
+    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
+    const auto dim = get_dim(ents);
+    for (size_t d = 1; d < dim; ++d)
+      CHKERR mField.get_moab().get_adjacencies(ents, d, false, verts,
+                                                moab::Interface::UNION);
+    verts.merge(ents);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
+    return verts;
+  };
+
   auto remove_dofs_from_dirichlet_data = [&]() {
     MoFEMFunctionBeginHot;
     for (auto &bc_it : *bcDataPtr)
       for (auto &ents : bc_it.bc_ents)
         for (int i = 0; i != nb_coefficients; i++)
           if (bc_it.bc_flags[i])
-            CHKERR prb_mng->removeDofsOnEntities(problemName,
-                                                 fieldName, ents, i, i);
+            CHKERR prb_mng->removeDofsOnEntities(problemName, fieldName,
+                                                //  get_adj_ents(ents), i, i);
+                                                 ents, i, i);
 
     MoFEMFunctionReturnHot(0);
   };
@@ -687,6 +707,7 @@ MoFEMErrorCode DirichletDisplacementRemoveDofsBc::iNitialize() {
         for (int i = 0; i != nb_coefficients; i++)
           if (bc_it.bc_flags[i])
             CHKERR prb_mng->removeDofsOnEntitiesNotDistributed(
+                // problemName, fieldName, get_adj_ents(ents), i, i);
                 problemName, fieldName, ents, i, i);
 
     MoFEMFunctionReturnHot(0);

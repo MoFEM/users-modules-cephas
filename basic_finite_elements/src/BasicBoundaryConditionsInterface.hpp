@@ -492,7 +492,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                   new TimeForceScale(getHistoryParam("dirichlet"), false));
 
             CHKERR function(dM, domainElementName.c_str(), dirichletBcPtr.get(),
-                            NULL, NULL);
+                            dirichletBcPtr.get(), dirichletBcPtr.get());
             CHKERR function(dM, domainElementName.c_str(),
                             bodyForceRhsPtr.get(), NULL, NULL);
             CHKERR function(dM, "SPRING", springRhsPtr.get(), NULL, NULL);
@@ -502,8 +502,8 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                             &fluidPressureElementPtr->getLoopFe(), NULL, NULL);
           } else {
 
-            CHKERR jacobian(dM, domainElementName.c_str(), dirichletBcPtr.get(), NULL,
-                            NULL);
+            CHKERR jacobian(dM, domainElementName.c_str(), dirichletBcPtr.get(),
+                            dirichletBcPtr.get(), dirichletBcPtr.get());
             CHKERR jacobian(dM, domainElementName.c_str(),
                             bodyForceLhsPtr.get(), NULL, NULL);
             CHKERR jacobian(dM, "SPRING", springLhsPtr.get(), NULL, NULL);

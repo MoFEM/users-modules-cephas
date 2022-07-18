@@ -216,13 +216,16 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
     // MOFEM_LOG("WORLD", Sev::inform) << "Loop energy\n";
     CHKERR DMoFEMLoopFiniteElements(dM, "ELASTIC",
                                     &elasticElementPtr->getLoopFeEnergy());
+
+    auto E = elasticElementPtr->getLoopFeEnergy().eNergy;
     // Print elastic energy
-    MOFEM_LOG_C("WORLD", Sev::inform, "Elastic energy %6.4e\n",
-                elasticElementPtr->getLoopFeEnergy().eNergy);
+    MOFEM_LOG_C("WORLD", Sev::inform, "%d Time %3.2e Elastic energy %3.2e\n",
+                elasticElementPtr->getLoopFeRhs().ts_step,
+                elasticElementPtr->getLoopFeRhs().ts_t, E);
 
     CHKERR DMoFEMLoopFiniteElements(dM, "ELASTIC", postProcMeshPtr);
     auto out_name = "out_" + to_string(step) + ".h5m";
-    // MOFEM_LOG_C("WORLD", Sev::inform, "out file %s\n", out_name.c_str());
+
     CHKERR postProcMeshPtr->writeFile(out_name);
 
     MoFEMFunctionReturn(0);
