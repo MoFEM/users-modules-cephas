@@ -501,7 +501,6 @@ inline double constrian_sign(long double x) {
     return 0;
 };
 
-
 inline double w(long double dot_tau, long double f, long double sigma_y) {
   return (f - sigma_y) / sigmaY + cn * dot_tau;
 };

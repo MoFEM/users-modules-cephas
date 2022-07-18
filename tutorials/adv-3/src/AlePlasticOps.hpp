@@ -712,6 +712,11 @@ MoFEMErrorCode OpCalculatePlasticFlowPenalty_Rhs::doWork(int side,
 
         const auto sense_row = cmdata.senseMap[s0];
         const auto sense_ep = cmdata.senseMap[s1];
+
+        const double eval = (t_omega(k) * t_normal(k)) * sense_row;
+        if (enforce_vel_vector && eval > 0)
+          continue;
+
         auto t_ep = getFTensor2SymmetricFromMat<SPACE_DIM>(
             commonDataPtr->strainSideMap.at(s1));
         auto t_diff_ep = getFTensor3DgFromMat<SPACE_DIM, SPACE_DIM>(
@@ -804,9 +809,13 @@ MoFEMErrorCode OpCalculateConstraintPenalty_Rhs::doWork(int side,
       // auto t_tau_jump = getFTensor0FromVec(*cmdata.plasticTauJumpPtr);
       // auto t_grad_tau_avg =
       //     getFTensor1FromMat<SPACE_DIM>(*cmdata.plasticTauDiffAvgPtr);
-
       const auto sense_row = cmdata.senseMap[s0];
       const auto sense_tau = cmdata.senseMap[s1];
+
+      const double eval = (t_omega(k) * t_normal(k)) * sense_row;
+      if (enforce_vel_vector && eval > 0)
+        continue;
+
       auto t_tau = getFTensor0FromVec(commonDataPtr->tauSideMap.at(s1));
       auto t_diff_tau =
           getFTensor1FromMat<SPACE_DIM>(commonDataPtr->tauDiffSideMap.at(s1));
@@ -951,9 +960,15 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
       const auto nb_row_base_functions = cmdata.rowBaseSideMap[s0].size2();
       for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
 
+        auto t_omega =
+            getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
         // get orientation of the edge
         const auto sense_col = cmdata.senseMap[s1];
         const auto nb_cols = cmdata.indicesColStrainSideMap[s1].size();
+
+        const double eval = (t_omega(k) * t_normal(k)) * sense_row;
+        if (enforce_vel_vector && eval > 0)
+          continue;
 
         // resize local element matrix
         MatrixDouble locMat(nb_rows, nb_cols, false);
@@ -963,8 +978,6 @@ MoFEMErrorCode OpCalculatePlasticFlowPenaltyLhs_dEP::doWork(
         auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
         auto t_w = getFTensor0IntegrationWeight();
         // auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
-        auto t_omega =
-            getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
 
         for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
@@ -1080,6 +1093,12 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
         // get orientation of the edge
         const auto sense_col = cmdata.senseMap[s1];
         const auto nb_cols = cmdata.indicesColTauSideMap[s1].size();
+        auto t_omega =
+            getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
+
+        const double eval = (t_omega(k) * t_normal(k)) * sense_row;
+        if (enforce_vel_vector && eval > 0)
+          continue;
 
         // resize local element matrix
         MatrixDouble locMat(nb_rows, nb_cols, false);
@@ -1089,8 +1108,6 @@ MoFEMErrorCode OpCalculateConstraintPenaltyLhs_dTAU::doWork(
         auto t_diff_row_base = get_diff_ntensor(cmdata.rowDiffBaseSideMap[s0]);
         auto t_w = getFTensor0IntegrationWeight();
         // auto t_X_dot_n = getFTensor0FromVec(*cmdata.velocityDotNormalPtr);
-        auto t_omega =
-            getFTensor1FromMat<SPACE_DIM>(*cmdata.guidingVelocityPtr);
 
         for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
@@ -1332,12 +1349,14 @@ struct MonitorPostProcSkeleton : public FEMethod {
                             error_indices.size(), MPIU_REAL, MPIU_SUM,
                             PetscObjectComm((PetscObject)dM));
 
-      CHKERR PetscPrintf(PETSC_COMM_WORLD,
-                  "Energy %3.4e dissipation %3.4e eta %3.4g \n",
-                  global_error_indices[ENERGY], global_error_indices[DISSIPATION],
-                  global_error_indices[ETA]);
-    // CHKERR VecView(ts_u, PETSC_VIEWER_STDOUT_WORLD);
-    // CHKERR VecView(ts_u_t, PETSC_VIEWER_STDOUT_WORLD);
+      PetscPrintf(
+          PETSC_COMM_WORLD,
+          "Time %3.4e error energy %3.4e dissipation %3.4e eta %3.4e \n", ts_t,
+          error_indices[ENERGY], error_indices[DISSIPATION],
+          error_indices[ETA]);
+
+      // CHKERR VecView(ts_u, PETSC_VIEWER_STDOUT_WORLD);
+      // CHKERR VecView(ts_u_t, PETSC_VIEWER_STDOUT_WORLD);
     }
 
     MoFEMFunctionReturn(0);

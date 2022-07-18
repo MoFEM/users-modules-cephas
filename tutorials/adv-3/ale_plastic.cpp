@@ -133,6 +133,7 @@ PetscBool is_large_strains = PETSC_TRUE;
 PetscBool is_with_ALE = PETSC_TRUE; 
 PetscBool test_convection = PETSC_TRUE; 
 PetscBool test_penalty = PETSC_TRUE;
+PetscBool enforce_vel_vector = PETSC_FALSE;
 
 double petsc_time = 0;
 double scale = 1.;
@@ -348,6 +349,8 @@ MoFEMErrorCode Example::createCommonData() {
                                &test_convection, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_H1", &test_H1,
                                PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-enforce_vel_vector",
+                               &enforce_vel_vector, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-max_load_time",
                                  &max_load_time, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-penalty", &penalty,
@@ -1279,7 +1282,6 @@ MoFEMErrorCode Example::tsSolve() {
     // CHKERR TSSetApplicationContext(solver, &*ts_ctx_ptr);
     CHKERR TSSetApplicationContext(solver, &ts_ctx);
 
-
     auto test_func = [](TS a) {
       MoFEMFunctionBeginHot;
       TSctx *ctx;
@@ -1297,12 +1299,13 @@ MoFEMErrorCode Example::tsSolve() {
       //                       PetscObjectComm((PetscObject)dM));
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", ctx->mErrorInd);
       std::fill(error_indices.begin(), error_indices.end(), 0);
+      auto ts_step = ctx->mErrorInd->ts_step;
+      auto ts_time = ctx->mErrorInd->ts_t;
 
-      PetscPrintf(
-          PETSC_COMM_WORLD,
-          "Error energy %3.4e dissipation %3.4e eta %3.4g \n",
-          error_indices[ENERGY], error_indices[DISSIPATION],
-          error_indices[ETA]);
+      PetscPrintf(PETSC_COMM_WORLD,
+                  "Error energy %3.4e dissipation %3.4e eta %3.4g \n",
+                  error_indices[ENERGY], error_indices[DISSIPATION],
+                  error_indices[ETA]);
 
       MoFEMFunctionReturnHot(0);
     };
@@ -1383,6 +1386,17 @@ int main(int argc, char *argv[]) {
     CHKERR simple->getOptions();
     CHKERR simple->loadFile();
     //! [Load mesh]
+
+// #ifndef NDEBUG
+    // print blocksets
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+      std::cout << std::endl << *it << std::endl;
+      CHKERR it->printName(std::cout);
+      std::vector<double> attributes;
+      CHKERR it->getAttributes(attributes);
+      CHKERR it->printAttributes(std::cout);
+    }
+// #endif
 
     //! [Example]
     Example ex(m_field);

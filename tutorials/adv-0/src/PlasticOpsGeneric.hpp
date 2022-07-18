@@ -192,7 +192,7 @@ OpCalculateContrainsRhs::iNtegrate(EntitiesFieldData::EntData &data) {
 
     const double beta =
         alpha * constrain(t_tau_dot, t_f, hardening(t_tau, t_temp));
-    
+        
     size_t bb = 0;
     for (; bb != AssemblyDomainEleOp::nbRows; ++bb) {
       nf[bb] += beta * t_base;
@@ -871,9 +871,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::iNtegrate(
         diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau, t_temp));
 
     const double c1 =
-        alpha
-
-        * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau, t_temp)) *
+        alpha *
+        diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau, t_temp)) *
         hardening_dtau(t_tau, t_temp);
 
     auto mat_ptr = locMat.data().begin();
