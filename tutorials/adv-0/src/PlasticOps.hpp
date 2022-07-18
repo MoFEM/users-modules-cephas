@@ -501,27 +501,6 @@ inline double constrian_sign(long double x) {
     return 0;
 };
 
-inline double k_penalty(const double tau) {
-  return 0;
-  constexpr auto eps = std::numeric_limits<float>::epsilon();
-  constexpr auto inv_eps = 1. / eps;
-  return tau > -eps ? 0 : inv_eps;
-}
-
-inline double cut_off(const double tau) {
-  if (is_cut_off) 
-    return (tau + std::abs(tau)) / 2.;
-  return tau; // comment
-}
-
-inline unsigned int cut_off_dtau(const double tau) {
-  constexpr auto eps = std::numeric_limits<float>::epsilon();
-  constexpr auto inv_eps = 1. / eps;
-  if (is_cut_off)
-    return tau > -std::numeric_limits<double>::epsilon() ? 1 : 0;
-  return 1;
-};
-
 inline double w(long double dot_tau, long double f, long double sigma_y) {
   return (f - sigma_y) / sigmaY + cn * dot_tau;
 };

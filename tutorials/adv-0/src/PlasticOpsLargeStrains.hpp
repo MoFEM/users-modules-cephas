@@ -192,8 +192,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::iNtegrate(
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
     double alpha = getMeasure() * t_w;
 
-    const double tau = cut_off(t_tau);
-
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_F;
     t_F(i, j) = t_grad(i, j) + t_kd(i, j);
     FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM> dC_dF;
@@ -202,7 +200,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::iNtegrate(
     auto t_diff_constrain_dstrain = diff_constrain_dstrain(
         t_D_Op,
         diff_constrain_dstress(
-            diff_constrain_df(t_tau_dot, t_f, hardening(tau, t_temp)), t_flow));
+            diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)), t_flow));
 
     FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_constrain_dlog_c;
     t_diff_constrain_dlog_c(k, l) =

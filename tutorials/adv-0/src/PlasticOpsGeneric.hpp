@@ -189,11 +189,10 @@ OpCalculateContrainsRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   auto t_base = data.getFTensor0N();
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
     const double alpha = getMeasure() * t_w;
-    const double tau = cut_off(t_tau);
 
     const double beta =
-        alpha * constrain(t_tau_dot, t_f, hardening(tau, t_temp));
-    
+        alpha * constrain(t_tau_dot, t_f, hardening(t_tau, t_temp));
+
     size_t bb = 0;
     for (; bb != AssemblyDomainEleOp::nbRows; ++bb) {
       nf[bb] += beta * t_base;
@@ -784,12 +783,11 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::iNtegrate(
 
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
     double alpha = getMeasure() * t_w;
-    const double tau = cut_off(t_tau);
 
     auto mat_ptr = locMat.data().begin();
     auto t_diff_constrain_dstrain = diff_constrain_dstrain(
         t_D_Op, diff_constrain_dstress(
-                    diff_constrain_df(t_tau_dot, t_f, hardening(tau, t_temp)),
+                    diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
                     t_flow));
 
     constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
@@ -867,17 +865,15 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::iNtegrate(
 
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
     const double alpha = getMeasure() * t_w;
-    const double tau = cut_off(t_tau);
 
     const double c0 =
         alpha * t_a *
-        diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(tau, t_temp));
+        diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau, t_temp));
 
     const double c1 =
         alpha
-
-        * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(tau, t_temp)) *
-        hardening_dtau(tau, t_temp) * cut_off_dtau(t_tau);
+        * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau, t_temp)) *
+        hardening_dtau(t_tau, t_temp);
 
     auto mat_ptr = locMat.data().begin();
 
@@ -935,17 +931,16 @@ MoFEMErrorCode OpCalculateConstrainsLhs_dTAU_ALE::iNtegrate(
     // const double alpha = getMeasure() * t_w;
 
     const double alpha = getMeasure() * t_w;
-    const double tau = cut_off(t_tau);
 
     const double c0 =
         alpha * /*  t_a * */
-        diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(tau, t_temp));
+        diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau, t_temp));
 
     const double c1 =
         alpha
 
-        * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(tau, t_temp)) *
-        hardening_dtau(tau, t_temp) * cut_off_dtau(t_tau);
+        * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau, t_temp)) *
+        hardening_dtau(t_tau, t_temp);
 
     auto mat_ptr = locMat.data().begin();
 
