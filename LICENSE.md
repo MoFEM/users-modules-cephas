@@ -1,4 +1,4 @@
-Copyright (c) 2022 Lukasz.Kaczmarczyk@glasgow.ac.uk
+Copyright (c) 2022 [Authors](https://www.openhub.net/p/mofem/contributors)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
