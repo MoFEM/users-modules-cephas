@@ -213,7 +213,7 @@ MoFEMErrorCode NonlinearPoisson::assembleSystem() {
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
         new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
-        new OpSetHOWeights(det_ptr));
+        new OpSetHOWeightsOnFace());
 
     // Add default operator to calculate field values at integration points
     domainTangentMatrixPipeline->getOpPtrVector().push_back(
@@ -240,7 +240,7 @@ MoFEMErrorCode NonlinearPoisson::assembleSystem() {
     domainResidualVectorPipeline->getOpPtrVector().push_back(
         new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
     domainResidualVectorPipeline->getOpPtrVector().push_back(
-        new OpSetHOWeights(det_ptr));
+        new OpSetHOWeightsOnFace());
 
     // Add default operator to calculate field values at integration points
     domainResidualVectorPipeline->getOpPtrVector().push_back(

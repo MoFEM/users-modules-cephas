@@ -40,12 +40,12 @@ using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, 2>;
 using OpBase = OpBaseImpl<PETSC, EdgeEleOp>;
 
-// Units 
+// Units
 // Temperature: Kelvins
 // Length: 1 km
 // Time: 1 s
 
-constexpr double heat_conductivity = ((0.4+0.7)/2) * 1e3;
+constexpr double heat_conductivity = ((0.4 + 0.7) / 2) * 1e3;
 
 constexpr double emissivity = 1;
 constexpr double boltzmann_constant = 5.670374419e-2;
@@ -118,7 +118,6 @@ private:
     double &sumTemperature;
     double &surfaceArea;
 
-
   public:
     OpCalcSurfaceAverageTemperature(
         boost::shared_ptr<VectorDouble> &approx_vals, double &sum_temp,
@@ -128,11 +127,7 @@ private:
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           EntitiesFieldData::EntData &data);
-
-
   };
-
-
 };
 
 MoFEMErrorCode Example::runProblem() {
@@ -205,7 +200,8 @@ MoFEMErrorCode Example::OPs() {
       new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeights(det_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpSetHOWeightsOnFace());
 
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpDomainGradGrad("T", "T", beta));
@@ -217,7 +213,8 @@ MoFEMErrorCode Example::OPs() {
       new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeights(det_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpSetHOWeightsOnFace());
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldGradient<2>("T", approxGradVals));
@@ -286,7 +283,7 @@ MoFEMErrorCode Example::postProcess() {
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc("T");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
-  
+
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("T", approxVals));
 

@@ -226,7 +226,7 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     pipeline.push_back(new OpCalculateHOJac<2>(jac_ptr));
     pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOWeights(det_ptr));
+    pipeline.push_back(new OpSetHOWeightsOnFace());
   };
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {

@@ -528,7 +528,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(
         new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOWeights(det_ptr));
+    pipeline.push_back(new OpSetHOWeightsOnFace());
 
     pipeline.push_back(
         new OpCalculateVectorFieldValuesDot<U_FIELD_DIM>("U", dot_u_ptr));

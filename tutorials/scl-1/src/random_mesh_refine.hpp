@@ -91,7 +91,7 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op, auto verbosity,
                 fe_ptr_current->getOpPtrVector().push_back(
                     new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
                 fe_ptr_current->getOpPtrVector().push_back(
-                    new OpSetHOWeights(det_ptr));
+                    new OpSetHOWeightsOnFace());
               }
 
               add_parent_level(
