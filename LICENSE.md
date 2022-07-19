@@ -1,4 +1,4 @@
-# Copyright (c) 2022 Contributors [https://www.openhub.net/p/mofem/contributors](https://www.openhub.net/p/mofem/contributors)
+# Copyright (c) 2022 Authors [http://mofem.eng.gla.ac.uk/mofem/html/authors.html](http://mofem.eng.gla.ac.uk/mofem/html/authors.html)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
