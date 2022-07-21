@@ -245,8 +245,8 @@ public:
             }
 
             // this is obsolete for this particular example, we keep it for
-            // generality. in case of multi-physcis problems diffrent fields can
-            // chare hierarchical base but use diffrent approx. order, so is
+            // generality. in case of multi-physics problems different fields can
+            // chare hierarchical base but use different approx. order, so is
             // possible to have more base functions than DOFs on element.
             for (; rr < nb_row_base_functions; ++rr) {
               ++t_row_base;

@@ -130,7 +130,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::readMesh() {
   CHKERR simpleInterface->getOptions();
 
   // Only L2 field is set in this example. Two lines bellow forces simple
-  // interface to creat lower diminesion (edge) elements, despite that fact that
+  // interface to creat lower dimension (edge) elements, despite that fact that
   // there is no field spanning on such elements. We need them for DF method.
   simpleInterface->getAddSkeletonFE() = true;
   simpleInterface->getAddBoundaryFE() = true;
