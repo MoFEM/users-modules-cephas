@@ -38,7 +38,7 @@
 -(v_{j}, \sigma_{j}(\mathbf{u}))_\Omega+(v, \overline{t})_{S^\sigma}
 -\sum_{i} (\left\{[v n_j] - \theta\gamma\sigma_{j}(\mathbf{v})\right\}, 
 \gamma^{-1} \left\{ [u n_j] - \gamma \sigma_{j}(\mathbf{u})\right\})_{F_i}
-+\sum_{i} (\theta\gamma\sigma_{j}(\mathbf{v}), 
+-\sum_{i} (\theta\gamma\sigma_{j}(\mathbf{v}), 
 \gamma^{-1} \left\{\gamma \sigma_{j}(\mathbf{u})\right\})_{F_i}
 = 0
 \f]
