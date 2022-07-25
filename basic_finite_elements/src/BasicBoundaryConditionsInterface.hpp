@@ -94,7 +94,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
   const string domainProblemName;
   const string domainElementName;
 
-  using BcDataTuple = std::tuple<VectorDouble, VectorDouble,
+  using BcDataTuple = std::tuple<VectorDouble, double,
                                  boost::shared_ptr<MethodForForceScaling>>;
 
   std::map<int, BcDataTuple> bodyForceMap;
@@ -266,8 +266,11 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
       CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL,
                                    param_name_with_id.c_str(), load_hist_file,
                                    255, &ctg_flag);
-      if (ctg_flag)
+      if (ctg_flag) {
+        MOFEM_LOG("WORLD", Sev::verbose)
+            << "Setting one accelerogram for all blocks!";
         return param_name_with_id;
+      }
       
       return string("");
     };
@@ -298,9 +301,11 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
           auto bc_ents_ptr = boost::make_shared<Range>(get_adj_ents(bc_ents));
 
           VectorDouble accel({attr[1], attr[2], attr[3]});
-          VectorDouble density({attr[0], 0., 0.});
-          // if accelerogram is provided then change the acceleration, otherwise
-          // use whatever is in that block TODO:
+          double density = attr[0];
+          bool inertia_flag =
+              attr.size() > 4 ? bool(std::floor(attr[4])) : true;
+          // if accelerogram is provided then change the acceleration,
+          // otherwise use whatever is in that block TODO:
           boost::shared_ptr<MethodForForceScaling> method_for_scaling;
           auto param_name_for_scaling =
               get_id_block_param("accelerogram", id);
@@ -312,7 +317,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
           bodyForceMap[id] =
               std::make_tuple(accel, density, method_for_scaling);
           auto &acc = std::get<0>(bodyForceMap.at(id));
-          auto &rho = std::get<1>(bodyForceMap.at(id));
+          auto &rho0 = std::get<1>(bodyForceMap.at(id));
           auto &method = std::get<2>(bodyForceMap.at(id));
 
           auto get_scale_body = [&](double, double, double) {
@@ -325,14 +330,15 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                                                        method, acc_c);
 
             FTensor::Tensor1<double, 3> t_source(acc_c(0), acc_c(1), acc_c(2));
-            t_source(i) *= rho(0);
+            t_source(i) *= rho0;
             return t_source;
           };
 
+          // FIXME: this require correction for large strains, multiply by det_F
           auto get_rho = [&](double, double, double) {
             auto *pipeline_mng = mField.getInterface<PipelineManager>();
             auto &fe_domain_lhs = bodyForceLhsPtr;
-            return rho(0) * fe_domain_lhs->ts_aa;
+            return rho0 * fe_domain_lhs->ts_aa;
           };
 
           auto &pipeline_rhs = bodyForceRhsPtr->getOpPtrVector();
@@ -344,11 +350,12 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                              false, false, false);
 
           // boundaryMarker.reset();
+          //FIXME: fix for large strains
           pipeline_rhs.push_back(
               new OpSetBc(positionField, true, mBoundaryMarker));
           pipeline_rhs.push_back(
               new OpBodyForce(positionField, get_scale_body, bc_ents_ptr));
-          if (!isQuasiStatic) {
+          if (!isQuasiStatic && inertia_flag) {
             pipeline_lhs.push_back(
                 new OpSetBc(positionField, true, mBoundaryMarker));
             pipeline_lhs.push_back(
@@ -358,7 +365,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                 positionField, mat_acceleration));
             pipeline_rhs.push_back(new OpInertiaForce(
                 positionField, mat_acceleration,
-                [&](double, double, double) { return rho(0); }, bc_ents_ptr));
+                [&](double, double, double) { return rho0; }, bc_ents_ptr));
             pipeline_lhs.push_back(new OpUnSetBc(positionField));
           }
           pipeline_rhs.push_back(new OpUnSetBc(positionField));
@@ -367,7 +374,8 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
           SETERRQ1(
               PETSC_COMM_SELF, MOFEM_INVALID_DATA,
               "There should be (1 density + 3 accelerations ) attributes in "
-              "BODY_FORCE blockset, but is %d",
+              "BODY_FORCE blockset, but is %d. Optionally, you can set 5th "
+              "parameter to inertia flag.",
               attr.size());
         }
       }
