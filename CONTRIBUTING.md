@@ -1,7 +1,7 @@
 Contributing to MoFEM {#contributing_to_mofem}
 ==============================================
 
-# Guidance to to follow
+# Guidance to follow
 
 * MoFEM is a software with an open community of users and developers, and here we put what it means to be a good citizen of MoFEM community. [Link to Be a good MoFEM citizen](http://mofem.eng.gla.ac.uk/mofem/html/being_a_good_citizen.html)
 
