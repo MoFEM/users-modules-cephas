@@ -19,7 +19,7 @@
 !CTestConfig.cmake
 !ModulesList.cmake
 !*.in
-!LICENSE.md
+!*.md
 
 .DS_Store
 basic_finite_elements/.vscode
