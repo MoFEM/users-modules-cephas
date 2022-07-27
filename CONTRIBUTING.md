@@ -8,7 +8,7 @@ Contributing to MoFEM {#contributing_to_mofem}
 * MoFEM has its own naming conventions and guidance which you should follow when
 you program, make pull requests,  etc. Please follow [link to coding practice](http://mofem.eng.gla.ac.uk/mofem/html/coding_practice.html) for more details.
 
-* MoFEM has bugs and there are rules on how to report them. You can ask for enhancements, proposals, and tasks [link](https://bitbucket.org/likask/mofem-cephas/issues?status=new&status=open); please follow 
+* MoFEM certainly has bugs and there are rules on how to report them. You can also ask for enhancements and propose development tasks. [link](https://bitbucket.org/likask/mofem-cephas/issues?status=new&status=open); please follow 
 [link to bug reporting](http://mofem.eng.gla.ac.uk/mofem/html/guidelines_bug_reporting.html) for more details.
 
 * [Writing documentation](http://mofem.eng.gla.ac.uk/mofem/html/a_guide_to_writing_documentation.html) is essential to develop a sustainable code; without comments, examples and tutorials the code will be difficult or even impossible to use.
