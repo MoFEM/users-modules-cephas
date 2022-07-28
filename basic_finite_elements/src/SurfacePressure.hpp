@@ -129,7 +129,23 @@ struct NeumannForcesSurface {
                    bool ho_geometry = false);
 
     VectorDouble Nf; //< Local force vector
-
+  /**
+   * @brief Integrate surface force (traction)
+   *
+   * \f[
+   * \mathbf{f}^i = \int_\mathcal{T} {\pmb\phi}^i \mathbf{t}
+   * \textrm{d}\mathcal{T}
+   * \f]
+   * where \f$\mathbf{t}\f$ is traction, and
+   * \f$\mathbf{f}^i\f$ is local vector of external forces for ith base
+   * function \f${\pmb\phi}^i\f$.
+   *
+   *
+   * @param side
+   * @param type
+   * @param data
+   * @return MoFEMErrorCode
+   */
     MoFEMErrorCode doWork(int side, EntityType type,
                           EntitiesFieldData::EntData &data);
   };
@@ -341,18 +357,17 @@ struct NeumannForcesSurface {
      * \delta W^\text{spatial}_{\mathbf t}(\mathbf{X}, \delta\mathbf{x}) =
      * \int\limits_\mathcal{T} \mathbf{t}(\mathbf{X}) \cdot
      * \delta\mathbf{x}\, \textrm{d}\mathcal{T} =
-     * \dfrac{1}{2}\int\limits_{\mathcal{T}_{\xi}}
+     * \int\limits_{\mathcal{T}_{\xi}}
      * \mathbf{t} \cdot \delta\mathbf{x} \left\|
-     * \left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
-     * \mathbf{X}} {\partial\eta}\right) \right\| \,
+     * \frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}} {\partial\eta} \right\| \,
      * \textrm{d}\xi\textrm{d}\eta, \f] where \f$\mathbf{t}\f$ is the force
      * vector, \f$ \left\|
-     * \left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
-     * \mathbf{X}} {\partial\eta}\right) \right\|\f$ is the determinant of the
-     * Jacobian of the triangular face in the material configuration equal to
-     * the norm of the normal vector \f$\|\mathbf{N}\|$\f since \f$\mathbf{N} =
+     * \frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}} {\partial\eta} \right\|\f$ is the length of the normal to the face
+     * in the material configuration, i.e. \f$\|\mathbf{N}\|\f$ since \f$\mathbf{N} =
      * \frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial \mathbf{X}}
-     * {\partial\eta}$\f and \f$\xi, \eta\f$ are coordinates in the parent space
+     * {\partial\eta}\f$ and \f$\xi, \eta\f$ are coordinates in the parent space
      * \f$(\mathcal{T}_\xi)\f$.
      *
      * Linearisation with respect to a variation of material coordinates
@@ -510,7 +525,7 @@ struct NeumannForcesSurface {
     /**
      * @brief Integrate surface force in the material configuration.
      *
-     * Virtual work of the surface surface force corresponding to a test function
+     * Virtual work of the surface force corresponding to a test function
      * of the material configuration \f$(\delta\mathbf{X})\f$:
      *
      * \f[
@@ -519,17 +534,17 @@ struct NeumannForcesSurface {
      * -\int\limits_\mathcal{T} \left\{\mathbf{F}^{\intercal}\cdot
      * \mathbf{t} \right\} \cdot \delta\mathbf{X}\,
      * \textrm{d}\mathcal{T} =
-     * -\dfrac{1}{2}\int\limits_{\mathcal{T}_{\xi}}
+     * -\int\limits_{\mathcal{T}_{\xi}}
      * \left\{\mathbf{F}^{\intercal}\cdot \mathbf{t} \right\} \cdot
      * \delta\mathbf{X}\,
      * \left\|\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
      * \mathbf{X}} {\partial\eta}\right\| \textrm{d}\xi\textrm{d}\eta
-     * = -\dfrac{1}{2}\int\limits_{\mathcal{T}_{\xi}}
+     * = -\int\limits_{\mathcal{T}_{\xi}}
      * \left\{\mathbf{F}^{\intercal}\cdot \mathbf{t} \right\} \cdot
      * \delta\mathbf{X}\, \left\|\mathbf{N}\right\| \textrm{d}\xi\textrm{d}\eta
      *  \f]
      *
-     * where \f$\mathbf t\f$ surface force, \f$\mathbf{N}\f$ is a normal to the
+     * where \f$\mathbf t\f$ is surface force, \f$\mathbf{N}\f$ is a normal to the
      * face in the material configuration, \f$\xi, \eta\f$ are coordinates in
      * the parent space \f$(\mathcal{T}_\xi)\f$ and \f$\mathbf{F}\f$ is the
      * deformation gradient:
@@ -1179,7 +1194,7 @@ struct NeumannForcesSurface {
    * @param  ho_geometry   Use higher order shape functions to define curved
    * geometry
    * @param  block_set     If true get data from block set
-   * @param  ignore_material_force If true then crack front force is not added
+   * @param  ignore_material_force If true then material force is not added
    * @return               ErrorCode
    */
   MoFEMErrorCode

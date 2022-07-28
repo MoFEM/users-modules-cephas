@@ -190,10 +190,9 @@ int main(int argc, char *argv[]) {
           true, false, false);
     }
 
-    const string block_set_force_name_2("FORCE");
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-      if (it->getName().compare(0, block_set_force_name_2.length(),
-                                block_set_force_name_2) == 0) {
+      if (it->getName().compare(0, block_set_force_name.length(),
+                                block_set_force_name) == 0) {
         CHKERR surfaceForce->addForce("SPATIAL_POSITION", PETSC_NULL, (it->getMeshsetId()),
                       true, true);
         CHKERR surfaceForce->addForceAle(
