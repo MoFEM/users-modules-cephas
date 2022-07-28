@@ -193,12 +193,12 @@ int main(int argc, char *argv[]) {
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
       if (it->getName().compare(0, block_set_force_name.length(),
                                 block_set_force_name) == 0) {
-        CHKERR surfaceForce->addForce("SPATIAL_POSITION", PETSC_NULL, (it->getMeshsetId()),
-                      true, true);
+        CHKERR surfaceForce->addForce("SPATIAL_POSITION", PETSC_NULL,
+                                      (it->getMeshsetId()), true, true);
         CHKERR surfaceForce->addForceAle(
-          "SPATIAL_POSITION", "MESH_NODE_POSITIONS", dataAtPts,
-          si->getDomainFEName(), PETSC_NULL, PETSC_NULL, it->getMeshsetId(),
-          true, true, false);
+            "SPATIAL_POSITION", "MESH_NODE_POSITIONS", dataAtPts,
+            si->getDomainFEName(), PETSC_NULL, PETSC_NULL, it->getMeshsetId(),
+            true, true, false);
       }
     }
 

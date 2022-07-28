@@ -129,23 +129,23 @@ struct NeumannForcesSurface {
                    bool ho_geometry = false);
 
     VectorDouble Nf; //< Local force vector
-  /**
-   * @brief Integrate surface force (traction)
-   *
-   * \f[
-   * \mathbf{f}^i = \int_\mathcal{T} {\pmb\phi}^i \mathbf{t}
-   * \textrm{d}\mathcal{T}
-   * \f]
-   * where \f$\mathbf{t}\f$ is traction, and
-   * \f$\mathbf{f}^i\f$ is local vector of external forces for ith base
-   * function \f${\pmb\phi}^i\f$.
-   *
-   *
-   * @param side
-   * @param type
-   * @param data
-   * @return MoFEMErrorCode
-   */
+                     /**
+                      * @brief Integrate surface force (traction)
+                      *
+                      * \f[
+                      * \mathbf{f}^i = \int_\mathcal{T} {\pmb\phi}^i \mathbf{t}
+                      * \textrm{d}\mathcal{T}
+                      * \f]
+                      * where \f$\mathbf{t}\f$ is traction, and
+                      * \f$\mathbf{f}^i\f$ is local vector of external forces for ith base
+                      * function \f${\pmb\phi}^i\f$.
+                      *
+                      *
+                      * @param side
+                      * @param type
+                      * @param data
+                      * @return MoFEMErrorCode
+                      */
     MoFEMErrorCode doWork(int side, EntityType type,
                           EntitiesFieldData::EntData &data);
   };
@@ -328,8 +328,7 @@ struct NeumannForcesSurface {
     };
   };
 
-
-/**
+  /**
    * @brief LHS-operator for surface force element (spatial configuration)
    *
    * Computes linearisation of the spatial component with respect to
@@ -364,8 +363,9 @@ struct NeumannForcesSurface {
      * \textrm{d}\xi\textrm{d}\eta, \f] where \f$\mathbf{t}\f$ is the force
      * vector, \f$ \left\|
      * \frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
-     * \mathbf{X}} {\partial\eta} \right\|\f$ is the length of the normal to the face
-     * in the material configuration, i.e. \f$\|\mathbf{N}\|\f$ since \f$\mathbf{N} =
+     * \mathbf{X}} {\partial\eta} \right\|\f$ is the length of the normal to the
+     * face in the material configuration, i.e. \f$\|\mathbf{N}\|\f$ since
+     * \f$\mathbf{N} =
      * \frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial \mathbf{X}}
      * {\partial\eta}\f$ and \f$\xi, \eta\f$ are coordinates in the parent space
      * \f$(\mathcal{T}_\xi)\f$.
@@ -374,7 +374,8 @@ struct NeumannForcesSurface {
      * \f$(\Delta\mathbf{X})\f$:
      *
      * \f[
-     * \textrm{D} \delta W^\text{spatial}_{\mathbf t}(\mathbf{X}, \delta\mathbf{x})
+     * \textrm{D} \delta W^\text{spatial}_{\mathbf t}(\mathbf{X},
+     * \delta\mathbf{x})
      * [\Delta\mathbf{X}] = \int\limits_{\mathcal{T}_{\xi}}
      * \dfrac{\mathbf{t}\cdot \delta \mathbf{x}}{\left\|
      * \left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
@@ -404,7 +405,6 @@ struct NeumannForcesSurface {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
-
 
   /**
    * @brief Operator for computing deformation gradients in side volumes
@@ -499,7 +499,6 @@ struct NeumannForcesSurface {
           F(f), dAta(data), hoGeometry(ho_geometry){};
   };
 
-
   /**
    * @brief RHS-operator for the surface force element (material configuration)
    *
@@ -544,9 +543,9 @@ struct NeumannForcesSurface {
      * \delta\mathbf{X}\, \left\|\mathbf{N}\right\| \textrm{d}\xi\textrm{d}\eta
      *  \f]
      *
-     * where \f$\mathbf t\f$ is surface force, \f$\mathbf{N}\f$ is a normal to the
-     * face in the material configuration, \f$\xi, \eta\f$ are coordinates in
-     * the parent space \f$(\mathcal{T}_\xi)\f$ and \f$\mathbf{F}\f$ is the
+     * where \f$\mathbf t\f$ is surface force, \f$\mathbf{N}\f$ is a normal to
+     * the face in the material configuration, \f$\xi, \eta\f$ are coordinates
+     * in the parent space \f$(\mathcal{T}_\xi)\f$ and \f$\mathbf{F}\f$ is the
      * deformation gradient:
      *
      * \f[
@@ -775,7 +774,7 @@ struct NeumannForcesSurface {
     };
   };
 
-/**
+  /**
    * @brief LHS-operator for the surface force element (material configuration)
    *
    * Computes linearisation of the material component with respect to
@@ -827,9 +826,9 @@ struct NeumannForcesSurface {
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
         std::string &side_fe_name, Mat aij, bCForce &data,
         bool ho_geometry = false)
-        : OpNeumannSurfaceForceMaterialLhs(field_name_1, field_name_2, data_at_pts,
-                                       side_fe, side_fe_name, aij, data,
-                                       ho_geometry) {
+        : OpNeumannSurfaceForceMaterialLhs(field_name_1, field_name_2,
+                                           data_at_pts, side_fe, side_fe_name,
+                                           aij, data, ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
@@ -889,9 +888,9 @@ struct NeumannForcesSurface {
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
         std::string &side_fe_name, Mat aij, bCForce &data,
         bool ho_geometry = false)
-        : OpNeumannSurfaceForceMaterialLhs(field_name_1, field_name_2, data_at_pts,
-                                       side_fe, side_fe_name, aij, data,
-                                       ho_geometry) {
+        : OpNeumannSurfaceForceMaterialLhs(field_name_1, field_name_2,
+                                           data_at_pts, side_fe, side_fe_name,
+                                           aij, data, ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
@@ -944,7 +943,7 @@ struct NeumannForcesSurface {
     }
   };
 
-/**
+  /**
    * @brief Base class for LHS-operators (material) on side volumes
    *
    */
@@ -1031,7 +1030,7 @@ struct NeumannForcesSurface {
     };
   };
 
-/**
+  /**
    * @brief LHS-operator (material configuration) on the side volume
    *
    * Computes the linearisation of the material component
@@ -1047,15 +1046,15 @@ struct NeumannForcesSurface {
      * with respect to a variation of spatial coordinates:
      *
      * \f[
-     * \textrm{D} \delta W^\text{(side volume)}_{\mathbf{t}}(\mathbf{x}, \mathbf{X},
-     * \delta\mathbf{x})
-     * [\Delta\mathbf{x}] = -\int\limits_{\mathcal{T}_{\xi}} 
+     * \textrm{D} \delta W^\text{(side volume)}_{\mathbf{t}}(\mathbf{x},
+     * \mathbf{X}, \delta\mathbf{x})
+     * [\Delta\mathbf{x}] = -\int\limits_{\mathcal{T}_{\xi}}
      * \left\{\left[
      * \frac{\partial\Delta\mathbf{x}}{\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
      * \right]^{\intercal}\cdot \mathbf{t}\right\}
      * \cdot \delta\mathbf{X} \left\|\frac{\partial\mathbf{X}}{\partial\xi}
-     * \times\frac{\partial\mathbf{X}}{\partial\eta}\right\| \, \textrm{d}\xi\textrm{d}\eta
-     * \f]
+     * \times\frac{\partial\mathbf{X}}{\partial\eta}\right\| \,
+     * \textrm{d}\xi\textrm{d}\eta \f]
      *
      */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
@@ -1069,7 +1068,6 @@ struct NeumannForcesSurface {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
-
 
   /**
    * @brief LHS-operator (material configuration) on the side volume
@@ -1200,8 +1198,9 @@ struct NeumannForcesSurface {
   MoFEMErrorCode
   addForceAle(const std::string field_name_1, const std::string field_name_2,
               boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
-              std::string side_fe_name, Vec F,  Mat aij, int ms_id,
-              bool ho_geometry = false, bool block_set = false, bool ignore_material_force = false);
+              std::string side_fe_name, Vec F, Mat aij, int ms_id,
+              bool ho_geometry = false, bool block_set = false,
+              bool ignore_material_force = false);
 
   /**
    * \brief Add operator to calculate pressure on element
