@@ -1,4 +1,4 @@
-Contributing to MoFEM {#contributing_to_mofem}
+Contributing to MoFEM 
 ==============================================
 
 # Guidance to follow
