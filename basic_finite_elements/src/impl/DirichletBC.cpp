@@ -708,7 +708,7 @@ MoFEMErrorCode DirichletDisplacementRemoveDofsBc::iNitialize() {
           if (bc_it.bc_flags[i])
             CHKERR prb_mng->removeDofsOnEntitiesNotDistributed(
                 // problemName, fieldName, get_adj_ents(ents), i, i);
-                problemName, fieldName, ents, i, i);
+                problemName, fieldName, ents, i, i, QUIET);
 
     MoFEMFunctionReturnHot(0);
   };
