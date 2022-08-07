@@ -324,7 +324,7 @@ MoFEMErrorCode Example::createCommonData() {
                                  &heat_conductivity, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-omega_0", &omega_0,
                                  PETSC_NULL);
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-omega_h", &omega_0,
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-omega_h", &omega_h,
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-omega_inf", &omega_inf,
                                  PETSC_NULL);
