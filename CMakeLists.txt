@@ -1,27 +1,16 @@
-# MoFEM is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Lesser General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
 #
-# MoFEM is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
-# License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public
-# License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
 cmake_minimum_required (VERSION 3.1.3)
 
 project(MoFEM-UserModules 
-  VERSION 0.12.2
+  VERSION 0.13.1
   DESCRIPTION "Finite element framework" 
   LANGUAGES C CXX)
 
 # Set fallback version. Fallback version is version of users moudles which is used
 # as default version if version from the git tags can not be extracted. For example 
 # that is a case when someone install mofem from tarball.
-set(UM_FALLBACK_VERSION "0.12.3" CACHE STRING "Fallback version" FORCE)
+set(UM_FALLBACK_VERSION "0.13.1" CACHE STRING "Fallback version" FORCE)
 message(STATUS "Falback version v${UM_FALLBACK_VERSION}")
 
 #search include directories before system directories
@@ -42,7 +31,7 @@ if(NOT MPI_RUN_FLAGS)
 endif(NOT MPI_RUN_FLAGS)
 
 # This is obsolete option should not be used, is set for back compatibility
-# with some old modules. You should replace UM_SOURCE_DIR by PROJECT_SOURCE_DIR
+# with some old D_LIBCPP_DISABLE_DEPRECATION_WARNINGSmodules. You should replace UM_SOURCE_DIR by PROJECT_SOURCE_DIR
 # when you spot it in your code.
 set(UM_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 
@@ -60,6 +49,7 @@ add_definitions(
   -DMoFEM_VERSION_BUILD=${MoFEM_VERSION_BUILD})
 
 add_definitions(${MoFEM_DEFINE_RESTRICT})
+add_definitions("-D_LIBCPP_DISABLE_DEPRECATION_WARNINGS")
 
 # Find mbconvert
 find_program(

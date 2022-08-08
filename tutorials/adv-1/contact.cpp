@@ -6,19 +6,7 @@
  *
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #ifndef EXECUTABLE_DIMENSION
 #define EXECUTABLE_DIMENSION 3
@@ -60,7 +48,7 @@ constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
@@ -342,26 +330,28 @@ MoFEMErrorCode Example::bC() {
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto bc_mng = mField.getInterface<BcManager>();
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    pipeline.push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline.push_back(
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+
     if (SPACE_DIM == 2) {
-      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
-      pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
       pipeline.push_back(new OpMakeHdivFromHcurl());
       pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
       pipeline.push_back(new OpSetHOWeightsOnFace());
     } else {
-      pipeline.push_back(new OpCalculateHOJacVolume(jac_ptr));
-      pipeline.push_back(new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
       pipeline.push_back(
           new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
       pipeline.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
-      pipeline.push_back(new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
       pipeline.push_back(new OpSetHOWeights(det_ptr));
     }
   };
@@ -371,8 +361,7 @@ MoFEMErrorCode Example::OPs() {
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    if (boundaryMarker)
-      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     if (is_large_strains) {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -411,8 +400,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
     pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
 
-    if (boundaryMarker)
-      pipeline.push_back(new OpUnSetBc("U"));
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -429,8 +417,7 @@ MoFEMErrorCode Example::OPs() {
       return t_source;
     };
 
-    if (boundaryMarker)
-      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(new OpBodyForce("U", get_body_force));
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -489,8 +476,7 @@ MoFEMErrorCode Example::OPs() {
           "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
 
-    if (boundaryMarker)
-      pipeline.push_back(new OpUnSetBc("U"));
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -501,14 +487,13 @@ MoFEMErrorCode Example::OPs() {
         "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
         "SIGMA", commonDataPtr->contactTractionPtr));
-
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
+    auto &bc_map = bc_mng->getBcMapByBlockName();
     for (auto bc : bc_map) {
-      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+      if (bc_mng->checkBlock(bc, "FIX_")) {
         MOFEM_LOG("EXAMPLE", Sev::inform)
             << "Set boundary matrix for " << bc.first;
         pipeline.push_back(
@@ -520,8 +505,7 @@ MoFEMErrorCode Example::OPs() {
       }
     }
 
-    if (boundaryMarker)
-      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
@@ -546,7 +530,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     MoFEMFunctionBegin;
     for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
-      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+      if (bc_mng->checkBlock(bc, "FIX_")) {
         MOFEM_LOG("EXAMPLE", Sev::inform)
             << "Set boundary residual for " << bc.first;
         pipeline.push_back(
@@ -573,14 +557,12 @@ MoFEMErrorCode Example::OPs() {
       }
     }
 
-    if (boundaryMarker)
-      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs(
         "U", commonDataPtr->contactDispPtr,
         [this](double, double, double) { return spring_stiffness; }));
-    if (boundaryMarker)
-      pipeline.push_back(new OpUnSetBc("U"));
+    pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 

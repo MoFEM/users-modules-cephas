@@ -4,19 +4,7 @@
 
 */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #include <MoFEM.hpp>
 using namespace MoFEM;
@@ -57,7 +45,7 @@ int main(int argc, char *argv[]) {
                                 mesh_file_name, 255, &flg_file);
     if (flg_file != PETSC_TRUE)
       SETERRQ(PETSC_COMM_SELF, 1,
-              "*** ERROR -my_file (-file_name) (MESH FILE NEEDED)");
+              "*** ERROR -my_file (-file_name) (mesh file needed)");
 
     const char *option;
     option = "";
@@ -131,10 +119,9 @@ int main(int argc, char *argv[]) {
                                       moab::Interface::UNION);
         }
       }
-      ProblemsManager *prb_mng_ptr;
-      CHKERR m_field.getInterface(prb_mng_ptr);
-      CHKERR prb_mng_ptr->partitionMesh(ents_dim, dim, adj_dim, n_partas,
-                                        nullptr, nullptr, nullptr, VERBOSE);
+      CommInterface *comm_interafce_ptr = m_field.getInterface<CommInterface>();
+      CHKERR comm_interafce_ptr->partitionMesh(
+          ents_dim, dim, adj_dim, n_partas, nullptr, nullptr, nullptr, VERBOSE);
     }
 
     auto get_tag_list = [&]() {

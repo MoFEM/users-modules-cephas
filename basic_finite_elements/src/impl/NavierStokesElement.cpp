@@ -3,25 +3,15 @@
  * \example NavierStokesElement.cpp
  *
  * \brief Implementation of operators for fluid flow
+ * 
+ * FIXME: Code does not handle higher order geometry
  *
  * Implementation of operators for simulation of the fluid flow governed by
  * Stokes and Navier-Stokes equations, and computation of the drag
  * force on a fluid-solid inteface
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #include <MoFEM.hpp>
 using namespace MoFEM;
@@ -173,10 +163,12 @@ MoFEMErrorCode NavierStokesElement::setCalcDragOperators(
     sideDragFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
-    dragFe->getOpPtrVector().push_back(new OpCalculateHOJacForFace(jac_ptr));
+    dragFe->getOpPtrVector().push_back(new OpCalculateHOJac<2>(jac_ptr));
     dragFe->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    dragFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+    dragFe->getOpPtrVector().push_back(
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+
     dragFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         pressure_field, common_data->pressPtr));
 
@@ -206,11 +198,12 @@ MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
     postProcDragPtr->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     postProcDragPtr->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     postProcDragPtr->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+
     postProcDragPtr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(velocity_field,
                                             common_data->velPtr));

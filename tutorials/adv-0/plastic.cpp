@@ -6,19 +6,7 @@
  *
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #ifndef EXECUTABLE_DIMENSION
 #define EXECUTABLE_DIMENSION 3
@@ -52,7 +40,7 @@ constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
@@ -408,14 +396,18 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    if (SPACE_DIM == 2) {
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
-      pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-    }
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    pipeline.push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline.push_back(
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+    if (SPACE_DIM == 2)
+      pipeline.push_back(new OpSetHOWeightsOnFace());
+    else 
+      pipeline.push_back(new OpSetHOWeights(det_ptr));
 
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
         "TAU", commonPlasticDataPtr->getPlasticTauDotPtr()));
@@ -570,7 +562,6 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-
     pipeline.push_back(
         new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr));
     pipeline.push_back(
@@ -707,7 +698,7 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_domain_stress_ops(feAxiatorRhs->getOpPtrVector(),
                                commonPlasticDataPtr->mDPtr_Axiator);
   CHKERR add_domain_ops_rhs_mechanical(feAxiatorRhs->getOpPtrVector());
-  
+
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_deviator);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_deviator);
 
@@ -719,15 +710,19 @@ MoFEMErrorCode Example::OPs() {
 
     if (reactionMarker) {
 
-      if (SPACE_DIM == 2) {
-        auto det_ptr = boost::make_shared<VectorDouble>();
-        auto jac_ptr = boost::make_shared<MatrixDouble>();
-        auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-        pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
-        pipeline.push_back(
-            new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-        pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-      }
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+      pipeline.push_back(
+          new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+      pipeline.push_back(
+          new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+      if (SPACE_DIM == 2)
+        pipeline.push_back(new OpSetHOWeightsOnFace());
+      else
+        pipeline.push_back(new OpSetHOWeights(det_ptr));
+
 
       pipeline.push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -756,8 +751,8 @@ MoFEMErrorCode Example::OPs() {
         pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
             "U", commonPlasticDataPtr->mGradPtr,
             commonPlasticDataPtr->mStrainPtr));
-        pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr,
-                                               commonPlasticDataPtr->mDPtr, 1));
+        pipeline.push_back(new OpPlasticStress(
+            "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
       }
 
       pipeline.push_back(new OpSetBc("U", false, reactionMarker));
@@ -792,17 +787,16 @@ MoFEMErrorCode Example::tsSolve() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   ISManager *is_manager = mField.getInterface<ISManager>();
 
+  auto snes_ctx_ptr = smartGetDMSnesCtx(simple->getDM());
+
   auto set_section_monitor = [&](auto solver) {
     MoFEMFunctionBegin;
     SNES snes;
     CHKERR TSGetSNES(solver, &snes);
-    PetscViewerAndFormat *vf;
-    CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
-                                      PETSC_VIEWER_DEFAULT, &vf);
-    CHKERR SNESMonitorSet(
-        snes,
-        (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal, void *))SNESMonitorFields,
-        vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
+    CHKERR SNESMonitorSet(snes,
+                          (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
+                                             void *))MoFEMSNESMonitorFields,
+                          (void *)(snes_ctx_ptr.get()), nullptr);
     MoFEMFunctionReturn(0);
   };
 
@@ -810,16 +804,16 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
-    if (SPACE_DIM == 2) {
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      postProcFe->getOpPtrVector().push_back(
-          new OpCalculateHOJacForFace(jac_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
-    }
+
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(

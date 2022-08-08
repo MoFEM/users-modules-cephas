@@ -4,19 +4,7 @@
 
 */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #include <MoFEM.hpp>
 using namespace MoFEM;
@@ -32,8 +20,8 @@ AnalyticalDirichletBC::ApproxField::OpLhs::OpLhs(const std::string field_name)
 
 MoFEMErrorCode AnalyticalDirichletBC::ApproxField::OpLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   if (row_data.getIndices().size() == 0)
@@ -146,19 +134,19 @@ AnalyticalDirichletBC::DirichletBC::DirichletBC(MoFEM::Interface &m_field,
                                                 const std::string &field)
     : DirichletDisplacementBc(m_field, field) {}
 
-MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitalize() {
+MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitialize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty()) {
     if (!trisPtr) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
               "Need to initialized from AnalyticalDirichletBC::solveProblem");
     }
-    CHKERR iNitalize(*trisPtr);
+    CHKERR iNitialize(*trisPtr);
   }
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitalize(Range &tris) {
+MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitialize(Range &tris) {
   MoFEMFunctionBegin;
   ParallelComm *pcomm =
       ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);

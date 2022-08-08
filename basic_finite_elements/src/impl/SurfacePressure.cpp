@@ -5,19 +5,7 @@
   guarantee that will work.
 */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 using namespace MoFEM;
 
@@ -43,7 +31,7 @@ NeumannForcesSurface::OpNeumannForce::OpNeumannForce(
       F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {}
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -116,7 +104,7 @@ NeumannForcesSurface::OpNeumannForceAnalytical::OpNeumannForceAnalytical(
       analyticalForceOp(analytical_force_op), hoGeometry(ho_geometry) {}
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -183,7 +171,7 @@ NeumannForcesSurface::OpNeumannPressure::OpNeumannPressure(
       F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {}
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
 
   MoFEMFunctionBegin;
 
@@ -234,7 +222,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
 }
 
 MoFEMErrorCode NeumannForcesSurface::OpGetTangent::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -274,8 +262,8 @@ MoFEMErrorCode NeumannForcesSurface::OpGetTangent::doWork(
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -371,7 +359,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
 }
 
 MoFEMErrorCode NeumannForcesSurface::OpCalculateDeformation::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
+    int side, EntityType type, EntitiesFieldData::EntData &row_data) {
 
   MoFEMFunctionBegin;
   FTensor::Index<'i', 3> i;
@@ -407,7 +395,7 @@ MoFEMErrorCode NeumannForcesSurface::OpCalculateDeformation::doWork(
 }
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialRhs_dX::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
+    int side, EntityType type, EntitiesFieldData::EntData &row_data) {
 
   MoFEMFunctionBegin;
 
@@ -527,8 +515,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialRhs_dX::aSsemble(
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
 
   MoFEMFunctionBegin;
 
@@ -694,8 +682,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialLhs::aSsemble(
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dx::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
 
   MoFEMFunctionBegin;
 
@@ -716,8 +704,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dx::doWork(
 MoFEMErrorCode
 NeumannForcesSurface::OpNeumannPressureMaterialVolOnSideLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
 
   MoFEMFunctionBegin;
 
@@ -936,7 +924,7 @@ NeumannForcesSurface::OpNeumannFlux::OpNeumannFlux(
       F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {}
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannFlux::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)

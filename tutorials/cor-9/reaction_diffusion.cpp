@@ -4,20 +4,6 @@
  *
  **/
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
-
 #include <BasicFiniteElements.hpp>
 using namespace MoFEM;
 
@@ -27,7 +13,7 @@ namespace ReactionDiffusionEquation {
 
 using Ele = FaceElementForcesAndSourcesCore;
 using OpEle = FaceElementForcesAndSourcesCore::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 const double D = 2e-3; ///< diffusivity
 const double r = 1;    ///< rate factor
@@ -385,11 +371,12 @@ int main(int argc, char *argv[]) {
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
     // Add operators to calculate the stiff right-hand side
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    vol_ele_stiff_rhs->getOpPtrVector().push_back(new OpSetHOWeights(det_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValuesDot("u", dot_val_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
@@ -399,11 +386,12 @@ int main(int argc, char *argv[]) {
 
     // Add operators to calculate the stiff left-hand side
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    vol_ele_stiff_lhs->getOpPtrVector().push_back(new OpSetHOWeights(det_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpAssembleStiffLhs<2>(data));
 

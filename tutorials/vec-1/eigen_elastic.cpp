@@ -6,20 +6,6 @@
  *
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
-
 #include <MoFEM.hpp>
 #undef EPS
 #include <slepceps.h>
@@ -29,7 +15,7 @@ using namespace MoFEM;
 template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
-  using DomainEle = FaceElementForcesAndSourcesCoreBase;
+  using DomainEle = FaceElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 };
@@ -43,7 +29,7 @@ template <> struct ElementsAndOps<3> {
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
@@ -83,9 +69,6 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  boost::shared_ptr<MatrixDouble> matGradPtr;
-  boost::shared_ptr<MatrixDouble> matStrainPtr;
-  boost::shared_ptr<MatrixDouble> matStressPtr;
   boost::shared_ptr<MatrixDouble> matDPtr;
 
   SmartPetscObj<Mat> M;
@@ -125,9 +108,6 @@ MoFEMErrorCode Example::createCommonData() {
     MoFEMFunctionReturn(0);
   };
 
-  matGradPtr = boost::make_shared<MatrixDouble>();
-  matStrainPtr = boost::make_shared<MatrixDouble>();
-  matStressPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
 
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
@@ -269,17 +249,17 @@ MoFEMErrorCode Example::assembleSystem() {
     MoFEMFunctionBegin;
     pipeline_mng->getDomainLhsFE().reset();
 
-    if (SPACE_DIM == 2) {
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpCalculateHOJacForFace(jac_ptr));
-      pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpSetInvJacH1ForFace(inv_jac_ptr));
-    }
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetHOWeights(det_ptr));
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpK("U", "U", matDPtr));
@@ -299,6 +279,17 @@ MoFEMErrorCode Example::assembleSystem() {
   auto calculate_mass_matrix = [&]() {
     MoFEMFunctionBegin;
     pipeline_mng->getDomainLhsFE().reset();
+
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetHOWeights(det_ptr));
+
     auto get_rho = [](const double, const double, const double) { return rho; };
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpMass("U", "U", get_rho));
@@ -387,11 +378,11 @@ MoFEMErrorCode Example::solveSystem() {
   ePS = create_eps(mField.get_comm());
   CHKERR EPSSetOperators(ePS, K, M);
 
-  // Setup eps 
+  // Setup eps
   CHKERR setup_eps();
 
   // Deflate vectors
-  CHKERR deflate_vectors(); 
+  CHKERR deflate_vectors();
 
   // Solve problem
   CHKERR EPSSolve(ePS);
@@ -413,31 +404,50 @@ MoFEMErrorCode Example::outputResults() {
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
 
-  if (SPACE_DIM == 2) {
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
-  }
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+
+  auto u_ptr = boost::make_shared<MatrixDouble>();
+  auto grad_ptr = boost::make_shared<MatrixDouble>();
+  auto strain_ptr = boost::make_shared<MatrixDouble>();
+  auto stress_ptr = boost::make_shared<MatrixDouble>();
 
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                               matGradPtr));
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
+      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U", grad_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpSymmetrizeTensor<SPACE_DIM>("U", grad_ptr, strain_ptr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", matStrainPtr, matStressPtr, matDPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
-      "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
-      matStressPtr));
+          "U", strain_ptr, stress_ptr, matDPtr));
 
-  post_proc_fe->addFieldValuesPostProc("U");
+  using OpPPMap = OpPostProcMap<SPACE_DIM, SPACE_DIM>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(
+          post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+
+          OpPPMap::DataMapVec{},
+
+          OpPPMap::DataMapMat{{"U", u_ptr}},
+
+          OpPPMap::DataMapMat{},
+
+          OpPPMap::DataMapMat{{"STRAIN", strain_ptr}, {"STRESS", stress_ptr}}
+
+          )
+
+  );
+
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
   auto dm = simple->getDM();
@@ -453,7 +463,8 @@ MoFEMErrorCode Example::outputResults() {
     CHKERR VecNorm(D, NORM_2, &nrm2r);
     MOFEM_LOG_C("EXAMPLE", Sev::inform,
                 " ncov = %d omega2 = %.8g omega = %.8g frequency  = %.8g", nn,
-                eigr, std::sqrt(std::abs(eigr)), std::sqrt(std::abs(eigr)) / (2 * M_PI));
+                eigr, std::sqrt(std::abs(eigr)),
+                std::sqrt(std::abs(eigr)) / (2 * M_PI));
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR pipeline_mng->loopFiniteElements();
     post_proc_fe->writeFile("out_eig_" + boost::lexical_cast<std::string>(nn) +

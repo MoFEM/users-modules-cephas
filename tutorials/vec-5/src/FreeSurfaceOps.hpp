@@ -1,17 +1,3 @@
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
-
 namespace FreeSurfaceOps {
 
 struct OpCalculateLift : public BoundaryEleOp {
@@ -68,7 +54,7 @@ struct OpNormalConstrainRhs : public AssemblyBoundaryEleOp {
                               AssemblyBoundaryEleOp::OPROW),
         uPtr(u_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data) {
     MoFEMFunctionBegin;
 
     auto t_w = getFTensor0IntegrationWeight();
@@ -103,14 +89,14 @@ private:
   boost::shared_ptr<MatrixDouble> uPtr;
 };
 
-struct OpNormalForcebRhs : public AssemblyBoundaryEleOp {
-  OpNormalForcebRhs(const std::string field_name,
+struct OpNormalForceRhs : public AssemblyBoundaryEleOp {
+  OpNormalForceRhs(const std::string field_name,
                     boost::shared_ptr<VectorDouble> lambda_ptr)
       : AssemblyBoundaryEleOp(field_name, field_name,
                               AssemblyDomainEleOp::OPROW),
         lambdaPtr(lambda_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data) {
     MoFEMFunctionBegin;
 
     auto t_w = getFTensor0IntegrationWeight();
@@ -214,8 +200,8 @@ struct OpNormalConstrainLhs : public AssemblyBoundaryEleOp {
     sYmm = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     auto t_w = getFTensor0IntegrationWeight();
@@ -341,7 +327,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
         dotUPtr(dot_u_ptr), uPtr(u_ptr), gradUPtr(grad_u_ptr), hPtr(h_ptr),
         gradHPtr(grad_h_ptr), gPtr(g_ptr), pPtr(p_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -455,8 +441,8 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
     assembleTranspose = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -600,8 +586,8 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
     assembleTranspose = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -715,8 +701,8 @@ struct OpLhsU_dG : public AssemblyDomainEleOp {
     assembleTranspose = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -778,7 +764,7 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
         uPtr(u_ptr), dotHPtr(dot_h_ptr), hPtr(h_ptr), gradHPtr(grad_h_ptr),
         gradGPtr(grad_g_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -786,6 +772,18 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
     auto t_coords = getFTensor1CoordsAtGaussPts();
     auto t_base = data.getFTensor0N();
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
+
+#ifndef NDEBUG
+    if(data.getDiffN().size1() != data.getN().size1())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
+    if (data.getDiffN().size2() != data.getN().size2() * SPACE_DIM) {
+      MOFEM_LOG("SELF", Sev::error)
+          << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
+      MOFEM_LOG("SELF", Sev::error) << data.getN();
+      MOFEM_LOG("SELF", Sev::error) << data.getDiffN();
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
+    }
+#endif
 
     if constexpr (I) {
 
@@ -884,8 +882,8 @@ struct OpLhsH_dU : public AssemblyDomainEleOp {
     sYmm = false;
     assembleTranspose = false;
   }
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -940,8 +938,8 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
     sYmm = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -949,6 +947,28 @@ template <bool I> struct OpLhsH_dH : public AssemblyDomainEleOp {
     auto t_coords = getFTensor1CoordsAtGaussPts();
     auto t_row_base = row_data.getFTensor0N();
     auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
+
+#ifndef NDEBUG
+    if (row_data.getDiffN().size1() != row_data.getN().size1())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
+    if (row_data.getDiffN().size2() != row_data.getN().size2() * SPACE_DIM) {
+      MOFEM_LOG("SELF", Sev::error)
+          << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
+      MOFEM_LOG("SELF", Sev::error) << row_data.getN();
+      MOFEM_LOG("SELF", Sev::error) << row_data.getDiffN();
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
+    }
+
+    if (col_data.getDiffN().size1() != col_data.getN().size1())
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
+    if (col_data.getDiffN().size2() != col_data.getN().size2() * SPACE_DIM) {
+      MOFEM_LOG("SELF", Sev::error)
+          << "Side " << rowSide << " " << CN::EntityTypeName(rowType);
+      MOFEM_LOG("SELF", Sev::error) << col_data.getN();
+      MOFEM_LOG("SELF", Sev::error) << col_data.getDiffN();
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 2");
+    }
+#endif
 
     if constexpr (I) {
 
@@ -1062,8 +1082,8 @@ template <bool I> struct OpLhsH_dG : public AssemblyDomainEleOp {
     assembleTranspose = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -1123,7 +1143,7 @@ template <bool I> struct OpRhsG : public AssemblyDomainEleOp {
       : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
         hPtr(h_ptr), gradHPtr(grad_h_ptr), gPtr(g_ptr) {}
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -1194,8 +1214,8 @@ template <bool I> struct OpLhsG_dH : public AssemblyDomainEleOp {
     assembleTranspose = false;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -1263,8 +1283,8 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
     sYmm = true;
   }
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const double vol = getMeasure();
@@ -1303,5 +1323,7 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
 
 private:
 };
+
+
 
 } // namespace FreeSurfaceOps

@@ -2,19 +2,7 @@
   \ingroup Header file for basic finite elements implementation
 */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #ifndef __BASICFINITEELEMENTS_HPP__
 #define __BASICFINITEELEMENTS_HPP__
@@ -32,6 +20,9 @@ extern "C" {
   void tricircumcenter3d_tp(double a[3],double b[3],double c[3],
     double circumcenter[3],double *xi,double *eta);
 }
+
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
 
 #include <cholesky.hpp>
 
@@ -66,8 +57,16 @@ extern "C" {
 #include <HookeElement.hpp>
 #include <SpringElement.hpp>
 #include <NavierStokesElement.hpp>
-#include <SimpleContact.hpp>
 #include <SimpleRodElement.hpp>
+
+// generic interfaces
+#include <GenericElementInterface.hpp>
+
+//FIXME: fix organisation of these headers
+// #include <ElasticMaterials.hpp>
+// #include <NonlinearElasticElementInterface.hpp>
+
+#include <BasicBoundaryConditionsInterface.hpp>
 
 using namespace BasicFiniteElements;
 

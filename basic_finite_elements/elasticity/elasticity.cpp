@@ -46,25 +46,10 @@ of the code, look here;
 
 */
 
-/* MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #include <BasicFiniteElements.hpp>
 using namespace MoFEM;
-
-#include <boost/program_options.hpp>
-using namespace std;
-namespace po = boost::program_options;
 
 #include <Hooke.hpp>
 using namespace boost::numeric;
@@ -151,9 +136,9 @@ int main(int argc, char *argv[]) {
     PetscBool is_post_proc_volume = PETSC_TRUE;
 
     // Select base
-    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, DEMKOWICZ, LASBASETOP };
+    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, JACOBI, LASBASETOP };
     const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier",
-                                "demkowicz"};
+                                "jacobi"};
     PetscInt choice_base_value = LOBATTO;
 
     // Read options from command line
@@ -284,7 +269,7 @@ int main(int argc, char *argv[]) {
     case BERNSTEIN_BEZIER:
       base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
       break;
-    case DEMKOWICZ:
+    case JACOBI:
       base = DEMKOWICZ_JACOBI_BASE;
       break;
     default:
@@ -737,9 +722,9 @@ int main(int argc, char *argv[]) {
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
 
     // Initialise mass matrix
-    Mat Mij;
+    SmartPetscObj<Mat> Mij;
     if (is_calculating_frequency == PETSC_TRUE) {
-      CHKERR MatDuplicate(Aij, MAT_DO_NOT_COPY_VALUES, &Mij);
+      Mij = smartMatDuplicate(Aij, MAT_DO_NOT_COPY_VALUES);
       CHKERR MatSetOption(Mij, MAT_SPD, PETSC_TRUE);
       // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
     }

@@ -2,19 +2,7 @@
   \brief Implementation of spring boundary condition on triangular surfaces
 */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #include <MoFEM.hpp>
 using namespace MoFEM;
@@ -87,7 +75,10 @@ MoFEMErrorCode MetaSpringBC::OpSpringFs::doWork(int side, EntityType type,
       t_displacement_at_gauss_point(i) = t_solution_at_gauss_point(i);
     }
 
-    double w = t_w * 0.5 * normal_length; // area was constant
+    double w = t_w * normal_length; // area was constant
+    if (getNumeredEntFiniteElementPtr()->getEntType() == MBTRI) {
+      w *= 0.5;
+    }
 
     auto t_base_func = data.getFTensor0N(gg, 0);
 
@@ -192,7 +183,10 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs::doWork(int row_side, int col_side,
     t_tangent_projection(2, 2) -= 1;
 
     // get area and integration weight
-    double w = 0.5 * t_w * normal_length;
+    double w = t_w * normal_length;
+    if (getNumeredEntFiniteElementPtr()->getEntType() == MBTRI) {
+      w *= 0.5;
+    }
 
     auto t_row_base_func = row_data.getFTensor0N(gg, 0);
 
@@ -1180,8 +1174,8 @@ MetaSpringBC::addSpringElements(MoFEM::Interface &m_field,
   // from cubit
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
-      CHKERR m_field.add_ents_to_finite_element_by_type(bit->getMeshset(),
-                                                        MBTRI, "SPRING");
+      CHKERR m_field.add_ents_to_finite_element_by_dim(bit->getMeshset(), 2,
+                                                       "SPRING");
     }
   }
 
@@ -1206,8 +1200,8 @@ MoFEMErrorCode MetaSpringBC::addSpringElementsALE(
   CHKERR m_field.modify_finite_element_add_field_data("SPRING_ALE",
                                                       mesh_nodals_positions);
 
-  CHKERR m_field.add_ents_to_finite_element_by_type(spring_triangles, MBTRI,
-                                                    "SPRING_ALE");
+  CHKERR m_field.add_ents_to_finite_element_by_dim(spring_triangles, 2,
+                                                   "SPRING_ALE");
 
   MoFEMFunctionReturn(0);
 }

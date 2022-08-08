@@ -1,6 +1,24 @@
-#include <stdlib.h>
+/**
+ * \file poisson_2d_homogeneous.cpp
+ * \example poisson_2d_homogeneous.cpp
+ *
+ * Solution of poisson equation. Direct implementation of User Data Operators
+ * for teaching proposes.
+ *
+ * \note In practical application we suggest use form integrators to generalise
+ * and simplify code. However, here we like to expose user to ways how to
+ * implement data operator from scratch.
+ */
+
+static const int nb_ref_levels =
+    1; ///< if larger than zero set n-levels of random mesh refinements with
+       ///< hanging nodes
+
+constexpr auto field_name = "U";
+
 #include <BasicFiniteElements.hpp>
 #include <poisson_2d_homogeneous.hpp>
+#include <random_mesh_refine.hpp>
 
 using namespace MoFEM;
 using namespace Poisson2DHomogeneousOperators;
@@ -31,13 +49,12 @@ private:
   Simple *simpleInterface;
 
   // Field name and approximation order
-  std::string domainField;
   int oRder;
 
 };
 
 Poisson2DHomogeneous::Poisson2DHomogeneous(MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field) {}
+    : mField(m_field) {}
 
 //! [Read mesh]
 MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
@@ -55,14 +72,23 @@ MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
 MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
   MoFEMFunctionBegin;
 
-  CHKERR simpleInterface->addDomainField(domainField, H1,
-                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simpleInterface->addDomainField(field_name, H1,
+                                         AINSWORTH_LEGENDRE_BASE, 1);
 
   int oRder = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
-  CHKERR simpleInterface->setFieldOrder(domainField, oRder);
+  CHKERR simpleInterface->setFieldOrder(field_name, oRder);
+
+  // Refine random elements and create hanging nodes. This is only need if one
+  // like to refine mesh.
+  if (nb_ref_levels)
+    CHKERR random_mesh_refine(mField);
 
   CHKERR simpleInterface->setUp();
+
+  // Remove hanging nodes
+  if(nb_ref_levels)
+    CHKERR remove_hanging_dofs(mField);
 
   MoFEMFunctionReturn(0);
 }
@@ -89,7 +115,7 @@ MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
 
   // Remove DOFs as homogeneous boundary condition is used
   CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simpleInterface->getProblemName(), domainField, boundary_entities);
+      simpleInterface->getProblemName(), field_name, boundary_entities);
 
   MoFEMFunctionReturn(0);
 }
@@ -105,24 +131,51 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
-
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+        new OpCalculateHOJac<2>(jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetHOWeightsOnFace());
+
+    if (nb_ref_levels) { // This part is advanced. Can be skipped for not
+                         // refined meshes with
+      // hanging nodes.
+      // Force integration on last refinement level, and add to top elements
+      // DOFs and based from underlying elements.
+      pipeline_mng->getDomainLhsFE()->exeTestHook = test_bit_child;
+      set_parent_dofs(mField, pipeline_mng->getDomainLhsFE(),
+                      OpFaceEle::OPSPACE, QUIET, Sev::noisy);
+      set_parent_dofs(mField, pipeline_mng->getDomainLhsFE(), OpFaceEle::OPROW,
+                      QUIET, Sev::noisy);
+      set_parent_dofs(mField, pipeline_mng->getDomainLhsFE(), OpFaceEle::OPCOL,
+                      QUIET, Sev::noisy);
+    }
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK(domainField, domainField));
+        new OpDomainLhsMatrixK(field_name, field_name));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS
 
+    if (nb_ref_levels) { // This part is advanced. Can be skipped for not
+                         // refined meshes with
+      // hanging nodes.
+      // Force integration on last refinement level, and add to top elements
+      // DOFs and based from underlying elements.
+      pipeline_mng->getDomainRhsFE()->exeTestHook = test_bit_child;
+      set_parent_dofs(mField, pipeline_mng->getDomainRhsFE(),
+                      OpFaceEle::OPSPACE, QUIET, Sev::noisy);
+      set_parent_dofs(mField, pipeline_mng->getDomainRhsFE(), OpFaceEle::OPROW,
+                      QUIET, Sev::noisy);
+    }
+
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDomainRhsVectorF(domainField));
+        new OpDomainRhsVectorF(field_name));
   }
 
   MoFEMFunctionReturn(0);
@@ -180,7 +233,56 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 
   auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc(domainField);
+
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+  constexpr auto SPACE_DIM = 2; // dimension of problem
+
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+
+  if (nb_ref_levels) { // This part is advanced. Can be skipped for not refined
+                       // meshes with
+    // hanging nodes.
+    post_proc_fe->exeTestHook = test_bit_child;
+    set_parent_dofs(mField, post_proc_fe, OpFaceEle::OPSPACE, QUIET,
+                    Sev::noisy);
+    set_parent_dofs(mField, post_proc_fe, OpFaceEle::OPROW, QUIET, Sev::noisy);
+  }
+
+  auto u_ptr = boost::make_shared<VectorDouble>();
+  auto grad_u_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues(field_name, u_ptr));
+
+
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldGradient<SPACE_DIM>(field_name, grad_u_ptr));
+
+  using OpPPMap = OpPostProcMap<SPACE_DIM, SPACE_DIM>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+
+                  OpPPMap::DataMapVec{{"U", u_ptr}},
+
+                  OpPPMap::DataMapMat{{"GRAD_U", grad_u_ptr}},
+
+                  OpPPMap::DataMapMat{},
+
+                  OpPPMap::DataMapMat{}
+
+                  )
+
+  );
+
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_result.h5m"); 
@@ -196,8 +298,8 @@ MoFEMErrorCode Poisson2DHomogeneous::runProgram() {
   CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR boundaryCondition();
-  CHKERR assembleSystem();
   CHKERR setIntegrationRules();
+  CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
 

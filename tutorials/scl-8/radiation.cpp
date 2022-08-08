@@ -7,19 +7,7 @@
  * integral and boundary integral should give the same result.
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #include <MoFEM.hpp>
 
@@ -33,19 +21,19 @@ using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EdgeEle = PipelineManager::EdgeEle;
 using EdgeEleOp = EdgeEle::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 2>;
 using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, 2>;
 using OpBase = OpBaseImpl<PETSC, EdgeEleOp>;
 
-// Units 
+// Units
 // Temperature: Kelvins
 // Length: 1 km
 // Time: 1 s
 
-constexpr double heat_conductivity = ((0.4+0.7)/2) * 1e3;
+constexpr double heat_conductivity = ((0.4 + 0.7) / 2) * 1e3;
 
 constexpr double emissivity = 1;
 constexpr double boltzmann_constant = 5.670374419e-2;
@@ -118,7 +106,6 @@ private:
     double &sumTemperature;
     double &surfaceArea;
 
-
   public:
     OpCalcSurfaceAverageTemperature(
         boost::shared_ptr<VectorDouble> &approx_vals, double &sum_temp,
@@ -127,12 +114,8 @@ private:
           sumTemperature(sum_temp), surfaceArea(surf) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
-
-
+                          EntitiesFieldData::EntData &data);
   };
-
-
 };
 
 MoFEMErrorCode Example::runProblem() {
@@ -200,19 +183,27 @@ MoFEMErrorCode Example::OPs() {
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateHOJacForFace(jac_ptr));
+      new OpCalculateHOJac<2>(jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpSetHOWeightsOnFace());
+
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpDomainGradGrad("T", "T", beta));
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integrationRule);
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateHOJacForFace(jac_ptr));
+      new OpCalculateHOJac<2>(jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetInvJacH1ForFace(inv_jac_ptr));
+      new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpSetHOWeightsOnFace());
+
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldGradient<2>("T", approxGradVals));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -280,7 +271,7 @@ MoFEMErrorCode Example::postProcess() {
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc("T");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
-  
+
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("T", approxVals));
 
@@ -481,7 +472,7 @@ MoFEMErrorCode Example::OpFluxRhs::iNtegrate(EntData &row_data) {
 
 //! [Ave Temp]
 MoFEMErrorCode Example::OpCalcSurfaceAverageTemperature::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
 
   MoFEMFunctionBegin;
   if (type == MBVERTEX) {

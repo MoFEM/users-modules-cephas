@@ -1,20 +1,7 @@
 /* \file SurfacePressureComplexForLazy.cpp
- * --------------------------------------------------------------
- *
- *
- * This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+ */
+
+
 
 #include <MoFEM.hpp>
 
@@ -77,7 +64,7 @@ NeumannForcesSurfaceComplexForLazy::AuxMethodMaterial::AuxMethodMaterial(
       myPtr(my_ptr){};
 
 MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   switch (type) {
@@ -97,7 +84,7 @@ MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
     myPtr->dofs_x_indices = &*myPtr->dOfs_x_indices.data().begin();
   } break;
   case MBEDGE: {
-    myPtr->order_edge[side] = data.getDataOrder();
+    myPtr->order_edge[side] = data.getOrder();
     myPtr->N_edge[side] = &*data.getN().data().begin();
     myPtr->diffN_edge[side] = &*data.getDiffN().data().begin();
     myPtr->dOfs_x_edge.resize(3);
@@ -110,7 +97,7 @@ MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
         &*myPtr->dOfs_x_edge_indices[side].data().begin();
   } break;
   case MBTRI: {
-    myPtr->order_face = data.getDataOrder();
+    myPtr->order_face = data.getOrder();
     myPtr->N_face = &*data.getN().data().begin();
     myPtr->diffN_face = &*data.getDiffN().data().begin();
     myPtr->dOfs_x_face.resize(data.getFieldData().size());
@@ -128,7 +115,7 @@ MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
 }
 
 MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodMaterial::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   switch (type) {
@@ -152,14 +139,14 @@ MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodMaterial::doWork(
     myPtr->dofs_X = &*myPtr->dOfs_X.data().begin();
   } break;
   case MBEDGE: {
-    myPtr->order_edge_material[side] = data.getDataOrder();
+    myPtr->order_edge_material[side] = data.getOrder();
     myPtr->dOfs_X_edge.resize(3);
     myPtr->dOfs_X_edge[side].resize(data.getFieldData().size());
     ublas::noalias(myPtr->dOfs_X_edge[side]) = data.getFieldData();
     myPtr->dofs_X_edge[side] = &*myPtr->dOfs_X_edge[side].data().begin();
   } break;
   case MBTRI: {
-    myPtr->order_face_material = data.getDataOrder();
+    myPtr->order_face_material = data.getOrder();
     myPtr->dOfs_X_face.resize(data.getFieldData().size());
     ublas::noalias(myPtr->dOfs_X_face) = data.getFieldData();
     myPtr->dofs_X_face = &*myPtr->dOfs_X_face.data().begin();

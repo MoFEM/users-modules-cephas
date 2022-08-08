@@ -1,17 +1,24 @@
-// Define name if it has not been defined yet
-#ifndef __POISSON2DHOMOGENEOUS_HPP__
-#define __POISSON2DHOMOGENEOUS_HPP__
+/**
+ * \file poisson_2d_homogeneous.hpp
+ * \example poisson_2d_homogeneous.hpp
+ *
+ * Solution of poisson equation. Direct implementation of User Data Operators
+ * for teaching proposes.
+ *
+ * \note In practical application we suggest use form integrators to generalise
+ * and simplify code. However, here we like to expose user to ways how to
+ * implement data operator from scratch.
+ */
 
-// Include standard library and Header file for basic finite elements
-// implementation
-#include <stdlib.h>
-#include <BasicFiniteElements.hpp>
+// Define name if it has not been defined yet
+#ifndef __POISSON_2D_HOMOGENEOUS_HPP__
+#define __POISSON_2D_HOMOGENEOUS_HPP__
 
 // Use of alias for some specific functions
 // We are solving Poisson's equation in 2D so Face element is used
 using FaceEle = MoFEM::FaceElementForcesAndSourcesCore;
 using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 // Namespace that contains necessary UDOs, will be included in the main program
 namespace Poisson2DHomogeneousOperators {
@@ -150,4 +157,4 @@ private:
 
 }; // namespace Poisson2DHomogeneousOperators
 
-#endif //__POISSON2DHOMOGENEOUS_HPP__
+#endif //__POISSON_2D_HOMOGENEOUS_HPP__

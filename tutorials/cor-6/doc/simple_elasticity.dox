@@ -851,7 +851,7 @@ method of operator OpK is implemented as follows
 MoFEMErrorCode doWork(
       int row_side, int col_side,
       EntityType row_type, EntityType col_type,
-      DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data)
+      EntitiesFieldData::EntData &row_data, EntitiesFieldData::EntData &col_data)
   {
     MoFEMFunctionBeginHot;
 
@@ -936,7 +936,7 @@ loops described in Section \ref hierarchical_approximation_data_structures of
 \ref hierarchical_approximation_1 tutorial
 \code
 MoFEMErrorCode iNtegrate(
-      DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data)
+      EntitiesFieldData::EntData &row_data, EntitiesFieldData::EntData &col_data)
   {
     MoFEMFunctionBegin;
 
@@ -1028,8 +1028,8 @@ matrix as follows
      * @param  col_data column data (consist base functions on column entity)
      * @return          error code
      */
-  MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data,
-                                  DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode aSsemble(EntitiesFieldData::EntData &row_data,
+                                  EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // get pointer to first global index on row
     const int *row_indices = &*row_data.getIndices().data().begin();
@@ -1070,7 +1070,7 @@ is the struct presented below
 
   FTensor::Index<'i', 3> i;
 
-  MoFEMErrorCode doWork(int side, EntityType type, DataForcesAndSourcesCore::EntData &data)
+  MoFEMErrorCode doWork(int side, EntityType type, EntitiesFieldData::EntData &data)
   {
 
     MoFEMFunctionBeginHot;

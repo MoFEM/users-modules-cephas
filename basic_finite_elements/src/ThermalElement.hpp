@@ -8,20 +8,7 @@
 
 */
 
-/*
- * This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #ifndef __THERMAL_ELEMENT_HPP
 #define __THERMAL_ELEMENT_HPP
@@ -180,7 +167,7 @@ struct ThermalElement {
      * functions by degrees of freedom.
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   /** \brief operator to calculate temperature  and rate of temperature at Gauss
@@ -201,7 +188,7 @@ struct ThermalElement {
      * shape functions by degrees of freedom
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBeginHot;
       try {
 
@@ -297,7 +284,7 @@ struct ThermalElement {
      *
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   /** \biref operator to calculate left hand side of heat conductivity terms
@@ -331,8 +318,8 @@ struct ThermalElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data);
   };
 
   /** \brief operator to calculate right hand side of heat capacity terms
@@ -357,7 +344,7 @@ struct ThermalElement {
      *
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   /** \brief operator to calculate left hand side of heat capacity terms
@@ -383,8 +370,8 @@ struct ThermalElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data);
   };
 
   /** \brief operator for calculate heat flux and assemble to right hand side
@@ -417,7 +404,7 @@ struct ThermalElement {
      *
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   /**
@@ -458,8 +445,8 @@ struct ThermalElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data);
   };
 
   /** \brief operator to calculate radiation therms on body surface and assemble
@@ -496,7 +483,7 @@ struct ThermalElement {
      *  R=int_S N^T * sIgma * eMissivity * (Ta^4 -Ts^4) dS
      **/
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   /** \brief operator to calculate convection therms on body surface and
@@ -531,7 +518,7 @@ struct ThermalElement {
      *  R=int_S N^T*alpha*N_f  dS **/
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   /// \biref operator to calculate convection therms on body surface and
@@ -563,8 +550,8 @@ struct ThermalElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data);
   };
 
   /** \brief this calass is to control time stepping

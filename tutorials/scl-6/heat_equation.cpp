@@ -13,19 +13,7 @@ t \in(0, T). \end{aligned}
  \f]
  **/
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #include <stdlib.h>
 #include <cmath>
@@ -41,7 +29,7 @@ template <int DIM> struct ElementsAndOps {};
 constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
 //! [Define dimension]
 
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = PipelineManager::EdgeEle;
@@ -223,9 +211,9 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
+    pipeline.push_back(new OpCalculateHOJac<2>(jac_ptr));
     pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
+    pipeline.push_back(new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
     pipeline.push_back(new OpSetHOWeightsOnFace());
   };
 
@@ -321,12 +309,11 @@ MoFEMErrorCode HeatEquation::solveSystem() {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    post_froc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
+    post_froc_fe->getOpPtrVector().push_back(new OpCalculateHOJac<2>(jac_ptr));
     post_froc_fe->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     post_froc_fe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
     post_froc_fe->addFieldValuesPostProc("U");
     return post_froc_fe;
   };

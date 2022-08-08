@@ -6,20 +6,7 @@
  * \ingroup mofem_fs_post_proc
  */
 
-/*
- * This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #include <MoFEM.hpp>
 using namespace MoFEM;
@@ -27,7 +14,7 @@ using namespace boost::numeric;
 #include <PostProcOnRefMesh.hpp>
 
 MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -210,7 +197,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
 }
 
 MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -531,9 +518,9 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::postProcess() {
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    // wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
     pcomm_post_proc_mesh =
-        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+        new ParallelComm(&postProcMesh, PETSC_COMM_WORLD/*wrapRefMeshComm->get_comm()*/);
   }
 
   Range prims;
@@ -823,15 +810,14 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
     postProcMesh.delete_mesh();
 
     auto get_number_of_computational_elements = [&]() {
-      auto fe_name = this->feName;
       auto fe_ptr = this->problemPtr->numeredFiniteElementsPtr;
 
       auto miit =
           fe_ptr->template get<Composite_Name_And_Part_mi_tag>().lower_bound(
-              boost::make_tuple(fe_name, this->getLoFERank()));
+              boost::make_tuple(this->getFEName(), this->getLoFERank()));
       auto hi_miit =
           fe_ptr->template get<Composite_Name_And_Part_mi_tag>().upper_bound(
-              boost::make_tuple(fe_name, this->getHiFERank()));
+              boost::make_tuple(this->getFEName(), this->getHiFERank()));
 
       const int number_of_ents_in_the_loop = this->getLoopSize();
       if (std::distance(miit, hi_miit) != number_of_ents_in_the_loop) {
@@ -844,8 +830,17 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
       std::fill(nb_elemms_by_type.begin(), nb_elemms_by_type.end(), 0);
 
       for (; miit != hi_miit; ++miit) {
-        auto type = (*miit)->getEntType();
-        ++nb_elemms_by_type[type];
+
+        bool add = true;
+        if (exeTestHook) {
+          numeredEntFiniteElementPtr = *miit;
+          add = exeTestHook(this);
+        }
+
+        if (add) {
+          auto type = (*miit)->getEntType();
+          ++nb_elemms_by_type[type];
+        }
       }
 
       return nb_elemms_by_type;
@@ -909,10 +904,10 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
     ParallelComm *pcomm_post_proc_mesh =
         ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
     if (pcomm_post_proc_mesh == NULL) {
-      wrapRefMeshComm =
-          boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-      pcomm_post_proc_mesh =
-          new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+      // wrapRefMeshComm =
+      //     boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+      pcomm_post_proc_mesh = new ParallelComm(
+          &postProcMesh, PETSC_COMM_WORLD /* wrapRefMeshComm->get_comm()*/);
     }
 
     Range faces;
@@ -933,7 +928,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
 template <int RANK>
 MoFEMErrorCode
 PostProcFaceOnRefinedMesh::OpGetFieldValuesOnSkinImpl<RANK>::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBVERTEX)
@@ -1116,10 +1111,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
-  return opSwitch<0>();
-}
-
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::generateReferenceElementMesh() {
   MoFEMFunctionBegin;
 
@@ -1164,9 +1155,9 @@ MoFEMErrorCode PostProcEdgeOnRefinedMesh::postProcess() {
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-    pcomm_post_proc_mesh =
-        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+    // wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh = new ParallelComm(
+        &postProcMesh, PETSC_COMM_WORLD /*wrapRefMeshComm->get_comm()*/);
   }
 
   Range edges;

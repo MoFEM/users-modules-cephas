@@ -1,16 +1,4 @@
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 /**
  * \file ContactOps.hpp
@@ -44,7 +32,7 @@ FTensor::Index<'l', SPACE_DIM> l;
 struct OpConstrainBoundaryRhs : public AssemblyBoundaryEleOp {
   OpConstrainBoundaryRhs(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -54,8 +42,8 @@ struct OpConstrainBoundaryLhs_dU : public AssemblyBoundaryEleOp {
   OpConstrainBoundaryLhs_dU(const std::string row_field_name,
                             const std::string col_field_name,
                             boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -65,8 +53,8 @@ struct OpConstrainBoundaryLhs_dTraction : public AssemblyBoundaryEleOp {
   OpConstrainBoundaryLhs_dTraction(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -129,7 +117,7 @@ OpConstrainBoundaryRhs::OpConstrainBoundaryRhs(
       commonDataPtr(common_data_ptr) {}
 
 MoFEMErrorCode
-OpConstrainBoundaryRhs::iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = AssemblyBoundaryEleOp::getGaussPts().size2();
@@ -206,8 +194,8 @@ OpConstrainBoundaryLhs_dU::OpConstrainBoundaryLhs_dU(
 }
 
 MoFEMErrorCode OpConstrainBoundaryLhs_dU::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = getGaussPts().size2();
@@ -284,8 +272,8 @@ OpConstrainBoundaryLhs_dTraction::OpConstrainBoundaryLhs_dTraction(
 }
 
 MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = getGaussPts().size2();

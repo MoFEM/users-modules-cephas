@@ -2,20 +2,9 @@
  * \brief Operators and data structures for nonlinear elastic material
  *
  * Implementation of nonlinear elastic element.
- *
- * This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+ */
+
+
 
 #include <MoFEM.hpp>
 
@@ -104,7 +93,7 @@ NonlinearElasticElement::OpGetDataAtGaussPts::OpGetDataAtGaussPts(
       gradientAtGaussPts(gardient_at_gauss_pts), zeroAtType(MBVERTEX) {}
 
 MoFEMErrorCode NonlinearElasticElement::OpGetDataAtGaussPts::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   const int nb_dofs = data.getFieldData().size();
@@ -351,7 +340,7 @@ NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::playTag(const int gg) {
 
 MoFEMErrorCode NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBegin;
 
   // do it only once, no need to repeat this for edges,faces or tets
@@ -539,7 +528,7 @@ NonlinearElasticElement::OpJacobianEnergy::playTag(const int gg) {
 
 MoFEMErrorCode NonlinearElasticElement::OpJacobianEnergy::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBegin;
 
   // do it only once, no need to repeat this for edges,faces or tets
@@ -611,7 +600,7 @@ NonlinearElasticElement::OpRhsPiolaKirchhoff::OpRhsPiolaKirchhoff(
 
 MoFEMErrorCode NonlinearElasticElement::OpRhsPiolaKirchhoff::aSemble(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBegin;
 
   int nb_dofs = row_data.getIndices().size();
@@ -636,7 +625,7 @@ MoFEMErrorCode NonlinearElasticElement::OpRhsPiolaKirchhoff::aSemble(
 
 MoFEMErrorCode NonlinearElasticElement::OpRhsPiolaKirchhoff::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBegin;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -696,7 +685,7 @@ NonlinearElasticElement::OpEnergy::OpEnergy(const std::string field_name,
 
 MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
     int row_side, EntityType row_type,
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBegin;
 
   if (row_type != MBVERTEX)
@@ -739,7 +728,7 @@ NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::OpLhsPiolaKirchhoff_dx(
       dAta(data), commonData(common_data), aLe(false) {}
 
 template <int S>
-static MoFEMErrorCode get_jac(DataForcesAndSourcesCore::EntData &col_data,
+static MoFEMErrorCode get_jac(EntitiesFieldData::EntData &col_data,
                               int gg, MatrixDouble &jac_stress,
                               MatrixDouble &jac) {
   jac.clear();
@@ -822,14 +811,14 @@ static MoFEMErrorCode get_jac(DataForcesAndSourcesCore::EntData &col_data,
 }
 
 MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   return get_jac<0>(col_data, gg, commonData.jacStress[gg], jac);
 }
 
 MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::aSemble(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   int nb_row = row_data.getIndices().size();
@@ -914,8 +903,8 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::aSemble(
 
 MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   int nb_row = row_data.getIndices().size();
@@ -982,14 +971,14 @@ NonlinearElasticElement::OpLhsPiolaKirchhoff_dX::OpLhsPiolaKirchhoff_dX(
 }
 
 MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dX::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   return get_jac<9>(col_data, gg, commonData.jacStress[gg], jac);
 }
 
 MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dX::aSemble(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   int nb_row = row_data.getIndices().size();
@@ -1080,7 +1069,7 @@ NonlinearElasticElement::OpLhsEshelby_dx::OpLhsEshelby_dx(
     : OpLhsPiolaKirchhoff_dX(vel_field, field_name, data, common_data) {}
 
 MoFEMErrorCode NonlinearElasticElement::OpLhsEshelby_dx::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   return get_jac<0>(col_data, gg, commonData.jacStress[gg], jac);
 }
 
@@ -1090,7 +1079,7 @@ NonlinearElasticElement::OpLhsEshelby_dX::OpLhsEshelby_dX(
     : OpLhsPiolaKirchhoff_dx(vel_field, field_name, data, common_data) {}
 
 MoFEMErrorCode NonlinearElasticElement::OpLhsEshelby_dX::getJac(
-    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+    EntitiesFieldData::EntData &col_data, int gg) {
   return get_jac<9>(col_data, gg, commonData.jacStress[gg], jac);
 }
 

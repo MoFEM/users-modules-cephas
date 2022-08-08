@@ -17,20 +17,6 @@
  *
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
-
 #include <MoFEM.hpp>
 
 using namespace MoFEM;
@@ -43,7 +29,7 @@ double dt = 2; // relative to edge length
 
 using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 
 // Use forms iterators for Grad-Grad term
 using OpGradGrad = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
@@ -83,7 +69,7 @@ private:
     OpRhs(boost::shared_ptr<MatrixDouble> u_grad_ptr);
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
 
   protected:
     boost::shared_ptr<MatrixDouble> uGradPtr;
@@ -417,7 +403,7 @@ Example::OpRhs::OpRhs(boost::shared_ptr<MatrixDouble> u_grad_ptr)
     : DomainEleOp("U", DomainEleOp::OPROW), uGradPtr(u_grad_ptr) {}
 
 MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
-                                      DataForcesAndSourcesCore::EntData &data) {
+                                      EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   FTensor::Index<'i', 3> i;

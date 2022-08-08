@@ -1,15 +1,4 @@
-# MoFEM is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Lesser General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
 #
-# MoFEM is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
-# License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public
-# License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
 set(TUTORIALS_INSTALL_DIR "tutorials") 
 
@@ -89,6 +78,7 @@ set(TUTORIALS_DIRS
   scl-8
   scl-9
   scl-10
+  scl-11
   clx-0
   vec-0
   vec-1
@@ -96,7 +86,9 @@ set(TUTORIALS_DIRS
   vec-3
   vec-4
   vec-5
+  vec-6
   mix-0
+  mix-1
   max-0
   max-1
   adv-0
@@ -125,8 +117,12 @@ foreach(LOOP_DIR ${TUTORIALS_DIRS})
 
   message(STATUS "Build status ${OP_NAME} ${VAR_OP_NAME}")
 
-  set(TUTORIALS_MOD_DIR ${LOOP_DIR})
-  add_subdirectory(${LOOP_DIR})
-  tutorials_install(${LOOP_DIR})
+  if(VAR_OP_NAME)
+
+    set(TUTORIALS_MOD_DIR ${LOOP_DIR})
+    add_subdirectory(${LOOP_DIR})
+    tutorials_install(${LOOP_DIR})
+
+  endif(VAR_OP_NAME)
 
 endforeach(LOOP_DIR)

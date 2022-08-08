@@ -3,19 +3,7 @@
 
 */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #ifndef __SURFACE_PERSSURE_HPP__
 #define __SURFACE_PERSSURE_HPP__
@@ -113,7 +101,7 @@ struct NeumannForcesSurface {
       MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
   using VolOnSideUserDataOperator =
       MoFEM::VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator;
-  using EntData = DataForcesAndSourcesCore::EntData;
+  using EntData = EntitiesFieldData::EntData;
 
   /// Operator for force element
   struct OpNeumannForce : public UserDataOperator {
@@ -131,7 +119,7 @@ struct NeumannForcesSurface {
     VectorDouble Nf; //< Local force vector
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   /// Operator for force element
@@ -146,7 +134,7 @@ struct NeumannForcesSurface {
     VectorDouble nF; //< Local force vector
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
 
     Vec F;
 
@@ -195,7 +183,7 @@ struct NeumannForcesSurface {
      * @return MoFEMErrorCode
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   struct DataAtIntegrationPts
@@ -243,7 +231,7 @@ struct NeumannForcesSurface {
 
     int ngp;
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   /**
@@ -298,8 +286,8 @@ struct NeumannForcesSurface {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data);
 
     OpNeumannPressureLhs_dx_dX(
         const string field_name_1, const string field_name_2,
@@ -323,7 +311,7 @@ struct NeumannForcesSurface {
     bool hoGeometry;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
 
     OpCalculateDeformation(const string field_name,
                            boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
@@ -391,7 +379,7 @@ struct NeumannForcesSurface {
      *
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
     MoFEMErrorCode iNtegrate(EntData &row_data);
     MoFEMErrorCode aSsemble(EntData &row_data);
 
@@ -450,8 +438,8 @@ struct NeumannForcesSurface {
 
     virtual MoFEMErrorCode doWork(int row_side, int col_side,
                                   EntityType row_type, EntityType col_type,
-                                  DataForcesAndSourcesCore::EntData &row_data,
-                                  DataForcesAndSourcesCore::EntData &col_data) {
+                                  EntitiesFieldData::EntData &row_data,
+                                  EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
       MoFEMFunctionReturn(0);
     }
@@ -495,8 +483,8 @@ struct NeumannForcesSurface {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data);
 
     /**
      * @brief Compute part of the left-hand side
@@ -549,8 +537,8 @@ struct NeumannForcesSurface {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data);
 
     OpNeumannPressureMaterialLhs_dX_dx(
         const string field_name_1, const string field_name_2,
@@ -593,8 +581,8 @@ struct NeumannForcesSurface {
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data);
     virtual MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
       MoFEMFunctionBegin;
       MoFEMFunctionReturn(0);
@@ -707,7 +695,7 @@ struct NeumannForcesSurface {
     VectorDouble Nf;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   /**

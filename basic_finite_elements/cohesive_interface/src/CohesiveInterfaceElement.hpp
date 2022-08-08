@@ -3,19 +3,7 @@
 
 */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 namespace CohesiveElement {
 
@@ -321,7 +309,7 @@ struct CohesiveInterfaceElement {
     OpSetSignToShapeFunctions(const std::string field_name):
     FlatPrismElementForcesAndSourcesCore::UserDataOperator(field_name,ForcesAndSourcesCore::UserDataOperator::OPROW) {}
 
-    MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+    MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data) {
       MoFEMFunctionBeginHot;
       if(data.getN().size1()==0)  MoFEMFunctionReturnHot(0);
       if(data.getN().size2()==0)  MoFEMFunctionReturnHot(0);
@@ -359,7 +347,7 @@ struct CohesiveInterfaceElement {
       commonData(common_data) {}
 
     MoFEMErrorCode doWork(
-      int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+      int side,EntityType type,EntitiesFieldData::EntData &data) {
       MoFEMFunctionBeginHot;
       try {
         int nb_dofs = data.getIndices().size();
@@ -416,7 +404,7 @@ struct CohesiveInterfaceElement {
       FlatPrismElementForcesAndSourcesCore::UserDataOperator(field_name,ForcesAndSourcesCore::UserDataOperator::OPROW),
       commonData(common_data) {}
 
-    MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+    MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data) {
       MoFEMFunctionBeginHot;
       try {
         if(type == MBVERTEX) {
@@ -449,7 +437,7 @@ struct CohesiveInterfaceElement {
       commonData(common_data),physicalEqations(physical_eqations) {}
 
     VectorDouble traction,Nf;
-    MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+    MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data) {
       MoFEMFunctionBeginHot;
 
       try {
@@ -496,8 +484,8 @@ struct CohesiveInterfaceElement {
     MoFEMErrorCode doWork(
       int row_side,int col_side,
       EntityType row_type,EntityType col_type,
-      DataForcesAndSourcesCore::EntData &row_data,
-      DataForcesAndSourcesCore::EntData &col_data
+      EntitiesFieldData::EntData &row_data,
+      EntitiesFieldData::EntData &col_data
     ) {
       MoFEMFunctionBeginHot;
 
@@ -562,7 +550,7 @@ struct CohesiveInterfaceElement {
       FlatPrismElementForcesAndSourcesCore::UserDataOperator(field_name,ForcesAndSourcesCore::UserDataOperator::OPROW),
       commonData(common_data),physicalEqations(physical_eqations) {}
 
-      MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+      MoFEMErrorCode doWork(int side,EntityType type,EntitiesFieldData::EntData &data) {
         MoFEMFunctionBeginHot;
 
         if(type != MBVERTEX) MoFEMFunctionReturnHot(0);

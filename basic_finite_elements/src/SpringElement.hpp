@@ -2,26 +2,14 @@
   \brief Header file for spring element implementation
 */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #ifndef __SPRINGELEMENT_HPP__
 #define __SPRINGELEMENT_HPP__
 
 using VolOnSideUserDataOperator =
     MoFEM::VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
+using EntData = EntitiesFieldData::EntData;
 using FaceDataOperator =
     MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
 /** \brief Set of functions declaring elements and setting operators
@@ -69,7 +57,7 @@ struct MetaSpringBC {
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
 
-    DataForcesAndSourcesCore::EntData *faceRowData;
+    EntitiesFieldData::EntData *faceRowData;
 
     std::map<int, BlockOptionDataSprings> mapSpring;
     //   ~DataAtIntegrationPtsSprings() {}
@@ -106,8 +94,8 @@ struct MetaSpringBC {
 
           const int id = bit->getMeshsetId();
           mapSpring[id].tRis.clear();
-          CHKERR mField.get_moab().get_entities_by_type(
-              bit->getMeshset(), MBTRI, mapSpring[id].tRis, true);
+          CHKERR mField.get_moab().get_entities_by_dimension(
+              bit->getMeshset(), 2, mapSpring[id].tRis, true);
 
           std::vector<double> attributes;
           bit->getAttributes(attributes);

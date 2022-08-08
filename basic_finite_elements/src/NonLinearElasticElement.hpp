@@ -5,20 +5,7 @@
  * Implementation of nonlinear elastic element.
  */
 
-/*
- * This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #ifndef __NONLINEAR_ELASTIC_HPP
 #define __NONLINEAR_ELASTIC_HPP
@@ -369,7 +356,7 @@ struct NonlinearElasticElement {
      * functions by degrees of freedom
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   struct OpGetCommonDataAtGaussPts : public OpGetDataAtGaussPts {
@@ -463,7 +450,7 @@ struct NonlinearElasticElement {
      * @return          error code
      */
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
   };
 
   /**
@@ -527,7 +514,7 @@ struct NonlinearElasticElement {
     virtual MoFEMErrorCode playTag(const int gg);
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
   };
 
   struct OpRhsPiolaKirchhoff
@@ -544,10 +531,10 @@ struct NonlinearElasticElement {
 
     VectorDouble nf;
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
 
     virtual MoFEMErrorCode aSemble(int row_side, EntityType row_type,
-                                   DataForcesAndSourcesCore::EntData &row_data);
+                                   EntitiesFieldData::EntData &row_data);
   };
 
   struct OpEnergy
@@ -563,7 +550,7 @@ struct NonlinearElasticElement {
              bool field_disp);
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data);
+                          EntitiesFieldData::EntData &row_data);
   };
 
   struct OpLhsPiolaKirchhoff_dx
@@ -594,18 +581,18 @@ struct NonlinearElasticElement {
       function
 
     */
-    virtual MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data,
+    virtual MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data,
                                   int gg);
 
     virtual MoFEMErrorCode aSemble(int row_side, int col_side,
                                    EntityType row_type, EntityType col_type,
-                                   DataForcesAndSourcesCore::EntData &row_data,
-                                   DataForcesAndSourcesCore::EntData &col_data);
+                                   EntitiesFieldData::EntData &row_data,
+                                   EntitiesFieldData::EntData &col_data);
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data);
   };
 
   struct OpLhsPiolaKirchhoff_dX : public OpLhsPiolaKirchhoff_dx {
@@ -615,12 +602,12 @@ struct NonlinearElasticElement {
                            CommonData &common_data);
 
     /// \brief Derivative of Piola Kirchhoff stress over material DOFs
-    MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data, int gg);
+    MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data, int gg);
 
     MoFEMErrorCode aSemble(int row_side, int col_side, EntityType row_type,
                            EntityType col_type,
-                           DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+                           EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
   };
 
   struct OpJacobianEshelbyStress : public OpJacobianPiolaKirchhoffStress {
@@ -648,7 +635,7 @@ struct NonlinearElasticElement {
     OpLhsEshelby_dx(const std::string vel_field, const std::string field_name,
                     BlockData &data, CommonData &common_data);
 
-    MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data, int gg);
+    MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data, int gg);
   };
 
   struct OpLhsEshelby_dX : public OpLhsPiolaKirchhoff_dx {
@@ -656,7 +643,7 @@ struct NonlinearElasticElement {
     OpLhsEshelby_dX(const std::string vel_field, const std::string field_name,
                     BlockData &data, CommonData &common_data);
 
-    MoFEMErrorCode getJac(DataForcesAndSourcesCore::EntData &col_data, int gg);
+    MoFEMErrorCode getJac(EntitiesFieldData::EntData &col_data, int gg);
   };
 
   MoFEMErrorCode

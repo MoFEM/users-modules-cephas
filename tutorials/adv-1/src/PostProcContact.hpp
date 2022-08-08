@@ -1,16 +1,4 @@
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 namespace ContactOps {
 
@@ -254,31 +242,23 @@ struct Monitor : public FEMethod {
     postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
     postProcFe->generateReferenceElementMesh();
 
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+
     if (SPACE_DIM == 2) {
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      postProcFe->getOpPtrVector().push_back(
-          new OpCalculateHOJacForFace(jac_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpSetInvJacH1ForFace(inv_jac_ptr));
       postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       postProcFe->getOpPtrVector().push_back(
           new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       postProcFe->getOpPtrVector().push_back(
           new OpSetInvJacHcurlFace(inv_jac_ptr));
     } else {
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      postProcFe->getOpPtrVector().push_back(
-          new OpCalculateHOJacVolume(jac_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpSetHOInvJacToScalarBases(H1, inv_jac_ptr));
       postProcFe->getOpPtrVector().push_back(
           new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
       postProcFe->getOpPtrVector().push_back(

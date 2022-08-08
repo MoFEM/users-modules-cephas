@@ -1,16 +1,4 @@
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 /** \file PlasticOpsGeneric.hpp
  * \example PlasticOpsGeneric.hpp
@@ -111,7 +99,7 @@ get_nf(VectorDouble &nf, FTensor::Number<3>) {
 }
 
 MoFEMErrorCode
-OpCalculatePlasticFlowRhs::iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+OpCalculatePlasticFlowRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   auto t_flow =
@@ -167,7 +155,7 @@ OpCalculateContrainsRhs::OpCalculateContrainsRhs(
       commonDataPtr(common_data_ptr) {}
 
 MoFEMErrorCode
-OpCalculateContrainsRhs::iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+OpCalculateContrainsRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   const size_t nb_integration_pts = data.getN().size1();
@@ -241,8 +229,8 @@ get_mat_vector_dtensor_sym(size_t rr, MatrixDouble &mat, FTensor::Number<3>) {
 }
 
 MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
@@ -312,8 +300,8 @@ OpCalculatePlasticInternalForceLhs_LogStrain_dEP::
 }
 
 MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
@@ -459,8 +447,8 @@ static inline auto get_mat_tensor_sym_dtensor_sym(size_t rr, MatrixDouble &mat,
 }
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
@@ -551,8 +539,8 @@ static inline auto get_mat_tensor_sym_dscalar(size_t rr, MatrixDouble &mat,
 }
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
@@ -617,8 +605,8 @@ auto get_mat_scalar_dtensor_sym(MatrixDouble &mat, FTensor::Number<3>) {
 }
 
 MoFEMErrorCode OpCalculateContrainsLhs_dEP::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   locMat.resize(AssemblyDomainEleOp::nbRows, AssemblyDomainEleOp::nbCols,
@@ -704,8 +692,8 @@ OpCalculateContrainsLhs_dTAU::OpCalculateContrainsLhs_dTAU(
 }
 
 MoFEMErrorCode OpCalculateContrainsLhs_dTAU::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   locMat.resize(AssemblyDomainEleOp::nbRows, AssemblyDomainEleOp::nbCols,

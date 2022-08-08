@@ -5,20 +5,7 @@
  *
  */
 
-/*
- * This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #ifndef _MIX_TRANPORT_ELEMENT_HPP_
 #define _MIX_TRANPORT_ELEMENT_HPP_
@@ -374,7 +361,7 @@ struct MixTransportElement {
               "VALUES", UserDataOperator::OPCOL),
           postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {}
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (type != MBTET)
         MoFEMFunctionReturnHot(0);
@@ -735,8 +722,8 @@ struct MixTransportElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
       if (Aij == PETSC_NULL)
         MoFEMFunctionReturnHot(0);
@@ -804,7 +791,7 @@ struct MixTransportElement {
      * @return          error code
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (F == PETSC_NULL)
         MoFEMFunctionReturnHot(0);
@@ -869,7 +856,7 @@ struct MixTransportElement {
     VectorDouble divVec, Nf;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
@@ -945,8 +932,8 @@ struct MixTransportElement {
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
       if (Aij == PETSC_NULL)
         MoFEMFunctionReturnHot(0);
@@ -983,7 +970,7 @@ struct MixTransportElement {
     }
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (data.getIndices().size() == 0)
         MoFEMFunctionReturnHot(0);
@@ -1020,7 +1007,7 @@ struct MixTransportElement {
 
     VectorDouble Nf;
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
@@ -1077,7 +1064,7 @@ struct MixTransportElement {
      * @return      error code
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
@@ -1136,7 +1123,7 @@ struct MixTransportElement {
     FTensor::Index<'i', 3> i;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
@@ -1247,7 +1234,7 @@ struct MixTransportElement {
     virtual ~OpValuesAtGaussPts() {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
@@ -1279,7 +1266,7 @@ struct MixTransportElement {
     virtual ~OpValuesGradientAtGaussPts() {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
@@ -1311,7 +1298,7 @@ struct MixTransportElement {
 
     VectorDouble divVec;
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
 
       if (data.getFieldData().size() == 0)
@@ -1366,7 +1353,7 @@ struct MixTransportElement {
     MatrixDouble3by3 invK;
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
       if (type != MBTET)
         MoFEMFunctionReturnHot(0);
@@ -1475,7 +1462,7 @@ struct MixTransportElement {
                 "VALUES", UserDataOperator::OPROW),
             valMap(val_map) {}
       MoFEMErrorCode doWork(int side, EntityType type,
-                            DataForcesAndSourcesCore::EntData &data) {
+                            EntitiesFieldData::EntData &data) {
         MoFEMFunctionBegin;
         if (data.getFieldData().size() == 0)
           MoFEMFunctionReturnHot(0);
@@ -1499,7 +1486,7 @@ struct MixTransportElement {
     }
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
 
       if (type == MBTRI) {

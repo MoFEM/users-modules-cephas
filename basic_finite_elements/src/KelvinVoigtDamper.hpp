@@ -4,21 +4,7 @@
  *
  */
 
-/* Implementation of convective mass element
- *
- * This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #ifndef __KELVIN_VOIGT_DAMPER_HPP__
 #define __KELVIN_VOIGT_DAMPER_HPP__
@@ -268,7 +254,7 @@ struct KelvinVoigtDamper {
      *
      */
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+                          EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
 
       int nb_dofs = data.getFieldData().size();
@@ -508,7 +494,7 @@ struct KelvinVoigtDamper {
     }
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data) {
+                          EntitiesFieldData::EntData &row_data) {
       MoFEMFunctionBegin;
 
       if (row_type != MBVERTEX)
@@ -539,7 +525,7 @@ struct KelvinVoigtDamper {
 
     VectorDouble nF;
     MoFEMErrorCode aSemble(int row_side, EntityType row_type,
-                           DataForcesAndSourcesCore::EntData &row_data) {
+                           EntitiesFieldData::EntData &row_data) {
       MoFEMFunctionBegin;
       int nb_dofs = row_data.getIndices().size();
       int *indices_ptr = &row_data.getIndices()[0];
@@ -559,7 +545,7 @@ struct KelvinVoigtDamper {
         : AssembleVector(common_data.spatialPositionName),
           commonData(common_data) {}
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          DataForcesAndSourcesCore::EntData &row_data) {
+                          EntitiesFieldData::EntData &row_data) {
       MoFEMFunctionBegin;
 
       if (commonData.skipThis) {
@@ -600,8 +586,8 @@ struct KelvinVoigtDamper {
     MatrixDouble K, transK;
     MoFEMErrorCode aSemble(int row_side, int col_side, EntityType row_type,
                            EntityType col_type,
-                           DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+                           EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
       int nb_row = row_data.getIndices().size();
       int nb_col = col_data.getIndices().size();
@@ -632,7 +618,7 @@ struct KelvinVoigtDamper {
                          common_data.spatialPositionName),
           commonData(common_data) {}
     MatrixDouble dStress_dx;
-    MoFEMErrorCode get_dStress_dx(DataForcesAndSourcesCore::EntData &col_data,
+    MoFEMErrorCode get_dStress_dx(EntitiesFieldData::EntData &col_data,
                                   int gg) {
       MoFEMFunctionBegin;
       int nb_col = col_data.getIndices().size();
@@ -655,8 +641,8 @@ struct KelvinVoigtDamper {
     }
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       if (commonData.skipThis) {
@@ -711,7 +697,7 @@ struct KelvinVoigtDamper {
                          common_data.spatialPositionName),
           commonData(common_data) {}
     MatrixDouble dStress_dot;
-    MoFEMErrorCode get_dStress_dot(DataForcesAndSourcesCore::EntData &col_data,
+    MoFEMErrorCode get_dStress_dot(EntitiesFieldData::EntData &col_data,
                                    int gg) {
       MoFEMFunctionBegin;
       int nb_col = col_data.getIndices().size();
@@ -735,8 +721,8 @@ struct KelvinVoigtDamper {
     }
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       if (commonData.skipThis) {

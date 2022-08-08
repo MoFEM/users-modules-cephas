@@ -5,19 +5,6 @@
  * \brief Operator implementation of U-P (mixed) finite element.
  *
  */
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
 #ifndef __ELASTICITYMIXEDFORMULATION_HPP__
 #define __ELASTICITYMIXEDFORMULATION_HPP__
@@ -141,8 +128,8 @@ struct OpAssembleP
 
   PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
 
     MoFEMFunctionBegin;
     const int row_nb_dofs = row_data.getIndices().size();
@@ -241,8 +228,8 @@ struct OpAssembleG
 
   PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
 
     MoFEMFunctionBegin;
 
@@ -339,8 +326,8 @@ struct OpAssembleK
 
   PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
@@ -462,7 +449,7 @@ struct OpPostProcStress
   }
 
   PetscErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+                        EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
     if (type != MBVERTEX)
       PetscFunctionReturn(9);

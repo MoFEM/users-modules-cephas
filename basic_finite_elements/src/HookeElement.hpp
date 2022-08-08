@@ -13,20 +13,7 @@
  * In other words, spatial deformation is small but topological changes large.
  */
 
-/*
- * This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 #ifndef __HOOKE_ELEMENT_HPP
 #define __HOOKE_ELEMENT_HPP
@@ -84,7 +71,7 @@ struct HookeElement {
   using BlockData = NonlinearElasticElement::BlockData;
   using MassBlockData = ConvectiveMassElement::BlockData;
 
-  using EntData = DataForcesAndSourcesCore::EntData;
+  using EntData = EntitiesFieldData::EntData;
   using UserDataOperator = ForcesAndSourcesCore::UserDataOperator;
   using VolUserDataOperator =
       VolumeElementForcesAndSourcesCore::UserDataOperator;
@@ -243,8 +230,8 @@ struct HookeElement {
 
     PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+                          EntitiesFieldData::EntData &row_data,
+                          EntitiesFieldData::EntData &col_data) {
       MoFEMFunctionBegin;
 
       auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
@@ -664,7 +651,7 @@ struct HookeElement {
                            bool is_ale = false, bool is_field_disp = true);
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+                          EntitiesFieldData::EntData &data);
   };
 
   static MoFEMErrorCode
@@ -1407,7 +1394,7 @@ HookeElement::OpPostProcHookeElement<ELEMENT>::OpPostProcHookeElement(
 
 template <class ELEMENT>
 MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBVERTEX) {
