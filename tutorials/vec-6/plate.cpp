@@ -27,7 +27,7 @@ template <> struct ElementsAndOps<2> {
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 
-  using FaceSideEle = MoFEM::FaceElementForcesAndSourcesCoreOnSide;
+  using FaceSideEle = FaceElementForcesAndSourcesCoreOnSide;
   using FaceSideOp = FaceSideEle::UserDataOperator;
 };
 
