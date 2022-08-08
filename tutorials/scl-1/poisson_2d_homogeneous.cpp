@@ -10,20 +10,6 @@
  * implement data operator from scratch.
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
-
 static const int nb_ref_levels =
     1; ///< if larger than zero set n-levels of random mesh refinements with
        ///< hanging nodes
@@ -154,7 +140,7 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetHOWeights(det_ptr));
+        new OpSetHOWeightsOnFace());
 
     if (nb_ref_levels) { // This part is advanced. Can be skipped for not
                          // refined meshes with
@@ -278,19 +264,22 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateScalarFieldGradient<SPACE_DIM>(field_name, grad_u_ptr));
+
+  using OpPPMap = OpPostProcMap<SPACE_DIM, SPACE_DIM>;
+
   post_proc_fe->getOpPtrVector().push_back(
 
-      new OpPostProcMap<SPACE_DIM, SPACE_DIM>(
-          post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+      new OpPPMap(post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
 
-          OpPostProcMap<SPACE_DIM, SPACE_DIM>::DataMapVec{{"U", u_ptr}},
+                  OpPPMap::DataMapVec{{"U", u_ptr}},
 
-          OpPostProcMap<SPACE_DIM, SPACE_DIM>::DataMapMat{
-              {"GRAD_U", grad_u_ptr}},
+                  OpPPMap::DataMapMat{{"GRAD_U", grad_u_ptr}},
 
-          OpPostProcMap<SPACE_DIM, SPACE_DIM>::DataMapMat{}
+                  OpPPMap::DataMapMat{},
 
-          )
+                  OpPPMap::DataMapMat{}
+
+                  )
 
   );
 

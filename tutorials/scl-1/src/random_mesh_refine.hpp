@@ -10,21 +10,6 @@
  * implement data operator from scratch.
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
-
-
 // Define name if it has not been defined yet
 #ifndef __RANDOM_MESH_REFINMENT_HPP__
 #define __RANDOM_MESH_REFINMENT_HPP__
@@ -91,7 +76,7 @@ auto set_parent_dofs = [](auto &m_field, auto &fe_top, auto op, auto verbosity,
                 fe_ptr_current->getOpPtrVector().push_back(
                     new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
                 fe_ptr_current->getOpPtrVector().push_back(
-                    new OpSetHOWeights(det_ptr));
+                    new OpSetHOWeightsOnFace());
               }
 
               add_parent_level(

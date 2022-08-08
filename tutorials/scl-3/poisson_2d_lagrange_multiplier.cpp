@@ -146,7 +146,7 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::assembleSystem() {
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetHOWeights(det_ptr));
+        new OpSetHOWeightsOnFace());
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsK(domainField, domainField, boundaryMarker));
   }

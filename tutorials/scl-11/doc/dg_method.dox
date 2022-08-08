@@ -11,6 +11,38 @@
 
 \tableofcontents
 
+\section base_equations Problem formulation
+
+\f[
+-(v_{,j}, \sigma_{j}(\mathbf{u}))_V+(v, \overline{t})_{S^\sigma} = 0
+\f]
+
+\f[
+-(v_{j}, \sigma_{j}(\mathbf{u}))_\Omega
+-\sum_{i} (\left\{[v n_j] - \theta\gamma\sigma_{j}(\mathbf{v})\right\} + \theta\gamma\sigma_{j}(\mathbf{v}), 
+\hat{\sigma}_{j}(\mathbf{u}))_{F_i}+(v_i, \overline{t}_i)_{S^\sigma}= 0
+\f]
+
+\f[
+-(v_{j}, \sigma_{j}(\mathbf{u}))_\Omega+(v_i, \overline{t})_{S^\sigma}
+-\sum_{i} (\left\{[v_i n_j] - \theta\gamma\sigma_{ij}(\mathbf{v})\right\}, 
+\hat{\sigma}_{j}(\mathbf{u}))_{F_i}-\sum_{i} (\theta\gamma\sigma_{j}(\mathbf{v}),\sigma_{j}(\mathbf{u}))_{F_i}
+= 0
+\f]
+
+\f[
+\hat{\sigma} = \gamma^{-1} \left\{ [u n_j] - \gamma \sigma_{j} (\mathbf{u}) \right\}
+\f]
+
+\f[
+-(v_{j}, \sigma_{j}(\mathbf{u}))_\Omega+(v, \overline{t})_{S^\sigma}
+-\sum_{i} (\left\{[v n_j] - \theta\gamma\sigma_{j}(\mathbf{v})\right\}, 
+\gamma^{-1} \left\{ [u n_j] - \gamma \sigma_{j}(\mathbf{u})\right\})_{F_i}
+-\sum_{i} (\theta\gamma\sigma_{j}(\mathbf{v}), 
+\gamma^{-1} \left\{\gamma \sigma_{j}(\mathbf{u})\right\})_{F_i}
+= 0
+\f]
+
 \section source_scl_11 Source code main code
 
 \include poisson_2d_dis_galerkin.cpp

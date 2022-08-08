@@ -5,20 +5,6 @@
  * Example of implementation for discontinuous Galerkin.
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
-
 #include <BasicFiniteElements.hpp>
 
 template <int DIM> struct ElementsAndOps {};
@@ -130,8 +116,8 @@ MoFEMErrorCode Poisson2DiscontGalerkin::readMesh() {
   CHKERR simpleInterface->getOptions();
 
   // Only L2 field is set in this example. Two lines bellow forces simple
-  // interface to creat lower diminesion (edge) elements, despite that fact that
-  // there is no field spanning on such elements. We need them for DF method.
+  // interface to creat lower dimension (edge) elements, despite that fact that
+  // there is no field spanning on such elements. We need them for DG method.
   simpleInterface->getAddSkeletonFE() = true;
   simpleInterface->getAddBoundaryFE() = true;
 

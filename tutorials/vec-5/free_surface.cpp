@@ -7,20 +7,6 @@
  * integral and boundary integral should give the same result.
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
-
 #include <MoFEM.hpp>
 
 using namespace MoFEM;
@@ -269,7 +255,6 @@ private:
   MoFEMErrorCode solveSystem();
 
   boost::shared_ptr<FEMethod> domianLhsFEPtr;
-
 };
 
 //! [Run programme]
@@ -373,17 +358,20 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
     set_generic(post_proc_fe->getOpPtrVector(), post_proc_fe);
 
+    using OpPPMap = OpPostProcMap<2, 2>;
+
     post_proc_fe->getOpPtrVector().push_back(
 
-        new OpPostProcMap<2, 2>(
+        new OpPPMap(
             post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
 
-            OpPostProcMap<2, 2>::DataMapVec{{"H", h_ptr}, {"G", g_ptr}},
+            OpPPMap::DataMapVec{{"H", h_ptr}, {"G", g_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat{{"GRAD_H", grad_h_ptr},
-                                            {"GRAD_G", grad_g_ptr}},
+            OpPPMap::DataMapMat{{"GRAD_H", grad_h_ptr}, {"GRAD_G", grad_g_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat{}
+            OpPPMap::DataMapMat{},
+
+            OpPPMap::DataMapMat{}
 
             )
 
@@ -526,7 +514,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(
         new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOWeights(det_ptr));
+    pipeline.push_back(new OpSetHOWeightsOnFace());
 
     pipeline.push_back(
         new OpCalculateVectorFieldValuesDot<U_FIELD_DIM>("U", dot_u_ptr));
@@ -663,7 +651,6 @@ struct Monitor : public FEMethod {
                                       this->getCacheWeakPtr());
       CHKERR postProcEdge->writeFile(
           "out_step_bdy_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
-
     }
 
     liftVec->resize(SPACE_DIM, false);
@@ -735,18 +722,21 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
 
+    using OpPPMap = OpPostProcMap<2, 2>;
+
     post_proc_fe->getOpPtrVector().push_back(
 
-        new OpPostProcMap<2, 2>(
+        new OpPPMap(
             post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
 
-            OpPostProcMap<2, 2>::DataMapVec{
-                {"H", h_ptr}, {"P", p_ptr}, {"G", g_ptr}},
+            OpPPMap::DataMapVec{{"H", h_ptr}, {"P", p_ptr}, {"G", g_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat{
+            OpPPMap::DataMapMat{
                 {"U", u_ptr}, {"H_GRAD", grad_h_ptr}, {"G_GRAD", grad_g_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat{{"GRAD_U", grad_u_ptr}}
+            OpPPMap::DataMapMat{{"GRAD_U", grad_u_ptr}},
+
+            OpPPMap::DataMapMat{}
 
             )
 
@@ -770,18 +760,21 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("P", p_ptr));
 
+    using OpPPMap = OpPostProcMap<2, 2>;
+
     post_proc_fe->getOpPtrVector().push_back(
 
-        new OpPostProcMap<2, 2>(
-            post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+        new OpPPMap(post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
 
-            OpPostProcMap<2, 2>::DataMapVec{{"L", lambda_ptr}, {"P", p_ptr}},
+                    OpPPMap::DataMapVec{{"L", lambda_ptr}, {"P", p_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat{{"U", u_ptr}},
+                    OpPPMap::DataMapMat{{"U", u_ptr}},
 
-            OpPostProcMap<2, 2>::DataMapMat()
+                    OpPPMap::DataMapMat(),
 
-                )
+                    OpPPMap::DataMapMat()
+
+                        )
 
     );
 

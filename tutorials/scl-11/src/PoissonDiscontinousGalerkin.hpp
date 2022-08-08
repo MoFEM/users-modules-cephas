@@ -5,19 +5,7 @@
  * Example of implementation for discontinuous Galerkin.
  */
 
-/* This file is part of MoFEM.
- * MoFEM is free software: you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * MoFEM is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
 
 // Define name if it has not been defined yet
 #ifndef __POISSON2DISGALERKIN_HPP__
@@ -245,8 +233,8 @@ public:
             }
 
             // this is obsolete for this particular example, we keep it for
-            // generality. in case of multi-physcis problems diffrent fields can
-            // chare hierarchical base but use diffrent approx. order, so is
+            // generality. in case of multi-physics problems different fields can
+            // chare hierarchical base but use different approx. order, so is
             // possible to have more base functions than DOFs on element.
             for (; rr < nb_row_base_functions; ++rr) {
               ++t_row_base;
