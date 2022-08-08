@@ -43,21 +43,15 @@ template <> struct ElementsAndOps<2> {
   using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
-};
-
-template <> struct ElementsAndOps<3> {
-  using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = PipelineManager::FaceEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcVolumeOnRefinedMesh;
+  using SideEle = FaceElementForcesAndSourcesCoreOnSide;
+  using SideOp = SideEle::UserDataOperator;
 };
 
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
-
+using SideEle = ElementsAndOps<SPACE_DIM>::SideEle;
 using EntData = DataForcesAndSourcesCore::EntData;
 
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
@@ -71,6 +65,8 @@ using OpDomainMassU = FormsIntegrators<DomainEleOp>::Assembly<
 using OpDomainMassH = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<BASE_DIM, 1>;
 using OpDomainMassP = OpDomainMassH;
+using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
 
 using OpDomainSourceU = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, U_FIELD_DIM>;
@@ -98,6 +94,7 @@ constexpr double rho_p = 0.0012;
 constexpr double mu_p = 0.000182;
 constexpr double lambda = 7.4;
 constexpr double W = 0.25;
+constexpr double cos_alpha = 0; // wetting angle
 
 // Model parameters
 constexpr double h = 0.02; // mesh size
@@ -130,9 +127,7 @@ auto cylindrical = [](const double r) {
 
 auto my_max = [](const double x) { return (x - 1 + std::abs(x + 1)) / 2; };
 auto my_min = [](const double x) { return (x + 1 - std::abs(x - 1)) / 2; };
-auto cut_off = [](const double h) {
-  return my_max(my_min(h));
-};
+auto cut_off = [](const double h) { return my_max(my_min(h)); };
 auto d_cut_off = [](const double h) {
   if (h >= -1 && h < 1)
     return 1.;
@@ -203,15 +198,24 @@ auto kernel_oscillation = [](double r, double y, double) {
 
 auto kernel_eye = [](double r, double y, double) {
   constexpr double y0 = 0.5;
-  constexpr double R = 0.4;
+  constexpr double R = 0.25;
   y -= y0;
   const double d = std::sqrt(r * r + y * y);
   return tanh((R - d) / (eta * std::sqrt(2)));
 };
 
-auto init_h = [](double r, double y, double theta) {
-  return kernel_eye(r, y, theta);
+auto cappilary_tube = [](double x, double y, double z) {
+  constexpr double water_height = 0.2;
+  return tanh((water_height - y) / (eta * std::sqrt(2)));
+  ;
 };
+
+auto init_h = [](double r, double y, double theta) {
+  return cappilary_tube(r, y, theta);
+  // return kernel_eye(r, y, theta);
+};
+
+auto wetting_angle = [](double water_level) { return water_level; };
 
 #include <FreeSurfaceOps.hpp>
 using namespace FreeSurfaceOps;
@@ -232,6 +236,7 @@ private:
   MoFEM::Interface &mField;
 
   boost::shared_ptr<FEMethod> domianLhsFEPtr;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 };
 
 //! [Run programme]
@@ -265,19 +270,21 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   auto simple = mField.getInterface<Simple>();
 
   // Fields on domain
-  
+
   // Velocity field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
   // Pressure field
   CHKERR simple->addDomainField("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
   // Order/phase fild
   CHKERR simple->addDomainField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
-  //Chemical potential
+  // Chemical potential
   CHKERR simple->addDomainField("G", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
   // Field on boundary
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, U_FIELD_DIM);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE,
+                                  U_FIELD_DIM);
   CHKERR simple->addBoundaryField("H", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("G", H1, AINSWORTH_LEGENDRE_BASE, 1);
   // Lagrange multiplier which constrains slip conditions
   CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
@@ -292,6 +299,20 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
+
+//! [Create common data]
+// MoFEMErrorCode Example::createCommonData() {
+//   MoFEMFunctionBegin;
+
+//   auto get_command_line_parameters = [&]() {
+//     MoFEMFunctionBegin;
+//     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-water_depth",
+//                                  &young_modulus, PETSC_NULL);
+
+//     MOFEM_LOG("EXAMPLE", Sev::inform) << "water depth " << water-depth;
+
+//     MoFEMFunctionReturn(0);
+//   };
 
 //! [Boundary condition]
 MoFEMErrorCode FreeSurface::boundaryCondition() {
@@ -324,9 +345,38 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
     CHKERR post_proc_fe->writeFile("out_init.h5m");
 
+   //adding side element stuff
+
+//need to have the gradiants of 
+    auto add_base_ops = [&](auto &pipeline) {
+      // auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    };
+
+
+    // Push operators to the Pipeline for Skeleton
+    auto side_fe_ptr = boost::make_shared<SideEle>(mField);
+    set_generic(side_fe_ptr->getOpPtrVector());
+    // side_fe_ptr->getOpPtrVector().push_back(
+    //     new OpCalculateSideData(domainField, domainField));
+
+    
+
+    // Push operators to the Pipeline for Boundary
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpLoopSideRHS(side_fe_ptr, u_exact));
+
+    pipeline.push_back(
+        new OpCalculateVectorFieldGradient<U_FIELD_DIM, SPACE_DIM>("U",
+                                                                   grad_u_ptr));
+
+    // pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+    //     new OpL2LhsPenalty(side_fe_ptr));
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+    //     new OpL2BoundaryRhs(side_fe_ptr, u_exact));
+
     MoFEMFunctionReturn(0);
   };
-
+//end of side element stuff
   auto solve_init = [&]() {
     MoFEMFunctionBegin;
 
@@ -426,14 +476,14 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   CHKERR solve_init();
   CHKERR post_proc();
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "SYMETRY", "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "SYMETRY", "L", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
-                                           "U", 0, SPACE_DIM);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMETRY",
                                            "L", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "U",
+                                           0, SPACE_DIM);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
+                                           0, 0);
   // Clear pipelines
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainLhsPipeline().clear();
@@ -445,6 +495,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 //! [Push operators to pipeline]
 MoFEMErrorCode FreeSurface::assembleSystem() {
   MoFEMFunctionBegin;
+  auto simple = mField.getInterface<Simple>();
 
   auto dot_u_ptr = boost::make_shared<MatrixDouble>();
   auto u_ptr = boost::make_shared<MatrixDouble>();
@@ -503,7 +554,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         }));
     pipeline.push_back(new OpBaseTimesScalarField(
         "P", p_ptr, [](const double r, const double, const double) {
-          return eps * cylindrical(r) ;
+          return eps * cylindrical(r);
         }));
   };
 
@@ -538,10 +589,82 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(new OpCalculateScalarFieldValues("L", lambda_ptr));
     pipeline.push_back(new OpNormalConstrainRhs("L", u_ptr));
     pipeline.push_back(new OpNormalForcebRhs("U", lambda_ptr));
+
+    
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      if (it->getName().compare(0, 13, "WETTING_ANGLE") == 0) {
+        Range force_edges;
+        std::vector<double> attr_vec;
+        CHKERR it->getMeshsetIdEntitiesByDimension(
+            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
+        it->getAttributes(attr_vec);
+        if (attr_vec.size() != 1)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+                  "Should be one attribute");
+
+        auto det_ptr = boost::make_shared<VectorDouble>();
+        auto jac_ptr = boost::make_shared<MatrixDouble>();
+        auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+        // push operators to the side element which is called from op_bdy_side
+        auto op_bdy_side =
+            new OpLoopSideRHS(mField, simple->getBoundaryFEName());
+        op_bdy_side->getOpPtrVector().push_back(
+            new OpCalculateHOJacForFace(jac_ptr));
+        op_bdy_side->getOpPtrVector().push_back(
+            new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+        op_bdy_side->getOpPtrVector().push_back(
+            new OpSetInvJacH1ForFace(inv_jac_ptr));
+        op_bdy_side->getOpPtrVector().push_back(
+            new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
+        // push bdy side op 
+        pipeline.push_back(op_bdy_side);
+
+        // need to find the attributes and pass to opporator
+        pipeline.push_back(new OpWettingAngleRhs(
+            "G", grad_h_ptr, boost::make_shared<Range>(force_edges), attr_vec.front()));
+
+        // it->getAttributes(attr_vec);
+        // if (attr_vec.size() < SPACE_DIM)
+        //   SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+        //           "Wrong size of boundary attributes vector. Set right
+        //           block " "size attributes.");
+        // auto force_vec_ptr = boost::make_shared<MatrixDouble>(SPACE_DIM,
+        // 1); std::copy(&attr_vec[0], &attr_vec[SPACE_DIM],
+        //           force_vec_ptr->data().begin());
+        // pipeline.push_back(
+        // new OpBoundaryVec("U", force_vec_ptr,
+        // boost::make_shared<Range>(force_edges)));
+      }
+    }
   };
 
   auto set_boundary_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpNormalConstrainLhs("L", "U"));
+    pipeline.push_back(
+        new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
+      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      if (it->getName().compare(0, 13, "WETTING_ANGLE") == 0) {
+        Range force_edges;
+        std::vector<double> attr_vec;
+        CHKERR it->getMeshsetIdEntitiesByDimension(
+            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
+        it->getAttributes(attr_vec);
+        if (attr_vec.size() != 1)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+                  "Should be one attribute");
+        cerr << "forces edges"<< force_edges.size()<<"\n";
+        
+         pipeline.push_back(new OpWettingAngleLhs(
+            "G", "H", grad_h_ptr, boost::make_shared<Range>(force_edges),
+            attr_vec.front()));
+        // push opperators for lhs wetting angle
+      }
+    }
   };
 
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -585,11 +708,11 @@ struct Monitor : public FEMethod {
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
 
-
       // MOFEM_LOG("FS", Sev::verbose)
       //     << "writing vector in binary to vector.dat ...";
       // PetscViewer viewer;
-      // PetscViewerBinaryOpen(PETSC_COMM_WORLD, "vector.dat", FILE_MODE_WRITE,
+      // PetscViewerBinaryOpen(PETSC_COMM_WORLD, "vector.dat",
+      // FILE_MODE_WRITE,
       //                       &viewer);
       // VecView(ts_u, viewer);
       // PetscViewerDestroy(&viewer);
@@ -601,7 +724,7 @@ struct Monitor : public FEMethod {
     MPI_Allreduce(MPI_IN_PLACE, &(*liftVec)[0], SPACE_DIM, MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
     MOFEM_LOG("FS", Sev::inform)
-        << "Step " ts_step << " time " << ts_t
+        << "Step " << ts_step << " time " << ts_t
         << " lift vec x: " << (*liftVec)[0] << " y: " << (*liftVec)[1];
 
     MoFEMFunctionReturn(0);
