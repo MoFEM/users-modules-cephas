@@ -36,6 +36,11 @@ struct BodyForceConstantField {
         : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPROW),
           F(_F), dAta(data), blockTets(block_tets) {}
+    OpBodyForce(const std::string field_name, Block_BodyForces &data,
+                Range block_tets)
+        : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROW),
+          dAta(data), blockTets(block_tets) {}
 
     VectorDouble Nf;
 
@@ -75,6 +80,9 @@ struct BodyForceConstantField {
                       rank);
         }
       }
+
+      if (F == PETSC_NULL)
+        F = getKSPf();
 
       CHKERR VecSetValues(F, data.getIndices().size(), &data.getIndices()[0],
                            &Nf[0], ADD_VALUES);
