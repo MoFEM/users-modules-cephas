@@ -270,9 +270,28 @@ MoFEMErrorCode Example::postProcess() {
   pipeline_mng->getDomainLhsFE().reset();
   pipeline_mng->getBoundaryLhsFE().reset();
   pipeline_mng->getBoundaryRhsFE().reset();
-  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc("T");
+  auto post_proc_fe =
+      boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
+
+  auto t_ptr = boost::make_shared<VectorDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues("T", t_ptr));
+
+  using OpPPMap = OpPostProcMapInMoab<2, 2>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(post_proc_fe->getPostProcMesh(),
+                  post_proc_fe->getMapGaussPts(),
+
+                  {{"T", t_ptr}},
+
+                  {}, {}, {}
+
+                  )
+
+  );
+
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(

@@ -23,7 +23,8 @@ constexpr auto field_name = "U";
 using namespace MoFEM;
 using namespace Poisson2DHomogeneousOperators;
 
-using PostProcFaceEle = PostProcFaceOnRefinedMesh;
+using PostProcFaceEle =
+    PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
 
 static char help[] = "...\n\n";
 
@@ -232,7 +233,6 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   pipeline_mng->getDomainLhsFE().reset();
 
   auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
 
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -261,15 +261,15 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateScalarFieldValues(field_name, u_ptr));
 
-
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateScalarFieldGradient<SPACE_DIM>(field_name, grad_u_ptr));
 
-  using OpPPMap = OpPostProcMap<SPACE_DIM, SPACE_DIM>;
+  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
   post_proc_fe->getOpPtrVector().push_back(
 
-      new OpPPMap(post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+      new OpPPMap(post_proc_fe->getPostProcMesh(),
+                  post_proc_fe->getMapGaussPts(),
 
                   OpPPMap::DataMapVec{{"U", u_ptr}},
 

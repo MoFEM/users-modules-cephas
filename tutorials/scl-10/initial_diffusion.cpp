@@ -20,7 +20,7 @@ constexpr int SPACE_DIM = 3; //< Space dimension of problem, mesh
 
 using DomainEle = VolumeElementForcesAndSourcesCore;
 using DomainEleOp = DomainEle::UserDataOperator;
-using PostProcEle = PostProcVolumeOnRefinedMesh;
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
@@ -297,8 +297,29 @@ MoFEMErrorCode PhotonDiffusion::outputResults() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc("U");
+
+  auto u_ptr = boost::make_shared<VectorDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues("U", u_ptr));
+
+  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(
+
+          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(), 
+          
+          {{"U", u_ptr}},
+
+          {},
+
+          {},
+
+          {})
+
+  );     
+
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_initial.h5m");

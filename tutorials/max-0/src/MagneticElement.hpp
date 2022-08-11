@@ -17,7 +17,7 @@
  *  \cite ivanyshyn2013computation
  *  <www.hpfem.jku.at/publications/szthesis.pdf>
  *  <https://pdfs.semanticscholar.org/0574/e5763d9b64bff16f908e9621f23af3b3dc86.pdf>
- * 
+ *
  * Election file and all other problem related file are here \ref
  * maxwell_element.
  *
@@ -163,7 +163,7 @@ struct MagneticElement {
     // topological changes, simply set refinement level to zero on all entities.
 
     CHKERR mField.getInterface<BitRefManager>()->setBitRefLevelByDim(
-      0, 3,BitRefLevel().set(0));
+        0, 3, BitRefLevel().set(0));
 
     // add fields
     CHKERR mField.add_field(blockData.fieldName, HCURL, DEMKOWICZ_JACOBI_BASE,
@@ -295,7 +295,7 @@ struct MagneticElement {
     CHKERR DMMoFEMGetProblemPtr(blockData.dM, &problem_ptr);
     CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
         problem_ptr->getName(), blockData.fieldName, blockData.essentialBc);
-    
+
     MoFEMFunctionReturn(0);
   }
 
@@ -406,13 +406,43 @@ struct MagneticElement {
   MoFEMErrorCode postProcessResults() {
 
     MoFEMFunctionBegin;
-    PostProcVolumeOnRefinedMesh post_proc(mField);
-    CHKERR post_proc.generateReferenceElementMesh();
-    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", post_proc, false, true, false, true);
-    CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
-    CHKERR post_proc.addFieldValuesPostProc(blockData.fieldName);
+    PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore> post_proc(
+        mField);
+
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", post_proc, false, true, false,
+                       true);
+
+    auto pos_ptr = boost::make_shared<MatrixDouble>();
+    auto field_val_ptr = boost::make_shared<MatrixDouble>();
+
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>("MESH_NODE_POSITIONS", pos_ptr));
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateHVecVectorField<3>(blockData.fieldName, field_val_ptr));
+
+    using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+    post_proc.getOpPtrVector().push_back(
+
+        new OpPPMap(
+
+            post_proc.getPostProcMesh(), post_proc.getMapGaussPts(),
+
+            {},
+
+            {{"MESH_NODE_POSITIONS", pos_ptr},
+             {blockData.fieldName, field_val_ptr}},
+
+            {},
+
+            {}
+
+            )
+
+    );
+
     post_proc.getOpPtrVector().push_back(new OpPostProcessCurl(
-        blockData, post_proc.postProcMesh, post_proc.mapGaussPts));
+        blockData, post_proc.getPostProcMesh(), post_proc.getMapGaussPts()));
     CHKERR DMoFEMLoopFiniteElements(blockData.dM, blockData.feName.c_str(),
                                     &post_proc);
     CHKERR post_proc.writeFile("out_values.h5m");
@@ -517,7 +547,7 @@ struct MagneticElement {
             ++t_local_mat;
             ++t_col_curl_base;
           }
-          
+
           ++t_row_curl_base;
         }
       }
@@ -721,9 +751,9 @@ struct MagneticElement {
         t_j(1) = +x / r;
         t_j(2) = 0;
 
-        //double a = t_j(i) * t_tangent1(i);
-        //double b = t_j(i) * t_tangent2(i);
-        //t_j(i) = a * t_tangent1(i) + b * t_tangent2(i);
+        // double a = t_j(i) * t_tangent1(i);
+        // double b = t_j(i) * t_tangent2(i);
+        // t_j(i) = a * t_tangent1(i) + b * t_tangent2(i);
 
         // ++t_tangent1;
         // ++t_tangent2;
@@ -777,7 +807,7 @@ struct MagneticElement {
         MoFEMFunctionReturnHot(0);
       const void *tags_ptr[mapGaussPts.size()];
 
-      if(nb_row_dofs != row_data.getFieldData().size())
+      if (nb_row_dofs != row_data.getFieldData().size())
         SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                  "Wrong number of base functions and DOFs %d != %d",
                  nb_row_dofs, row_data.getFieldData().size());

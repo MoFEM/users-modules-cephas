@@ -22,7 +22,11 @@ using DomainEle = VolumeElementForcesAndSourcesCore;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = FaceElementForcesAndSourcesCore;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
-using PostProcEle = PostProcVolumeOnRefinedMesh;
+using PostProcEle = PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore>;
+using PostProcFaceEle =
+    PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
+
+using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
 using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
@@ -71,7 +75,7 @@ double inv_v = 1. / v;
 struct Monitor : public FEMethod {
 
   Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc,
-          boost::shared_ptr<PostProcFaceOnRefinedMesh> skin_post_proc)
+          boost::shared_ptr<PostProcFaceEle> skin_post_proc)
       : dM(dm), postProc(post_proc), skinPostProc(skin_post_proc){};
 
   MoFEMErrorCode preProcess() { return 0; }
@@ -97,7 +101,7 @@ struct Monitor : public FEMethod {
 private:
   SmartPetscObj<DM> dM;
   boost::shared_ptr<PostProcEle> postProc;
-  boost::shared_ptr<PostProcFaceOnRefinedMesh> skinPostProc;
+  boost::shared_ptr<PostProcFaceEle> skinPostProc;
 };
 
 struct PhotonDiffusion {
@@ -367,23 +371,50 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
 
   auto create_post_process_element = [&]() {
     auto post_froc_fe = boost::make_shared<PostProcEle>(mField);
-    post_froc_fe->generateReferenceElementMesh();
-    post_froc_fe->addFieldValuesPostProc("U");
-    post_froc_fe->addFieldValuesGradientPostProc("U");
+    auto u_ptr = boost::make_shared<VectorDouble>();
+    post_froc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("U", u_ptr));
+    post_froc_fe->getOpPtrVector().push_back(new OpPPMap(
+        post_froc_fe->getPostProcMesh(), post_froc_fe->getMapGaussPts(),
+        {{"U", u_ptr}}, {}, {}, {}));
     return post_froc_fe;
   };
 
   auto create_post_process_camera_element = [&]() {
     if (mField.check_finite_element("CAMERA_FE")) {
-      auto post_proc_skin =
-          boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-      post_proc_skin->generateReferenceElementMesh();
-      CHKERR post_proc_skin->addFieldValuesPostProc("U");
-      CHKERR post_proc_skin->addFieldValuesGradientPostProcOnSkin(
-          "U", simple->getDomainFEName());
+      auto post_proc_skin = boost::make_shared<PostProcFaceEle>(mField);
+
+      auto u_ptr = boost::make_shared<VectorDouble>();
+      auto grad_ptr = boost::make_shared<MatrixDouble>();
+
+      auto op_loop_side = new OpLoopSide<FaceElementForcesAndSourcesCoreOnSide>(
+          mField, simple->getDomainFEName(), SPACE_DIM);
+
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      auto det_ptr = boost::make_shared<VectorDouble>();
+
+      // push operators to side element
+      op_loop_side->getOpPtrVector().push_back(
+          new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+      op_loop_side->getOpPtrVector().push_back(
+          new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+      op_loop_side->getOpPtrVector().push_back(
+          new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+      op_loop_side->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldValues("U", u_ptr));
+      op_loop_side->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldGradient<SPACE_DIM>("U", grad_ptr));
+      // push op to boundary element
+      post_proc_skin->getOpPtrVector().push_back(op_loop_side);
+
+      post_proc_skin->getOpPtrVector().push_back(new OpPPMap(
+          post_proc_skin->getPostProcMesh(), post_proc_skin->getMapGaussPts(),
+          {{"U", u_ptr}}, {{"GRAD", grad_ptr}}, {}, {}));
+
       return post_proc_skin;
     } else {
-      return boost::shared_ptr<PostProcFaceOnRefinedMesh>();
+      return boost::shared_ptr<PostProcFaceEle>();
     }
   };
 

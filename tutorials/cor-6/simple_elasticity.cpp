@@ -615,19 +615,55 @@ int main(int argc, char *argv[]) {
 
     // Set up post-processor. It is some generic implementation of finite
     // element
-    PostProcVolumeOnRefinedMesh post_proc(m_field);
-    // Add operators to the elements, starting with some generic
-    CHKERR post_proc.generateReferenceElementMesh();
+    auto get_post_proc_ele = [&]() {
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      auto det_ptr = boost::make_shared<VectorDouble>();
 
-    CHKERR post_proc.addFieldValuesPostProc("U");
+      auto post_proc_ele = boost::make_shared<
+          PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore>>(m_field);
+      // Add operators to the elements, starting with some generic
+      constexpr int SPACE_DIM = 3;
+      post_proc_ele->getOpPtrVector().push_back(
+          new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+      post_proc_ele->getOpPtrVector().push_back(
+          new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+      post_proc_ele->getOpPtrVector().push_back(
+          new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
-    CHKERR post_proc.addFieldValuesGradientPostProc("U");
+      auto u_ptr = boost::make_shared<MatrixDouble>();
+      auto grad_ptr = boost::make_shared<MatrixDouble>();
+      post_proc_ele->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+      post_proc_ele->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
+                                                                   grad_ptr));
+      using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-    CHKERR DMoFEMLoopFiniteElements(
-        dm, simple_interface->getDomainFEName().c_str(), &post_proc);
+      post_proc_ele->getOpPtrVector().push_back(
 
-    // write output
-    CHKERR post_proc.writeFile("out.h5m");
+          new OpPPMap(
+
+              post_proc_ele->getPostProcMesh(), post_proc_ele->getMapGaussPts(),
+              {},
+
+              {{"U", u_ptr}},
+
+              {{"GRAD", grad_ptr}},
+
+              {})
+
+      );
+
+      return post_proc_ele;
+    };
+
+    if (auto post_proc = get_post_proc_ele()) {
+      CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName(),
+                                      post_proc);
+      // write output
+      CHKERR post_proc->writeFile("out.h5m");
+    }
 
     {
       if (flg_test == PETSC_TRUE) {

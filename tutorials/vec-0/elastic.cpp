@@ -14,18 +14,12 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
-  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
 template <> struct ElementsAndOps<3> {
   using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = FaceElementForcesAndSourcesCore;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
 //! [Define dimension]
@@ -34,10 +28,10 @@ constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
+using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
-using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
-using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
@@ -50,9 +44,6 @@ constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
-
-#include <OpPostProcElastic.hpp>
-using namespace Tutorial;
 
 struct Example {
 
@@ -261,7 +252,7 @@ MoFEMErrorCode Example::outputResults() {
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
   pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
+
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(
@@ -277,16 +268,37 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", matStrainPtr, matStressPtr, matDPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
-      "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
-      matStressPtr));
-  post_proc_fe->addFieldValuesPostProc("U");
+
+  auto u_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+
+  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(
+
+          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+          {},
+
+          {{"U", u_ptr}},
+
+          {},
+
+          {{"STRAIN", matStrainPtr}, {"STRESS", matStressPtr}}
+
+          )
+
+  );
+
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_elastic.h5m");
   MoFEMFunctionReturn(0);
 }
-//! [Postprocess results]
+//! [Postprocessing results]
 
 //! [Check]
 MoFEMErrorCode Example::checkResults() {

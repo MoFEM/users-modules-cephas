@@ -4,12 +4,12 @@
  *
  */
 
-
-
 #ifndef __POISSONOPERATORS_HPP__
 #define __POISSONOPERATORS_HPP__
 
 namespace PoissonExample {
+
+using PostProcFE = PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore>;
 
 /**
  * \brief Calculate the grad-grad operator and assemble matrix
@@ -85,9 +85,8 @@ protected:
    * @param  col_data column data (consist base functions on column entity)
    * @return          error code
    */
-  virtual MoFEMErrorCode
-  iNtegrate(EntitiesFieldData::EntData &row_data,
-            EntitiesFieldData::EntData &col_data) {
+  virtual MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                                   EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // set size of local entity bock
     locMat.resize(nbRows, nbCols, false);
@@ -943,7 +942,7 @@ struct CreateFiniteElements {
    * \brief Create finite element to post-process results
    */
   MoFEMErrorCode creatFEToPostProcessResults(
-      boost::shared_ptr<ForcesAndSourcesCore> &post_proc_volume) const {
+      boost::shared_ptr<PostProcFE> &post_proc_volume) const {
 
     MoFEMFunctionBegin;
 
@@ -956,21 +955,51 @@ struct CreateFiniteElements {
     // post-processing fields. Here using simplified mechanism for
     // post-processing finite element, we add operators to save data from field
     // on mesh tags for ParaView visualization.
-    post_proc_volume = boost::shared_ptr<ForcesAndSourcesCore>(
-        new PostProcVolumeOnRefinedMesh(mField));
+    post_proc_volume =
+        boost::shared_ptr<PostProcFE>(new PostProcFE(mField));
     // Add operators to the elements, starting with some generic
-    CHKERR boost::static_pointer_cast<PostProcVolumeOnRefinedMesh>(
-        post_proc_volume)
-        ->generateReferenceElementMesh();
-    CHKERR boost::static_pointer_cast<PostProcVolumeOnRefinedMesh>(
-        post_proc_volume)
-        ->addFieldValuesPostProc("U");
-    CHKERR boost::static_pointer_cast<PostProcVolumeOnRefinedMesh>(
-        post_proc_volume)
-        ->addFieldValuesPostProc("ERROR");
-    CHKERR boost::static_pointer_cast<PostProcVolumeOnRefinedMesh>(
-        post_proc_volume)
-        ->addFieldValuesGradientPostProc("U");
+
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_volume->getOpPtrVector().push_back(
+        new OpCalculateHOJac<3>(jac_ptr));
+    post_proc_volume->getOpPtrVector().push_back(
+        new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+    post_proc_volume->getOpPtrVector().push_back(
+        new OpSetHOInvJacToScalarBases<3>(H1, inv_jac_ptr));
+
+    auto u_ptr = boost::make_shared<VectorDouble>();
+    auto grad_ptr = boost::make_shared<MatrixDouble>();
+    auto e_ptr = boost::make_shared<VectorDouble>();
+
+    post_proc_volume->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("U", u_ptr));
+    post_proc_volume->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldGradient<3>("U", grad_ptr));
+    post_proc_volume->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("ERROR", e_ptr));
+
+    using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+    post_proc_volume->getOpPtrVector().push_back(
+
+        new OpPPMap(
+
+            post_proc_volume->getPostProcMesh(),
+            post_proc_volume->getMapGaussPts(),
+
+            {{"U", u_ptr}, {"ERROR", e_ptr}},
+
+            {{"GRAD", grad_ptr}},
+
+            {},
+
+            {}
+
+            )
+
+    );
 
     MoFEMFunctionReturn(0);
   }

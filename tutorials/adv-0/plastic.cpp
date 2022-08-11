@@ -22,16 +22,12 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
-  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
 };
 
 template <> struct ElementsAndOps<3> {
-  using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = FaceElementForcesAndSourcesCore;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using DomainEle = PipelineManager::VolEle;
+  using BoundaryEle = PipelineManager::FaceEle;
 };
 
 constexpr int SPACE_DIM =
@@ -40,9 +36,9 @@ constexpr int SPACE_DIM =
 constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
+using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
-using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using AssemblyDomainEleOp =
@@ -109,7 +105,6 @@ inline long double hardening_dtau(long double tau, double temp) {
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
-#include <OpPostProcElastic.hpp>
 
 using namespace PlasticOps;
 using namespace HenckyOps;
@@ -863,7 +858,6 @@ MoFEMErrorCode Example::tsSolve() {
                                             commonPlasticDataPtr->mStrainPtr));
       postProcFe->getOpPtrVector().push_back(new OpPlasticStress(
           "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
-
 
       postProcFe->getOpPtrVector().push_back(
 

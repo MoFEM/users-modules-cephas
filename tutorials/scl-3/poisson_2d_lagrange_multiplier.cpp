@@ -5,8 +5,10 @@
 using namespace MoFEM;
 using namespace Poisson2DLagrangeMultiplierOperators;
 
-using PostProcFaceEle = PostProcFaceOnRefinedMesh;
-using PostProcEdgeEle = PostProcEdgeOnRefinedMesh;
+using PostProcFaceEle =
+    PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
+using PostProcEdgeEle =
+    PostProcBrokenMeshInMoab<EdgeElementForcesAndSourcesCore>;
 
 static char help[] = "...\n\n";
 
@@ -251,14 +253,27 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::outputResults() {
   pipeline_mng->getDomainLhsFE().reset();
   pipeline_mng->getBoundaryLhsFE().reset();
 
+  auto d_ptr = boost::make_shared<VectorDouble>();
+  auto l_ptr = boost::make_shared<VectorDouble>();
+
+  using OpPPMap = OpPostProcMapInMoab<2, 2>;
+
   auto post_proc_domain_fe = boost::make_shared<PostProcFaceEle>(mField);
-  post_proc_domain_fe->generateReferenceElementMesh();
-  post_proc_domain_fe->addFieldValuesPostProc(domainField);
+  post_proc_domain_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues(domainField, d_ptr));
+  post_proc_domain_fe->getOpPtrVector().push_back(
+      new OpPPMap(post_proc_domain_fe->getPostProcMesh(),
+                  post_proc_domain_fe->getMapGaussPts(), {{domainField, d_ptr}},
+                  {}, {}, {}));
   pipeline_mng->getDomainRhsFE() = post_proc_domain_fe;
 
   auto post_proc_boundary_fe = boost::make_shared<PostProcEdgeEle>(mField);
-  post_proc_boundary_fe->generateReferenceElementMesh();
-  post_proc_boundary_fe->addFieldValuesPostProc(boundaryField);
+  post_proc_boundary_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues(boundaryField, l_ptr));
+  post_proc_boundary_fe->getOpPtrVector().push_back(
+      new OpPPMap(post_proc_boundary_fe->getPostProcMesh(),
+                  post_proc_boundary_fe->getMapGaussPts(),
+                  {{boundaryField, l_ptr}}, {}, {}, {}));
   pipeline_mng->getBoundaryRhsFE() = post_proc_boundary_fe;
 
   CHKERR pipeline_mng->loopFiniteElements();
