@@ -6,12 +6,12 @@
  *
  */
 
-
-
 #ifndef __UNSATURATD_FLOW_HPP__
 #define __UNSATURATD_FLOW_HPP__
 
 namespace MixTransport {
+
+using PostProcEle = PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore>;
 
 /**
  * \brief Generic material model for unsaturated water transport
@@ -25,9 +25,9 @@ struct GenericMaterial {
 
   static double ePsilon0; ///< Regularization parameter
   static double ePsilon1; ///< Regularization parameter
-  static double scaleZ; ///< Scale z direction
-  
-  double sCale;           ///< Scale time dependent eq.
+  static double scaleZ;   ///< Scale z direction
+
+  double sCale; ///< Scale time dependent eq.
 
   double h;   ///< hydraulic head
   double h_t; ///< rate of hydraulic head
@@ -351,7 +351,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         // Get divergence
-        for(auto &v : divVec) {
+        for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
         }
@@ -722,7 +722,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       int nb_gauss_pts = row_data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double alpha = getGaussPts()(3, gg) * getVolume() * scale;
-        for(auto &v : divVec) {
+        for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
         }
@@ -815,7 +815,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         const double KK = K * K;
         const double diffK = block_data->diffK;
         double alpha = t_w * vol;
-        for(auto &v : divVec) {
+        for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
         }
@@ -1062,19 +1062,19 @@ struct UnsaturatedFlowElement : public MixTransportElement {
    * finite elements to evaluate material properties and save results on the
    * mesh.
    *
-   * \note Element overloaded only FEMethod::postProcess methos where other
+   * \note Element overloaded only FEMethod::postProcess methods where other
    * elements are called.
    */
   struct MonitorPostProc : public MoFEM::FEMethod {
 
     UnsaturatedFlowElement &cTx;
-    boost::shared_ptr<PostProcVolumeOnRefinedMesh> postProc;
+    boost::shared_ptr<PostProcEle> postProc;
     boost::shared_ptr<ForcesAndSourcesCore> fluxIntegrate;
 
     const int fRequency;
 
     MonitorPostProc(UnsaturatedFlowElement &ctx,
-                    boost::shared_ptr<PostProcVolumeOnRefinedMesh> &post_proc,
+                    boost::shared_ptr<PostProcEle> &post_proc,
                     boost::shared_ptr<ForcesAndSourcesCore> flux_Integrate,
                     const int frequency)
         : cTx(ctx), postProc(post_proc), fluxIntegrate(flux_Integrate),
@@ -1367,7 +1367,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
             if (auto dof_ptr =
                     fePtr->problemPtr->getColDofsByPetscGlobalDofIdx(*it)
                         .lock())
-            dof_ptr->getFieldData() = *vit;
+              dof_ptr->getFieldData() = *vit;
           }
         } else {
           cTx.bcVecIds.resize(0);
@@ -1482,7 +1482,6 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     scaleMethodValue = boost::shared_ptr<MethodForForceScaling>(
         new TimeForceScale("-head_history", false));
 
-
     // Set operator to calculate essential boundary conditions
     feFaceBc->getOpPtrVector().push_back(
         new OpEvaluateBcOnFluxes(*this, "FLUXES"));
@@ -1534,18 +1533,58 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     CHKERR DMMoFEMTSSetIJacobian(dM, "MIX", feVolLhs, null, null);
 
     // setting up post-processing
-    boost::shared_ptr<PostProcVolumeOnRefinedMesh> post_process(
-        new PostProcVolumeOnRefinedMesh(mField));
-    CHKERR post_process->generateReferenceElementMesh();
-    CHKERR post_process->addFieldValuesPostProc("VALUES");
-    CHKERR post_process->addFieldValuesPostProc("VALUES_t");
-    // CHKERR post_process->addFieldValuesPostProc("FLUXES_residual");
-    CHKERR post_process->addFieldValuesPostProc("FLUXES");
+
+
+    auto get_post_process_ele = [&]() {
+      auto post_process = boost::make_shared<PostProcEle>(mField);
+
+      auto jac_ptr = boost::make_shared<MatrixDouble>();
+      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+      auto det_ptr = boost::make_shared<VectorDouble>();
+      post_process->getOpPtrVector().push_back(new OpCalculateHOJac<3>(jac_ptr));
+      post_process->getOpPtrVector().push_back(
+          new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+      post_process->getOpPtrVector().push_back(
+          new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
+      post_process->getOpPtrVector().push_back(
+          new OpSetHOInvJacToScalarBases<3>(L2, inv_jac_ptr));
+
+      auto values_ptr = boost::make_shared<VectorDouble>();
+      auto grad_ptr = boost::make_shared<MatrixDouble>();
+      auto flux_ptr = boost::make_shared<MatrixDouble>();
+
+      post_process->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldValues("VALUES", values_ptr));
+      post_process->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldGradient<3>("VALUES", grad_ptr));
+      post_process->getOpPtrVector().push_back(
+          new OpCalculateHVecVectorField<3>("FLUXES", flux_ptr));
+
+      using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+      post_process->getOpPtrVector().push_back(
+
+          new OpPPMap(post_process->getPostProcMesh(),
+                      post_process->getMapGaussPts(),
+
+                      {{"VALUES", values_ptr}},
+
+                      {{"GRAD", grad_ptr}, {"FLUXES", flux_ptr}},
+
+                      {}, {}
+
+                      ));
+
+      return post_process;
+    };
+
+    auto post_process = get_post_process_ele();
+
     post_process->getOpPtrVector().push_back(
         new OpValuesAtGaussPts(*this, "VALUES"));
     post_process->getOpPtrVector().push_back(
-        new OpPostProcMaterial(*this, post_process->postProcMesh,
-                               post_process->mapGaussPts, "VALUES"));
+        new OpPostProcMaterial(*this, post_process->getPostProcMesh(),
+                               post_process->getMapGaussPts(), "VALUES"));
 
     // Integrate fluxes on boundary
     boost::shared_ptr<ForcesAndSourcesCore> flux_integrate;

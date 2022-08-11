@@ -18,8 +18,6 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = MoFEM::FaceElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
 using DomainEle = ElementsAndOps<FM_DIM>::DomainEle;
@@ -396,21 +394,41 @@ MoFEMErrorCode ApproxSphere::solveSystem() {
 MoFEMErrorCode ApproxSphere::outputResults() {
   MoFEMFunctionBegin;
 
-  auto simple = mField.getInterface<Simple>();
-  auto dm = simple->getDM();
-
-  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc("HO_POSITIONS");
-  CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
-  CHKERR post_proc_fe->writeFile("out_approx.h5m");
-
-  auto error_fe = boost::make_shared<DomainEle>(mField);
-
   auto x_ptr = boost::make_shared<MatrixDouble>();
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+  auto simple = mField.getInterface<Simple>();
+  auto dm = simple->getDM();
+
+  auto post_proc_fe =
+      boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
+
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<3>("HO_POSITIONS", x_ptr));
+
+  using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(post_proc_fe->getPostProcMesh(),
+                  post_proc_fe->getMapGaussPts(),
+
+                  {},
+
+                  {{"HO_POSITIONS", x_ptr}},
+
+                  {}, {}
+
+                  )
+
+  );
+
+  CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
+  CHKERR post_proc_fe->writeFile("out_approx.h5m");
+
+  auto error_fe = boost::make_shared<DomainEle>(mField);
 
   error_fe->getOpPtrVector().push_back(
       new OpGetHONormalsOnFace("HO_POSITIONS"));
