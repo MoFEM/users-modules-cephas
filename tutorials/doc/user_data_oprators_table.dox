@@ -652,11 +652,11 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 <td>
 
 Integrate term for discrete scalar fields
-\ref MoFEM::OpBaseTimesScalarFieldImpl
+\ref MoFEM::OpBaseTimesScalarImpl
 
 \code
 using OpBaseTimesV = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpBaseTimesScalarField<BASE_DIM>;
+    GAUSS>::OpBaseTimesScalar<BASE_DIM>;
 \endcode
 
 <td>
@@ -664,7 +664,7 @@ using OpBaseTimesV = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
 %Example
 \code
 using OpBaseTimesV = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpBaseTimesScalarField<1>;
+    GAUSS>::OpBaseTimesScalar<1>;
 auto vec_at_gauss_pts = boost::make_shared<VectorDouble>();
 // Push operator which sets vec_at_gauss_pts
 pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -676,7 +676,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 <td>
 
 Integrate term for discrete vector fields
-\ref MoFEM::OpBaseTimesScalarFieldImpl
+\ref MoFEM::OpBaseTimesScalarImpl
 
 \code
 using OpBaseTimesM = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<

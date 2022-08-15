@@ -123,7 +123,7 @@ using OpHDivTemp = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
  *
  */
 using OpBaseDotT = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpBaseTimesScalarField<1>;
+    GAUSS>::OpBaseTimesScalar<1>;
 
 /**
  * @brief Integrate Rhs base of temerature times divergenc of flux (T)
