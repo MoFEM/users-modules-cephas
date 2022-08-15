@@ -55,7 +55,6 @@ struct MetaSpringBC {
     double scaleStiffness;
 
     Range forcesOnlyOnEntitiesRow;
-    Range forcesOnlyOnEntitiesCol;
 
     EntitiesFieldData::EntData *faceRowData;
 
