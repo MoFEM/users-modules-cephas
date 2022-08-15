@@ -122,6 +122,29 @@ int main(int argc, char *argv[]) {
     CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *fe_mat_rhs_ptr, false, false);
     CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *fe_mat_lhs_ptr, false, false);
 
+    boost::shared_ptr<NeumannForcesSurface> surfaceForce(
+        new NeumannForcesSurface(m_field));
+
+    boost::shared_ptr<NeumannForcesSurface::MyTriangleFE>
+        fe_rhs_surface_force_ptr(surfaceForce, &(surfaceForce->getLoopFe()));
+    boost::shared_ptr<NeumannForcesSurface::MyTriangleFE>
+        fe_lhs_surface_force_ptr(surfaceForce, &(surfaceForce->getLoopFeLhs()));
+    boost::shared_ptr<NeumannForcesSurface::MyTriangleFE>
+        fe_mat_rhs_surface_force_ptr(surfaceForce,
+                                     &(surfaceForce->getLoopFeMatRhs()));
+    boost::shared_ptr<NeumannForcesSurface::MyTriangleFE>
+        fe_mat_lhs_surface_force_ptr(surfaceForce,
+                                     &(surfaceForce->getLoopFeMatLhs()));
+
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *fe_rhs_surface_force_ptr,
+                          false, false);
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *fe_lhs_surface_force_ptr,
+                          false, false);
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *fe_mat_rhs_surface_force_ptr,
+                          false, false);
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *fe_mat_lhs_surface_force_ptr,
+                          false, false);
+
     Range nodes;
     CHKERR moab.get_entities_by_type(0, MBVERTEX, nodes, false);
 
@@ -141,6 +164,30 @@ int main(int argc, char *argv[]) {
             "SPATIAL_POSITION", "MESH_NODE_POSITIONS", dataAtPts,
             si->getDomainFEName(), PETSC_NULL, PETSC_NULL, bit->getMeshsetId(),
             true, true);
+      }
+    }
+
+    const string block_set_force_name("FORCE");
+    // search for block named FORCE and add its attributes to FORCE_FE element
+    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
+                                                    bit)) {
+      CHKERR surfaceForce->addForce("SPATIAL_POSITION", PETSC_NULL,
+                                    (bit->getMeshsetId()), true, false);
+      CHKERR surfaceForce->addForceAle(
+          "SPATIAL_POSITION", "MESH_NODE_POSITIONS", dataAtPts,
+          si->getDomainFEName(), PETSC_NULL, PETSC_NULL, bit->getMeshsetId(),
+          true, false, false);
+    }
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+      if (it->getName().compare(0, block_set_force_name.length(),
+                                block_set_force_name) == 0) {
+        CHKERR surfaceForce->addForce("SPATIAL_POSITION", PETSC_NULL,
+                                      (it->getMeshsetId()), true, true);
+        CHKERR surfaceForce->addForceAle(
+            "SPATIAL_POSITION", "MESH_NODE_POSITIONS", dataAtPts,
+            si->getDomainFEName(), PETSC_NULL, PETSC_NULL, it->getMeshsetId(),
+            true, true, false);
       }
     }
 
@@ -198,6 +245,19 @@ int main(int argc, char *argv[]) {
                                   nullptr, nullptr);
     CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_mat_rhs_ptr,
                                   nullptr, nullptr);
+
+    // Surface force ALE
+    CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(),
+                                  fe_lhs_surface_force_ptr, nullptr, nullptr);
+    CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(),
+                                  fe_rhs_surface_force_ptr, nullptr, nullptr);
+
+    CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(),
+                                  fe_mat_lhs_surface_force_ptr, nullptr,
+                                  nullptr);
+    CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(),
+                                  fe_mat_rhs_surface_force_ptr, nullptr,
+                                  nullptr);
 
     Vec x, f;
     CHKERR DMCreateGlobalVector(dm, &x);
