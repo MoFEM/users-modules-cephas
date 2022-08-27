@@ -41,8 +41,8 @@ using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, SPACE_DIM>;
 
-using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
+using OpForce = NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpFlux<BLOCKSET, 1, SPACE_DIM>;
 
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.3;
@@ -179,25 +179,19 @@ MoFEMErrorCode Example::boundaryCondition() {
     return fe_domain_rhs->ts_t;
   };
 
-  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    if (it->getName().compare(0, 5, "FORCE") == 0) {
-      Range force_edges;
-      std::vector<double> attr_vec;
-      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                 force_edges, true);
-      it->getAttributes(attr_vec);
-      if (attr_vec.size() < SPACE_DIM)
-        SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                "Wrong size of boundary attributes vector. Set right block "
-                "size attributes.");
-      auto force_vec_ptr = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
-      std::copy(&attr_vec[0], &attr_vec[SPACE_DIM],
-                force_vec_ptr->data().begin());
+  auto add_forces = [&]() {
+    MoFEMFunctionBegin;
+    auto force_blocks_ptr =
+        mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
+            std::regex("FORCE(.*)"));
+    for (auto m : force_blocks_ptr) {
       pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-          new OpBoundaryVec("U", force_vec_ptr, get_time,
-                            boost::make_shared<Range>(force_edges)));
+          new OpForce(mField, m->getMeshsetId(), "U"));
     }
-  }
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR add_forces();
 
   //! [Define gravity vector]
   auto get_body_force = [this](const double, const double, const double) {
