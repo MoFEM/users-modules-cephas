@@ -35,8 +35,8 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
-using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
+using OpBodyForce = NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpFlux<UNKNOWNSET, 1, SPACE_DIM>;
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 
@@ -44,6 +44,14 @@ constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+
+auto get_body_force = []() {
+  FTensor::Tensor1<double, SPACE_DIM> t_body_force;
+  FTensor::Index<'i', SPACE_DIM> i;
+  t_body_force(i) = 0;
+  t_body_force(1) = -1;
+  return t_body_force;
+};
 
 struct Example {
 
@@ -187,8 +195,8 @@ MoFEMErrorCode Example::boundaryCondition() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, nullptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeights(det_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
-      "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpBodyForce("U", get_body_force()));
   //! [Pushing gravity load operator]
 
   MoFEMFunctionReturn(0);
@@ -330,9 +338,16 @@ MoFEMErrorCode Example::checkResults() {
           "U", matStrainPtr, matStressPtr, matDPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", matStressPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
-      "U", bodyForceMatPtr, [](double, double, double) { return -1.; }));
 
+  auto get_minus_body_force = []() {
+    auto t_b = get_body_force();
+    FTensor::Index<'i', SPACE_DIM> i;
+    t_b(i) *= -1;
+    return t_b;
+  };
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpBodyForce("U", get_minus_body_force()));
+      
   auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
 

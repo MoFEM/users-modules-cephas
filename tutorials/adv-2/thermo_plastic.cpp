@@ -118,7 +118,7 @@ using OpHDivTemp = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpMixDivTimesU<3, 1, 2>;
 
 /**
- * @brief Integrate Rhs base of temerature time heat capacity times heat rate
+ * @brief Integrate Rhs base of temperature time heat capacity times heat rate
  * (T)
  *
  */
@@ -126,15 +126,19 @@ using OpBaseDotT = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesScalar<1>;
 
 /**
- * @brief Integrate Rhs base of temerature times divergenc of flux (T)
+ * @brief Integrate Rhs base of temperature times divergence of flux (T)
  *
  */
 using OpBaseDivFlux = OpBaseDotT;
 
 using OpHeatSource = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, 1>;
-using OpTemperatureBC = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpNormalMixVecTimesScalar<SPACE_DIM>;
+
+using OpForce = NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpFlux<BLOCKSET, 1, SPACE_DIM>;
+
+using OpTemperatureBC = NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpFlux<BLOCKSET, SPACE_DIM, SPACE_DIM>;
 
 double scale = 1.;
 
@@ -611,21 +615,18 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      const std::string block_name = "BODY_FORCE";
-      if (it->getName().compare(0, block_name.size(), block_name) == 0) {
-        std::vector<double> attr;
-        CHKERR it->getAttributes(attr);
-        if (attr.size() == 3) {
-          bodyForces.push_back(
-              FTensor::Tensor1<double, 3>{attr[0], attr[1], attr[2]});
-        } else {
-          SETERRQ1(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
-                   "Should be three atributes in BODYFORCE blockset, but is %d",
-                   attr.size());
-        }
+    auto add_forces = [&]() {
+      MoFEMFunctionBegin;
+      auto force_blocks_ptr =
+          mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
+              std::regex("FORCE(.*)"));
+      for (auto m : force_blocks_ptr) {
+        pipeline.push_back(new OpForce(mField, m->getMeshsetId(), "U"));
       }
-    }
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR add_forces();
 
     auto get_body_force = [this](const double, const double, const double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -846,26 +847,20 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpHOSetCovariantPiolaTransformOnFace3D(HDIV));
     }
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      const std::string block_name = "TEMPERATURE";
-      if (it->getName().compare(0, block_name.size(), block_name) == 0) {
-        Range temp_edges;
-        std::vector<double> attr_vec;
-        CHKERR it->getMeshsetIdEntitiesByDimension(
-            mField.get_moab(), SPACE_DIM - 1, temp_edges, true);
-        it->getAttributes(attr_vec);
-        if (attr_vec.size() != 1)
-          SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
-                  "Should be one attribute");
-        MOFEM_LOG("EXAMPLE", Sev::inform)
-            << "Set temerature " << attr_vec[0] << " on ents:\n"
-            << temp_edges;
-        bcTemperatureFunctions.push_back(BcTempFun(attr_vec[0], fe));
+    auto add_temperature = [&]() {
+      MoFEMFunctionBegin;
+      auto force_blocks_ptr =
+          mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
+              std::regex("TEMPERATURE(.*)"));
+      for (auto m : force_blocks_ptr) {
         pipeline.push_back(
-            new OpTemperatureBC("FLUX", bcTemperatureFunctions.back(),
-                                boost::make_shared<Range>(temp_edges)));
+            new OpTemperatureBC(mField, m->getMeshsetId(), "FLUX"));
       }
-    }
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR add_temperature();
+
     MoFEMFunctionReturn(0);
   };
 

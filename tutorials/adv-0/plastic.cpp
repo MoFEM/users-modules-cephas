@@ -44,10 +44,6 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
 
-//! [Body force]
-using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpSource<1, SPACE_DIM>;
-//! [Body force]
 
 //! [Only used with Hooke equation (linear material model)]
 using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
@@ -79,6 +75,15 @@ using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Essential boundary conditions]
 using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
+
+
+//! [Body force]
+using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpSource<1, SPACE_DIM>;
+//! [Body force]
+
+using OpForce = NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpFlux<BLOCKSET, 1, SPACE_DIM>;
 
 PetscBool is_large_strains = PETSC_TRUE;
 
@@ -608,25 +613,18 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, 5, "FORCE") == 0) {
-        Range force_edges;
-        std::vector<double> attr_vec;
-        CHKERR it->getMeshsetIdEntitiesByDimension(
-            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
-        it->getAttributes(attr_vec);
-        if (attr_vec.size() < SPACE_DIM)
-          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                  "Wrong size of boundary attributes vector. Set right block "
-                  "size attributes.");
-        auto force_vec_ptr = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
-        std::copy(&attr_vec[0], &attr_vec[SPACE_DIM],
-                  force_vec_ptr->data().begin());
-        pipeline.push_back(
-            new OpBoundaryVec("U", force_vec_ptr, get_time_scaled,
-                              boost::make_shared<Range>(force_edges)));
+    auto add_forces = [&]() {
+      MoFEMFunctionBegin;
+      auto force_blocks_ptr =
+          mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
+              std::regex("FORCE(.*)"));
+      for (auto m : force_blocks_ptr) {
+        pipeline.push_back(new OpForce(mField, m->getMeshsetId(), "U"));
       }
-    }
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR add_forces();
 
     pipeline.push_back(new OpUnSetBc("U"));
 
