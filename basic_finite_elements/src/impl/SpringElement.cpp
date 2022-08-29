@@ -425,16 +425,31 @@ MetaSpringBC::SpringALEMaterialVolOnSideLhs::aSsemble(EntData &row_data,
   const int *col_indices = &*col_data.getIndices().data().begin();
 
   auto &data = *dataAtSpringPts;
-  
-  rowIndices.resize(row_nb_dofs, false);
-  noalias(rowIndices) = row_data.getIndices();
-  row_indices = &rowIndices[0];
-  VectorDofs &dofs = row_data.getFieldDofs();
-  VectorDofs::iterator dit = dofs.begin();
-  for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
-    if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
-        data.forcesOnlyOnEntitiesRow.end()) {
-      rowIndices[ii] = -1;
+  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+    rowIndices.resize(row_nb_dofs, false);
+    noalias(rowIndices) = row_data.getIndices();
+    row_indices = &rowIndices[0];
+    VectorDofs &dofs = row_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesRow.end()) {
+        rowIndices[ii] = -1;
+      }
+    }
+  }
+
+  if (!data.forcesOnlyOnEntitiesCol.empty()) {
+    colIndices.resize(col_nb_dofs, false);
+    noalias(colIndices) = col_data.getIndices();
+    col_indices = &colIndices[0];
+    VectorDofs &dofs = col_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
+      if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesCol.end()) {
+        colIndices[ii] = -1;
+      }
     }
   }
 
@@ -551,16 +566,31 @@ MetaSpringBC::OpSpringALEMaterialLhs::aSsemble(EntData &row_data,
   const int *col_indices = &*col_data.getIndices().data().begin();
 
   auto &data = *dataAtSpringPts;
+  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+    rowIndices.resize(row_nb_dofs, false);
+    noalias(rowIndices) = row_data.getIndices();
+    row_indices = &rowIndices[0];
+    VectorDofs &dofs = row_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesRow.end()) {
+        rowIndices[ii] = -1;
+      }
+    }
+  }
 
-  rowIndices.resize(row_nb_dofs, false);
-  noalias(rowIndices) = row_data.getIndices();
-  row_indices = &rowIndices[0];
-  VectorDofs &dofs = row_data.getFieldDofs();
-  VectorDofs::iterator dit = dofs.begin();
-  for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
-    if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
-        data.forcesOnlyOnEntitiesRow.end()) {
-      rowIndices[ii] = -1;
+  if (!data.forcesOnlyOnEntitiesCol.empty()) {
+    colIndices.resize(col_nb_dofs, false);
+    noalias(colIndices) = col_data.getIndices();
+    col_indices = &colIndices[0];
+    VectorDofs &dofs = col_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
+      if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesCol.end()) {
+        colIndices[ii] = -1;
+      }
     }
   }
 
@@ -1013,16 +1043,17 @@ MoFEMErrorCode MetaSpringBC::OpSpringFsMaterial::aSsemble(EntData &row_data) {
   const int *row_indices = &*row_data.getIndices().data().begin();
 
   auto &data = *dataAtPts;
-
-  rowIndices.resize(nbRows, false);
-  noalias(rowIndices) = row_data.getIndices();
-  row_indices = &rowIndices[0];
-  VectorDofs &dofs = row_data.getFieldDofs();
-  VectorDofs::iterator dit = dofs.begin();
-  for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
-    if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
-        data.forcesOnlyOnEntitiesRow.end()) {
-      rowIndices[ii] = -1;
+  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+    rowIndices.resize(nbRows, false);
+    noalias(rowIndices) = row_data.getIndices();
+    row_indices = &rowIndices[0];
+    VectorDofs &dofs = row_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesRow.end()) {
+        rowIndices[ii] = -1;
+      }
     }
   }
 

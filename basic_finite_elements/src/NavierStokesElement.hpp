@@ -24,11 +24,6 @@ using namespace boost::numeric;
 */
 struct NavierStokesElement {
 
-  using PostProcVol =
-      PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore>;
-  using PostProcFace =
-      PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
-
   using UserDataOperator =
       MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator;
   using FaceUserDataOperator =
@@ -238,7 +233,7 @@ struct NavierStokesElement {
    * @return                          Error code
    */
   static MoFEMErrorCode setPostProcDragOperators(
-      boost::shared_ptr<PostProcFace> postProcDragPtr,
+      boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcDragPtr,
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideDragFe,
       std::string side_fe_name, const std::string velocity_field,
       const std::string pressure_field,

@@ -22,8 +22,12 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
+  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
-  using FaceSideEle = FaceElementForcesAndSourcesCoreOnSide;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using PostProcEle = PostProcFaceOnRefinedMesh;
+
+  using FaceSideEle = MoFEM::FaceElementForcesAndSourcesCoreOnSide;
   using FaceSideOp = FaceSideEle::UserDataOperator;
 };
 
@@ -31,8 +35,7 @@ using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
-
-using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
 using FaceSideEle = ElementsAndOps<SPACE_DIM>::FaceSideEle;
 using FaceSideOp = ElementsAndOps<SPACE_DIM>::FaceSideOp;
@@ -344,26 +347,8 @@ MoFEMErrorCode Plate::outputResults() {
   pipeline_mng->getBoundaryLhsFE().reset();
 
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-
-  auto u_ptr = boost::make_shared<VectorDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldValues("U", u_ptr));
-
-  using OpPPMap = OpPostProcMapInMoab<2, 2>;
-
-  post_proc_fe->getOpPtrVector().push_back(
-
-      new OpPPMap(post_proc_fe->getPostProcMesh(),
-                  post_proc_fe->getMapGaussPts(),
-
-                  {{"U", u_ptr}},
-
-                  {}, {}, {}
-
-                  )
-
-  );
-
+  post_proc_fe->generateReferenceElementMesh();
+  post_proc_fe->addFieldValuesPostProc("U");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_result.h5m");

@@ -22,12 +22,18 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
+  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
 template <> struct ElementsAndOps<3> {
-  using DomainEle = PipelineManager::VolEle;
-  using BoundaryEle = PipelineManager::FaceEle;
+  using DomainEle = VolumeElementForcesAndSourcesCore;
+  using DomainEleOp = DomainEle::UserDataOperator;
+  using BoundaryEle = FaceElementForcesAndSourcesCore;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
 constexpr int SPACE_DIM =
@@ -36,10 +42,10 @@ constexpr int SPACE_DIM =
 constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = DomainEle::UserDataOperator;
+using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
-using BoundaryEleOp = BoundaryEle::UserDataOperator;
-using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
+using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
@@ -106,6 +112,7 @@ inline long double hardening_dtau(long double tau, double temp) {
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
+#include <OpPostProcElastic.hpp>
 
 using namespace PlasticOps;
 using namespace HenckyOps;
@@ -798,9 +805,7 @@ MoFEMErrorCode Example::tsSolve() {
   auto create_post_process_element = [&]() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcEle>(mField);
-    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
-
-    auto u_ptr = boost::make_shared<MatrixDouble>();
+    postProcFe->generateReferenceElementMesh();
 
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -811,9 +816,6 @@ MoFEMErrorCode Example::tsSolve() {
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     postProcFe->getOpPtrVector().push_back(
         new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -841,25 +843,9 @@ MoFEMErrorCode Example::tsSolve() {
               "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr, scale));
       postProcFe->getOpPtrVector().push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
-
-      postProcFe->getOpPtrVector().push_back(
-
-          new OpPPMap(
-
-              postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
-
-              {},
-
-              {{"U", u_ptr}},
-
-              {{"GRAD", commonPlasticDataPtr->mGradPtr},
-               {"FIRST_PIOLA", commonHenckyDataPtr->getMatFirstPiolaStress()}},
-
-              {}
-
-              )
-
-      );
+      postProcFe->getOpPtrVector().push_back(new OpPostProcHencky<SPACE_DIM>(
+          "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+          commonHenckyDataPtr));
 
     } else {
       postProcFe->getOpPtrVector().push_back(
@@ -867,49 +853,19 @@ MoFEMErrorCode Example::tsSolve() {
                                             commonPlasticDataPtr->mStrainPtr));
       postProcFe->getOpPtrVector().push_back(new OpPlasticStress(
           "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
-
       postProcFe->getOpPtrVector().push_back(
-
-          new OpPPMap(
-
-              postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
-
-              {},
-
-              {{"U", u_ptr}},
-
-              {},
-
-              {{"STRAIN", commonPlasticDataPtr->mStrainPtr},
-               {"STRESS", commonPlasticDataPtr->mStressPtr}}
-
-              )
-
-      );
+          new Tutorial::OpPostProcElastic<SPACE_DIM>(
+              "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+              commonPlasticDataPtr->mStrainPtr,
+              commonPlasticDataPtr->mStressPtr));
     }
 
     postProcFe->getOpPtrVector().push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
-
     postProcFe->getOpPtrVector().push_back(
-
-        new OpPPMap(
-
-            postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
-
-            {{"PLASTIC_SURFACE", commonPlasticDataPtr->getPlasticSurfacePtr()},
-             {"PLASTIC_MULTIPLIER", commonPlasticDataPtr->getPlasticTauPtr()}},
-
-            {},
-
-            {},
-
-            {{"PLASTIC_STRAIN", commonPlasticDataPtr->getPlasticStrainPtr()}}
-
-            )
-
-    );
-
+        new OpPostProcPlastic("U", postProcFe->postProcMesh,
+                              postProcFe->mapGaussPts, commonPlasticDataPtr));
+    postProcFe->addFieldValuesPostProc("U");
     MoFEMFunctionReturn(0);
   };
 

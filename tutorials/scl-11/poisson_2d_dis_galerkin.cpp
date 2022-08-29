@@ -11,9 +11,13 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
+  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using FaceSideEle = FaceElementForcesAndSourcesCoreOnSide;
+  using PostProcEle = PostProcFaceOnRefinedMesh;
+
+  using FaceSideEle = MoFEM::FaceElementForcesAndSourcesCoreOnSide;
+  using FaceSideOp = FaceSideEle::UserDataOperator;
 };
 
 constexpr int BASE_DIM = 1;
@@ -22,14 +26,12 @@ constexpr int SPACE_DIM = 2;
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = DomainEle::UserDataOperator;
-
+using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
 using FaceSideEle = ElementsAndOps<SPACE_DIM>::FaceSideEle;
-using FaceSideOp = FaceSideEle::UserDataOperator;
-
-using PostProcEle =  PostProcBrokenMeshInMoab<DomainEle>;
+using FaceSideOp = ElementsAndOps<SPACE_DIM>::FaceSideOp;
+using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
 static double penalty = 1e6;
 static double phi =
@@ -491,29 +493,8 @@ MoFEMErrorCode Poisson2DiscontGalerkin::outputResults() {
   pipeline_mng->getBoundaryLhsFE().reset();
 
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-
-  auto u_ptr = boost::make_shared<VectorDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldValues(domainField, u_ptr));
-
-  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
-
-  post_proc_fe->getOpPtrVector().push_back(
-
-      new OpPPMap(
-
-          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(), 
-          
-          {{"U", u_ptr}},
-
-          {},
-
-          {},
-
-          {})
-
-  );     
-
+  post_proc_fe->generateReferenceElementMesh();
+  post_proc_fe->addFieldValuesPostProc(domainField);
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_result.h5m");

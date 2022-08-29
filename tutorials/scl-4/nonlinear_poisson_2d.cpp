@@ -69,10 +69,8 @@ private:
   boost::shared_ptr<VectorDouble> fieldValuePtr;
   boost::shared_ptr<MatrixDouble> fieldGradPtr;
 
-  using PostProcEle = PostProcBrokenMeshInMoab<FaceEle>;
-
   // Object needed for postprocessing
-  boost::shared_ptr<PostProcEle> postProc;
+  boost::shared_ptr<FaceEle> postProc;
 
   // Boundary entities marked for fieldsplit (block) solver - optional
   Range boundaryEntitiesForFieldsplit;
@@ -357,31 +355,18 @@ MoFEMErrorCode NonlinearPoisson::solveSystem() {
 MoFEMErrorCode NonlinearPoisson::outputResults() {
   MoFEMFunctionBegin;
 
-  postProc = boost::make_shared<PostProcEle>(mField);
+  postProc = boost::shared_ptr<FaceEle>(new PostProcFaceOnRefinedMesh(mField));
 
-  auto u_ptr = boost::make_shared<VectorDouble>();
-  postProc->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldValues(domainField, u_ptr));
+  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
+      ->generateReferenceElementMesh();
+  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
+      ->addFieldValuesPostProc(domainField);
 
-  using OpPPMap = OpPostProcMapInMoab<2, 2>;
+  CHKERR DMoFEMLoopFiniteElements(dM, simpleInterface->getDomainFEName(),
+                                  postProc);
 
-  postProc->getOpPtrVector().push_back(
-
-      new OpPPMap(postProc->getPostProcMesh(), postProc->getMapGaussPts(),
-
-                  {{"U", u_ptr}},
-
-                  {}, {}, {}
-
-                  )
-
-  );
-
-  CHKERR DMoFEMLoopFiniteElements(
-      dM, simpleInterface->getDomainFEName(),
-      boost::dynamic_pointer_cast<FEMethod>(postProc));
-
-  CHKERR postProc->writeFile("out_result.h5m");
+  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
+      ->writeFile("out_result.h5m");
 
   MoFEMFunctionReturn(0);
 }

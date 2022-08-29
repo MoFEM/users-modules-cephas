@@ -15,15 +15,13 @@ using Ele = FaceElementForcesAndSourcesCore;
 using OpEle = FaceElementForcesAndSourcesCore::UserDataOperator;
 using EntData = EntitiesFieldData::EntData;
 
-using PostProcEle = PostProcBrokenMeshInMoab<Ele>;
-
 const double D = 2e-3; ///< diffusivity
 const double r = 1;    ///< rate factor
 const double k = 1;    ///< caring capacity
 
 const double u0 = 0.1; ///< inital vale on blocksets
 
-const int save_every_nth_step = 1;
+const int save_every_nth_step = 4;
 
 /**
  * @brief Common data
@@ -268,7 +266,8 @@ private:
  */
 struct Monitor : public FEMethod {
 
-  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<PostProcEle> &post_proc)
+  Monitor(SmartPetscObj<DM> &dm,
+          boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc)
       : dM(dm), postProc(post_proc){};
 
   MoFEMErrorCode preProcess() { return 0; }
@@ -286,7 +285,7 @@ struct Monitor : public FEMethod {
 
 private:
   SmartPetscObj<DM> dM;
-  boost::shared_ptr<PostProcEle> postProc;
+  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProc;
 };
 
 }; // namespace ReactionDiffusionEquation
@@ -377,6 +376,7 @@ int main(int argc, char *argv[]) {
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    vol_ele_stiff_rhs->getOpPtrVector().push_back(new OpSetHOWeights(det_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValuesDot("u", dot_val_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
@@ -391,6 +391,7 @@ int main(int argc, char *argv[]) {
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
+    vol_ele_stiff_lhs->getOpPtrVector().push_back(new OpSetHOWeights(det_ptr));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpAssembleStiffLhs<2>(data));
 
@@ -401,32 +402,14 @@ int main(int argc, char *argv[]) {
     vol_ele_stiff_lhs->getRuleHook = vol_rule;
 
     // Crate element for post-processing
-
-    auto post_proc = boost::make_shared<PostProcEle>(m_field);
+    boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc =
+        boost::shared_ptr<PostProcFaceOnRefinedMesh>(
+            new PostProcFaceOnRefinedMesh(m_field));
     boost::shared_ptr<ForcesAndSourcesCore> null;
-
-    using OpPPMap = OpPostProcMapInMoab<2, 2>;
-
-    auto u_ptr = boost::make_shared<VectorDouble>();
-    post_proc->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldValues("u", u_ptr));
-    post_proc->getOpPtrVector().push_back(
-
-        new OpPPMap(
-
-            post_proc->getPostProcMesh(), post_proc->getMapGaussPts(),
-
-            {{"u", u_ptr}},
-
-            {},
-
-            {},
-
-            {}
-
-            )
-
-    );
+    // Genarte post-processing mesh
+    post_proc->generateReferenceElementMesh();
+    // Postprocess only field values
+    post_proc->addFieldValuesPostProc("u");
 
     // Get PETSc discrete manager
     auto dm = simple_interface->getDM();

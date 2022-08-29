@@ -255,7 +255,7 @@ int main(int argc, char *argv[]) {
         boundary_rhs_fe; ///< Volume element to assemble vector
     boost::shared_ptr<ForcesAndSourcesCore>
         domain_error; ///< Volume element evaluate error
-    boost::shared_ptr<PoissonExample::PostProcFE>
+    boost::shared_ptr<ForcesAndSourcesCore>
         post_proc_volume; ///< Volume element to Post-process results
     boost::shared_ptr<ForcesAndSourcesCore> null; ///< Null element do nothing
     boost::shared_ptr<ForcesAndSourcesCore> boundary_penalty_lhs_fe;
@@ -507,7 +507,9 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName(),
                                       post_proc_volume);
       // Write results
-      post_proc_volume->writeFile("out_vol.h5m");
+      CHKERR boost::static_pointer_cast<PostProcVolumeOnRefinedMesh>(
+          post_proc_volume)
+          ->writeFile("out_vol.h5m");
     }
 
     // Destroy DM, no longer needed.

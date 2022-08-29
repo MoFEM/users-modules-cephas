@@ -702,7 +702,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
     CHKERR T::postProcMesh.delete_mesh();
 
-    auto alloc_vertices_and_elements_on_post_proc_mesh = [&]() {
+    auto alloc_vertives_and_elements_on_post_proc_mesh = [&]() {
       MoFEMFunctionBegin;
 
       auto fe_ptr = this->problemPtr->numeredFiniteElementsPtr;
@@ -788,7 +788,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
       MoFEMFunctionReturn(0);
     };
 
-    CHKERR alloc_vertices_and_elements_on_post_proc_mesh();
+    CHKERR alloc_vertives_and_elements_on_post_proc_mesh();
 
     MoFEMFunctionReturnHot(0);
   }

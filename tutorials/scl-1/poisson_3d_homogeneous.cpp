@@ -5,8 +5,7 @@
 using namespace MoFEM;
 using namespace Poisson3DHomogeneousOperators;
 
-using PostProcVolEle =
-    PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore>;
+using PostProcVolEle = PostProcVolumeOnRefinedMesh;
 
 static char help[] = "...\n\n";
 
@@ -154,29 +153,8 @@ MoFEMErrorCode Poisson3DHomogeneous::outputResults() {
   pipeline_mng->getDomainLhsFE().reset();
 
   auto post_proc_fe = boost::make_shared<PostProcVolEle>(mField);
-
-  auto u_ptr = boost::make_shared<VectorDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldValues(domainField, u_ptr));
-
-  using OpPPMap = OpPostProcMapInMoab<3, 3>;
-
-  post_proc_fe->getOpPtrVector().push_back(
-
-      new OpPPMap(
-
-          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
-
-          {{domainField, u_ptr}},
-
-          {},
-
-          {},
-
-          {})
-
-  );
-
+  post_proc_fe->generateReferenceElementMesh();
+  post_proc_fe->addFieldValuesPostProc(domainField);
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_result.h5m");

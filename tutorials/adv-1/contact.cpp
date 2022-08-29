@@ -22,6 +22,7 @@ template <int DIM> struct ElementsAndOps {};
 template <> struct ElementsAndOps<2> {
   static constexpr FieldSpace CONTACT_SPACE = HCURL;
   using DomainEle = PipelineManager::FaceEle;
+  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
@@ -34,6 +35,7 @@ template <> struct ElementsAndOps<3> {
   using DomainEle = VolumeElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = FaceElementForcesAndSourcesCore;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcVolumeOnRefinedMesh;
   using OpSetPiolaTransformOnBoundary =
       OpHOSetContravariantPiolaTransformOnFace3D;
@@ -48,10 +50,10 @@ constexpr int SPACE_DIM =
 constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = DomainEle::UserDataOperator;
+using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
-using BoundaryEleOp = BoundaryEle::UserDataOperator;
-using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
+using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
@@ -124,6 +126,7 @@ constexpr double rho = 0;
 constexpr double cn = 0.01;
 constexpr double spring_stiffness = 0.1;
 
+#include <OpPostProcElastic.hpp>
 #include <ContactOps.hpp>
 #include <HenckyOps.hpp>
 #include <PostProcContact.hpp>

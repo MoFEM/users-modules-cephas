@@ -5,10 +5,9 @@
  *
  */
 
-#include <BasicFiniteElements.hpp>
 
-using PostProcVol = PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore>;
-using PostProcFace = PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
+
+#include <BasicFiniteElements.hpp>
 
 using namespace boost::numeric;
 using namespace MoFEM;
@@ -76,8 +75,8 @@ private:
   boost::shared_ptr<DirichletDisplacementBc> dirichletBcPtr;
   boost::ptr_map<std::string, NeumannForcesSurface> neumannForces;
 
-  boost::shared_ptr<PostProcVol> fePostProcPtr;
-  boost::shared_ptr<PostProcFace> fePostProcDragPtr;
+  boost::shared_ptr<PostProcVolumeOnRefinedMesh> fePostProcPtr;
+  boost::shared_ptr<PostProcFaceOnRefinedMesh> fePostProcDragPtr;
 
   MoFEMErrorCode readInput();
   MoFEMErrorCode findBlocks();
@@ -411,10 +410,8 @@ MoFEMErrorCode NavierStokesExample::setupElementInstances() {
 
   feLhsPtr->getRuleHook = NavierStokesElement::VolRule();
   feRhsPtr->getRuleHook = NavierStokesElement::VolRule();
-  CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *feLhsPtr, true, false, false,
-                     true);
-  CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *feRhsPtr, true, false, false,
-                     true);
+  CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *feLhsPtr, true, false, false, true);
+  CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *feRhsPtr, true, false, false, true);
 
   feDragPtr = boost::shared_ptr<FaceElementForcesAndSourcesCore>(
       new FaceElementForcesAndSourcesCore(mField));
@@ -423,7 +420,7 @@ MoFEMErrorCode NavierStokesExample::setupElementInstances() {
 
   feDragPtr->getRuleHook = NavierStokesElement::FaceRule();
   CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *feDragSidePtr, true, false, false,
-                     true);
+                  true);
 
   if (isStokesFlow) {
     CHKERR NavierStokesElement::setStokesOperators(
@@ -448,66 +445,18 @@ MoFEMErrorCode NavierStokesExample::setupElementInstances() {
                                                      NULL, "VELOCITY");
 
   // for postprocessing:
-  fePostProcPtr = boost::make_shared<PostProcVol>(mField);
+  fePostProcPtr = boost::make_shared<PostProcVolumeOnRefinedMesh>(mField);
+  CHKERR fePostProcPtr->generateReferenceElementMesh();
   CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *fePostProcPtr, true, false, false,
-                     true);
+                  true);
+  CHKERR fePostProcPtr->addFieldValuesPostProc("VELOCITY");
+  CHKERR fePostProcPtr->addFieldValuesPostProc("PRESSURE");
+  CHKERR fePostProcPtr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
+  CHKERR fePostProcPtr->addFieldValuesGradientPostProc("VELOCITY");
 
-  auto v_ptr = boost::make_shared<MatrixDouble>();
-  auto grad_ptr = boost::make_shared<MatrixDouble>();
-  auto pos_ptr = boost::make_shared<MatrixDouble>();
-  auto p_ptr = boost::make_shared<VectorDouble>();
-
-  fePostProcPtr->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<3>("VELOCITY", v_ptr));
-  fePostProcPtr->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<3, 3>("VELOCITY", grad_ptr));
-  fePostProcPtr->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldValues("PRESSURE", p_ptr));
-  fePostProcPtr->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<3>("MESH_NODE_POSITIONS", pos_ptr));
-
-  using OpPPMap = OpPostProcMapInMoab<3, 3>;
-
-  fePostProcPtr->getOpPtrVector().push_back(
-
-      new OpPPMap(
-
-          fePostProcPtr->getPostProcMesh(), fePostProcPtr->getMapGaussPts(),
-
-          {{"PRESSURE", p_ptr}},
-
-          {{"VELOCITY", v_ptr}, {"MESH_NODE_POSITIONS", pos_ptr}},
-
-          {{"VELOCITY_GRAD", grad_ptr}},
-
-          {}
-
-          )
-
-  );
-
-  fePostProcDragPtr = boost::make_shared<PostProcFace>(mField);
-  fePostProcDragPtr->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<3>("MESH_NODE_POSITIONS", pos_ptr));
-  fePostProcDragPtr->getOpPtrVector().push_back(
-
-      new OpPPMap(
-
-          fePostProcDragPtr->getPostProcMesh(),
-          fePostProcDragPtr->getMapGaussPts(),
-
-          {},
-
-          {{"MESH_NODE_POSITIONS", pos_ptr}},
-
-          {},
-
-          {}
-
-          )
-
-  );
-
+  fePostProcDragPtr = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+  CHKERR fePostProcDragPtr->generateReferenceElementMesh();
+  CHKERR fePostProcDragPtr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
   CHKERR NavierStokesElement::setPostProcDragOperators(
       fePostProcDragPtr, feDragSidePtr, "NAVIER_STOKES", "VELOCITY", "PRESSURE",
       commonData);
@@ -658,7 +607,8 @@ MoFEMErrorCode NavierStokesExample::postProcess() {
     out_file_name = stm.str();
     CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
                        out_file_name.c_str());
-    CHKERR fePostProcPtr->writeFile(out_file_name.c_str());
+    CHKERR fePostProcPtr->postProcMesh.write_file(out_file_name.c_str(), "MOAB",
+                                                  "PARALLEL=WRITE_PART");
   }
 
   CHKERR VecZeroEntries(commonData->pressureDragForceVec);
@@ -707,7 +657,8 @@ MoFEMErrorCode NavierStokesExample::postProcess() {
     out_file_name = stm.str();
     CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
                        out_file_name.c_str());
-    CHKERR fePostProcDragPtr->writeFile(out_file_name);
+    CHKERR fePostProcDragPtr->postProcMesh.write_file(
+        out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
   }
   MoFEMFunctionReturn(0);
 }
@@ -719,6 +670,8 @@ int main(int argc, char *argv[]) {
   const char param_file[] = "param_file.petsc";
   // Initialise MoFEM
   MoFEM::Core::Initialize(&argc, &argv, param_file, help);
+
+
 
   try {
 
