@@ -5,7 +5,8 @@
 using namespace MoFEM;
 using namespace Poisson2DNonhomogeneousOperators;
 
-using PostProcFaceEle = PostProcFaceOnRefinedMesh;
+using PostProcFaceEle =
+    PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
 
 static char help[] = "...\n\n";
 
@@ -256,11 +257,21 @@ MoFEMErrorCode Poisson2DNonhomogeneous::outputResults() {
   pipeline_mng->getDomainLhsFE().reset();
   pipeline_mng->getBoundaryLhsFE().reset();
 
+  auto d_ptr = boost::make_shared<VectorDouble>();
+  auto l_ptr = boost::make_shared<VectorDouble>();
+
+  using OpPPMap = OpPostProcMapInMoab<2, 2>;
+
   auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc(domainField);
+
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues(domainField, d_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpPPMap(post_proc_fe->getPostProcMesh(),
+                  post_proc_fe->getMapGaussPts(), {{domainField, d_ptr}},
+                  {}, {}, {}));
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
-  pipeline_mng->getBoundaryRhsFE() = post_proc_fe;
+
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_result.h5m");
 

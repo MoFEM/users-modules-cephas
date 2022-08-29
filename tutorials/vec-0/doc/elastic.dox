@@ -224,7 +224,6 @@ pipeline_mng->getDomainLhsFE().reset();
 In the next two lines we create a postprocessig element (object) and use its function to generate a reference mesh.
 \code
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
 \endcode 
 
 Next, a series of operators is pushed:
@@ -301,6 +300,4 @@ Note that the beams, both for 2D and 3D cases experience spurious deformation at
 The full source code of the main program can be accessed below:
 elastic.cpp
 
-The implementation of the postprocessing operator can be found in:
-OpPostProcElastic.hpp
 */

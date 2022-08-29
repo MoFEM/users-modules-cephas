@@ -34,7 +34,7 @@ using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = PipelineManager::EdgeEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
-using PostProcEle = PostProcFaceOnRefinedMesh;
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
@@ -276,18 +276,37 @@ MoFEMErrorCode WaveEquation::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto create_post_process_element = [&]() {
-    auto post_froc_fe = boost::make_shared<PostProcEle>(mField);
-    post_froc_fe->generateReferenceElementMesh();
+    auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    post_froc_fe->getOpPtrVector().push_back(new OpCalculateHOJac<2>(jac_ptr));
-    post_froc_fe->getOpPtrVector().push_back(
+    post_proc_fe->getOpPtrVector().push_back(new OpCalculateHOJac<2>(jac_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    post_froc_fe->getOpPtrVector().push_back(
+    post_proc_fe->getOpPtrVector().push_back(
         new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
-    post_froc_fe->addFieldValuesPostProc("U");
-    return post_froc_fe;
+
+    auto u_ptr = boost::make_shared<VectorDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("U", u_ptr));
+
+    using OpPPMap = OpPostProcMapInMoab<2, 2>;
+
+    post_proc_fe->getOpPtrVector().push_back(
+
+        new OpPPMap(post_proc_fe->getPostProcMesh(),
+                    post_proc_fe->getMapGaussPts(),
+
+                    {{"U", u_ptr}},
+
+                    {}, {}, {}
+
+                    )
+
+    );
+
+    return post_proc_fe;
   };
 
   auto set_time_monitor = [&](auto dm, auto solver) {
