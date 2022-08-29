@@ -76,14 +76,14 @@ using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
 //! [Essential boundary conditions]
 using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 
+using DomainNaturalBC =
+    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpBodyForce = DomainNaturalBC::OpFlux<BLOCKSET, 1, SPACE_DIM>;
 
-//! [Body force]
-using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpSource<1, SPACE_DIM>;
-//! [Body force]
+using BoundaryNaturalBC =
+    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpForce = BoundaryNaturalBC::OpFlux<BLOCKSET, 1, SPACE_DIM>;
 
-using OpForce = NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpFlux<BLOCKSET, 1, SPACE_DIM>;
 
 PetscBool is_large_strains = PETSC_TRUE;
 
@@ -481,38 +481,14 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      const std::string block_name = "BODY_FORCE";
-      if (it->getName().compare(0, block_name.size(), block_name) == 0) {
-        std::vector<double> attr;
-        CHKERR it->getAttributes(attr);
-        if (attr.size() == 3) {
-          bodyForces.push_back(
-              FTensor::Tensor1<double, 3>{attr[0], attr[1], attr[2]});
-        } else {
-          SETERRQ1(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
-                   "Should be three atributes in BODYFORCE blockset, but is %d",
-                   attr.size());
-        }
-      }
-    }
+    CHKERR DomainNaturalBC::addFluxToPipeline(FluxOpType<OpBodyForce>(),
+                                              pipeline, mField, "U",
+                                              "BODY_FORCE", Sev::inform);
+    CHKERR DomainNaturalBC::addScalingMethod(
+        FluxOpType<OpBodyForce>(), pipeline, boost::make_shared<TimeScale>(),
+        Sev::inform);
 
-    auto get_body_force = [this](const double, const double, const double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      FTensor::Index<'i', SPACE_DIM> i;
-      FTensor::Tensor1<double, SPACE_DIM> t_source;
-      t_source(i) = 0;
-      auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-      const auto time = fe_domain_rhs->ts_t;
-      // hardcoded gravity load
-      for (auto &t_b : bodyForces)
-        t_source(i) += (scale * t_b(i)) * time;
-      return t_source;
-    };
-
-    pipeline.push_back(new OpBodyForce("U", get_body_force));
-
-    // Calculate internal forece
+    // Calculate internal forces
     if (is_large_strains) {
       pipeline.push_back(new OpInternalForcePiola(
           "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
@@ -587,18 +563,6 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_ops_rhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    auto get_time = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return fe_domain_rhs->ts_t;
-    };
-
-    auto get_time_scaled = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return fe_domain_rhs->ts_t * scale;
-    };
-
     auto get_minus_time = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
@@ -613,18 +577,11 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    auto add_forces = [&]() {
-      MoFEMFunctionBegin;
-      auto force_blocks_ptr =
-          mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
-              std::regex("FORCE(.*)"));
-      for (auto m : force_blocks_ptr) {
-        pipeline.push_back(new OpForce(mField, m->getMeshsetId(), "U"));
-      }
-      MoFEMFunctionReturn(0);
-    };
-
-    CHKERR add_forces();
+    CHKERR BoundaryNaturalBC::addFluxToPipeline(
+        FluxOpType<OpForce>(), pipeline, mField, "U", "FORCE", Sev::inform);
+    CHKERR BoundaryNaturalBC::addScalingMethod(FluxOpType<OpForce>(), pipeline,
+                                               boost::make_shared<TimeScale>(),
+                                               Sev::inform);
 
     pipeline.push_back(new OpUnSetBc("U"));
 

@@ -38,11 +38,13 @@ using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
-using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpSource<1, SPACE_DIM>;
+using DomainNaturalBC =
+    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpBodyForce = DomainNaturalBC::OpFlux<UNKNOWNSET, 1, SPACE_DIM>;
 
-using OpForce = NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpFlux<BLOCKSET, 1, SPACE_DIM>;
+using BoundaryNaturalBC =
+    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpForce = BoundaryNaturalBC::OpFlux<BLOCKSET, 1, SPACE_DIM>;
 
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.3;
@@ -179,36 +181,29 @@ MoFEMErrorCode Example::boundaryCondition() {
     return fe_domain_rhs->ts_t;
   };
 
-  auto add_forces = [&]() {
-    MoFEMFunctionBegin;
-    auto force_blocks_ptr =
-        mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
-            std::regex("FORCE(.*)"));
-    for (auto m : force_blocks_ptr) {
-      pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-          new OpForce(mField, m->getMeshsetId(), "U"));
-    }
-    MoFEMFunctionReturn(0);
-  };
-
-  CHKERR add_forces();
+  CHKERR BoundaryNaturalBC::addFluxToPipeline(
+      FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
+      "U", "FORCE", Sev::inform);
+  CHKERR BoundaryNaturalBC::addScalingMethod(
+      FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(),
+      boost::make_shared<TimeScale>(), Sev::inform);
 
   //! [Define gravity vector]
-  auto get_body_force = [this](const double, const double, const double) {
-    auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto get_body_force = []() {
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Tensor1<double, SPACE_DIM> t_source;
-    auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-    const auto time = fe_domain_rhs->ts_t;
     // hardcoded gravity load in y direction
     t_source(i) = 0;
-    t_source(1) = 1 * time;
+    t_source(1) = 1;
     return t_source;
   };
   //! [Define gravity vector]
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", get_body_force));
+      new OpBodyForce("U", get_body_force()));
+  CHKERR DomainNaturalBC::addScalingMethod(
+      FluxOpType<OpBodyForce>(), pipeline_mng->getOpDomainRhsPipeline(),
+      boost::make_shared<TimeScale>(), Sev::inform);
 
   MoFEMFunctionReturn(0);
 }

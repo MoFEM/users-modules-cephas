@@ -44,11 +44,6 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
 
-//! [Body force]
-using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpSource<1, SPACE_DIM>;
-//! [Body force]
-
 //! [Only used with Hooke equation (linear material model)]
 using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
@@ -131,14 +126,16 @@ using OpBaseDotT = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
  */
 using OpBaseDivFlux = OpBaseDotT;
 
-using OpHeatSource = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpSource<1, 1>;
+using DomainNaturalBC =
+    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpBodyForce = DomainNaturalBC::OpFlux<BLOCKSET, 1, SPACE_DIM>;
+using OpHeatSource = DomainNaturalBC::OpFlux<BLOCKSET, 1, 1>;
 
-using OpForce = NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpFlux<BLOCKSET, 1, SPACE_DIM>;
-
-using OpTemperatureBC = NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpFlux<BLOCKSET, SPACE_DIM, SPACE_DIM>;
+using BoundaryNaturalBC =
+    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpForce = BoundaryNaturalBC::OpFlux<BLOCKSET, 1, SPACE_DIM>;
+using OpTemperatureBC =
+    BoundaryNaturalBC::OpFlux<BLOCKSET, SPACE_DIM, SPACE_DIM>;
 
 double scale = 1.;
 
@@ -221,8 +218,6 @@ private:
 
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<std::vector<unsigned char>> reactionMarker;
-
-  std::vector<FTensor::Tensor1<double, 3>> bodyForces;
 
   struct BcTempFun {
     BcTempFun(double v, FEMethod &fe) : valTemp(v), fE(fe) {}
@@ -615,35 +610,14 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    auto add_forces = [&]() {
-      MoFEMFunctionBegin;
-      auto force_blocks_ptr =
-          mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
-              std::regex("FORCE(.*)"));
-      for (auto m : force_blocks_ptr) {
-        pipeline.push_back(new OpForce(mField, m->getMeshsetId(), "U"));
-      }
-      MoFEMFunctionReturn(0);
-    };
+    CHKERR DomainNaturalBC::addFluxToPipeline(FluxOpType<OpBodyForce>(),
+                                              pipeline, mField, "U",
+                                              "BODY_FORCE", Sev::inform);
+    CHKERR DomainNaturalBC::addScalingMethod(
+        FluxOpType<OpBodyForce>(), pipeline, boost::make_shared<TimeScale>(),
+        Sev::inform);
 
-    CHKERR add_forces();
-
-    auto get_body_force = [this](const double, const double, const double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      FTensor::Index<'i', SPACE_DIM> i;
-      FTensor::Tensor1<double, SPACE_DIM> t_source;
-      t_source(i) = 0;
-      auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-      const auto time = fe_domain_rhs->ts_t;
-      // hardcoded gravity load
-      for (auto &t_b : bodyForces)
-        t_source(i) += (scale * t_b(i)) * time;
-      return t_source;
-    };
-
-    pipeline.push_back(new OpBodyForce("U", get_body_force));
-
-    // Calculate internal forece
+    // Calculate internal forces
     pipeline.push_back(
         new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
 
@@ -712,18 +686,6 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_ops_rhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    auto get_time = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return fe_domain_rhs->ts_t;
-    };
-
-    auto get_time_scaled = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return fe_domain_rhs->ts_t * scale;
-    };
-
     auto get_minus_time = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
@@ -744,25 +706,11 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, 5, "FORCE") == 0) {
-        Range force_edges;
-        std::vector<double> attr_vec;
-        CHKERR it->getMeshsetIdEntitiesByDimension(
-            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
-        it->getAttributes(attr_vec);
-        if (attr_vec.size() < SPACE_DIM)
-          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                  "Wrong size of boundary attributes vector. Set right block "
-                  "size attributes.");
-        auto force_vec_ptr = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
-        std::copy(&attr_vec[0], &attr_vec[SPACE_DIM],
-                  force_vec_ptr->data().begin());
-        pipeline.push_back(
-            new OpBoundaryVec("U", force_vec_ptr, get_time_scaled,
-                              boost::make_shared<Range>(force_edges)));
-      }
-    }
+    CHKERR BoundaryNaturalBC::addFluxToPipeline(FluxOpType<OpForce>(), pipeline,
+                                                mField, "FLUX", "FORCE");
+    CHKERR BoundaryNaturalBC::addScalingMethod(FluxOpType<OpForce>(), pipeline,
+                                               boost::make_shared<TimeScale>(),
+                                               Sev::inform);
 
     pipeline.push_back(new OpUnSetBc("U"));
 
@@ -828,13 +776,16 @@ MoFEMErrorCode Example::OPs() {
         new OpHDivTemp("FLUX", commonPlasticDataPtr->getTempValPtr(), unity));
     pipeline.push_back(new OpBaseDivFlux(
         "T", commonPlasticDataPtr->getTempDivFluxPtr(), unity));
-    // auto source = [&](const double x, const double y, const double z) {
-    //   return 1;
-    // };
-    // pipeline.push_back(new OpHeatSource("T", source));
-
     pipeline.push_back(new OpBaseDotT(
         "T", commonPlasticDataPtr->getTempValDotPtr(), capacity));
+
+    CHKERR DomainNaturalBC::addFluxToPipeline(FluxOpType<OpHeatSource>(),
+                                              pipeline, mField, "U",
+                                              "HEAT_SOURCE", Sev::inform);
+    CHKERR DomainNaturalBC::addScalingMethod(
+        FluxOpType<OpHeatSource>(), pipeline, boost::make_shared<TimeScale>(),
+        Sev::inform);
+
     MoFEMFunctionReturn(0);
   };
 
@@ -847,19 +798,11 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpHOSetCovariantPiolaTransformOnFace3D(HDIV));
     }
 
-    auto add_temperature = [&]() {
-      MoFEMFunctionBegin;
-      auto force_blocks_ptr =
-          mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
-              std::regex("TEMPERATURE(.*)"));
-      for (auto m : force_blocks_ptr) {
-        pipeline.push_back(
-            new OpTemperatureBC(mField, m->getMeshsetId(), "FLUX"));
-      }
-      MoFEMFunctionReturn(0);
-    };
-
-    CHKERR add_temperature();
+    CHKERR BoundaryNaturalBC::addFluxToPipeline(
+        FluxOpType<OpTemperatureBC>(), pipeline, mField, "FLUX", "TEMPERATURE");
+    CHKERR BoundaryNaturalBC::addScalingMethod(
+        FluxOpType<OpTemperatureBC>(), pipeline,
+        boost::make_shared<TimeScale>(), Sev::inform);
 
     MoFEMFunctionReturn(0);
   };
