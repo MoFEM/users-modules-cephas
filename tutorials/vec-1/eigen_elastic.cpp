@@ -16,14 +16,10 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = FaceElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
 template <> struct ElementsAndOps<3> {
   using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
 constexpr int SPACE_DIM =
@@ -31,8 +27,8 @@ constexpr int SPACE_DIM =
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
-using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+using DomainEleOp = DomainEle::UserDataOperator;
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
@@ -47,9 +43,6 @@ double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
 int order = 1;
-
-#include <OpPostProcElastic.hpp>
-using namespace Tutorial;
 
 struct Example {
 
@@ -402,7 +395,6 @@ MoFEMErrorCode Example::outputResults() {
 
   pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
 
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -429,12 +421,12 @@ MoFEMErrorCode Example::outputResults() {
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", strain_ptr, stress_ptr, matDPtr));
 
-  using OpPPMap = OpPostProcMap<SPACE_DIM, SPACE_DIM>;
+  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
   post_proc_fe->getOpPtrVector().push_back(
 
       new OpPPMap(
-          post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
           OpPPMap::DataMapVec{},
 

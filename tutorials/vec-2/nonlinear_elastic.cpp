@@ -15,28 +15,23 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
-  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
 template <> struct ElementsAndOps<3> {
   using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = FaceElementForcesAndSourcesCore;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
 constexpr int SPACE_DIM = 3; //< Space dimension of problem, mesh
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
-using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
-using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+using DomainEleOp = DomainEle::UserDataOperator;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
+
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
@@ -330,9 +325,9 @@ MoFEMErrorCode Example::solveSystem() {
   auto dm = simple->getDM();
   auto ts = pipeline_mng->createTSIM();
 
+
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
 
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -358,11 +353,30 @@ MoFEMErrorCode Example::solveSystem() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
-  post_proc_fe->getOpPtrVector().push_back(new OpPostProcHencky<SPACE_DIM>(
-      "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
-      commonHenckyDataPtr));
+  auto u_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
-  post_proc_fe->addFieldValuesPostProc("U");
+  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(
+
+          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+          {},
+
+          {{"U", u_ptr}},
+
+          {{"GRAD", commonHenckyDataPtr->matGradPtr},
+           {"FIRST_PIOLA", commonHenckyDataPtr->getMatFirstPiolaStress()}},
+
+          {}
+
+          )
+
+  );
 
   // Add monitor to time solver
   boost::shared_ptr<FEMethod> null_fe;

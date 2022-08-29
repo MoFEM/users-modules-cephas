@@ -182,7 +182,7 @@ MoFEMErrorCode NavierStokesElement::setCalcDragOperators(
 };
 
 MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
-    boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcDragPtr,
+    boost::shared_ptr<PostProcFace> postProcDragPtr,
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideDragFe,
     std::string side_fe_name, const std::string velocity_field,
     const std::string pressure_field,
@@ -216,8 +216,8 @@ MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
             velocity_field, sideDragFe, side_fe_name, common_data, sit.second));
     postProcDragPtr->getOpPtrVector().push_back(
         new NavierStokesElement::OpPostProcDrag(
-            velocity_field, postProcDragPtr->postProcMesh,
-            postProcDragPtr->mapGaussPts, common_data, sit.second));
+            velocity_field, postProcDragPtr->getPostProcMesh(),
+            postProcDragPtr->getMapGaussPts(), common_data, sit.second));
   }
   MoFEMFunctionReturn(0);
 };

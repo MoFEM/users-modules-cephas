@@ -97,6 +97,8 @@ include_directories(${MoFEM_INSTALL_DIR}/include/multi_indices)
 include_directories(${MoFEM_INSTALL_DIR}/include/interfaces)
 include_directories(${MoFEM_INSTALL_DIR}/include/petsc)
 include_directories(${MoFEM_INSTALL_DIR}/include/finite_elements)
+include_directories(${MoFEM_INSTALL_DIR}/include/post_proc)
+include_directories(${MoFEM_INSTALL_DIR}/include/boundary_conditions)
 include_directories(${MoFEM_INSTALL_DIR}/third_party)
 include_directories(${MoFEM_INSTALL_DIR}/third_party/cblas)
 

@@ -205,7 +205,7 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs(
         new VolumeElementForcesAndSourcesCore(m_field));
 
-    PostProcVolumeOnRefinedMesh post_proc(m_field);
+    PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore> post_proc(m_field);
 
     // loop over blocks
     for (auto &sit : commonData.setOfBlocksData) {
@@ -217,14 +217,34 @@ int main(int argc, char *argv[]) {
       feLhs->getOpPtrVector().push_back(
           new OpAssembleG(commonData, sit.second));
 
+      auto u_ptr = boost::make_shared<MatrixDouble>();
+
+      post_proc.getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>("U", u_ptr));
       post_proc.getOpPtrVector().push_back(
           new OpCalculateScalarFieldValues("P", commonData.pPtr));
       post_proc.getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>("U",
                                                    commonData.gradDispPtr));
+
+      using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
       post_proc.getOpPtrVector().push_back(
-          new OpPostProcStress(post_proc.postProcMesh, post_proc.mapGaussPts,
-                               commonData, sit.second));
+
+          new OpPPMap(
+
+              post_proc.getPostProcMesh(), post_proc.getMapGaussPts(),
+              {{"P", commonData.pPtr}},
+
+              {{"U", u_ptr}},
+
+              {},
+
+              {}));
+
+      post_proc.getOpPtrVector().push_back(new OpPostProcStress(
+          post_proc.getPostProcMesh(), post_proc.getMapGaussPts(), commonData,
+          sit.second));
     }
 
     Mat Aij;      // Stiffness matrix
@@ -310,14 +330,9 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMMeshToGlobalVector(dm, d, INSERT_VALUES, SCATTER_REVERSE);
 
     // Save data on mesh
-    CHKERR post_proc.generateReferenceElementMesh();
-    CHKERR post_proc.addFieldValuesPostProc("U");
-    CHKERR post_proc.addFieldValuesPostProc("P");
-
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
     PetscPrintf(PETSC_COMM_WORLD, "Output file: %s\n", "out.h5m");
-    CHKERR post_proc.postProcMesh.write_file("out.h5m", "MOAB",
-                                             "PARALLEL=WRITE_PART");
+    CHKERR post_proc.writeFile("out.h5m");
 
     CHKERR MatDestroy(&Aij);
     CHKERR VecDestroy(&d);

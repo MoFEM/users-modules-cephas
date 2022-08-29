@@ -19,7 +19,6 @@ template <int DIM> struct ElementsAndOps {};
 template <> struct ElementsAndOps<2> {
   using DomainEle = FaceElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
 constexpr int FE_DIM = 2;
@@ -27,7 +26,7 @@ constexpr int FE_DIM = 2;
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<FE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<FE_DIM>::DomainEleOp;
-using PostProcEle = ElementsAndOps<FE_DIM>::PostProcEle;
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
@@ -524,7 +523,6 @@ MoFEMErrorCode Example::boundaryCondition() {
       auto dm = simple->getDM();
 
       auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-      post_proc_fe->generateReferenceElementMesh();
 
       auto det_ptr = boost::make_shared<VectorDouble>();
       auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -538,9 +536,34 @@ MoFEMErrorCode Example::boundaryCondition() {
           new OpCalculateHOJacForFaceEmbeddedIn3DSpace(jac_ptr));
       post_proc_fe->getOpPtrVector().push_back(
           new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
-      post_proc_fe->addFieldValuesPostProc("U");
-      post_proc_fe->addFieldValuesPostProc("H");
-      post_proc_fe->addFieldValuesPostProc("HO_POSITIONS");
+
+      auto u_ptr = boost::make_shared<MatrixDouble>();
+      auto h_ptr = boost::make_shared<VectorDouble>();
+      auto pos_ptr = boost::make_shared<MatrixDouble>();
+
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>("U", u_ptr));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldValues("H", h_ptr));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>("HO_POSITIONS", pos_ptr));
+
+      using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+      post_proc_fe->getOpPtrVector().push_back(
+
+          new OpPPMap(post_proc_fe->getPostProcMesh(),
+                      post_proc_fe->getMapGaussPts(),
+
+                      {{"H", h_ptr}},
+
+                      {{"U", u_ptr}, {"HO_POSITIONS", pos_ptr}},
+
+                      {}, {}
+
+                      )
+
+      );
 
       CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
       CHKERR post_proc_fe->writeFile("out_init.h5m");
@@ -767,7 +790,6 @@ MoFEMErrorCode Example::solveSystem() {
   // Setup postprocessing
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-    post_proc_fe->generateReferenceElementMesh();
 
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -783,11 +805,43 @@ MoFEMErrorCode Example::solveSystem() {
         new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(inv_jac_ptr));
-    post_proc_fe->addFieldValuesPostProc("U");
-    post_proc_fe->addFieldValuesPostProc("H");
-    post_proc_fe->addFieldValuesGradientPostProc("U");
-    post_proc_fe->addFieldValuesGradientPostProc("H");
-    post_proc_fe->addFieldValuesPostProc("HO_POSITIONS");
+
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    auto h_ptr = boost::make_shared<VectorDouble>();
+    auto pos_ptr = boost::make_shared<MatrixDouble>();
+
+    auto grad_u_ptr = boost::make_shared<MatrixDouble>();
+    auto grad_h_ptr = boost::make_shared<MatrixDouble>();
+
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>("U", u_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("H", h_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>("HO_POSITIONS", pos_ptr));
+
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>("U", grad_u_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldGradient<3>("H", grad_h_ptr));
+
+    using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+    post_proc_fe->getOpPtrVector().push_back(
+
+        new OpPPMap(
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+            {{"H", h_ptr}},
+
+            {{"U", u_ptr}, {"HO_POSITIONS", pos_ptr}, {"GRAD_H", grad_h_ptr}},
+
+            {{"GRAD_U", grad_u_ptr}}, {}
+
+            )
+
+    );
+
     return post_proc_fe;
   };
 
