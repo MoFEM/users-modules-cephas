@@ -292,6 +292,8 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
         t_G(i, j) = t_g(i, k) * t_invH(k, j);
         t_a_res(i) = t_a(i) - t_a0(i) + t_G(i, j) * t_dotW(j);
 
+        //FIXME: there is error somewhere for nonlinear case
+        // test dam example with -is_linear 0
         if (!lInear) {
 
           t_F(i,j) = t_h(i,k)*t_invH(k,j);
@@ -358,6 +360,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
         }
         double val = getVolume() * getGaussPts()(3, gg);
         res *= val;
+        // cout << "my res " << res << endl;
       } else {
         commonData.jacMassRowPtr[gg].resize(3);
         commonData.jacMass[gg].resize(3, nb_active_vars);

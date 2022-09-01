@@ -142,7 +142,7 @@ users_modules/basic_finite_elements/nonlinear_elasticity/examples/dam in build d
 \code
 mpirun -np 4 ../../nonlinear_dynamics \
 -my_file dam.h5m \
--ts_dt 0.2 \
+-ts_dt 0.002 \
 -ts_alpha_radius 0.5 \
 -ts_max_time 8 -ts_max_snes_failures -1 \
 -my_time_data_file dam_history.in \

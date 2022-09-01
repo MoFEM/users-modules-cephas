@@ -338,7 +338,7 @@ struct ElasticMaterials {
       set_of_blocks[id].materialAdoublePtr =
           aDoubleMaterialModel.at(defMaterial);
 
-      PetscPrintf(mField.get_comm(),
+      MOFEM_LOG_C("WORLD", Sev::verbose,
                   "Block Id %d Young Modulus %3.2g Poisson Ration %3.2f "
                   "Material model %s Nb. of elements %d\n",
                   id, set_of_blocks[id].E, set_of_blocks[id].PoissonRatio,

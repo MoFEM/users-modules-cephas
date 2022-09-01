@@ -75,7 +75,6 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   inline auto getTempValPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &tempVal);
   }
-
 };
 //! [Common data]
 
@@ -205,6 +204,21 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
+struct OpCalculatePlasticFlowLhs_dEP_ALE : public AssemblyDomainEleOp {
+  OpCalculatePlasticFlowLhs_dEP_ALE(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr,
+      boost::shared_ptr<MatrixDouble> velocity_ptr);
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
+
+protected:
+  boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
+  boost::shared_ptr<MatrixDouble> velocityPtr;
+};
+
 struct OpCalculatePlasticFlowLhs_dTAU : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowLhs_dTAU(const std::string row_field_name,
                                  const std::string col_field_name,
@@ -214,6 +228,20 @@ struct OpCalculatePlasticFlowLhs_dTAU : public AssemblyDomainEleOp {
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+struct OpCalculatePlasticFlowLhs_dTAU_ALE
+    : public OpCalculatePlasticFlowLhs_dEP_ALE {
+  using OpCalculatePlasticFlowLhs_dEP_ALE::OpCalculatePlasticFlowLhs_dEP_ALE;
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
+};
+
+struct OpCalculateConstrainsLhs_dTAU_ALE
+    : public OpCalculatePlasticFlowLhs_dEP_ALE {
+  using OpCalculatePlasticFlowLhs_dEP_ALE::OpCalculatePlasticFlowLhs_dEP_ALE;
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data);
 };
 
 struct OpCalculateContrainsLhs_dU : public AssemblyDomainEleOp {
