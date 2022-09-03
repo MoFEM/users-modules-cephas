@@ -446,9 +446,11 @@ MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
+
+  using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+
   auto post_proc_fe =
-      boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
-  post_proc_fe->generateReferenceElementMesh();
+      boost::make_shared<PostProcEle>(mField);
 
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -464,8 +466,32 @@ MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
   post_proc_fe->getOpPtrVector().push_back(
       new OpSetInvJacHcurlFace(inv_jac_ptr));
 
-  post_proc_fe->addFieldValuesPostProc("FLUX");
-  post_proc_fe->addFieldValuesPostProc("U");
+  auto u_ptr = boost::make_shared<VectorDouble>();
+  auto flux_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues("U", u_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateHVecVectorField<3>("FLUX", flux_ptr));
+
+  using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(post_proc_fe->getPostProcMesh(),
+                  post_proc_fe->getMapGaussPts(),
+
+                  OpPPMap::DataMapVec{{"U", u_ptr}},
+
+                  OpPPMap::DataMapMat{{"FLUX", flux_ptr}},
+
+                  OpPPMap::DataMapMat{},
+
+                  OpPPMap::DataMapMat{}
+
+                  )
+
+  );
+
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
 

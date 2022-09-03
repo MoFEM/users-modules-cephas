@@ -681,9 +681,30 @@ PostProcVolumeOnRefinedMesh has to be created based on MoAB database
 Thereafter, information of the problem solution is passed to the post processor as  
 \code
     // Add operators to the elements, strating with some generic
-    CHKERR post_proc.generateReferenceElementMesh();
-    CHKERR post_proc.addFieldValuesPostProc("U");
-    CHKERR post_proc.addFieldValuesGradientPostProc("U");
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    auto grad_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_ele->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+    post_proc_ele->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
+                                                                   grad_ptr));
+    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+    post_proc_ele->getOpPtrVector().push_back(
+
+          new OpPPMap(
+
+              post_proc_ele->getPostProcMesh(), post_proc_ele->getMapGaussPts(),
+              {},
+
+              {{"U", u_ptr}},
+
+              {{"GRAD", grad_ptr}},
+
+              {})
+
+    );
+
     CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName().c_str(), &post_proc);
 \endcode
 where initially a reference mesh is created is created, then field values are

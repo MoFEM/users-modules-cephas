@@ -429,15 +429,51 @@ struct MixTransportElement {
    */
   MoFEMErrorCode postProc(const string out_file) {
     MoFEMFunctionBegin;
-    PostProcVolumeOnRefinedMesh post_proc(mField);
-    CHKERR post_proc.generateReferenceElementMesh();
-    CHKERR post_proc.addFieldValuesPostProc("VALUES");
-    CHKERR post_proc.addFieldValuesGradientPostProc("VALUES");
-    CHKERR post_proc.addFieldValuesPostProc("FLUXES");
-    // CHKERR post_proc.addHdivFunctionsPostProc("FLUXES");
+
+    PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore> post_proc(
+        mField);
+
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    post_proc.getOpPtrVector().push_back(new OpCalculateHOJac<3>(jac_ptr));
     post_proc.getOpPtrVector().push_back(
-        new OpPostProc(post_proc.postProcMesh, post_proc.mapGaussPts));
+        new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+    post_proc.getOpPtrVector().push_back(
+        new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
+    post_proc.getOpPtrVector().push_back(
+        new OpSetHOInvJacToScalarBases<3>(L2, inv_jac_ptr));
+
+    auto values_ptr = boost::make_shared<VectorDouble>();
+    auto grad_ptr = boost::make_shared<MatrixDouble>();
+    auto flux_ptr = boost::make_shared<MatrixDouble>();
+
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("VALUES", values_ptr));
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateScalarFieldGradient<3>("VALUES", grad_ptr));
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateHVecVectorField<3>("FLUXES", flux_ptr));
+
+    using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+    post_proc.getOpPtrVector().push_back(
+
+        new OpPPMap(post_proc.getPostProcMesh(), post_proc.getMapGaussPts(),
+
+                    {{"VALUES", values_ptr}},
+
+                    {{"GRAD", grad_ptr}, {"FLUXES", flux_ptr}},
+
+                    {}, {}
+
+                    ));
+
+    post_proc.getOpPtrVector().push_back(new OpPostProc(
+        post_proc.getPostProcMesh(), post_proc.getMapGaussPts()));
+
     CHKERR mField.loop_finite_elements("MIX", "MIX", post_proc);
+
     CHKERR post_proc.writeFile(out_file.c_str());
     MoFEMFunctionReturn(0);
   }

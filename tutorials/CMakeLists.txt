@@ -44,6 +44,7 @@ function(tutorials_build_and_install target source)
     mofem_approx
     mofem_third_party
     mofem_matrix_function
+    mofem_post_proc
     ${MoFEM_PROJECT_LIBS})
   install(TARGETS ${target} DESTINATION ${TUTORIALS_INSTALL_DIR}/${TUTORIALS_MOD_DIR})
 endfunction(tutorials_build_and_install)
@@ -94,7 +95,6 @@ set(TUTORIALS_DIRS
   adv-0
   adv-1
   adv-2
-  adv-3
   cor-0to1
   cor-2to5
   cor-6

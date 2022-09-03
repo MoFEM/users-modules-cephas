@@ -180,6 +180,10 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
   MoFEMErrorCode updateElementVariables() { return 0; };
   MoFEMErrorCode postProcessElement(int step) {
     MoFEMFunctionBegin;
+    
+    if (elasticElementPtr->setOfBlocks.empty())
+      MoFEMFunctionReturnHot(0);
+
     if (!postProcMeshPtr) {
       postProcMeshPtr = boost::make_shared<PostProcVolumeOnRefinedMesh>(mField);
 

@@ -8,7 +8,7 @@ using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = PipelineManager::EdgeEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
-using PostProcEle = PostProcFaceOnRefinedMesh;
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
@@ -425,8 +425,25 @@ MoFEMErrorCode MinimalSurfaceEqn::outputResults() {
   MoFEMFunctionBegin;
 
   auto post_proc = boost::make_shared<PostProcEle>(mField);
-  CHKERR post_proc->generateReferenceElementMesh();
-  CHKERR post_proc->addFieldValuesPostProc("U");
+
+  auto u_ptr = boost::make_shared<VectorDouble>();
+  post_proc->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues("U", u_ptr));
+
+  using OpPPMap = OpPostProcMapInMoab<2, 2>;
+
+  post_proc->getOpPtrVector().push_back(
+
+      new OpPPMap(post_proc->getPostProcMesh(),
+                  post_proc->getMapGaussPts(),
+
+                  {{"U", u_ptr}},
+
+                  {}, {}, {}
+
+                  )
+
+  );
 
   auto *simple = mField.getInterface<Simple>();
   auto dm = simple->getDM();

@@ -2,7 +2,7 @@
  * \file plot_base.cpp
  * \example plot_base.cpp
  *
- * Utility for plotting base functions for different spaces, polynomial bases 
+ * Utility for plotting base functions for different spaces, polynomial bases
  */
 
 #include <MoFEM.hpp>
@@ -17,14 +17,10 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = FaceElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
 template <> struct ElementsAndOps<3> {
   using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
 constexpr int SPACE_DIM =
@@ -32,14 +28,17 @@ constexpr int SPACE_DIM =
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
-using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+using DomainEleOp = DomainEle::UserDataOperator;
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 struct MyPostProc : public PostProcEle {
   using PostProcEle::PostProcEle;
 
   MoFEMErrorCode generateReferenceElementMesh();
   MoFEMErrorCode setGaussPts(int order);
+
+  MoFEMErrorCode preProcess();
+  MoFEMErrorCode postProcess();
 
 protected:
   ublas::matrix<int> refEleMap;
@@ -140,7 +139,6 @@ MoFEMErrorCode Example::readMesh() {
     CHKERR mField.getInterface(simpleInterface);
     CHKERR simpleInterface->getOptions();
     CHKERR simpleInterface->loadFile();
-
   }
 
   MoFEMFunctionReturn(0);
@@ -245,11 +243,70 @@ MoFEMErrorCode Example::outputResults() {
     }
   }
 
-  post_proc_fe->addFieldValuesPostProc("U");
+  switch (space) {
+  case H1:
+  case L2:
+
+  {
+
+    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+    auto u_ptr = boost::make_shared<VectorDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("U", u_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+
+        new OpPPMap(
+
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+            {{"U", u_ptr}},
+
+            {},
+
+            {},
+
+            {}
+
+            )
+
+    );
+  } break;
+  case HCURL:
+  case HDIV:
+
+  {
+    using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateHVecVectorField<3>("U", u_ptr));
+
+    post_proc_fe->getOpPtrVector().push_back(
+
+        new OpPPMap(
+
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+            {},
+
+            {{"U", u_ptr}},
+
+            {},
+
+            {}
+
+            )
+
+    );
+  } break;
+  default:
+    break;
+  }
 
   auto scale_tag_val = [&]() {
     MoFEMFunctionBegin;
-    auto &post_proc_mesh = post_proc_fe->postProcMesh;
+    auto &post_proc_mesh = post_proc_fe->getPostProcMesh();
     Range nodes;
     CHKERR post_proc_mesh.get_entities_by_type(0, MBVERTEX, nodes);
     Tag th;
@@ -283,7 +340,7 @@ MoFEMErrorCode Example::outputResults() {
     CHKERR scale_tag_val();
     CHKERR post_proc_fe->writeFile(
         "out_base_dof_" + boost::lexical_cast<std::string>(nb) + ".h5m");
-    CHKERR post_proc_fe->postProcMesh.delete_mesh();
+    CHKERR post_proc_fe->getPostProcMesh().delete_mesh();
     val = 0;
     ++nb;
   };
@@ -413,7 +470,7 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   const int num_nodes = gaussPts.size2();
 
-  // Calculate sheape functions
+  // Calculate shape functions
 
   switch (numeredEntFiniteElementPtr->getEntType()) {
   case MBTRI:
@@ -459,7 +516,6 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
             "Not implemented element type");
   }
 
-
   // Create physical nodes
 
   // MoAB interface allowing for creating nodes and elements in the bulk
@@ -468,7 +524,7 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   std::vector<double *> arrays; /// pointers to memory allocated by MoAB for
                                 /// storing X, Y, and Z coordinates
-  EntityHandle startv; // Starting handle for vertex
+  EntityHandle startv;          // Starting handle for vertex
   // Allocate memory for num_nodes, and return starting handle, and access to
   // memort.
   CHKERR iface->get_node_coords(3, num_nodes, 0, startv, arrays);
@@ -489,8 +545,8 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   const int num_nodes_on_ele = refEleMap.size2();
 
   EntityHandle starte; // Starting handle to first created element
-  EntityHandle *conn; // Access to MOAB memory with connectivity of elements 
-  
+  EntityHandle *conn;  // Access to MOAB memory with connectivity of elements
+
   // Create tris/tets in the bulk in MoAB database
   if (SPACE_DIM == 2)
     CHKERR iface->get_element_connect(num_el, num_nodes_on_ele, MBTRI, 0,
@@ -512,7 +568,7 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   // Finalise elements creation. At that point MOAB updates adjacency tables,
   // and elements are ready to use.
   CHKERR iface->update_adjacencies(starte, num_el, num_nodes_on_ele, conn);
-  
+
   auto physical_elements = Range(starte, starte + num_el - 1);
   CHKERR postProcMesh.tag_clear_data(th, physical_elements, &(nInTheLoop));
 
@@ -551,4 +607,40 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   }
 
   MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode MyPostProc::preProcess() {
+  MoFEMFunctionBegin;
+  moab::Interface &moab = coreMesh;
+  ParallelComm *pcomm_post_proc_mesh =
+      ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+  if (pcomm_post_proc_mesh != NULL)
+    delete pcomm_post_proc_mesh;
+  MoFEMFunctionReturn(0);
+};
+
+MoFEMErrorCode MyPostProc::postProcess() {
+  MoFEMFunctionBeginHot;
+
+  auto resolve_shared_ents = [&]() {
+    MoFEMFunctionBegin;
+
+    ParallelComm *pcomm_post_proc_mesh =
+        ParallelComm::get_pcomm(&(postProcMesh), MYPCOMM_INDEX);
+    if (pcomm_post_proc_mesh == NULL) {
+      // wrapRefMeshComm =
+      // boost::make_shared<WrapMPIComm>(T::mField.get_comm(), false);
+      pcomm_post_proc_mesh = new ParallelComm(
+          &(postProcMesh),
+          PETSC_COMM_WORLD /*(T::wrapRefMeshComm)->get_comm()*/);
+    }
+
+    CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
+
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR resolve_shared_ents();
+
+  MoFEMFunctionReturnHot(0);
 }

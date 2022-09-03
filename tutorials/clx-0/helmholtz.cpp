@@ -21,14 +21,18 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using EdgeEle = EdgeElementForcesAndSourcesCore;
 using EdgeEleOp = EdgeEle::UserDataOperator;
 
+constexpr int SPACE_DIM = 2;
+
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 2>;
+    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, SPACE_DIM>;
 using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
 using OpBoundaryMass = FormsIntegrators<EdgeEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
 using OpBoundarySource = FormsIntegrators<EdgeEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
+
+
 
 struct Example {
 
@@ -255,10 +259,35 @@ MoFEMErrorCode Example::outputResults() {
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getBoundaryLhsFE().reset();
   pipeline_mng->getBoundaryRhsFE().reset();
-  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc("P_REAL");
-  post_proc_fe->addFieldValuesPostProc("P_IMAG");
+
+  using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+
+  auto p_real_ptr = boost::make_shared<VectorDouble>();
+  auto p_imag_ptr = boost::make_shared<VectorDouble>();
+
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues("P_REAL", p_real_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues("P_IMAG", p_imag_ptr));
+
+  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(
+
+          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+          {{"P_REAL", p_real_ptr}, {"P_IMAG", p_imag_ptr}},
+
+          {}, {}, {}
+
+          )
+
+  );
+
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_helmholtz.h5m");
