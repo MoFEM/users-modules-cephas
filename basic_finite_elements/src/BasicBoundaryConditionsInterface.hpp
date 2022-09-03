@@ -454,6 +454,10 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
           MoFEMFunctionBeginHot;
           if (RHS) {
+            if (std::is_same_v<T, TS>)
+              dirichletBcPtr->methodsOp.push_back(
+                  new TimeForceScale(getHistoryParam("dirichlet"), false));
+            
             CHKERR DMoFEMPreProcessFiniteElements(dM, dirichletBcPtr.get());
 
             // auto push_fmethods = [&](auto method, string element_name) {
@@ -483,9 +487,6 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
             CHKERR set_neumann_methods(nodal_forces, "force");
             CHKERR set_neumann_methods(edge_forces, "force");
 
-            if (std::is_same_v<T, TS>)
-              dirichletBcPtr->methodsOp.push_back(
-                  new TimeForceScale(getHistoryParam("dirichlet"), false));
 
             CHKERR function(dM, domainElementName.c_str(), dirichletBcPtr.get(),
                             dirichletBcPtr.get(), dirichletBcPtr.get());
