@@ -22,10 +22,11 @@
 -ts_dt 1e2
 -ts_max_snes_failures -1
 -ts_error_if_step_fails false
--ts_adapt_type basic
+-ts_adapt_type none
 -ts_adapt_always_accept
 -ts_adapt_monitor
 -ts_rtol 5e-2
+-ts_type alpha
 
 
 -ts_monitor
