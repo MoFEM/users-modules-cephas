@@ -18,6 +18,8 @@ struct GenericElementInterface {
 
   // static BcMarkerPtr mBoundaryMarker;
   BcMarkerPtr mBoundaryMarker;
+  int atomTest;
+  int restartRunStep;
 
   // GenericElementInterface() = delete;
   GenericElementInterface() {}
