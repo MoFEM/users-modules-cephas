@@ -168,15 +168,9 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
-                                           "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
-                                           "U", 1, 1);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
-                                           "U", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
-                                           "U", 0, 3);
-
+  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+      simple->getProblemName(), "U");
+      
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -283,6 +277,16 @@ MoFEMErrorCode Example::assembleSystem() {
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+
+  auto get_bc_hook = [&]() {
+    EssentialPreProc<DisplacementCubitBcData> hook(
+        mField, pipeline_mng->getDomainRhsFE());
+    hook.getVecOfTimeScalingMethods().push_back(
+        boost::make_shared<TimeScale>());
+    return hook;
+  };
+
+  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook();
 
   MoFEMFunctionReturn(0);
 }

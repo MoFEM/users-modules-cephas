@@ -35,23 +35,22 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
-using OpBodyForce = NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpFlux<UNKNOWNSET, 1, SPACE_DIM>;
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 
-constexpr double young_modulus = 100;
+using DomainNaturalBC =
+    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpBodyForce =
+    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
+
+using BoundaryNaturalBC =
+    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
+
+constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
-
-auto get_body_force = []() {
-  FTensor::Tensor1<double, SPACE_DIM> t_body_force;
-  FTensor::Index<'i', SPACE_DIM> i;
-  t_body_force(i) = 0;
-  t_body_force(1) = -1;
-  return t_body_force;
-};
 
 struct Example {
 
@@ -71,9 +70,6 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  boost::shared_ptr<MatrixDouble> matGradPtr;
-  boost::shared_ptr<MatrixDouble> matStrainPtr;
-  boost::shared_ptr<MatrixDouble> matStressPtr;
   boost::shared_ptr<MatrixDouble> matDPtr;
   boost::shared_ptr<MatrixDouble> bodyForceMatPtr;
 };
@@ -114,9 +110,6 @@ MoFEMErrorCode Example::createCommonData() {
   //! [Define gravity vector]
 
   //! [Initialise containers for commonData]
-  matGradPtr = boost::make_shared<MatrixDouble>();
-  matStrainPtr = boost::make_shared<MatrixDouble>();
-  matStressPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
   bodyForceMatPtr = boost::make_shared<MatrixDouble>();
 
@@ -179,25 +172,50 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
-                                           "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
-                                           "U", 1, 1);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
-                                           "U", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
-                                           "U", 0, 3);
+
 
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, nullptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeights(det_ptr));
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", get_body_force()));
-  //! [Pushing gravity load operator]
+      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
+
+  CHKERR DomainNaturalBC::addFluxToPipeline(
+      FluxOpType<OpBodyForce>(), pipeline_mng->getOpDomainRhsPipeline(), mField,
+      "U", {}, "BODY_FORCE", Sev::inform);
+
+  auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
+  auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
+  auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
+
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
+                                                               mat_grad_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+          "U", mat_strain_ptr, mat_stress_ptr, matDPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInternalForce(
+      "U", mat_stress_ptr,
+      [](double, double, double) constexpr { return -1; }));
+
+  // Add force boundary condition
+  CHKERR BoundaryNaturalBC::addFluxToPipeline(
+      FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
+      "U", {}, "FORCE", Sev::inform);
+
+  // Essential boundary condition
+  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+      simple->getProblemName(), "U");
+  pipeline_mng->getDomainRhsFE()->preProcessHook =
+      EssentialPreProc<DisplacementCubitBcData>(mField,
+                                                pipeline_mng->getDomainRhsFE());
 
   MoFEMFunctionReturn(0);
 }
@@ -217,7 +235,7 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeights(det_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeightsOnFace());
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
 
   auto integration_rule = [](int, int, int approx_order) {
@@ -268,14 +286,18 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
+  auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
+  auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
+  auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
+
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                               matGradPtr));
+                                                               mat_grad_ptr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
+      new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", matStrainPtr, matStressPtr, matDPtr));
+          "U", mat_strain_ptr, mat_stress_ptr, matDPtr));
 
   auto u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(
@@ -295,12 +317,13 @@ MoFEMErrorCode Example::outputResults() {
 
           {},
 
-          {{"STRAIN", matStrainPtr}, {"STRESS", matStressPtr}}
+          {{"STRAIN", mat_strain_ptr}, {"STRESS", mat_stress_ptr}}
 
           )
 
   );
 
+  pipeline_mng->getBoundaryRhsFE().reset();
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_elastic.h5m");
@@ -326,37 +349,42 @@ MoFEMErrorCode Example::checkResults() {
       new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeights(det_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
+
+  auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
+  auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
+  auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                               matGradPtr));
+                                                               mat_grad_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
+      new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", matStrainPtr, matStressPtr, matDPtr));
+          "U", mat_strain_ptr, mat_stress_ptr, matDPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInternalForce("U", matStressPtr));
+      new OpInternalForce("U", mat_stress_ptr));
 
-  auto get_minus_body_force = []() {
-    auto t_b = get_body_force();
-    FTensor::Index<'i', SPACE_DIM> i;
-    t_b(i) *= -1;
-    return t_b;
-  };
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", get_minus_body_force()));
-      
+  // Add force boundary condition
+  CHKERR BoundaryNaturalBC::addFluxToPipeline(
+      FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
+      "U", {}, "FORCE", Sev::inform);
+
   auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
 
   auto dm = simple->getDM();
   auto res = smartCreateDMVector(dm);
   pipeline_mng->getDomainRhsFE()->ksp_f = res;
+  pipeline_mng->getBoundaryRhsFE()->ksp_f = res;
 
   CHKERR VecZeroEntries(res);
+
+  CHKERR mField.getInterface<FieldBlas>()->fieldScale(-1, "U");
   CHKERR pipeline_mng->loopFiniteElements();
+  CHKERR mField.getInterface<FieldBlas>()->fieldScale(-1, "U");
+
   CHKERR VecGhostUpdateBegin(res, ADD_VALUES, SCATTER_REVERSE);
   CHKERR VecGhostUpdateEnd(res, ADD_VALUES, SCATTER_REVERSE);
   CHKERR VecAssemblyBegin(res);
@@ -395,7 +423,7 @@ int main(int argc, char *argv[]) {
 
     //! [Create MoFEM]
     MoFEM::Core core(moab);           ///< finite element database
-    MoFEM::Interface &m_field = core; ///< finite element database insterface
+    MoFEM::Interface &m_field = core; ///< finite element database interface
     //! [Create MoFEM]
 
     //! [Example]

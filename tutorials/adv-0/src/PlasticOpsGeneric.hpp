@@ -533,8 +533,8 @@ OpCalculatePlasticFlowLhs_dEP_ALE::OpCalculatePlasticFlowLhs_dEP_ALE(
 }
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP_ALE::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
@@ -669,8 +669,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::iNtegrate(
 }
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU_ALE::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
@@ -891,8 +891,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::iNtegrate(
 }
 
 MoFEMErrorCode OpCalculateConstrainsLhs_dTAU_ALE::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   locMat.resize(AssemblyDomainEleOp::nbRows, AssemblyDomainEleOp::nbCols,

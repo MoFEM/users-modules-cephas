@@ -40,11 +40,12 @@ using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
 
 using DomainNaturalBC =
     NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
-using OpBodyForce = DomainNaturalBC::OpFlux<UNKNOWNSET, 1, SPACE_DIM>;
+using OpBodyForce =
+    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
 
 using BoundaryNaturalBC =
     NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
-using OpForce = BoundaryNaturalBC::OpFlux<BLOCKSET, 1, SPACE_DIM>;
+using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
 
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.3;
@@ -166,44 +167,28 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
-                                           "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
-                                           "U", 1, 1);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
-                                           "U", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
-                                           "U", 0, 3);
-
-  auto get_time = [&](double, double, double) {
-    auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-    return fe_domain_rhs->ts_t;
-  };
-
   CHKERR BoundaryNaturalBC::addFluxToPipeline(
       FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
-      "U", "FORCE", Sev::inform);
-  CHKERR BoundaryNaturalBC::addScalingMethod(
-      FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(),
-      boost::make_shared<TimeScale>(), Sev::inform);
+      "U", {boost::make_shared<TimeScale>()}, "FORCE", Sev::inform);
 
   //! [Define gravity vector]
-  auto get_body_force = []() {
-    FTensor::Index<'i', SPACE_DIM> i;
-    FTensor::Tensor1<double, SPACE_DIM> t_source;
-    // hardcoded gravity load in y direction
-    t_source(i) = 0;
-    t_source(1) = 1;
-    return t_source;
+  CHKERR DomainNaturalBC::addFluxToPipeline(
+      FluxOpType<OpBodyForce>(), pipeline_mng->getOpDomainRhsPipeline(), mField,
+      "U", {boost::make_shared<TimeScale>()}, "BODY_FORCE", Sev::inform);
+
+  // Essential BC
+  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+      simple->getProblemName(), "U");
+
+  auto get_bc_hook = [&]() {
+    EssentialPreProc<DisplacementCubitBcData> hook(
+        mField, pipeline_mng->getDomainRhsFE());
+    hook.getVecOfTimeScalingMethods().push_back(
+        boost::make_shared<TimeScale>());
+    return hook;
   };
-  //! [Define gravity vector]
 
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", get_body_force()));
-  CHKERR DomainNaturalBC::addScalingMethod(
-      FluxOpType<OpBodyForce>(), pipeline_mng->getOpDomainRhsPipeline(),
-      boost::make_shared<TimeScale>(), Sev::inform);
+  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook();
 
   MoFEMFunctionReturn(0);
 }
@@ -314,7 +299,6 @@ MoFEMErrorCode Example::solveSystem() {
   auto dm = simple->getDM();
   auto ts = pipeline_mng->createTSIM();
 
-
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
 
@@ -416,7 +400,7 @@ MoFEMErrorCode Example::outputResults() {
     constexpr double regression_value = 1.09572;
     if (fabs(nrm2 - regression_value) > 1e-2)
       SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-              "Regression test faileed; wrong norm value.");
+              "Regression test field; wrong norm value.");
   }
   MoFEMFunctionReturn(0);
 }
@@ -458,7 +442,7 @@ int main(int argc, char *argv[]) {
 
     //! [Create MoFEM]
     MoFEM::Core core(moab);           ///< finite element database
-    MoFEM::Interface &m_field = core; ///< finite element database insterface
+    MoFEM::Interface &m_field = core; ///< finite element database interface
     //! [Create MoFEM]
 
     //! [Example]

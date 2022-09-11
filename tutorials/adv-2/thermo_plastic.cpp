@@ -128,14 +128,17 @@ using OpBaseDivFlux = OpBaseDotT;
 
 using DomainNaturalBC =
     NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
-using OpBodyForce = DomainNaturalBC::OpFlux<BLOCKSET, 1, SPACE_DIM>;
-using OpHeatSource = DomainNaturalBC::OpFlux<BLOCKSET, 1, 1>;
+using OpBodyForce =
+    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
+using OpHeatSource =
+    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, 1>;
 
 using BoundaryNaturalBC =
     NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
-using OpForce = BoundaryNaturalBC::OpFlux<BLOCKSET, 1, SPACE_DIM>;
-using OpTemperatureBC =
-    BoundaryNaturalBC::OpFlux<BLOCKSET, SPACE_DIM, SPACE_DIM>;
+using OpForce =
+    BoundaryNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
+using OpTemperatureBC = BoundaryNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>,
+                                                  SPACE_DIM, SPACE_DIM>;
 
 double scale = 1.;
 
@@ -610,12 +613,9 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    CHKERR DomainNaturalBC::addFluxToPipeline(FluxOpType<OpBodyForce>(),
-                                              pipeline, mField, "U",
-                                              "BODY_FORCE", Sev::inform);
-    CHKERR DomainNaturalBC::addScalingMethod(
-        FluxOpType<OpBodyForce>(), pipeline, boost::make_shared<TimeScale>(),
-        Sev::inform);
+    CHKERR DomainNaturalBC::addFluxToPipeline(
+        FluxOpType<OpBodyForce>(), pipeline, mField, "U",
+        {boost::make_shared<TimeScale>()}, "BODY_FORCE", Sev::inform);
 
     // Calculate internal forces
     pipeline.push_back(
@@ -706,11 +706,9 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    CHKERR BoundaryNaturalBC::addFluxToPipeline(FluxOpType<OpForce>(), pipeline,
-                                                mField, "FLUX", "FORCE");
-    CHKERR BoundaryNaturalBC::addScalingMethod(FluxOpType<OpForce>(), pipeline,
-                                               boost::make_shared<TimeScale>(),
-                                               Sev::inform);
+    CHKERR BoundaryNaturalBC::addFluxToPipeline(
+        FluxOpType<OpForce>(), pipeline, mField, "FLUX",
+        {boost::make_shared<TimeScale>()}, "FORCE");
 
     pipeline.push_back(new OpUnSetBc("U"));
 
@@ -779,12 +777,9 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpBaseDotT(
         "T", commonPlasticDataPtr->getTempValDotPtr(), capacity));
 
-    CHKERR DomainNaturalBC::addFluxToPipeline(FluxOpType<OpHeatSource>(),
-                                              pipeline, mField, "U",
-                                              "HEAT_SOURCE", Sev::inform);
-    CHKERR DomainNaturalBC::addScalingMethod(
-        FluxOpType<OpHeatSource>(), pipeline, boost::make_shared<TimeScale>(),
-        Sev::inform);
+    CHKERR DomainNaturalBC::addFluxToPipeline(
+        FluxOpType<OpHeatSource>(), pipeline, mField, "U",
+        {boost::make_shared<TimeScale>()}, "HEAT_SOURCE", Sev::inform);
 
     MoFEMFunctionReturn(0);
   };
@@ -799,10 +794,8 @@ MoFEMErrorCode Example::OPs() {
     }
 
     CHKERR BoundaryNaturalBC::addFluxToPipeline(
-        FluxOpType<OpTemperatureBC>(), pipeline, mField, "FLUX", "TEMPERATURE");
-    CHKERR BoundaryNaturalBC::addScalingMethod(
-        FluxOpType<OpTemperatureBC>(), pipeline,
-        boost::make_shared<TimeScale>(), Sev::inform);
+        FluxOpType<OpTemperatureBC>(), pipeline, mField, "FLUX",
+        {boost::make_shared<TimeScale>()}, "TEMPERATURE");
 
     MoFEMFunctionReturn(0);
   };
