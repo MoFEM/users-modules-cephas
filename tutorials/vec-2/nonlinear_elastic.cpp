@@ -182,9 +182,8 @@ MoFEMErrorCode Example::boundaryCondition() {
 
   auto get_bc_hook = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainRhsFE());
-    hook.getVecOfTimeScalingMethods().push_back(
-        boost::make_shared<TimeScale>());
+        mField, pipeline_mng->getDomainRhsFE(),
+        {boost::make_shared<TimeScale>()});
     return hook;
   };
 

@@ -465,8 +465,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
 
   auto get_bc_hook = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainRhsFE());
-    hook.getVecOfTimeScalingMethods().push_back(time_scale);
+        mField, pipeline_mng->getDomainRhsFE(), {time_scale});
     return hook;
   };
 

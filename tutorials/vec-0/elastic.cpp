@@ -214,8 +214,8 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
   pipeline_mng->getDomainRhsFE()->preProcessHook =
-      EssentialPreProc<DisplacementCubitBcData>(mField,
-                                                pipeline_mng->getDomainRhsFE());
+      EssentialPreProc<DisplacementCubitBcData>(
+          mField, pipeline_mng->getDomainRhsFE(), {});
 
   MoFEMFunctionReturn(0);
 }
