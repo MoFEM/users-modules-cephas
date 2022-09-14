@@ -564,7 +564,7 @@ MoFEMErrorCode ThermalElement::addThermalConvectionElement(
   // this is alternative method for setting boundary conditions, to bypass bu
   // in cubit file reader. not elegant, but good enough
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    if (it->getName().compare(0, 10, "CONVECTION") == 0) {
+    if (it->getName().compare(0, 13, "BC_CONVECTION") == 0) {
 
       std::vector<double> data;
       CHKERR it->getAttributes(data);
@@ -603,7 +603,7 @@ MoFEMErrorCode ThermalElement::addThermalRadiationElement(
   // this is alternative method for setting boundary conditions, to bypass bu
   // in cubit file reader. not elegant, but good enough
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    if (it->getName().compare(0, 9, "RADIATION") == 0) {
+    if (it->getName().compare(0, 12, "BC_RADIATION") == 0) {
       std::vector<double> data;
       ierr = it->getAttributes(data);
       if (data.size() != 3) {
