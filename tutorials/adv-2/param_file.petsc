@@ -1,5 +1,5 @@
--pc_type lu  
--pc_factor_mat_solver_type mumps  
+#-pc_type lu  
+#-pc_factor_mat_solver_type mumps  
 #-ksp_monitor
 
 -snes_atol 1e-8
@@ -7,18 +7,18 @@
 -snes_dtol 0
 -snes_max_linear_solve_fail 0
 #-snes_converged_reason
--snes_linesearch_type bt
--snes_linesearch_max_it 3
-# -snes_linesearch_keeplambda
+-snes_linesearch_type basic
+#-snes_linesearch_max_it 3
+#-snes_linesearch_keeplambda
 #-snes_linesearch_minlambda 0.01
 
 #-snes_linesearch_monitor 
 -snes_max_it 60
 -ts_max_steps 100
 
--ts_max_time 2
+-ts_max_time 1
 -ts_exact_final_time matchstep
--ts_dt 0.05
+-ts_dt 0.25
 -ts_max_snes_failures 0
 -ts_error_if_step_fails true
 -ts_adapt_type none
@@ -31,13 +31,32 @@
 -ts_theta_initial_guess_extrapolate 1
 -ts_theta_theta 1
 
-#-quasi_static 0
-#-ts_type alpha2
-#-ts_alpha_radius 1
-
 -ts_max_snes_failures 20
 
+-ksp_rtol 1e-10
+-ksp_atol 1e-10
+-pc_type fieldsplit 
+
+-pc_fieldsplit_type multiplicative
+-fieldsplit_0_ksp_type preonly 
+-fieldsplit_0_pc_type lu 
+-fieldsplit_0_pc_factor_mat_solver_type mumps
+
+-fieldsplit_1_ksp_type preonly 
+-fieldsplit_1_pc_type lu 
+-fieldsplit_1_pc_factor_mat_solver_type mumps 
+
+-mat_mumps_icntl_20 0
 -mat_mumps_icntl_14 800 
 -mat_mumps_icntl_24 1 
 -mat_mumps_icntl_13 1
--mat_mumps_icntl_20 0
+-fieldsplit_0_mat_mumps_icntl_14 800 
+-fieldsplit_0_mat_mumps_icntl_24 1 
+-fieldsplit_0_mat_mumps_icntl_13 1
+-fieldsplit_0_mat_mumps_icntl_20 0
+-fieldsplit_1_mat_mumps_icntl_14 800 
+-fieldsplit_1_mat_mumps_icntl_24 1 
+-fieldsplit_1_mat_mumps_icntl_13 1
+-fieldsplit_1_mat_mumps_icntl_20 0
+
+

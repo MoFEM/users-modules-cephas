@@ -732,7 +732,7 @@ pipeline.push_back(
    new OpTemperatureBC("FLUX", [](double,double.double) { return 1;},
                       boost::make_shared<Range>(skin_edges)));
 \endcode
-%Example usage thermo_plastic.cpp
+%Example usage thermo_elastic.cpp
 
 </table>
 

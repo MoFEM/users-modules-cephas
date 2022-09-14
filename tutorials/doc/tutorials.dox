@@ -324,7 +324,7 @@ continuing with the one you are most excited about.
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref tutorial_thermo_plastic</td>
+       <td width="350px">\ref tutorial_thermo_elastic</td>
        <td> Solve thermo-elasto-plastic probelm
        <br/> *Keywords:* *Keywords:* multi-physiscs, nonlinear problem, remove dofs on skin
        </td>
