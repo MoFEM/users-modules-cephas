@@ -117,11 +117,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::iNtegrate(
 
   auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
   auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
-  if (commonDataPtr->tempVal.size() != nb_integration_pts) {
-    commonDataPtr->tempVal.resize(nb_integration_pts, 0);
-    commonDataPtr->tempVal.clear();
-  }
-  auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
   auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
   auto t_flow =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
@@ -142,7 +137,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::iNtegrate(
 
     auto t_diff_constrain_dstrain = diff_constrain_dstrain(
         t_D_Op, diff_constrain_dstress(
-                    diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
+                    diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)),
                     t_flow));
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_diff_constrain_dgrad;
     t_diff_constrain_dgrad(k, l) =
@@ -171,7 +166,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::iNtegrate(
     ++t_tau;
     ++t_tau_dot;
     ++t_flow;
-    ++t_temp;
     ++t_w;
   }
 
