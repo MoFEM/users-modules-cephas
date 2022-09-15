@@ -56,7 +56,7 @@ using OpInternalForceCauchy =
  *
  */
 using OpHdivHdiv = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpMass<3, 3>;
+    GAUSS>::OpMass<3, SPACE_DIM>;
 
 /**
  * @brief Integrate Lhs div of base of flux time base of temperature (FLUX x T)
@@ -78,7 +78,7 @@ using OpCapacity = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
  * @brief Integrating Rhs flux base (1/k) flux  (FLUX)
  */
 using OpHdivFlux = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpBaseTimesVector<3, 3, 1>;
+    GAUSS>::OpBaseTimesVector<3, SPACE_DIM, 1>;
 
 /**
  * @brief  Integrate Rhs div flux base times temperature (T)
@@ -117,14 +117,16 @@ using BoundaryNaturalBC =
     NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
 using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
 using OpTemperatureBC =
-    BoundaryNaturalBC::OpFlux<NaturalTemperatureMeshsets, SPACE_DIM, SPACE_DIM>;
+    BoundaryNaturalBC::OpFlux<NaturalTemperatureMeshsets, 3, SPACE_DIM>;
 //! [Natural boundary conditions]
 
 //! [Essential boundary conditions (Least square approach)]
-using OpEssentialFluxRhs = EssentialBC<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpEssentialRhs<HeatFluxCubitBcData, 3, 3>;
-using OpEssentialFluxLhs = EssentialBC<BoundaryEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpEssentialLhs<HeatFluxCubitBcData, 3, 3>;
+using OpEssentialFluxRhs =
+    EssentialBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
+        GAUSS>::OpEssentialRhs<HeatFluxCubitBcData, 3, SPACE_DIM>;
+using OpEssentialFluxLhs =
+    EssentialBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<
+        GAUSS>::OpEssentialLhs<HeatFluxCubitBcData, 3, SPACE_DIM>;
 //! [Essential boundary conditions (Least square approach)]
 
 double young_modulus = 1;
@@ -343,7 +345,8 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
         new OpCalculateScalarFieldValuesDot("T", vec_temp_dot_ptr));
     pipeline.push_back(new OpCalculateHdivVectorDivergence<3, SPACE_DIM>(
         "FLUX", vec_temp_div_ptr));
-    pipeline.push_back(new OpCalculateHVecVectorField<3>("FLUX", mat_flux_ptr));
+    pipeline.push_back(
+        new OpCalculateHVecVectorField<3, SPACE_DIM>("FLUX", mat_flux_ptr));
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", mat_grad_ptr));
@@ -436,7 +439,8 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     pipeline.push_back(new OpUnSetBc("FLUX"));
 
     auto mat_flux_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpCalculateHVecVectorField<3>("FLUX", mat_flux_ptr));
+    pipeline.push_back(
+        new OpCalculateHVecVectorField<3, SPACE_DIM>("FLUX", mat_flux_ptr));
     CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
         GAUSS>::addEssentialToRhsPipeline(EssentialOpType<OpEssentialFluxRhs>(),
                                           mField, pipeline,
@@ -547,7 +551,7 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("T", vec_temp_ptr));
     post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHVecVectorField<3>("FLUX", mat_flux_ptr));
+        new OpCalculateHVecVectorField<3, SPACE_DIM>("FLUX", mat_flux_ptr));
 
     auto u_ptr = boost::make_shared<MatrixDouble>();
     post_proc_fe->getOpPtrVector().push_back(
@@ -570,7 +574,7 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
 
             {{"T", vec_temp_ptr}},
 
-            {{"U", u_ptr} /*, {"FLUX", mat_flux_ptr}*/},
+            {{"U", u_ptr}, {"FLUX", mat_flux_ptr}},
 
             {},
 
