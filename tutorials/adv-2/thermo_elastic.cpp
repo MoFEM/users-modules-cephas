@@ -370,9 +370,9 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
       return (1. / heat_conductivity);
     };
     auto capacity = [&](const double, const double, const double) {
-      return -heat_capacity;
+      return heat_capacity;
     };
-    auto unity = [](const double, const double, const double) { return 1; };
+    auto unity = [](const double, const double, const double) { return -1.; };
     pipeline.push_back(new OpHdivFlux("FLUX", mat_flux_ptr, resistance));
     pipeline.push_back(new OpHDivTemp("FLUX", vec_temp_ptr, unity));
     pipeline.push_back(new OpBaseDivFlux("T", vec_temp_div_ptr, unity));
@@ -401,11 +401,11 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
       return (1. / heat_conductivity);
     };
     auto capacity = [](const double, const double, const double) {
-      return -heat_capacity;
+      return heat_capacity;
     };
     pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
     pipeline.push_back(new OpHdivT(
-        "FLUX", "T", []() { return 1; }, true));
+        "FLUX", "T", []() { return -1; }, true));
 
     auto op_capacity = new OpCapacity("T", "T", capacity);
     op_capacity->feScalingFun = [](const FEMethod *fe_ptr) {
