@@ -29,7 +29,6 @@ template <> struct ElementsAndOps<3> {
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
-constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
@@ -181,7 +180,6 @@ MoFEMErrorCode ThermoElasticProblem::setupProblem() {
   Simple *simple = mField.getInterface<Simple>();
   // Add field
   constexpr FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   // Mechanical fields
   CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
   CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
@@ -244,39 +242,6 @@ MoFEMErrorCode ThermoElasticProblem::bC() {
 
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
-  auto prb_mng = mField.getInterface<ProblemsManager>();
-
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
-                                           "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Y",
-                                           "U", 1, 1);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Z",
-                                           "U", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "REMOVE_ALL", "U", 0, 3);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "ZERO_FLUX", "FLUX", 0, 1);
-
-  PetscBool zero_fix_skin_flux = PETSC_FALSE;
-  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-fix_skin_flux",
-                             &zero_fix_skin_flux, PETSC_NULL);
-  if (zero_fix_skin_flux) {
-    Range faces;
-    CHKERR mField.get_moab().get_entities_by_dimension(0, SPACE_DIM, faces);
-    Skinner skin(&mField.get_moab());
-    Range skin_ents;
-    CHKERR skin.find_skin(0, faces, false, skin_ents);
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-    if (pcomm == NULL)
-      SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-              "Communicator not created");
-    CHKERR pcomm->filter_pstatus(skin_ents,
-                                 PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                                 PSTATUS_NOT, -1, &skin_ents);
-    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "FLUX",
-                                         skin_ents, 0, 1);
-  }
 
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
@@ -305,30 +270,26 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
 
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
-  auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
-  auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
-  auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
 
-  auto vec_temp_ptr = boost::make_shared<VectorDouble>();
-  auto vec_temp_dot_ptr = boost::make_shared<VectorDouble>();
-  auto mat_flux_ptr = boost::make_shared<MatrixDouble>();
-  auto vec_temp_div_ptr = boost::make_shared<VectorDouble>();
+
 
   auto time_scale = boost::make_shared<TimeScale>();
 
   auto add_domain_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
+
+    auto det_ptr = boost::make_shared<VectorDouble>();
+    auto jac_ptr = boost::make_shared<MatrixDouble>();
+    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
     pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
     pipeline.push_back(
         new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     pipeline.push_back(
         new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
-    if (SPACE_DIM == 2) {
+    if constexpr (SPACE_DIM == 2) {
       pipeline.push_back(new OpMakeHdivFromHcurl());
       pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
@@ -339,6 +300,21 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
       pipeline.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
       pipeline.push_back(new OpSetInvJacL2ForFace(inv_jac_ptr));
     }
+
+    MoFEMFunctionReturn(0);
+  };
+
+  auto add_domain_rhs_ops = [&](auto &pipeline) {
+    MoFEMFunctionBegin;
+
+    auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
+    auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
+    auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
+
+    auto vec_temp_ptr = boost::make_shared<VectorDouble>();
+    auto vec_temp_dot_ptr = boost::make_shared<VectorDouble>();
+    auto mat_flux_ptr = boost::make_shared<MatrixDouble>();
+    auto vec_temp_div_ptr = boost::make_shared<VectorDouble>();
 
     pipeline.push_back(new OpCalculateScalarFieldValues("T", vec_temp_ptr));
     pipeline.push_back(
@@ -355,11 +331,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     pipeline.push_back(new OpStressThermal("U", mat_strain_ptr, vec_temp_ptr,
                                            mDPtr, mat_stress_ptr));
 
-    MoFEMFunctionReturn(0);
-  };
-
-  auto add_domain_rhs_ops = [&](auto &pipeline) {
-    MoFEMFunctionBegin;
+    
     pipeline.push_back(new OpSetBc("FLUX", true, boundary_marker));
 
     pipeline.push_back(new OpInternalForceCauchy(
@@ -420,7 +392,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
   auto add_boundary_rhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    if (SPACE_DIM == 2) {
+    if constexpr (SPACE_DIM == 2) {
       pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge2D());
     } else {
       pipeline.push_back(new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
@@ -453,7 +425,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
   auto add_boundary_lhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    if (SPACE_DIM == 2) {
+    if constexpr (SPACE_DIM == 2) {
       pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge2D());
     } else {
       pipeline.push_back(new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
@@ -533,7 +505,7 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
     post_proc_fe->getOpPtrVector().push_back(
         new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
-    if (SPACE_DIM == 2) {
+    if constexpr (SPACE_DIM == 2) {
       post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       post_proc_fe->getOpPtrVector().push_back(
           new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
