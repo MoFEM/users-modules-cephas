@@ -123,6 +123,9 @@ foreach(LOOP_DIR ${TUTORIALS_DIRS})
     set(TUTORIALS_MOD_DIR ${LOOP_DIR})
     add_subdirectory(${LOOP_DIR})
     tutorials_install(${LOOP_DIR})
+    # TODO: we need a little help with this, maybe you can contribute?
+    # get_property(test_names DIRECTORY ${LOOP_DIR} PROPERTY TESTS)
+    # set_property(TEST ${test_names} PROPERTY LABELS "um-tutorials-ctests")
 
   endif(VAR_OP_NAME)
 
