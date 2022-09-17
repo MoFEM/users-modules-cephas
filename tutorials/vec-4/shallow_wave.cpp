@@ -44,7 +44,7 @@ using OpMassHH = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<1, 1>;
 
 using OpBaseTimesDotH = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1>;
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalar<1>;
 using OpBaseTimesDivU = OpBaseTimesDotH;
 
 using OpSourceU = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<

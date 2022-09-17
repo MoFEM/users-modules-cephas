@@ -29,7 +29,7 @@ using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, SPACE_DIM>;
 using OpDomainTimesScalarField = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1>;
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalar<1>;
 using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, SPACE_DIM>;
 using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
