@@ -167,12 +167,12 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  CHKERR BoundaryNaturalBC::addFluxToPipeline(
+  CHKERR BoundaryNaturalBC::addFluxToRhsPipeline(
       FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
       "U", {boost::make_shared<TimeScale>()}, "FORCE", Sev::inform);
 
   //! [Define gravity vector]
-  CHKERR DomainNaturalBC::addFluxToPipeline(
+  CHKERR DomainNaturalBC::addFluxToRhsPipeline(
       FluxOpType<OpBodyForce>(), pipeline_mng->getOpDomainRhsPipeline(), mField,
       "U", {boost::make_shared<TimeScale>()}, "BODY_FORCE", Sev::inform);
 

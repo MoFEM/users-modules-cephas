@@ -172,8 +172,6 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-
-
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
@@ -185,7 +183,7 @@ MoFEMErrorCode Example::boundaryCondition() {
       new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
 
-  CHKERR DomainNaturalBC::addFluxToPipeline(
+  CHKERR DomainNaturalBC::addFluxToRhsPipeline(
       FluxOpType<OpBodyForce>(), pipeline_mng->getOpDomainRhsPipeline(), mField,
       "U", {}, "BODY_FORCE", Sev::inform);
 
@@ -206,7 +204,7 @@ MoFEMErrorCode Example::boundaryCondition() {
       [](double, double, double) constexpr { return -1; }));
 
   // Add force boundary condition
-  CHKERR BoundaryNaturalBC::addFluxToPipeline(
+  CHKERR BoundaryNaturalBC::addFluxToRhsPipeline(
       FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
       "U", {}, "FORCE", Sev::inform);
 
@@ -367,7 +365,7 @@ MoFEMErrorCode Example::checkResults() {
       new OpInternalForce("U", mat_stress_ptr));
 
   // Add force boundary condition
-  CHKERR BoundaryNaturalBC::addFluxToPipeline(
+  CHKERR BoundaryNaturalBC::addFluxToRhsPipeline(
       FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
       "U", {}, "FORCE", Sev::inform);
 
