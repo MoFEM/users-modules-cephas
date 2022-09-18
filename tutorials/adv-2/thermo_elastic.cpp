@@ -270,10 +270,6 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
 
-
-
-
-
   auto time_scale = boost::make_shared<TimeScale>();
 
   auto add_domain_ops = [&](auto &pipeline) {
@@ -331,7 +327,6 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     pipeline.push_back(new OpStressThermal("U", mat_strain_ptr, vec_temp_ptr,
                                            mDPtr, mat_stress_ptr));
 
-    
     pipeline.push_back(new OpSetBc("FLUX", true, boundary_marker));
 
     pipeline.push_back(new OpInternalForceCauchy(
@@ -350,10 +345,10 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     pipeline.push_back(new OpBaseDivFlux("T", vec_temp_div_ptr, unity));
     pipeline.push_back(new OpBaseDotT("T", vec_temp_dot_ptr, capacity));
 
-    CHKERR DomainNaturalBC::addFluxToPipeline(
+    CHKERR DomainNaturalBC::addFluxToRhsPipeline(
         FluxOpType<OpHeatSource>(), pipeline, mField, "T", {time_scale},
         "HEAT_SOURCE", Sev::inform);
-    CHKERR DomainNaturalBC::addFluxToPipeline(
+    CHKERR DomainNaturalBC::addFluxToRhsPipeline(
         FluxOpType<OpBodyForce>(), pipeline_mng->getOpDomainRhsPipeline(),
         mField, "U", {time_scale}, "BODY_FORCE", Sev::inform);
 
@@ -400,11 +395,11 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
 
     pipeline.push_back(new OpSetBc("FLUX", true, boundary_marker));
 
-    CHKERR BoundaryNaturalBC::addFluxToPipeline(
+    CHKERR BoundaryNaturalBC::addFluxToRhsPipeline(
         FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
         "U", {time_scale}, "FORCE", Sev::inform);
 
-    CHKERR BoundaryNaturalBC::addFluxToPipeline(
+    CHKERR BoundaryNaturalBC::addFluxToRhsPipeline(
         FluxOpType<OpTemperatureBC>(), pipeline_mng->getOpBoundaryRhsPipeline(),
         mField, "FLUX", {time_scale}, "TEMPERATURE", Sev::inform);
 

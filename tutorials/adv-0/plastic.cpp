@@ -6,8 +6,6 @@
  *
  */
 
-
-
 #ifndef EXECUTABLE_DIMENSION
 #define EXECUTABLE_DIMENSION 3
 #endif
@@ -43,7 +41,6 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
-
 
 //! [Only used with Hooke equation (linear material model)]
 using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
@@ -110,7 +107,6 @@ int order = 2;
 inline long double hardening(long double tau) {
   return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
 }
-
 
 inline long double hardening_dtau(long double tau) {
   return H + Qinf * b_iso * std::exp(-b_iso * tau);
@@ -335,9 +331,9 @@ MoFEMErrorCode Example::bC() {
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
 
-  for (auto bc : bc_map) 
+  for (auto bc : bc_map)
     MOFEM_LOG("EXAMPLE", Sev::verbose) << "Marker " << bc.first;
-  
+
   // OK. We have problem with GMesh, it adding empty characters at the end of
   // block. So first block is search by regexp. popMarkDOFsOnEntities should
   // work with regexp.
@@ -406,7 +402,7 @@ MoFEMErrorCode Example::OPs() {
         new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
     if (SPACE_DIM == 2)
       pipeline.push_back(new OpSetHOWeightsOnFace());
-    else 
+    else
       pipeline.push_back(new OpSetHOWeights(det_ptr));
 
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
@@ -483,10 +479,9 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    CHKERR DomainNaturalBC::addFluxToPipeline(FluxOpType<OpBodyForce>(),
-                                              pipeline, mField, "U",
-                                              {boost::make_shared<TimeScale>()},
-                                              "BODY_FORCE", Sev::inform);
+    CHKERR DomainNaturalBC::addFluxToRhsPipeline(
+        FluxOpType<OpBodyForce>(), pipeline, mField, "U",
+        {boost::make_shared<TimeScale>()}, "BODY_FORCE", Sev::inform);
 
     // Calculate internal forces
     if (is_large_strains) {
@@ -558,7 +553,7 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
-    CHKERR BoundaryNaturalBC::addFluxToPipeline(
+    CHKERR BoundaryNaturalBC::addFluxToRhsPipeline(
         FluxOpType<OpForce>(), pipeline, mField, "U",
         {boost::make_shared<TimeScale>()}, "FORCE", Sev::inform);
 
@@ -631,7 +626,6 @@ MoFEMErrorCode Example::OPs() {
         pipeline.push_back(new OpSetHOWeightsOnFace());
       else
         pipeline.push_back(new OpSetHOWeights(det_ptr));
-
 
       pipeline.push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
