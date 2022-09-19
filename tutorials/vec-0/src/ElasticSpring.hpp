@@ -29,7 +29,7 @@ template <CubitBC> struct GetSpringStiffness {
     CHKERR cubit_meshset_ptr->getAttributes(block_data);
     if (block_data.size() != 2) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-              "Expected that block has three attribute");
+              "Expected that block has two attribute");
     }
     normal_stiffness = block_data[0];
     tangent_stiffness = block_data[1];
@@ -246,7 +246,7 @@ struct AddFluxToRhsPipelineImpl<
 
     auto add_op = [&](auto &&meshset_vec_ptr) {
       for (auto m : meshset_vec_ptr) {
-        MOFEM_TAG_AND_LOG("WORLD", sev, "OpFlux") << "Add Spring (Rhs) " << *m;
+        MOFEM_TAG_AND_LOG("WORLD", sev, "OpSpringRhs") << "Add " << *m;
         pipeline.push_back(
             new OP(m_field, m->getMeshsetId(), field_name, u_ptr, scale));
       }
@@ -302,7 +302,7 @@ struct AddFluxToLhsPipelineImpl<
 
     auto add_op = [&](auto &&meshset_vec_ptr) {
       for (auto m : meshset_vec_ptr) {
-        MOFEM_TAG_AND_LOG("WORLD", sev, "OpFlux") << "Add Spring (Lhs) " << *m;
+        MOFEM_TAG_AND_LOG("WORLD", sev, "OpSprngLhs") << "Add " << *m;
         pipeline.push_back(
             new OP(m_field, m->getMeshsetId(), row_field_name, col_field_name));
       }
