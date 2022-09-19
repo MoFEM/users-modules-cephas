@@ -1,8 +1,10 @@
 /**
- * \file lesson4_elastic.cpp
- * \example lesson4_elastic.cpp
+ * @file elastic.cpp
+ * @brief elastic example
+ * @version 0.13.2
+ * @date 2022-09-19
  *
- * Plane stress elastic problem
+ * @copyright Copyright (c) 2022
  *
  */
 
@@ -23,8 +25,8 @@ template <> struct ElementsAndOps<3> {
 };
 
 //! [Define dimension]
-constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
-//! [Define dimension]
+constexpr int SPACE_DIM =
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -38,31 +40,119 @@ using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 
-using DomainNaturalBC =
-    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
-using OpBodyForce =
-    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
+#include <ElasticSpring.hpp>
 
-using BoundaryNaturalBCRhs =
+struct DomainBCs {};
+struct BoundaryBCs {};
+
+using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpDomainRhsBCs = DomainRhsBCs::OpFlux<DomainBCs, 1, SPACE_DIM>;
+using BoundaryRhsBCs =
     NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
-using BoundaryNaturalBCLhs =
+using OpBoundaryRhsBCs = BoundaryRhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
+using BoundaryLhsBCs =
     NaturalBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<GAUSS>;
+using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 
-using OpForce =
-    BoundaryNaturalBCRhs::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
+template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
+          typename OpBase>
+struct AddFluxToRhsPipelineImpl<
+
+    OpFluxRhsImpl<DomainBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>, A, I, OpBase
+
+    > {
+
+  AddFluxToRhsPipelineImpl() = delete;
+
+  using T =
+      typename NaturalBC<OpBase>::template Assembly<A>::template LinearForm<I>;
+  using OpBodyForce = typename T::template OpFlux<NaturalMeshsetType<BLOCKSET>,
+                                                  BASE_DIM, FIELD_DIM>;
+
+  static MoFEMErrorCode add(
+
+      boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      MoFEM::Interface &m_field, std::string field_name, Sev sev
+
+  ) {
+    MoFEMFunctionBegin;
+    CHKERR T::template AddFluxToPipeline<OpBodyForce>::add(
+        pipeline, m_field, field_name, {}, "BODY_FORCE", sev);
+    MoFEMFunctionReturn(0);
+  }
+};
+
+template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
+          typename OpBase>
+struct AddFluxToRhsPipelineImpl<
+
+    OpFluxRhsImpl<BoundaryBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>, A, I, OpBase
+
+    > {
+
+  AddFluxToRhsPipelineImpl() = delete;
+
+  using T =
+      typename NaturalBC<OpBase>::template Assembly<A>::template LinearForm<I>;
+
+  using OpForce =
+      typename T::template OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
+  using OpSpringRhs =
+      typename T::template OpFlux<ElasticExample::SpringBcType<BLOCKSET>, 1,
+                                  SPACE_DIM>;
+
+  static MoFEMErrorCode add(
+
+      boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      MoFEM::Interface &m_field, std::string field_name, double scale, Sev sev
+
+  ) {
+    MoFEMFunctionBegin;
+    CHKERR T::template AddFluxToPipeline<OpForce>::add(
+        pipeline, m_field, field_name, {}, "FORCE", sev);
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>(field_name, u_ptr));
+    CHKERR T::template AddFluxToPipeline<OpSpringRhs>::add(
+        pipeline, m_field, field_name, u_ptr, scale, "SPRING", sev);
+    MoFEMFunctionReturn(0);
+  }
+};
+
+template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
+          typename OpBase>
+struct AddFluxToLhsPipelineImpl<
+
+    OpFluxLhsImpl<BoundaryBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>, A, I, OpBase
+
+    > {
+
+  AddFluxToLhsPipelineImpl() = delete;
+
+  using T = typename NaturalBC<OpBase>::template Assembly<
+      A>::template BiLinearForm<I>;
+
+  using OpSpringLhs =
+      typename T::template OpFlux<ElasticExample::SpringBcType<BLOCKSET>,
+                                  BASE_DIM, FIELD_DIM>;
+
+  static MoFEMErrorCode add(
+
+      boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      MoFEM::Interface &m_field, std::string field_name, Sev sev
+
+  ) {
+    MoFEMFunctionBegin;
+    CHKERR T::template AddFluxToPipeline<OpSpringLhs>::add(
+        pipeline, m_field, field_name, field_name, "SPRING", sev);
+    MoFEMFunctionReturn(0);
+  }
+};
 
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
-
-#include <ElasticSpring.hpp>
-using OpSpringRhs =
-    BoundaryNaturalBCRhs::OpFlux<ElasticExample::SpringBcType<BLOCKSET>, 1,
-                                 SPACE_DIM>;
-using OpSpringLhs =
-    BoundaryNaturalBCLhs::OpFlux<ElasticExample::SpringBcType<BLOCKSET>, 1,
-                                 SPACE_DIM>;
 
 struct Example {
 
@@ -281,23 +371,13 @@ MoFEMErrorCode Example::boundaryCondition() {
       [](double, double, double) constexpr { return -1; }));
 
   // Body forces
-  CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
-      pipeline_mng->getOpDomainRhsPipeline(), mField, "U", {}, "BODY_FORCE",
-      Sev::inform);
+  CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
+      pipeline_mng->getOpDomainRhsPipeline(), mField, "U", Sev::inform);
   // Add force boundary condition
-  CHKERR BoundaryNaturalBCRhs::AddFluxToPipeline<OpForce>::add(
-      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {}, "FORCE",
-      Sev::inform);
-
-  auto u_ptr = boost::make_shared<MatrixDouble>();
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
-  CHKERR BoundaryNaturalBCRhs::AddFluxToPipeline<OpSpringRhs>::add(
-      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", u_ptr, -1,
-      "SPRING", Sev::inform);
-  CHKERR BoundaryNaturalBCLhs::AddFluxToPipeline<OpSpringLhs>::add(
-      pipeline_mng->getOpBoundaryLhsPipeline(), mField, "U", "U", "SPRING",
-      Sev::inform);
+  CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
+      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", -1, Sev::inform);
+  CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
+      pipeline_mng->getOpBoundaryLhsPipeline(), mField, "U", Sev::inform);
 
   // Essential boundary condition
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
@@ -480,20 +560,10 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", mat_stress_ptr));
 
-  CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
-      pipeline_mng->getOpDomainRhsPipeline(), mField, "U", {}, "BODY_FORCE",
-      Sev::inform);
-
-  // Add force boundary condition
-  CHKERR BoundaryNaturalBCRhs::AddFluxToPipeline<OpForce>::add(
-      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {}, "FORCE",
-      Sev::inform);
-  auto u_ptr = boost::make_shared<MatrixDouble>();
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
-  CHKERR BoundaryNaturalBCRhs::AddFluxToPipeline<OpSpringRhs>::add(
-      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", u_ptr, 1, "SPRING",
-      Sev::inform);
+  CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
+      pipeline_mng->getOpDomainRhsPipeline(), mField, "U", Sev::inform);
+  CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
+      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", 1, Sev::inform);
 
   auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
