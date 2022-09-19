@@ -171,44 +171,11 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  static MoFEMErrorCode getMatDPtr(boost::shared_ptr<MatrixDouble> mat_D_ptr,
-                                   double bulk_modulus_K,
-                                   double shear_modulus_G);
-
   MoFEMErrorCode addMatBlockOps(
       boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
       std::string field_name, std::string block_name,
       boost::shared_ptr<MatrixDouble> mat_D_Ptr);
 };
-
-MoFEMErrorCode Example::getMatDPtr(boost::shared_ptr<MatrixDouble> mat_D_ptr,
-                                   double bulk_modulus_K,
-                                   double shear_modulus_G) {
-  MoFEMFunctionBegin;
-  //! [Calculate elasticity tensor]
-  auto set_material_stiffness = [&]() {
-    FTensor::Index<'i', SPACE_DIM> i;
-    FTensor::Index<'j', SPACE_DIM> j;
-    FTensor::Index<'k', SPACE_DIM> k;
-    FTensor::Index<'l', SPACE_DIM> l;
-    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-    double A = (SPACE_DIM == 2)
-                   ? 2 * shear_modulus_G /
-                         (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
-                   : 1;
-    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
-    t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
-                      A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
-                          t_kd(i, j) * t_kd(k, l);
-  };
-  //! [Calculate elasticity tensor]
-
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  mat_D_ptr->resize(size_symm * size_symm, 1);
-  set_material_stiffness();
-
-  MoFEMFunctionReturn(0);
-}
 
 MoFEMErrorCode Example::addMatBlockOps(
     boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
@@ -229,10 +196,10 @@ MoFEMErrorCode Example::addMatBlockOps(
       MoFEMFunctionBegin;
       if (!feEnts.empty()) {
         if (feEnts.find(getFEEntityHandle()) != feEnts.end()) {
-          CHKERR Example::getMatDPtr(matDPtr, bulkModulusK, shearModulusG);
+          CHKERR getMatDPtr(matDPtr, bulkModulusK, shearModulusG);
         }
       } else {
-        CHKERR Example::getMatDPtr(matDPtr, bulkModulusK, shearModulusG);
+        CHKERR getMatDPtr(matDPtr, bulkModulusK, shearModulusG);
       }
       MoFEMFunctionReturn(0);
     }
@@ -243,6 +210,33 @@ MoFEMErrorCode Example::addMatBlockOps(
     Range feEnts;
     double bulkModulusK;
     double shearModulusG;
+
+    MoFEMErrorCode getMatDPtr(boost::shared_ptr<MatrixDouble> mat_D_ptr,
+                              double bulk_modulus_K, double shear_modulus_G) {
+      MoFEMFunctionBegin;
+      //! [Calculate elasticity tensor]
+      auto set_material_stiffness = [&]() {
+        FTensor::Index<'i', SPACE_DIM> i;
+        FTensor::Index<'j', SPACE_DIM> j;
+        FTensor::Index<'k', SPACE_DIM> k;
+        FTensor::Index<'l', SPACE_DIM> l;
+        constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+        double A = (SPACE_DIM == 2)
+                       ? 2 * shear_modulus_G /
+                             (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
+                       : 1;
+        auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
+        t_D(i, j, k, l) =
+            2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
+            A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) * t_kd(i, j) *
+                t_kd(k, l);
+      };
+      //! [Calculate elasticity tensor]
+      constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+      mat_D_ptr->resize(size_symm * size_symm, 1);
+      set_material_stiffness();
+      MoFEMFunctionReturn(0);
+    }
   };
 
   pipeline.push_back(new OpMatBlock(field_name, mat_D_Ptr, Range(),
