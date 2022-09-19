@@ -479,9 +479,9 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    CHKERR DomainNaturalBC::addFluxToRhsPipeline(
-        FluxOpType<OpBodyForce>(), pipeline, mField, "U",
-        {boost::make_shared<TimeScale>()}, "BODY_FORCE", Sev::inform);
+    CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
+        pipeline, mField, "U", {boost::make_shared<TimeScale>()}, "BODY_FORCE",
+        Sev::inform);
 
     // Calculate internal forces
     if (is_large_strains) {
@@ -542,10 +542,9 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_lhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<
-        GAUSS>::addEssentialToLhsPipeline(EssentialOpType<OpEssentialLhs>(),
-                                          mField, pipeline,
-                                          simple->getProblemName(), "U");
+    CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<GAUSS>::
+        AddEssentialToPipeline<OpEssentialLhs>::add(
+            mField, pipeline, simple->getProblemName(), "U");
     MoFEMFunctionReturn(0);
   };
 
@@ -553,9 +552,9 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
-    CHKERR BoundaryNaturalBC::addFluxToRhsPipeline(
-        FluxOpType<OpForce>(), pipeline, mField, "U",
-        {boost::make_shared<TimeScale>()}, "FORCE", Sev::inform);
+    CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
+        pipeline, mField, "U", {boost::make_shared<TimeScale>()}, "FORCE",
+        Sev::inform);
 
     pipeline.push_back(new OpUnSetBc("U"));
 
@@ -563,12 +562,10 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
 
-    CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
-        GAUSS>::addEssentialToRhsPipeline(EssentialOpType<OpEssentialRhs>(),
-                                          mField, pipeline,
-                                          simple->getProblemName(), "U",
-                                          u_mat_ptr,
-                                          {boost::make_shared<TimeScale>()});
+    CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>::
+        AddEssentialToPipeline<OpEssentialRhs>::add(
+            mField, pipeline, simple->getProblemName(), "U", u_mat_ptr,
+            {boost::make_shared<TimeScale>()});
 
     MoFEMFunctionReturn(0);
   };

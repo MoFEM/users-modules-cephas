@@ -43,14 +43,26 @@ using DomainNaturalBC =
 using OpBodyForce =
     DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
 
-using BoundaryNaturalBC =
+using BoundaryNaturalBCRhs =
     NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
-using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
+using BoundaryNaturalBCLhs =
+    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<GAUSS>;
+
+using OpForce =
+    BoundaryNaturalBCRhs::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
 
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+
+#include <ElasticSpring.hpp>
+using OpSpringRhs =
+    BoundaryNaturalBCRhs::OpFlux<ElasticExample::SpringBcType<BLOCKSET>, 1,
+                                 SPACE_DIM>;
+using OpSpringLhs =
+    BoundaryNaturalBCLhs::OpFlux<ElasticExample::SpringBcType<BLOCKSET>, 1,
+                                 SPACE_DIM>;
 
 struct Example {
 
@@ -63,65 +75,43 @@ private:
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  MoFEMErrorCode createCommonData();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  boost::shared_ptr<MatrixDouble> matDPtr;
-  boost::shared_ptr<MatrixDouble> bodyForceMatPtr;
+  boost::shared_ptr<MatrixDouble> getMatDPtr();
+
 };
 
 //! [Create common data]
-MoFEMErrorCode Example::createCommonData() {
-  MoFEMFunctionBegin;
-
+boost::shared_ptr<MatrixDouble> Example::getMatDPtr() {
   //! [Calculate elasticity tensor]
-  auto set_material_stiffness = [&]() {
+  auto set_material_stiffness = [&](auto &&mat_D_ptr) {
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Index<'j', SPACE_DIM> j;
     FTensor::Index<'k', SPACE_DIM> k;
     FTensor::Index<'l', SPACE_DIM> l;
     constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-    MoFEMFunctionBegin;
+
     constexpr double A =
         (SPACE_DIM == 2) ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                          : 1;
-    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*matDPtr);
+    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
     t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
                       A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
                           t_kd(i, j) * t_kd(k, l);
-    MoFEMFunctionReturn(0);
+    return mat_D_ptr;
   };
   //! [Calculate elasticity tensor]
 
-  //! [Define gravity vector]
-  auto set_body_force = [&]() {
-    FTensor::Index<'i', SPACE_DIM> i;
-    MoFEMFunctionBegin;
-    auto t_force = getFTensor1FromMat<SPACE_DIM, 0>(*bodyForceMatPtr);
-    t_force(i) = 0;
-    t_force(1) = -1;
-    MoFEMFunctionReturn(0);
-  };
-  //! [Define gravity vector]
-
-  //! [Initialise containers for commonData]
-  matDPtr = boost::make_shared<MatrixDouble>();
-  bodyForceMatPtr = boost::make_shared<MatrixDouble>();
-
+  auto mat_D_ptr = boost::make_shared<MatrixDouble>();
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  matDPtr->resize(size_symm * size_symm, 1);
-  bodyForceMatPtr->resize(SPACE_DIM, 1);
-  //! [Initialise containers for commonData]
+  mat_D_ptr->resize(size_symm * size_symm, 1);
 
-  CHKERR set_material_stiffness();
-  CHKERR set_body_force();
-
-  MoFEMFunctionReturn(0);
+  return set_material_stiffness(mat_D_ptr);
 }
 //! [Create common data]
 
@@ -130,7 +120,6 @@ MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
   CHKERR readMesh();
   CHKERR setupProblem();
-  CHKERR createCommonData();
   CHKERR boundaryCondition();
   CHKERR assembleSystem();
   CHKERR solveSystem();
@@ -183,14 +172,10 @@ MoFEMErrorCode Example::boundaryCondition() {
       new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
 
-  CHKERR DomainNaturalBC::addFluxToRhsPipeline(
-      FluxOpType<OpBodyForce>(), pipeline_mng->getOpDomainRhsPipeline(), mField,
-      "U", {}, "BODY_FORCE", Sev::inform);
-
+  // Infernal forces
   auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
   auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
   auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
-
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                mat_grad_ptr));
@@ -198,22 +183,41 @@ MoFEMErrorCode Example::boundaryCondition() {
       new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", mat_strain_ptr, mat_stress_ptr, matDPtr));
+          "U", mat_strain_ptr, mat_stress_ptr, getMatDPtr()));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInternalForce(
       "U", mat_stress_ptr,
       [](double, double, double) constexpr { return -1; }));
 
+  // Body forces
+  CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
+      pipeline_mng->getOpDomainRhsPipeline(), mField, "U", {}, "BODY_FORCE",
+      Sev::inform);
   // Add force boundary condition
-  CHKERR BoundaryNaturalBC::addFluxToRhsPipeline(
-      FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
-      "U", {}, "FORCE", Sev::inform);
+  CHKERR BoundaryNaturalBCRhs::AddFluxToPipeline<OpForce>::add(
+      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {}, "FORCE",
+      Sev::inform);
+
+  auto u_ptr = boost::make_shared<MatrixDouble>();
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+  CHKERR BoundaryNaturalBCRhs::AddFluxToPipeline<OpSpringRhs>::add(
+      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", u_ptr, -1,
+      "SPRING", Sev::inform);
+  CHKERR BoundaryNaturalBCLhs::AddFluxToPipeline<OpSpringLhs>::add(
+      pipeline_mng->getOpBoundaryLhsPipeline(), mField, "U", "U", "SPRING",
+      Sev::inform);
 
   // Essential boundary condition
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
-  pipeline_mng->getDomainRhsFE()->preProcessHook =
-      EssentialPreProc<DisplacementCubitBcData>(
-          mField, pipeline_mng->getDomainRhsFE(), {});
+
+  auto get_pre_proc_hook = [&]() {
+    return EssentialPreProc<DisplacementCubitBcData>(
+        mField, pipeline_mng->getDomainRhsFE(), {});
+  };
+
+  pipeline_mng->getDomainRhsFE()->preProcessHook = get_pre_proc_hook();
+  pipeline_mng->getBoundaryRhsFE()->preProcessHook = get_pre_proc_hook();
 
   MoFEMFunctionReturn(0);
 }
@@ -234,13 +238,16 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeightsOnFace());
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpK("U", "U", getMatDPtr()));
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * (approx_order - 1);
+    return 2 * approx_order;
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
 
   MoFEMFunctionReturn(0);
 }
@@ -274,7 +281,11 @@ MoFEMErrorCode Example::outputResults() {
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
+
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
 
   post_proc_fe->getOpPtrVector().push_back(
@@ -295,7 +306,7 @@ MoFEMErrorCode Example::outputResults() {
       new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", mat_strain_ptr, mat_stress_ptr, matDPtr));
+          "U", mat_strain_ptr, mat_stress_ptr, getMatDPtr()));
 
   auto u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(
@@ -337,6 +348,8 @@ MoFEMErrorCode Example::checkResults() {
   MoFEMFunctionBegin;
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
 
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -360,17 +373,28 @@ MoFEMErrorCode Example::checkResults() {
       new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", mat_strain_ptr, mat_stress_ptr, matDPtr));
+          "U", mat_strain_ptr, mat_stress_ptr, getMatDPtr()));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", mat_stress_ptr));
 
-  // Add force boundary condition
-  CHKERR BoundaryNaturalBC::addFluxToRhsPipeline(
-      FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
-      "U", {}, "FORCE", Sev::inform);
+  CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
+      pipeline_mng->getOpDomainRhsPipeline(), mField, "U", {}, "BODY_FORCE",
+      Sev::inform);
 
-  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
+  // Add force boundary condition
+  CHKERR BoundaryNaturalBCRhs::AddFluxToPipeline<OpForce>::add(
+      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {}, "FORCE",
+      Sev::inform);
+  auto u_ptr = boost::make_shared<MatrixDouble>();
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+  CHKERR BoundaryNaturalBCRhs::AddFluxToPipeline<OpSpringRhs>::add(
+      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", u_ptr, 1, "SPRING",
+      Sev::inform);
+
+  auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
 
   auto dm = simple->getDM();
   auto res = smartCreateDMVector(dm);
@@ -390,7 +414,8 @@ MoFEMErrorCode Example::checkResults() {
 
   double nrm2;
   CHKERR VecNorm(res, NORM_2, &nrm2);
-  MOFEM_LOG_C("WORLD", Sev::verbose, "residual = %3.4e\n", nrm2);
+  MOFEM_LOG_CHANNEL("WORLD");
+  MOFEM_LOG_C("WORLD", Sev::inform, "residual = %3.4e\n", nrm2);
   constexpr double eps = 1e-8;
   if (nrm2 > eps)
     SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not zero");
