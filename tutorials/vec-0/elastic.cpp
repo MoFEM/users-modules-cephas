@@ -174,13 +174,13 @@ private:
   MoFEMErrorCode addMatBlockOps(
       boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
       std::string field_name, std::string block_name,
-      boost::shared_ptr<MatrixDouble> mat_D_Ptr);
+      boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev);
 };
 
 MoFEMErrorCode Example::addMatBlockOps(
     boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
     std::string field_name, std::string block_name,
-    boost::shared_ptr<MatrixDouble> mat_D_Ptr) {
+    boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev) {
   MoFEMFunctionBegin;
 
   struct OpMatBlock : public DomainEleOp {
@@ -245,7 +245,7 @@ MoFEMErrorCode Example::addMatBlockOps(
   auto add_op = [&](auto &&meshset_vec_ptr) {
     MoFEMFunctionBegin;
     for (auto m : meshset_vec_ptr) {
-      MOFEM_TAG_AND_LOG("WORLD", Sev::inform, "MatBlock") << *m;
+      MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock") << *m;
       std::vector<double> block_data;
       CHKERR m->getAttributes(block_data);
       if (block_data.size() != 2) {
@@ -264,7 +264,7 @@ MoFEMErrorCode Example::addMatBlockOps(
       double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
       double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
-      MOFEM_TAG_AND_LOG("WORLD", Sev::inform, "MatBlock")
+      MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock")
           << "E = " << young_modulus << " nu = " << poisson_ratio;
 
       pipeline.push_back(new OpMatBlock(field_name, mat_D_Ptr, get_block_ents(),
@@ -320,8 +320,20 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
   int order = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+
+  CHKERR simple->addDataField("GEOMETRY", H1, AINSWORTH_LEGENDRE_BASE,
+                              SPACE_DIM);
+
   CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("GEOMETRY", 2);
   CHKERR simple->setUp();
+
+  auto project_ho_geometry = [&]() {
+    Projection10NodeCoordsOnField ent_method(mField, "GEOMETRY");
+    return mField.loop_dofs("GEOMETRY", ent_method);
+  };
+  CHKERR project_ho_geometry();
+
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
@@ -333,16 +345,10 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      pipeline_mng->getOpDomainRhsPipeline(), {H1}, "GEOMETRY");
+  CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+      pipeline_mng->getOpBoundaryRhsPipeline(), {NOSPACE}, "GEOMETRY");
 
   // Infernal forces
   auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
@@ -356,7 +362,7 @@ MoFEMErrorCode Example::boundaryCondition() {
 
   auto mat_D_ptr = boost::make_shared<MatrixDouble>();
   CHKERR addMatBlockOps(pipeline_mng->getOpDomainRhsPipeline(), "U",
-                        "MAT_ELASTIC", mat_D_ptr);
+                        "MAT_ELASTIC", mat_D_ptr, Sev::inform);
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
@@ -371,7 +377,7 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
       pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", -1, Sev::inform);
   CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
-      pipeline_mng->getOpBoundaryLhsPipeline(), mField, "U", Sev::inform);
+      pipeline_mng->getOpBoundaryLhsPipeline(), mField, "U", Sev::verbose);
 
   // Essential boundary condition
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
@@ -394,19 +400,12 @@ MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeightsOnFace());
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      pipeline_mng->getOpDomainLhsPipeline(), {H1}, "GEOMETRY");
+
   auto mat_D_ptr = boost::make_shared<MatrixDouble>();
   CHKERR addMatBlockOps(pipeline_mng->getOpDomainLhsPipeline(), "U",
-                        "MAT_ELASTIC", mat_D_ptr);
+                        "MAT_ELASTIC", mat_D_ptr, Sev::verbose);
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpK("U", "U", mat_D_ptr));
 
@@ -457,12 +456,8 @@ MoFEMErrorCode Example::outputResults() {
 
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
 
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      post_proc_fe->getOpPtrVector(), {H1}, "GEOMETRY");
 
   auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
   auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
@@ -476,7 +471,7 @@ MoFEMErrorCode Example::outputResults() {
 
   auto mat_D_ptr = boost::make_shared<MatrixDouble>();
   CHKERR addMatBlockOps(post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC",
-                        mat_D_ptr);
+                        mat_D_ptr, Sev::verbose);
   post_proc_fe->getOpPtrVector().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
@@ -484,6 +479,9 @@ MoFEMErrorCode Example::outputResults() {
   auto u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+  auto x_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", x_ptr));
 
   using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
@@ -495,7 +493,7 @@ MoFEMErrorCode Example::outputResults() {
 
           {},
 
-          {{"U", u_ptr}},
+          {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
 
           {},
 
@@ -524,16 +522,14 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getBoundaryRhsFE().reset();
   pipeline_mng->getBoundaryLhsFE().reset();
 
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
+  auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
+
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      pipeline_mng->getOpDomainRhsPipeline(), {H1}, "GEOMETRY");
+  CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+      pipeline_mng->getOpBoundaryRhsPipeline(), {NOSPACE}, "GEOMETRY");
 
   auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
   auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
@@ -547,7 +543,7 @@ MoFEMErrorCode Example::checkResults() {
 
   auto mat_D_ptr = boost::make_shared<MatrixDouble>();
   CHKERR addMatBlockOps(pipeline_mng->getOpDomainRhsPipeline(), "U",
-                        "MAT_ELASTIC", mat_D_ptr);
+                        "MAT_ELASTIC", mat_D_ptr, Sev::verbose);
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
@@ -555,13 +551,9 @@ MoFEMErrorCode Example::checkResults() {
       new OpInternalForce("U", mat_stress_ptr));
 
   CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
-      pipeline_mng->getOpDomainRhsPipeline(), mField, "U", Sev::inform);
+      pipeline_mng->getOpDomainRhsPipeline(), mField, "U", Sev::verbose);
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
-      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", 1, Sev::inform);
-
-  auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
+      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", 1, Sev::verbose);
 
   auto dm = simple->getDM();
   auto res = smartCreateDMVector(dm);
