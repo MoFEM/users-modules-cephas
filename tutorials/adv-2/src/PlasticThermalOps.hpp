@@ -61,6 +61,19 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
+struct OpHdivFluxLargeStrains : public AssemblyDomainEleOp {
+  OpHdivFluxLargeStrains(const std::string field_name,
+                         boost::shared_ptr<CommonData> common_data_ptr,
+                         ScalarFun beta_coeff)
+      : AssemblyDomainEleOp(field_name, field_name, DomainEleOp::OPROW),
+        commonDataPtr(common_data_ptr) {}
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data);
+
+protected:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
 struct OpKCauchyThermoElasticity : public AssemblyDomainEleOp {
   OpKCauchyThermoElasticity(const std::string row_field_name,
                             const std::string col_field_name,

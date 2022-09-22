@@ -920,8 +920,14 @@ MoFEMErrorCode Example::OPs() {
       return -heat_capacity;
     };
     auto unity = [](const double, const double, const double) { return 1; };
-    pipeline.push_back(new OpHdivFlux(
-        "FLUX", commonPlasticDataPtr->getTempFluxValPtr(), resistance));
+    if (is_large_strains) {
+      pipeline.push_back(new PlasticThermalOps::OpHdivFluxLargeStrains(
+          "FLUX", commonPlasticDataPtr->getTempFluxValPtr(), resistance));
+    } else {
+      pipeline.push_back(new OpHdivFlux(
+          "FLUX", commonPlasticDataPtr->getTempFluxValPtr(), resistance));
+    }
+
     pipeline.push_back(
         new OpHDivTemp("FLUX", commonPlasticDataPtr->getTempValPtr(), unity));
     pipeline.push_back(new OpBaseDivFlux(
