@@ -154,6 +154,8 @@ using OpHeatSource = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
 using OpTemperatureBC = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpNormalMixVecTimesScalar<SPACE_DIM>;
 
+PetscBool is_large_strains = PETSC_TRUE;
+
 double scale = 1.;
 
 double young_modulus = 206913;
@@ -338,6 +340,8 @@ MoFEMErrorCode Example::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-amplitude_shift",
                                  &amplitude_shift, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
+                               &is_large_strains, PETSC_NULL);
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Coeff_expansion " << coeff_expansion;
@@ -429,6 +433,17 @@ MoFEMErrorCode Example::createCommonData() {
 
   CHKERR get_command_line_parameters();
   CHKERR set_matrial_stiffness();
+
+  if (is_large_strains) {
+    commonHenckyDataPtr = boost::make_shared<HenckyOps::CommonData>();
+    commonHenckyDataPtr->matGradPtr = commonPlasticDataPtr->mGradPtr;
+    commonHenckyDataPtr->matDPtr = commonPlasticDataPtr->mDPtr;
+    commonHenckyDataPtr->matLogCPlastic =
+        commonPlasticDataPtr->getPlasticStrainPtr();
+    commonPlasticDataPtr->mStrainPtr = commonHenckyDataPtr->getMatLogC();
+    commonPlasticDataPtr->mStressPtr =
+        commonHenckyDataPtr->getMatHenckyStress();
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -597,11 +612,32 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_stress_ops = [&](auto &pipeline, auto m_D_ptr) {
     MoFEMFunctionBegin;
 
-    pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
-    pipeline.push_back(new PlasticThermalOps::OpPlasticStressThermal(
-        "U", commonPlasticDataPtr, m_D_ptr, 1));
+    if (is_large_strains) {
 
+      if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                "Wrong pointer for grad");
+
+      pipeline.push_back(
+          new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
+      pipeline.push_back(
+          new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
+      pipeline.push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+      // This operator is likely to be changed
+      // pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
+      //     "U", commonHenckyDataPtr, m_D_ptr));
+      pipeline.push_back(new OpCalculateHenckyPlasticStressThermal<SPACE_DIM>(
+          "U", commonHenckyDataPtr, m_D_ptr));
+      pipeline.push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
+    } else {
+      pipeline.push_back(
+          new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
+                                            commonPlasticDataPtr->mStrainPtr));
+      pipeline.push_back(new PlasticThermalOps::OpPlasticStressThermal(
+          "U", commonPlasticDataPtr, m_D_ptr, 1));
+    }
     if (m_D_ptr != commonPlasticDataPtr->mDPtr_Axiator)
       pipeline.push_back(
           new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
@@ -613,11 +649,26 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    pipeline.push_back(new OpKCauchy("U", "U", m_D_ptr));
-    pipeline.push_back(new PlasticThermalOps::OpKCauchyThermoElasticity(
-        "U", "T", commonPlasticDataPtr, m_D_ptr));
-    pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
-        "U", "EP", commonPlasticDataPtr, m_D_ptr));
+    if (is_large_strains) {
+      pipeline.push_back(
+          new OpHenckyTangent<SPACE_DIM>("U", commonHenckyDataPtr, m_D_ptr));
+      pipeline.push_back(
+          new OpKPiola("U", "U", commonHenckyDataPtr->getMatTangent()));
+      pipeline.push_back(new OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
+          "U", "EP", commonPlasticDataPtr, commonHenckyDataPtr, m_D_ptr));
+      // This operator is likely to be changed coupling does not exist for large
+      // strain, a new OpKPiolaThermal?
+      // * New operator for coupling will be something like this *
+      pipeline.push_back(new PlasticThermalOps::OpKPiolaThermal(
+          "U", "T", commonPlasticDataPtr, commonHenckyDataPtr, m_D_ptr));
+      // OpCalculatePlasticInternalForceLhs_LogStrain_dEP is not affected by T
+    } else {
+      pipeline.push_back(new OpKCauchy("U", "U", m_D_ptr));
+      pipeline.push_back(new PlasticThermalOps::OpKCauchyThermoElasticity(
+          "U", "T", commonPlasticDataPtr, m_D_ptr));
+      pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
+          "U", "EP", commonPlasticDataPtr, m_D_ptr));
+    }
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -658,9 +709,15 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpBodyForce("U", get_body_force));
 
-    // Calculate internal forece
-    pipeline.push_back(
-        new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
+    // Calculate internal force
+    // All good here
+    if (is_large_strains) {
+      pipeline.push_back(new OpInternalForcePiola(
+          "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
+    } else {
+      pipeline.push_back(
+          new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
+    }
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -670,11 +727,20 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    pipeline.push_back(new OpCalculatePlasticFlowLhs_dU(
-        "EP", "U", commonPlasticDataPtr, m_D_ptr));
-    pipeline.push_back(new OpCalculateContrainsLhs_dU(
-        "TAU", "U", commonPlasticDataPtr, m_D_ptr));
-
+    // All good here
+    if (is_large_strains) {
+      pipeline.push_back(
+          new OpHenckyTangent<SPACE_DIM>("U", commonHenckyDataPtr));
+      pipeline.push_back(new OpCalculateContrainsLhs_LogStrain_dU(
+          "TAU", "U", commonPlasticDataPtr, commonHenckyDataPtr, m_D_ptr));
+      pipeline.push_back(new OpCalculatePlasticFlowLhs_LogStrain_dU(
+          "EP", "U", commonPlasticDataPtr, commonHenckyDataPtr, m_D_ptr));
+    } else {
+      pipeline.push_back(new OpCalculatePlasticFlowLhs_dU(
+          "EP", "U", commonPlasticDataPtr, m_D_ptr));
+      pipeline.push_back(new OpCalculateContrainsLhs_dU(
+          "TAU", "U", commonPlasticDataPtr, m_D_ptr));
+    }
     pipeline.push_back(new OpCalculatePlasticFlowLhs_dEP(
         "EP", "EP", commonPlasticDataPtr, m_D_ptr));
     pipeline.push_back(
@@ -683,7 +749,7 @@ MoFEMErrorCode Example::OPs() {
         "TAU", "EP", commonPlasticDataPtr, m_D_ptr));
     pipeline.push_back(
         new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
-
+    // These operator needs to be checked
     pipeline.push_back(new PlasticThermalOps::OpCalculateContrainsLhs_dT(
         "TAU", "T", commonPlasticDataPtr));
     pipeline.push_back(new PlasticThermalOps::OpPlasticHeatProduction_dEP(
@@ -953,16 +1019,48 @@ MoFEMErrorCode Example::OPs() {
               "U", commonPlasticDataPtr->mGradPtr));
       pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
           "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
-      pipeline.push_back(
-          new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
-                                            commonPlasticDataPtr->mStrainPtr));
-      pipeline.push_back(new PlasticThermalOps::OpPlasticStressThermal(
-          "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, 1));
+
+      if (is_large_strains) {
+
+        if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                  "Wrong pointer for grad");
+
+        pipeline.push_back(
+            new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
+        pipeline.push_back(
+            new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
+        pipeline.push_back(
+            new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+        // This operator is likely to be changed as was done for OpPlasticStress
+        pipeline.push_back(new OpCalculateHenckyPlasticStressThermal<SPACE_DIM>(
+            "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr));
+        // pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
+        //     "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr));
+        // OpCalculatePiolaStress should be ok since once Hencky stress is
+        // properly calculated, this operator calculate Piola based on Hencky
+        pipeline.push_back(
+            new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
+
+      } else {
+        pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+            "U", commonPlasticDataPtr->mGradPtr,
+            commonPlasticDataPtr->mStrainPtr));
+        pipeline.push_back(new PlasticThermalOps::OpPlasticStressThermal(
+            "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, 1));
+      };
+
       pipeline.push_back(new OpSetBc("U", false, reactionMarker));
 
       // Calculate internal forece
-      pipeline.push_back(
-          new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
+      // All good here no further changes
+      if (is_large_strains) {
+        pipeline.push_back(new OpInternalForcePiola(
+            "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
+      } else {
+        pipeline.push_back(
+            new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
+      }
 
       pipeline.push_back(new OpUnSetBc("U"));
     }
@@ -1028,16 +1126,44 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         "T", commonPlasticDataPtr->getTempValPtr()));
 
-    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
-    postProcFe->getOpPtrVector().push_back(
-        new PlasticThermalOps::OpPlasticStressThermal(
-            "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
-    postProcFe->getOpPtrVector().push_back(
-        new Tutorial::OpPostProcElastic<SPACE_DIM>(
-            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-            commonPlasticDataPtr->mStrainPtr,
-            commonPlasticDataPtr->mStressPtr));
+    if (is_large_strains) {
+
+      if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                "Wrong pointer for grad");
+
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+      // This operator is likely to be changed as was done for OpPlasticStress
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateHenckyPlasticStressThermal<SPACE_DIM>(
+              "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr, scale));
+      // postProcFe->getOpPtrVector().push_back(
+      //     new OpCalculateHenckyPlasticStress<SPACE_DIM>(
+      //         "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr, scale));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
+      postProcFe->getOpPtrVector().push_back(new OpPostProcHencky<SPACE_DIM>(
+          "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+          commonHenckyDataPtr));
+
+    } else {
+      postProcFe->getOpPtrVector().push_back(
+          new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
+                                            commonPlasticDataPtr->mStrainPtr));
+      postProcFe->getOpPtrVector().push_back(
+          new PlasticThermalOps::OpPlasticStressThermal(
+              "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
+      postProcFe->getOpPtrVector().push_back(
+          new Tutorial::OpPostProcElastic<SPACE_DIM>(
+              "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+              commonPlasticDataPtr->mStrainPtr,
+              commonPlasticDataPtr->mStressPtr));
+    }
 
     postProcFe->getOpPtrVector().push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));

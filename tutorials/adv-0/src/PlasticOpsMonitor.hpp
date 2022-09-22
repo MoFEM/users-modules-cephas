@@ -95,7 +95,7 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
     const double temp = (commonDataPtr->tempVal)[gg];
     const double tau = (commonDataPtr->plasticTau)[gg];
     const double f = (commonDataPtr->plasticSurface)[gg];
-    const double h = hardening(tau, temp);
+    const double h = hardening(tau, temp) / scale;
     CHKERR set_tag(th_plastic_surface, gg, set_scalar(f));
     CHKERR set_tag(th_hardening, gg, set_scalar(h));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
