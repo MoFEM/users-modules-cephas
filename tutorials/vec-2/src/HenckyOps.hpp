@@ -36,7 +36,7 @@ template <int DIM> inline auto get_uniq_nb(double *ptr) {
 template <int DIM>
 inline auto sort_eigen_vals(FTensor::Tensor1<double, DIM> &eig,
                             FTensor::Tensor2<double, DIM, DIM> &eigen_vec) {
-   std::array<std::pair<double, size_t>, DIM> tmp;
+  std::array<std::pair<double, size_t>, DIM> tmp;
   auto is_eq_pair = [](const auto &a, const auto &b) {
     return a.first < b.first;
   };
@@ -86,6 +86,20 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble matSecondPiolaStress;
   MatrixDouble matHenckyStress;
   MatrixDouble matTangent;
+  MatrixDouble tempFluxVal;
+  VectorDouble templDivFlux;
+  VectorDouble tempValDot;
+  VectorDouble tempVal;
+
+  inline auto getTempFluxValPtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &tempFluxVal);
+  }
+  inline auto getTempValDotPtr() {
+    return boost::shared_ptr<VectorDouble>(shared_from_this(), &tempValDot);
+  }
+  inline auto getTempDivFluxPtr() {
+    return boost::shared_ptr<VectorDouble>(shared_from_this(), &templDivFlux);
+  }
 
   inline auto getMatFirstPiolaStress() {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(),
@@ -362,6 +376,61 @@ private:
   const double scaleStress;
 };
 
+//! [Calculate stress with large strains and thermal effect]
+template <int DIM>
+struct OpCalculateHenckyPlasticStressThermal : public DomainEleOp {
+
+  OpCalculateHenckyPlasticStressThermal(
+      const std::string field_name, boost::shared_ptr<CommonData> common_data,
+      boost::shared_ptr<MatrixDouble> mat_D_ptr, const double scale = 1)
+      : DomainEleOp(field_name, DomainEleOp::OPROW), commonDataPtr(common_data),
+        scaleStress(scale), matDPtr(mat_D_ptr) {
+    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+
+    matLogCPlastic = commonDataPtr->matLogCPlastic;
+  }
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    FTensor::Index<'i', DIM> i;
+    FTensor::Index<'j', DIM> j;
+    FTensor::Index<'k', DIM> k;
+    FTensor::Index<'l', DIM> l;
+
+    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+
+    // const size_t nb_gauss_pts = matGradPtr->size2();
+    const size_t nb_gauss_pts = getGaussPts().size2();
+    auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*matDPtr);
+    auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
+    auto t_logCPlastic = getFTensor2SymmetricFromMat<DIM>(*matLogCPlastic);
+    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+    commonDataPtr->matHenckyStress.resize(size_symm, nb_gauss_pts, false);
+    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
+    auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      t_T(i, j) = t_D(i, j, k, l) *
+                  (t_logC(k, l) - t_logCPlastic(k, l) -
+                   t_kd(k, l) * log(t_temp - ref_temp) * coeff_expansion);
+      t_T(i, j) /= scaleStress;
+      ++t_logC;
+      ++t_T;
+      ++t_D;
+      ++t_logCPlastic;
+      ++t_temp;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> matDPtr;
+  boost::shared_ptr<MatrixDouble> matLogCPlastic;
+  const double scaleStress;
+};
+
 template <int DIM> struct OpCalculatePiolaStress : public DomainEleOp {
 
   OpCalculatePiolaStress(const std::string field_name,
@@ -426,7 +495,7 @@ template <int DIM> struct OpHenckyTangent : public DomainEleOp {
     std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
     if (mat_D_ptr)
       matDPtr = mat_D_ptr;
-    else 
+    else
       matDPtr = commonDataPtr->matDPtr;
   }
 
