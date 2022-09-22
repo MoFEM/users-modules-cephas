@@ -381,6 +381,12 @@ MoFEMErrorCode Example::createCommonData() {
           << "Scaled heat capacity " << heat_capacity;
     }
 
+    if (is_large_strains) {
+      MOFEM_LOG("EXAMPLE", Sev::inform) << "Running using LARGE STRAINS ";
+    } else {
+      MOFEM_LOG("EXAMPLE", Sev::inform) << "Running using SMALL STRAINS ";
+    }
+
     MoFEMFunctionReturn(0);
   };
 
@@ -440,6 +446,7 @@ MoFEMErrorCode Example::createCommonData() {
     commonHenckyDataPtr->matDPtr = commonPlasticDataPtr->mDPtr;
     commonHenckyDataPtr->matLogCPlastic =
         commonPlasticDataPtr->getPlasticStrainPtr();
+    commonHenckyDataPtr->tempValPtr = commonPlasticDataPtr->getTempValPtr();
     commonPlasticDataPtr->mStrainPtr = commonHenckyDataPtr->getMatLogC();
     commonPlasticDataPtr->mStressPtr =
         commonHenckyDataPtr->getMatHenckyStress();
@@ -762,6 +769,10 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_ops_rhs_constrain = [&](auto &pipeline) {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    // Constrains RHS is totally ok and do not need any further modification.
+    // OpPlasticHeatProduction do not need further modification thanks to the
+    // re-assigning of the Hencky common data pointer to the Common Plasticity
+    // data pointer.
 
     pipeline.push_back(
         new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr));
@@ -888,7 +899,13 @@ MoFEMErrorCode Example::OPs() {
       return -heat_capacity * fe.ts_a;
     };
     auto unity = []() { return 1; };
-    pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
+    // NEW OPERATOR NEEDED TO CONVERT RESISTANCE to CURRENT CONFIG
+    if (is_large_strains) {
+      pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
+    } else {
+      pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
+    }
+
     pipeline.push_back(new OpHdivT("FLUX", "T", unity, true));
     pipeline.push_back(new OpCapacity("T", "T", capacity));
     MoFEMFunctionReturn(0);

@@ -21,9 +21,9 @@ namespace PlasticThermalOps {
 //! [Common data]
 struct CommonData : public PlasticOps::CommonData {
 
-  boost::shared_ptr<MatrixDouble> matGradPtr;
-  boost::shared_ptr<MatrixDouble> matDPtr;
-  boost::shared_ptr<MatrixDouble> matLogCPlastic;
+  // boost::shared_ptr<MatrixDouble> matGradPtr;
+  // boost::shared_ptr<MatrixDouble> matDPtr;
+  // boost::shared_ptr<MatrixDouble> matLogCPlastic;
 
   MatrixDouble tempFluxVal;
   VectorDouble templDivFlux;
@@ -417,9 +417,8 @@ OpCalculateContrainsLhs_dT::iNtegrate(EntitiesFieldData::EntData &row_data,
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
     const double alpha = getMeasure() * t_w;
     const double c1 =
-        alpha
-
-        * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau, t_temp)) *
+        alpha *
+        diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau, t_temp)) *
         hardening_dtemp(t_tau, t_temp);
 
     auto mat_ptr = locMat.data().begin();
