@@ -27,6 +27,9 @@ template <> struct ElementsAndOps<3> {
 //! [Define dimension]
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
+constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
+constexpr IntegrationType I =
+    IntegrationType::GAUSS; //< selected integration type
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -35,119 +38,24 @@ using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
-using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
-using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
-
-#include <ElasticSpring.hpp>
+using OpK = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
+    I>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
+    I>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 
 struct DomainBCs {};
 struct BoundaryBCs {};
 
-using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<A>::LinearForm<I>;
 using OpDomainRhsBCs = DomainRhsBCs::OpFlux<DomainBCs, 1, SPACE_DIM>;
-using BoundaryRhsBCs =
-    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using BoundaryRhsBCs = NaturalBC<BoundaryEleOp>::Assembly<A>::LinearForm<I>;
 using OpBoundaryRhsBCs = BoundaryRhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
-using BoundaryLhsBCs =
-    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<GAUSS>;
+using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<I>;
 using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 
-template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
-          typename OpBase>
-struct AddFluxToRhsPipelineImpl<
-
-    OpFluxRhsImpl<DomainBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>, A, I, OpBase
-
-    > {
-
-  AddFluxToRhsPipelineImpl() = delete;
-
-  using T =
-      typename NaturalBC<OpBase>::template Assembly<A>::template LinearForm<I>;
-  using OpBodyForce = typename T::template OpFlux<NaturalMeshsetType<BLOCKSET>,
-                                                  BASE_DIM, FIELD_DIM>;
-
-  static MoFEMErrorCode add(
-
-      boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
-      MoFEM::Interface &m_field, std::string field_name, Sev sev
-
-  ) {
-    MoFEMFunctionBegin;
-    CHKERR T::template AddFluxToPipeline<OpBodyForce>::add(
-        pipeline, m_field, field_name, {}, "BODY_FORCE", sev);
-    MoFEMFunctionReturn(0);
-  }
-};
-
-template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
-          typename OpBase>
-struct AddFluxToRhsPipelineImpl<
-
-    OpFluxRhsImpl<BoundaryBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>, A, I, OpBase
-
-    > {
-
-  AddFluxToRhsPipelineImpl() = delete;
-
-  using T =
-      typename NaturalBC<OpBase>::template Assembly<A>::template LinearForm<I>;
-
-  using OpForce =
-      typename T::template OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
-  using OpSpringRhs =
-      typename T::template OpFlux<ElasticExample::SpringBcType<BLOCKSET>, 1,
-                                  SPACE_DIM>;
-
-  static MoFEMErrorCode add(
-
-      boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
-      MoFEM::Interface &m_field, std::string field_name, double scale, Sev sev
-
-  ) {
-    MoFEMFunctionBegin;
-    CHKERR T::template AddFluxToPipeline<OpForce>::add(
-        pipeline, m_field, field_name, {}, "FORCE", sev);
-    auto u_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(
-        new OpCalculateVectorFieldValues<SPACE_DIM>(field_name, u_ptr));
-    CHKERR T::template AddFluxToPipeline<OpSpringRhs>::add(
-        pipeline, m_field, field_name, u_ptr, scale, "SPRING", sev);
-    MoFEMFunctionReturn(0);
-  }
-};
-
-template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
-          typename OpBase>
-struct AddFluxToLhsPipelineImpl<
-
-    OpFluxLhsImpl<BoundaryBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>, A, I, OpBase
-
-    > {
-
-  AddFluxToLhsPipelineImpl() = delete;
-
-  using T = typename NaturalBC<OpBase>::template Assembly<
-      A>::template BiLinearForm<I>;
-
-  using OpSpringLhs =
-      typename T::template OpFlux<ElasticExample::SpringBcType<BLOCKSET>,
-                                  BASE_DIM, FIELD_DIM>;
-
-  static MoFEMErrorCode add(
-
-      boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
-      MoFEM::Interface &m_field, std::string field_name, Sev sev
-
-  ) {
-    MoFEMFunctionBegin;
-    CHKERR T::template AddFluxToPipeline<OpSpringLhs>::add(
-        pipeline, m_field, field_name, field_name, "SPRING", sev);
-    MoFEMFunctionReturn(0);
-  }
-};
+#include <ElasticSpring.hpp>
+#include <NaturalDomainBC.hpp>
+#include <NaturalBoundaryBC.hpp>
 
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.3;

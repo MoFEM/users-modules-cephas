@@ -29,10 +29,10 @@ tutorials_build_and_install(
 set_target_properties(
   elastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
-# tutorials_build_and_install(
-#   elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/elastic.cpp)
-# set_target_properties(
-#   elastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+tutorials_build_and_install(
+  elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/elastic.cpp)
+set_target_properties(
+  elastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
 
 add_test(
   elastic
