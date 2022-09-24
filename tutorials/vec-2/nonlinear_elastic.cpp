@@ -167,14 +167,14 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  CHKERR BoundaryNaturalBC::addFluxToRhsPipeline(
-      FluxOpType<OpForce>(), pipeline_mng->getOpBoundaryRhsPipeline(), mField,
-      "U", {boost::make_shared<TimeScale>()}, "FORCE", Sev::inform);
+  CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
+      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U",
+      {boost::make_shared<TimeScale>()}, "FORCE", Sev::inform);
 
   //! [Define gravity vector]
-  CHKERR DomainNaturalBC::addFluxToRhsPipeline(
-      FluxOpType<OpBodyForce>(), pipeline_mng->getOpDomainRhsPipeline(), mField,
-      "U", {boost::make_shared<TimeScale>()}, "BODY_FORCE", Sev::inform);
+  CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
+      pipeline_mng->getOpDomainRhsPipeline(), mField, "U",
+      {boost::make_shared<TimeScale>()}, "BODY_FORCE", Sev::inform);
 
   // Essential BC
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
