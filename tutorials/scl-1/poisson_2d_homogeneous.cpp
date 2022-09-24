@@ -51,7 +51,6 @@ private:
 
   // Field name and approximation order
   int oRder;
-
 };
 
 Poisson2DHomogeneous::Poisson2DHomogeneous(MoFEM::Interface &m_field)
@@ -285,7 +284,7 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_result.h5m"); 
+  CHKERR post_proc_fe->writeFile("out_result.h5m");
 
   MoFEMFunctionReturn(0);
 }

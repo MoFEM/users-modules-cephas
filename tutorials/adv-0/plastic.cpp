@@ -6,8 +6,6 @@
  *
  */
 
-
-
 #ifndef EXECUTABLE_DIMENSION
 #define EXECUTABLE_DIMENSION 3
 #endif
@@ -44,11 +42,6 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
 
-//! [Body force]
-using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpSource<1, SPACE_DIM>;
-//! [Body force]
-
 //! [Only used with Hooke equation (linear material model)]
 using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
@@ -80,6 +73,22 @@ using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
 //! [Essential boundary conditions]
 using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 
+using DomainNaturalBC =
+    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpBodyForce =
+    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
+
+using BoundaryNaturalBC =
+    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpForce =
+    BoundaryNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
+
+using OpEssentialLhs =
+    EssentialBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<
+        GAUSS>::OpEssentialLhs<DisplacementCubitBcData, 1, SPACE_DIM>;
+using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
+
 PetscBool is_large_strains = PETSC_TRUE;
 
 double scale = 1.;
@@ -95,11 +104,11 @@ double Qinf = 265;
 double b_iso = 16.93;
 int order = 2;
 
-inline long double hardening(long double tau, double temp) {
+inline long double hardening(long double tau) {
   return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
 }
 
-inline long double hardening_dtau(long double tau, double temp) {
+inline long double hardening_dtau(long double tau) {
   return H + Qinf * b_iso * std::exp(-b_iso * tau);
 }
 
@@ -168,6 +177,7 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->setFieldOrder("TAU", order - 1);
   CHKERR simple->setFieldOrder("EP", order - 1);
   CHKERR simple->setUp();
+  CHKERR simple->addFieldToEmptyFieldBlocks("U", "TAU");
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
@@ -192,7 +202,6 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Qinf", &Qinf, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
-
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
 
@@ -313,24 +322,18 @@ MoFEMErrorCode Example::bC() {
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "REMOVE_ALL", "U", 0, 3);
 
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_X", "U",
-                                        0, 0);
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Y", "U",
-                                        1, 1);
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Z", "U",
-                                        2, 2);
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
-                                        "U", 0, 3);
+  CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
+      simple->getProblemName(), "U");
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
   boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_"});
-  
+
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
 
-  for (auto bc : bc_map) 
+  for (auto bc : bc_map)
     MOFEM_LOG("EXAMPLE", Sev::verbose) << "Marker " << bc.first;
-  
+
   // OK. We have problem with GMesh, it adding empty characters at the end of
   // block. So first block is search by regexp. popMarkDOFsOnEntities should
   // work with regexp.
@@ -399,7 +402,7 @@ MoFEMErrorCode Example::OPs() {
         new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
     if (SPACE_DIM == 2)
       pipeline.push_back(new OpSetHOWeightsOnFace());
-    else 
+    else
       pipeline.push_back(new OpSetHOWeights(det_ptr));
 
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
@@ -476,38 +479,11 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      const std::string block_name = "BODY_FORCE";
-      if (it->getName().compare(0, block_name.size(), block_name) == 0) {
-        std::vector<double> attr;
-        CHKERR it->getAttributes(attr);
-        if (attr.size() == 3) {
-          bodyForces.push_back(
-              FTensor::Tensor1<double, 3>{attr[0], attr[1], attr[2]});
-        } else {
-          SETERRQ1(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
-                   "Should be three atributes in BODYFORCE blockset, but is %d",
-                   attr.size());
-        }
-      }
-    }
+    CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
+        pipeline, mField, "U", {boost::make_shared<TimeScale>()}, "BODY_FORCE",
+        Sev::inform);
 
-    auto get_body_force = [this](const double, const double, const double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      FTensor::Index<'i', SPACE_DIM> i;
-      FTensor::Tensor1<double, SPACE_DIM> t_source;
-      t_source(i) = 0;
-      auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-      const auto time = fe_domain_rhs->ts_t;
-      // hardcoded gravity load
-      for (auto &t_b : bodyForces)
-        t_source(i) += (scale * t_b(i)) * time;
-      return t_source;
-    };
-
-    pipeline.push_back(new OpBodyForce("U", get_body_force));
-
-    // Calculate internal forece
+    // Calculate internal forces
     if (is_large_strains) {
       pipeline.push_back(new OpInternalForcePiola(
           "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
@@ -560,73 +536,25 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateContrainsRhs("TAU", commonPlasticDataPtr));
 
+    pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
   auto add_boundary_ops_lhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
-    for (auto bc : bc_map) {
-      if (bc_mng->checkBlock(bc, "FIX_")){
-        pipeline.push_back(
-            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
-        pipeline.push_back(new OpBoundaryMass(
-            "U", "U", [](double, double, double) { return 1.; },
-            bc.second->getBcEntsPtr()));
-        pipeline.push_back(new OpUnSetBc("U"));
-      }
-    }
+    CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<GAUSS>::
+        AddEssentialToPipeline<OpEssentialLhs>::add(
+            mField, pipeline, simple->getProblemName(), "U");
     MoFEMFunctionReturn(0);
   };
 
   auto add_boundary_ops_rhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    auto get_time = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return fe_domain_rhs->ts_t;
-    };
-
-    auto get_time_scaled = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return fe_domain_rhs->ts_t * scale;
-    };
-
-    auto get_minus_time = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return -fe_domain_rhs->ts_t;
-    };
-
-    auto time_scaled = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return -fe_domain_rhs->ts_t;
-    };
-
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
-
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, 5, "FORCE") == 0) {
-        Range force_edges;
-        std::vector<double> attr_vec;
-        CHKERR it->getMeshsetIdEntitiesByDimension(
-            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
-        it->getAttributes(attr_vec);
-        if (attr_vec.size() < SPACE_DIM)
-          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                  "Wrong size of boundary attributes vector. Set right block "
-                  "size attributes.");
-        auto force_vec_ptr = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
-        std::copy(&attr_vec[0], &attr_vec[SPACE_DIM],
-                  force_vec_ptr->data().begin());
-        pipeline.push_back(
-            new OpBoundaryVec("U", force_vec_ptr, get_time_scaled,
-                              boost::make_shared<Range>(force_edges)));
-      }
-    }
+    CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
+        pipeline, mField, "U", {boost::make_shared<TimeScale>()}, "FORCE",
+        Sev::inform);
 
     pipeline.push_back(new OpUnSetBc("U"));
 
@@ -634,30 +562,10 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
 
-    for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
-      if (bc_mng->checkBlock(bc, "FIX_"))  {
-        pipeline.push_back(
-            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
-        auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
-        attr_vec->clear();
-        if (bc.second->bcAttributes.size() < SPACE_DIM)
-          SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                   "Wrong size of boundary attributes vector. Set right block "
-                   "size attributes. Size of attributes %d",
-                   bc.second->bcAttributes.size());
-        std::copy(&bc.second->bcAttributes[0],
-                  &bc.second->bcAttributes[SPACE_DIM],
-                  attr_vec->data().begin());
-
-        pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
-                                             bc.second->getBcEntsPtr()));
-        pipeline.push_back(new OpBoundaryInternal(
-            "U", u_mat_ptr, [](double, double, double) { return 1.; },
-            bc.second->getBcEntsPtr()));
-
-        pipeline.push_back(new OpUnSetBc("U"));
-      }
-    }
+    CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>::
+        AddEssentialToPipeline<OpEssentialRhs>::add(
+            mField, pipeline, simple->getProblemName(), "U", u_mat_ptr,
+            {boost::make_shared<TimeScale>()});
 
     MoFEMFunctionReturn(0);
   };
@@ -715,7 +623,6 @@ MoFEMErrorCode Example::OPs() {
         pipeline.push_back(new OpSetHOWeightsOnFace());
       else
         pipeline.push_back(new OpSetHOWeights(det_ptr));
-
 
       pipeline.push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(

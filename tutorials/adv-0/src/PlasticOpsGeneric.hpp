@@ -162,12 +162,6 @@ OpCalculateContrainsRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   const size_t nb_base_functions = data.getN().size2();
 
   auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
-  if (commonDataPtr->tempVal.size() != nb_integration_pts) {
-    commonDataPtr->tempVal.resize(nb_integration_pts, false);
-    commonDataPtr->tempVal.clear();
-  }
-  auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
-
   auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
   auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
   auto t_w = getFTensor0IntegrationWeight();
@@ -177,19 +171,20 @@ OpCalculateContrainsRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   auto t_base = data.getFTensor0N();
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
     const double alpha = getMeasure() * t_w;
-    const double beta =
-        alpha * constrain(t_tau_dot, t_f, hardening(t_tau, t_temp));
 
+    const double beta =
+        alpha * constrain(t_tau_dot, t_f, hardening(t_tau));
+        
     size_t bb = 0;
     for (; bb != AssemblyDomainEleOp::nbRows; ++bb) {
       nf[bb] += beta * t_base;
+      // nf[bb] += alpha * t_base * k_penalty(t_tau);
       ++t_base;
     }
     for (; bb < nb_base_functions; ++bb)
       ++t_base;
 
     ++t_tau;
-    ++t_temp;
     ++t_tau_dot;
     ++t_f;
     ++t_w;
@@ -326,7 +321,9 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::iNtegrate(
 
     FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
         t_DLogC_dC;
+
     t_DLogC_dC(i, j, k, l) = 0;
+    
     for (int ii = 0; ii != SPACE_DIM; ++ii)
       for (int jj = 0; jj != SPACE_DIM; ++jj)
         for (int kk = 0; kk != SPACE_DIM; ++kk)
@@ -335,6 +332,8 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::iNtegrate(
               for (int nn = 0; nn != SPACE_DIM; ++nn)
                 t_DLogC_dC(ii, jj, kk, ll) +=
                     t_D(mm, nn, kk, ll) * t_logC_dC(mm, nn, ii, jj);
+
+    // t_DLogC_dC(i, j, k, l) = t_D(k, l, m, n) * t_logC_dC(m, n, i, j);
 
     FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
         t_FDLogC_dC;
@@ -621,11 +620,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::iNtegrate(
 
   auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
   auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
-  if (commonDataPtr->tempVal.size() != nb_integration_pts) {
-    commonDataPtr->tempVal.resize(nb_integration_pts, 0);
-    commonDataPtr->tempVal.clear();
-  }
-  auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
   auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
   auto t_flow =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
@@ -640,7 +634,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::iNtegrate(
     auto mat_ptr = locMat.data().begin();
     auto t_diff_constrain_dstrain = diff_constrain_dstrain(
         t_D_Op, diff_constrain_dstress(
-                    diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
+                    diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)),
                     t_flow));
 
     constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
@@ -673,7 +667,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::iNtegrate(
 
     ++t_f;
     ++t_tau;
-    ++t_temp;
     ++t_tau_dot;
     ++t_flow;
     ++t_w;
@@ -705,11 +698,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::iNtegrate(
   auto t_w = getFTensor0IntegrationWeight();
   auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
   auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
-  if (commonDataPtr->tempVal.size() != nb_integration_pts) {
-    commonDataPtr->tempVal.resize(nb_integration_pts, 0);
-    commonDataPtr->tempVal.clear();
-  }
-  auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
   auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
 
   const double t_a = getTSa();
@@ -718,15 +706,15 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::iNtegrate(
 
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
     const double alpha = getMeasure() * t_w;
+
     const double c0 =
         alpha * t_a *
-        diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau, t_temp));
+        diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau));
 
     const double c1 =
-        alpha
-
-        * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau, t_temp)) *
-        hardening_dtau(t_tau, t_temp);
+        alpha *
+        diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau)) *
+        hardening_dtau(t_tau);
 
     auto mat_ptr = locMat.data().begin();
 
@@ -736,6 +724,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::iNtegrate(
       auto t_col_base = col_data.getFTensor0N(gg, 0);
       for (size_t cc = 0; cc != AssemblyDomainEleOp::nbCols; ++cc) {
         *mat_ptr += (c0 + c1) * t_row_base * t_col_base;
+        // *mat_ptr += alpha * k_penalty(t_tau) * t_row_base * t_col_base;
         ++mat_ptr;
         ++t_col_base;
       }
@@ -747,7 +736,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::iNtegrate(
     ++t_w;
     ++t_f;
     ++t_tau;
-    ++t_temp;
     ++t_tau_dot;
   }
 

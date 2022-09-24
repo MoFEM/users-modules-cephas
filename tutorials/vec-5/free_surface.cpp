@@ -59,8 +59,8 @@ using OpDomainSourceU = FormsIntegrators<DomainEleOp>::Assembly<
 using OpDomainSourceH = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, 1>;
 
-using OpBaseTimesScalarField = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1, 1>;
+using OpBaseTimesScalar = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalar<1, 1>;
 
 using OpMixScalarTimesDiv = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMixScalarTimesDiv<SPACE_DIM, coord_type>;
@@ -542,11 +542,11 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(new OpRhsH<false>("H", u_ptr, dot_h_ptr, h_ptr,
                                          grad_h_ptr, grad_g_ptr));
     pipeline.push_back(new OpRhsG<false>("G", h_ptr, grad_h_ptr, g_ptr));
-    pipeline.push_back(new OpBaseTimesScalarField(
+    pipeline.push_back(new OpBaseTimesScalar(
         "P", div_u_ptr, [](const double r, const double, const double) {
           return cylindrical(r);
         }));
-    pipeline.push_back(new OpBaseTimesScalarField(
+    pipeline.push_back(new OpBaseTimesScalar(
         "P", p_ptr, [](const double r, const double, const double) {
           return eps * cylindrical(r);
         }));

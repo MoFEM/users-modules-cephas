@@ -79,12 +79,12 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::iNtegrate(
     FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
         t_diff_plastic_flow_stress_dgrad;
     t_diff_plastic_flow_stress_dgrad(i, j, k, l) = 0;
-    for (int ii = 0; ii != SPACE_DIM; ++ii)
-      for (int jj = 0; jj != SPACE_DIM; ++jj)
-        for (int kk = 0; kk != SPACE_DIM; ++kk)
-          for (int ll = 0; ll != SPACE_DIM; ++ll)
-            for (int mm = 0; mm != SPACE_DIM; ++mm)
-              for (int nn = 0; nn != SPACE_DIM; ++nn)
+    for (int jj = 0; jj != SPACE_DIM; ++jj)
+      for (int ii = 0; ii != SPACE_DIM; ++ii)
+        for (int mm = 0; mm != SPACE_DIM; ++mm)
+          for (int nn = 0; nn != SPACE_DIM; ++nn)
+            for (int kk = 0; kk != SPACE_DIM; ++kk)
+              for (int ll = 0; ll != SPACE_DIM; ++ll)
                 t_diff_plastic_flow_stress_dgrad(ii, jj, kk, ll) +=
                     t_diff_plastic_flow_stress_dC(ii, jj, mm, nn) *
                     dC_dF(mm, nn, kk, ll);
@@ -157,11 +157,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::iNtegrate(
 
   auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
   auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
-  if (commonDataPtr->tempVal.size() != nb_integration_pts) {
-    commonDataPtr->tempVal.resize(nb_integration_pts, 0);
-    commonDataPtr->tempVal.clear();
-  }
-  auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
   auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
   auto t_flow =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
@@ -186,9 +181,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::iNtegrate(
     dC_dF(i, j, k, l) = (t_kd(i, l) * t_F(k, j)) + (t_kd(j, l) * t_F(k, i));
 
     auto t_diff_constrain_dstrain = diff_constrain_dstrain(
-        t_D_Op, diff_constrain_dstress(
-                    diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
-                    t_flow));
+        t_D_Op,
+        diff_constrain_dstress(
+            diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
 
     FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_constrain_dlog_c;
     t_diff_constrain_dlog_c(k, l) =
@@ -225,7 +220,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::iNtegrate(
 
     ++t_f;
     ++t_tau;
-    ++t_temp;
     ++t_tau_dot;
     ++t_flow;
     ++t_stress;

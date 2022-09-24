@@ -5,8 +5,6 @@
 
 */
 
-
-
 #include <BasicFiniteElements.hpp>
 
 using namespace boost::numeric;
@@ -36,7 +34,7 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
 
     // hardcoded choice of elastic parameters
     pOisson = 0.1;
-    yOung   = 10;
+    yOung = 10;
 
     // coefficient used in intermediate calculation
     const double coefficient = yOung / ((1 + pOisson) * (1 - 2 * pOisson));
@@ -64,7 +62,6 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
     tD(2, 2, 1, 1) = pOisson;
 
     tD(i, j, k, l) *= coefficient;
-
   }
 
   /**
@@ -133,9 +130,8 @@ protected:
    * @param  col_data column data (consist base functions on column entity)
    * @return error code
    */
-  MoFEMErrorCode
-  iNtegrate(EntitiesFieldData::EntData &row_data,
-            EntitiesFieldData::EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     // get sub-block (3x3) of local stiffens matrix, here represented by second
@@ -176,7 +172,7 @@ protected:
         auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
 
         // iterate column base functions
-        for (int cc = 0; cc != nbCols / 3;++cc) {
+        for (int cc = 0; cc != nbCols / 3; ++cc) {
 
           // integrate block local stiffens matrix
           t_m(i, k) +=
@@ -207,7 +203,7 @@ protected:
    * @return          error code
    */
   MoFEMErrorCode aSsemble(EntitiesFieldData::EntData &row_data,
-                                  EntitiesFieldData::EntData &col_data) {
+                          EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     // get pointer to first global index on row
     const int *row_indices = &*row_data.getIndices().data().begin();
@@ -362,27 +358,25 @@ struct ApplyDirichletBc : public MoFEM::FEMethod {
  * \brief Set integration rule to volume elements
  *
  * This rule is used to integrate \f$\nabla v \cdot \nabla u\f$, thus
- * if the approximation field and the testing field are polynomials of order "p",
- * then the rule for the exact integration is 2*(p-1).
+ * if the approximation field and the testing field are polynomials of order
+ * "p", then the rule for the exact integration is 2*(p-1).
  *
  * Integration rule is order of polynomial which is calculated exactly. Finite
  * element selects integration method based on return of this function.
  *
  */
 struct VolRule {
-  int operator()(int, int, int p) const {
-     return 2 * (p - 1); 
-  }
+  int operator()(int, int, int p) const { return 2 * (p - 1); }
 };
 
 /**
  * \brief Set integration rule to boundary elements
  *
- * This rule is used to integrate the work of external forces on a face, 
+ * This rule is used to integrate the work of external forces on a face,
  * i.e. \f$f \cdot v\f$, where f is the traction vector and v is the test
- * vector function. The current problem features a Neumann bc with 
- * a pre-defined constant pressure. Therefore, if the test field is 
- * represented by polynomials of order "p", then the rule for the exact 
+ * vector function. The current problem features a Neumann bc with
+ * a pre-defined constant pressure. Therefore, if the test field is
+ * represented by polynomials of order "p", then the rule for the exact
  * integration is also p.
  *
  * Integration rule is order of polynomial which is calculated exactly. Finite
@@ -390,14 +384,12 @@ struct VolRule {
  *
  */
 struct FaceRule {
-  int operator()(int, int, int p) const {
-    return p;
-  }
+  int operator()(int, int, int p) const { return p; }
 };
 
 int main(int argc, char *argv[]) {
 
-   const string default_options = "-ksp_type fgmres \n"
+  const string default_options = "-ksp_type fgmres \n"
                                  "-pc_type lu \n"
                                  "-pc_factor_mat_solver_type mumps \n"
                                  "-mat_mumps_icntl_20 0 \n"
@@ -426,7 +418,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMRegister_MoFEM("DMMOFEM");
 
     // Get command line options
-    int order          = 3;           // default approximation order
+    int order = 3;                    // default approximation order
     PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "SimpleElasticProblem",
                              "none");
@@ -446,19 +438,19 @@ int main(int argc, char *argv[]) {
 
     CHKERR simple_interface->getOptions();
     CHKERR simple_interface->loadFile();
-    
+
     Range fix_faces, pressure_faces, fix_nodes, fix_second_node;
 
     enum MyBcTypes {
-      FIX_BRICK_FACES      = 1,
-      FIX_NODES            = 2,
+      FIX_BRICK_FACES = 1,
+      FIX_NODES = 2,
       BRICK_PRESSURE_FACES = 3,
-      FIX_NODES_Y_DIR      = 4
+      FIX_NODES_Y_DIR = 4
     };
 
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       EntityHandle meshset = bit->getMeshset();
-      int id               = bit->getMeshsetId();
+      int id = bit->getMeshsetId();
 
       if (id == FIX_BRICK_FACES) { // brick-faces
 
@@ -566,7 +558,7 @@ int main(int argc, char *argv[]) {
 
     // precondition matrix A according to fix_dofs_fe  and elastic_fe finite
     // elements
-    elastic_fe->ksp_B  = A;
+    elastic_fe->ksp_B = A;
     fix_dofs_fe->ksp_B = A;
 
     // precondition the right hand side vector f according to fix_dofs_fe  and
@@ -673,9 +665,10 @@ int main(int argc, char *argv[]) {
         // Takes maximal element of the vector, that should be maximal
         // displacement at the end of the bar
         CHKERR VecNorm(x, NORM_INFINITY, &norm_check);
-        if (std::abs(norm_check - x_vec_norm_const) / x_vec_norm_const > 1.e-10) {
+        if (std::abs(norm_check - x_vec_norm_const) / x_vec_norm_const >
+            1.e-10) {
           SETERRQ1(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-           "test failed (nrm 2 %6.4e)", norm_check);
+                   "test failed (nrm 2 %6.4e)", norm_check);
         }
       }
     }
