@@ -200,7 +200,7 @@ MoFEMErrorCode Example::addMatBlockOps(
   pipeline.push_back(new OpMatBlocks(
       field_name, mat_D_Ptr, bulk_modulus_K, shear_modulus_G, mField, sev,
 
-      // Exytck blockets using regular expression
+      // Get blockset using regular expression
       mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
 
           (boost::format("%s(.*)") % block_name).str()
@@ -269,6 +269,15 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
+
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Y",
+                                           "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Z",
+                                           "U", 2, 2);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "REMOVE_ALL", "U", 0, 3);
 
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       pipeline_mng->getOpDomainRhsPipeline(), {H1}, "GEOMETRY");

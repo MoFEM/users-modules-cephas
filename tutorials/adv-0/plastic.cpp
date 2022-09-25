@@ -14,6 +14,17 @@
 #include <MatrixFunction.hpp>
 #include <IntegrationRules.hpp>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <cblas.h>
+#include <lapack_wrap.h>
+// #include <gm_rule.h>
+#include <quad.h>
+#ifdef __cplusplus
+}
+#endif
+
 using namespace MoFEM;
 
 template <int DIM> struct ElementsAndOps {};
@@ -30,11 +41,12 @@ template <> struct ElementsAndOps<3> {
 
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
+constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType G =
     IntegrationType::GAUSS; //< selected integration type
 
-constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
@@ -99,9 +111,12 @@ double sigmaY = 450;
 double H = 129;
 double visH = 0;
 double cn = 1;
+double zeta = 5e-2;
 double Qinf = 265;
 double b_iso = 16.93;
-int order = 2;
+
+int order = 2; ///< Order if fixed.
+int geom_order = 2; ///< Order if fixed.
 
 inline long double hardening(long double tau) {
   return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
@@ -109,6 +124,10 @@ inline long double hardening(long double tau) {
 
 inline long double hardening_dtau(long double tau) {
   return H + Qinf * b_iso * std::exp(-b_iso * tau);
+}
+
+inline long double hardening_dtau2(long double tau) {
+  return -(Qinf * (b_iso * b_iso)) * std::exp(-b_iso * tau);
 }
 
 #include <HenckyOps.hpp>
@@ -133,10 +152,7 @@ private:
 
   boost::shared_ptr<PlasticOps::CommonData> commonPlasticDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
-  boost::shared_ptr<PostProcEle> postProcFe;
   boost::shared_ptr<DomainEle> reactionFe;
-  boost::shared_ptr<DomainEle> feAxiatorRhs;
-  boost::shared_ptr<DomainEle> feAxiatorLhs;
 
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
@@ -156,8 +172,8 @@ private:
 //! [Run problem]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
-  CHKERR setupProblem();
   CHKERR createCommonData();
+  CHKERR setupProblem();
   CHKERR bC();
   CHKERR OPs();
   CHKERR tsSolve();
@@ -169,19 +185,71 @@ MoFEMErrorCode Example::runProblem() {
 MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
-  // Add field
-  constexpr FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+
+  Range domain_ents;
+  CHKERR mField.get_moab().get_entities_by_dimension(0, SPACE_DIM, domain_ents,
+                                                     true);
+  auto get_ents_by_dim = [&](const auto dim) {
+    if (dim == SPACE_DIM) {
+      return domain_ents;
+    } else {
+      Range ents;
+      if (dim == 0)
+        CHKERR mField.get_moab().get_connectivity(domain_ents, ents, true);
+      else
+        CHKERR mField.get_moab().get_entities_by_dimension(0, dim, ents, true);
+      return ents;
+    }
+  };
+
+  auto get_base = [&]() {
+    auto domain_ents = get_ents_by_dim(SPACE_DIM);
+    if (domain_ents.empty())
+      CHK_THROW_MESSAGE(MOFEM_NOT_FOUND, "Empty mesh");
+    const auto type = type_from_handle(domain_ents[0]);
+    switch (type) {
+    case MBQUAD:
+      return DEMKOWICZ_JACOBI_BASE;
+    case MBHEX:
+      return DEMKOWICZ_JACOBI_BASE;
+    case MBTRI:
+      return AINSWORTH_LEGENDRE_BASE;
+    case MBTET:
+      return AINSWORTH_LEGENDRE_BASE;
+    default:
+      CHK_THROW_MESSAGE(MOFEM_NOT_FOUND, "Element type not handled");
+    }
+    return NOBASE;
+  };
+
+  const auto base = get_base();
+  MOFEM_LOG("WORLD", Sev::inform) << "Base " << ApproximationBaseNames[base];
+
   CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
   CHKERR simple->addDomainField("TAU", L2, base, 1);
   CHKERR simple->addDomainField("EP", L2, base, size_symm);
   CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-  CHKERR simple->setFieldOrder("U", order);
-  CHKERR simple->setFieldOrder("TAU", order - 1);
+
+  CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
+
+  auto ents = get_ents_by_dim(0);
+  ents.merge(get_ents_by_dim(1));
+  // ents.merge(get_ents_by_dim(2));
+  CHKERR simple->setFieldOrder("U", order, &ents);
   CHKERR simple->setFieldOrder("EP", order - 1);
+  CHKERR simple->setFieldOrder("TAU", order - 2);
+
+  CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
+
   CHKERR simple->setUp();
   CHKERR simple->addFieldToEmptyFieldBlocks("U", "TAU");
+
+  auto project_ho_geometry = [&]() {
+    Projection10NodeCoordsOnField ent_method(mField, "GEOMETRY");
+    return mField.loop_dofs("GEOMETRY", ent_method);
+  };
+  CHKERR project_ho_geometry();
+
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
@@ -204,10 +272,15 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-yield_stress", &sigmaY,
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-zeta", &zeta, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Qinf", &Qinf, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
+
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-geom_order", &geom_order,
+                              PETSC_NULL);
 
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
@@ -217,6 +290,10 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "zeta " << zeta;
+
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "order " << order;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "geom order " << geom_order;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
@@ -258,34 +335,35 @@ MoFEMErrorCode Example::createCommonData() {
     const double A = (SPACE_DIM == 2)
                          ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
-                         : 1;
+                         :
+      1;
 
-    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
-        *commonPlasticDataPtr->mDPtr);
-    auto t_D_axiator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
-        *commonPlasticDataPtr->mDPtr_Axiator);
-    auto t_D_deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
-        *commonPlasticDataPtr->mDPtr_Deviator);
+      auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+          *commonPlasticDataPtr->mDPtr);
+      auto t_D_axiator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+          *commonPlasticDataPtr->mDPtr_Axiator);
+      auto t_D_deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+          *commonPlasticDataPtr->mDPtr_Deviator);
 
-    constexpr double third = boost::math::constants::third<double>();
-    t_D_axiator(i, j, k, l) = A *
-                              (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
-                              t_kd(i, j) * t_kd(k, l);
-    t_D_deviator(i, j, k, l) =
-        2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
-    t_D(i, j, k, l) = t_D_axiator(i, j, k, l) + t_D_deviator(i, j, k, l);
+      constexpr double third = boost::math::constants::third<double>();
+      t_D_axiator(i, j, k, l) = A *
+                                (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
+                                t_kd(i, j) * t_kd(k, l);
+      t_D_deviator(i, j, k, l) =
+          2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
+      t_D(i, j, k, l) = t_D_axiator(i, j, k, l) + t_D_deviator(i, j, k, l);
 
-    MoFEMFunctionReturn(0);
+      MoFEMFunctionReturn(0);
+  };
+
+  auto make_d_mat = []() {
+    return boost::make_shared<MatrixDouble>(size_symm * size_symm, 1);
   };
 
   commonPlasticDataPtr = boost::make_shared<PlasticOps::CommonData>();
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  commonPlasticDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
-  commonPlasticDataPtr->mDPtr->resize(size_symm * size_symm, 1);
-  commonPlasticDataPtr->mDPtr_Axiator = boost::make_shared<MatrixDouble>();
-  commonPlasticDataPtr->mDPtr_Axiator->resize(size_symm * size_symm, 1);
-  commonPlasticDataPtr->mDPtr_Deviator = boost::make_shared<MatrixDouble>();
-  commonPlasticDataPtr->mDPtr_Deviator->resize(size_symm * size_symm, 1);
+  commonPlasticDataPtr->mDPtr = make_d_mat();
+  commonPlasticDataPtr->mDPtr_Axiator = make_d_mat();
+  commonPlasticDataPtr->mDPtr_Deviator = make_d_mat();
 
   commonPlasticDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonPlasticDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
@@ -378,47 +456,22 @@ MoFEMErrorCode Example::OPs() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  feAxiatorLhs = boost::make_shared<DomainEle>(mField);
-  feAxiatorRhs = boost::make_shared<DomainEle>(mField);
-  auto integration_rule_axiator = [](int, int, int approx_order) {
-    return 2 * (approx_order - 1);
-  };
-  feAxiatorLhs->getRuleHook = integration_rule_axiator;
-  feAxiatorRhs->getRuleHook = integration_rule_axiator;
-
-  auto integration_rule_deviator = [](int o_row, int o_col, int approx_order) {
-    return 2 * (approx_order - 1);
-  };
-  auto integration_rule_bc = [](int, int, int approx_order) {
-    return 2 * approx_order;
-  };
-
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    pipeline.push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-    if (SPACE_DIM == 2)
-      pipeline.push_back(new OpSetHOWeightsOnFace());
-    else
-      pipeline.push_back(new OpSetHOWeights(det_ptr));
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1, L2},
+                                                          "GEOMETRY");
 
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
         "TAU", commonPlasticDataPtr->getPlasticTauDotPtr()));
+    pipeline.push_back(new OpCalculateScalarFieldValues(
+        "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
         "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<SPACE_DIM>(
         "EP", commonPlasticDataPtr->getPlasticStrainDotPtr()));
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr));
-    pipeline.push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
 
     MoFEMFunctionReturn(0);
   };
@@ -451,9 +504,12 @@ MoFEMErrorCode Example::OPs() {
           new OpPlasticStress("U", commonPlasticDataPtr, m_D_ptr, 1));
     }
 
-    if (m_D_ptr != commonPlasticDataPtr->mDPtr_Axiator)
+    if (m_D_ptr != commonPlasticDataPtr->mDPtr_Axiator) {
       pipeline.push_back(
           new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
+      pipeline.push_back(
+          new OpCalculatePlasticity("U", commonPlasticDataPtr, m_D_ptr));
+    }
 
     MoFEMFunctionReturn(0);
   };
@@ -505,40 +561,38 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     if (is_large_strains) {
-      pipeline.push_back(
-          new OpHenckyTangent<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(new OpCalculateContrainsLhs_LogStrain_dU(
+      pipeline.push_back(new OpCalculateConstraintsLhs_LogStrain_dU(
           "TAU", "U", commonPlasticDataPtr, commonHenckyDataPtr, m_D_ptr));
       pipeline.push_back(new OpCalculatePlasticFlowLhs_LogStrain_dU(
           "EP", "U", commonPlasticDataPtr, commonHenckyDataPtr, m_D_ptr));
     } else {
+      pipeline.push_back(new OpCalculateConstraintsLhs_dU(
+          "TAU", "U", commonPlasticDataPtr, m_D_ptr));
       pipeline.push_back(new OpCalculatePlasticFlowLhs_dU(
           "EP", "U", commonPlasticDataPtr, m_D_ptr));
-      pipeline.push_back(new OpCalculateContrainsLhs_dU(
-          "TAU", "U", commonPlasticDataPtr, m_D_ptr));
     }
 
     pipeline.push_back(new OpCalculatePlasticFlowLhs_dEP(
         "EP", "EP", commonPlasticDataPtr, m_D_ptr));
-    pipeline.push_back(
-        new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonPlasticDataPtr));
-    pipeline.push_back(new OpCalculateContrainsLhs_dEP(
+    pipeline.push_back(new OpCalculatePlasticFlowLhs_dTAU(
+        "EP", "TAU", commonPlasticDataPtr, m_D_ptr));
+    pipeline.push_back(new OpCalculateConstraintsLhs_dEP(
         "TAU", "EP", commonPlasticDataPtr, m_D_ptr));
     pipeline.push_back(
-        new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
+        new OpCalculateConstraintsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_rhs_constrain = [&](auto &pipeline) {
+  auto add_domain_ops_rhs_constrain = [&](auto &pipeline, auto m_D_ptr) {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(
-        new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr));
+        new OpCalculateConstraintsRhs("TAU", commonPlasticDataPtr, m_D_ptr));
     pipeline.push_back(
-        new OpCalculateContrainsRhs("TAU", commonPlasticDataPtr));
+        new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr, m_D_ptr));
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -554,6 +608,9 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_rhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
+
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+        pipeline, {NOSPACE}, "GEOMETRY");
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
@@ -575,38 +632,33 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  // Axiator
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline(),
-                               commonPlasticDataPtr->mDPtr_Deviator);
+                               commonPlasticDataPtr->mDPtr);
   CHKERR add_domain_ops_lhs_mechanical(pipeline_mng->getOpDomainLhsPipeline(),
-                                       commonPlasticDataPtr->mDPtr_Deviator);
+                                       commonPlasticDataPtr->mDPtr);
   CHKERR add_domain_ops_lhs_constrain(pipeline_mng->getOpDomainLhsPipeline(),
-                                      commonPlasticDataPtr->mDPtr_Deviator);
-  CHKERR add_boundary_ops_lhs_mechanical(
-      pipeline_mng->getOpBoundaryLhsPipeline());
-
-  CHKERR add_domain_base_ops(feAxiatorLhs->getOpPtrVector());
-  CHKERR add_domain_stress_ops(feAxiatorLhs->getOpPtrVector(),
-                               commonPlasticDataPtr->mDPtr_Axiator);
-  CHKERR add_domain_ops_lhs_mechanical(feAxiatorLhs->getOpPtrVector(),
-                                       commonPlasticDataPtr->mDPtr_Axiator);
+                                      commonPlasticDataPtr->mDPtr);
+  CHKERR
+  add_boundary_ops_lhs_mechanical(pipeline_mng->getOpBoundaryLhsPipeline());
 
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline(),
-                               commonPlasticDataPtr->mDPtr_Deviator);
+                               commonPlasticDataPtr->mDPtr);
   CHKERR add_domain_ops_rhs_mechanical(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_domain_ops_rhs_constrain(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_boundary_ops_rhs_mechanical(
-      pipeline_mng->getOpBoundaryRhsPipeline());
+  CHKERR add_domain_ops_rhs_constrain(pipeline_mng->getOpDomainRhsPipeline(),
+                                      commonPlasticDataPtr->mDPtr);
 
-  CHKERR add_domain_base_ops(feAxiatorRhs->getOpPtrVector());
-  CHKERR add_domain_stress_ops(feAxiatorRhs->getOpPtrVector(),
-                               commonPlasticDataPtr->mDPtr_Axiator);
-  CHKERR add_domain_ops_rhs_mechanical(feAxiatorRhs->getOpPtrVector());
+  // Boundary
+  CHKERR
+  add_boundary_ops_rhs_mechanical(pipeline_mng->getOpBoundaryRhsPipeline());
 
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_deviator);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_deviator);
+  auto integration_rule_bc = [](int, int, int ao) { return 2 * ao; };
+
+  auto vol_rule = [](int, int, int ao) { return 2 * ao + geom_order - 1; };
+
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(vol_rule);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(vol_rule);
 
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_bc);
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_bc);
@@ -616,18 +668,8 @@ MoFEMErrorCode Example::OPs() {
 
     if (reactionMarker) {
 
-      auto det_ptr = boost::make_shared<VectorDouble>();
-      auto jac_ptr = boost::make_shared<MatrixDouble>();
-      auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-      pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-      pipeline.push_back(
-          new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(
-          new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-      if (SPACE_DIM == 2)
-        pipeline.push_back(new OpSetHOWeightsOnFace());
-      else
-        pipeline.push_back(new OpSetHOWeights(det_ptr));
+      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1, L2},
+                                                            "GEOMETRY");
 
       pipeline.push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -661,7 +703,7 @@ MoFEMErrorCode Example::OPs() {
       }
 
       pipeline.push_back(new OpSetBc("U", false, reactionMarker));
-      // Calculate internal forece
+      // Calculate internal force
       if (is_large_strains) {
         pipeline.push_back(new OpInternalForcePiola(
             "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
@@ -676,7 +718,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   reactionFe = boost::make_shared<DomainEle>(mField);
-  reactionFe->getRuleHook = integration_rule_deviator;
+  reactionFe->getRuleHook = vol_rule;
 
   CHKERR create_reaction_pipeline(reactionFe->getOpPtrVector());
 
@@ -706,61 +748,56 @@ MoFEMErrorCode Example::tsSolve() {
   };
 
   auto create_post_process_element = [&]() {
-    MoFEMFunctionBegin;
-    postProcFe = boost::make_shared<PostProcEle>(mField);
+    auto pp_fe = boost::make_shared<PostProcEle>(mField);
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
+        
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        pp_fe->getOpPtrVector(), {H1, L2}, "GEOMETRY");
+
+    auto x_ptr = boost::make_shared<MatrixDouble>();
+    pp_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", x_ptr));
     auto u_ptr = boost::make_shared<MatrixDouble>();
-
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
-    postProcFe->getOpPtrVector().push_back(
+    pp_fe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
-    postProcFe->getOpPtrVector().push_back(
+    pp_fe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
             "U", commonPlasticDataPtr->mGradPtr));
-    postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
+    pp_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
-    postProcFe->getOpPtrVector().push_back(
+    pp_fe->getOpPtrVector().push_back(
         new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
             "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
 
     if (is_large_strains) {
 
       if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
-        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                "Wrong pointer for grad");
+        CHK_THROW_MESSAGE(MOFEM_DATA_INCONSISTENCY, "Wrong pointer for grad");
 
-      postProcFe->getOpPtrVector().push_back(
+      pp_fe->getOpPtrVector().push_back(
           new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
-      postProcFe->getOpPtrVector().push_back(
+      pp_fe->getOpPtrVector().push_back(
           new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
-      postProcFe->getOpPtrVector().push_back(
+      pp_fe->getOpPtrVector().push_back(
           new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
-      postProcFe->getOpPtrVector().push_back(
+      pp_fe->getOpPtrVector().push_back(
           new OpCalculateHenckyPlasticStress<SPACE_DIM>(
-              "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr, scale));
-      postProcFe->getOpPtrVector().push_back(
+              "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr,
+              1 /*scale*/));
+      pp_fe->getOpPtrVector().push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
-      postProcFe->getOpPtrVector().push_back(
+      pp_fe->getOpPtrVector().push_back(
 
           new OpPPMap(
 
-              postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
+              pp_fe->getPostProcMesh(), pp_fe->getMapGaussPts(),
 
               {},
 
-              {{"U", u_ptr}},
+              {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
 
               {{"GRAD", commonPlasticDataPtr->mGradPtr},
                {"FIRST_PIOLA", commonHenckyDataPtr->getMatFirstPiolaStress()}},
@@ -772,21 +809,21 @@ MoFEMErrorCode Example::tsSolve() {
       );
 
     } else {
-      postProcFe->getOpPtrVector().push_back(
+      pp_fe->getOpPtrVector().push_back(
           new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
                                             commonPlasticDataPtr->mStrainPtr));
-      postProcFe->getOpPtrVector().push_back(new OpPlasticStress(
-          "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
+      pp_fe->getOpPtrVector().push_back(new OpPlasticStress(
+          "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, 1 /*scale*/));
 
-      postProcFe->getOpPtrVector().push_back(
+      pp_fe->getOpPtrVector().push_back(
 
           new OpPPMap(
 
-              postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
+              pp_fe->getPostProcMesh(), pp_fe->getMapGaussPts(),
 
               {},
 
-              {{"U", u_ptr}},
+              {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
 
               {},
 
@@ -798,14 +835,14 @@ MoFEMErrorCode Example::tsSolve() {
       );
     }
 
-    postProcFe->getOpPtrVector().push_back(
+    pp_fe->getOpPtrVector().push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
 
-    postProcFe->getOpPtrVector().push_back(
+    pp_fe->getOpPtrVector().push_back(
 
         new OpPPMap(
 
-            postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
+            pp_fe->getPostProcMesh(), pp_fe->getMapGaussPts(),
 
             {{"PLASTIC_SURFACE", commonPlasticDataPtr->getPlasticSurfacePtr()},
              {"PLASTIC_MULTIPLIER", commonPlasticDataPtr->getPlasticTauPtr()}},
@@ -814,13 +851,14 @@ MoFEMErrorCode Example::tsSolve() {
 
             {},
 
-            {{"PLASTIC_STRAIN", commonPlasticDataPtr->getPlasticStrainPtr()}}
+            {{"PLASTIC_STRAIN", commonPlasticDataPtr->getPlasticStrainPtr()},
+             {"PLASTIC_FLOW", commonPlasticDataPtr->getPlasticFlowPtr()}}
 
             )
 
     );
 
-    MoFEMFunctionReturn(0);
+    return pp_fe;
   };
 
   auto scatter_create = [&](auto D, auto coeff) {
@@ -839,8 +877,9 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
-    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(
-        dm, postProcFe, reactionFe, uXScatter, uYScatter, uZScatter));
+    boost::shared_ptr<Monitor> monitor_ptr(
+        new Monitor(dm, create_post_process_element(), reactionFe, uXScatter,
+                    uYScatter, uZScatter));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
@@ -883,20 +922,28 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
-
-  boost::shared_ptr<FEMethod> null;
-  CHKERR DMMoFEMTSSetIJacobian(dm, simple->getDomainFEName(), feAxiatorLhs,
-                               null, null);
-  CHKERR DMMoFEMTSSetIFunction(dm, simple->getDomainFEName(), feAxiatorRhs,
-                               null, null);
-
-  CHKERR create_post_process_element();
   uXScatter = scatter_create(D, 0);
   uYScatter = scatter_create(D, 1);
-  if (SPACE_DIM == 3)
+  if constexpr (SPACE_DIM == 3)
     uZScatter = scatter_create(D, 2);
 
   auto solver = pipeline_mng->createTSIM();
+
+  auto post_rhs = [&]() {
+    MoFEMFunctionBegin;
+    auto get_iter = [&]() {
+      SNES snes;
+      CHKERR TSGetSNES(solver, &snes);
+      int iter;
+      CHKERR SNESGetIterationNumber(snes, &iter);
+      return iter;
+    };
+
+    MoFEMFunctionReturn(0);
+  };
+
+  mField.getInterface<PipelineManager>()->getDomainRhsFE()->postProcessHook =
+      post_rhs;
 
   CHKERR TSSetSolution(solver, D);
   CHKERR set_section_monitor(solver);
