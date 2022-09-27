@@ -922,7 +922,8 @@ MoFEMErrorCode Example::OPs() {
     auto unity = [](const double, const double, const double) { return 1; };
     if (is_large_strains) {
       pipeline.push_back(new PlasticThermalOps::OpHdivFluxLargeStrains(
-          "FLUX", commonPlasticDataPtr->getTempFluxValPtr(), resistance));
+          "FLUX", commonPlasticDataPtr,
+          commonPlasticDataPtr->getTempFluxValPtr(), resistance));
     } else {
       pipeline.push_back(new OpHdivFlux(
           "FLUX", commonPlasticDataPtr->getTempFluxValPtr(), resistance));

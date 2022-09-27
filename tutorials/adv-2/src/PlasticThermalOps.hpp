@@ -64,14 +64,15 @@ private:
 struct OpHdivFluxLargeStrains : public AssemblyDomainEleOp {
   OpHdivFluxLargeStrains(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr,
-                         ScalarFun beta_coeff)
-      : AssemblyDomainEleOp(field_name, field_name, DomainEleOp::OPROW),
-        commonDataPtr(common_data_ptr) {}
+                         boost::shared_ptr<MatrixDouble> vec,
+                         ScalarFun beta_coeff);
 
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data);
 
 protected:
+  ScalarFun betaCoeff;
   boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> sourceVec;
 };
 
 struct OpKCauchyThermoElasticity : public AssemblyDomainEleOp {
@@ -79,8 +80,8 @@ struct OpKCauchyThermoElasticity : public AssemblyDomainEleOp {
                             const std::string col_field_name,
                             boost::shared_ptr<CommonData> common_data_ptr,
                             boost::shared_ptr<MatrixDouble> mDptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -93,8 +94,8 @@ struct OpKPiolaThermal : public AssemblyDomainEleOp {
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<HenckyOps::CommonData> common_henky_data_ptr,
       boost::shared_ptr<MatrixDouble> m_D_ptr);
-  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -166,6 +167,71 @@ OpPlasticHeatProduction::iNtegrate(EntitiesFieldData::EntData &data) {
 
     ++t_w;
     ++t_plastic_strain_dot;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+OpHdivFluxLargeStrains::OpHdivFluxLargeStrains(
+    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr,
+    boost::shared_ptr<MatrixDouble> vec, ScalarFun beta_coeff)
+    : AssemblyDomainEleOp(field_name, field_name, DomainEleOp::OPROW),
+      commonDataPtr(common_data_ptr), sourceVec(vec), betaCoeff(beta_coeff) {}
+
+MoFEMErrorCode
+OpHdivFluxLargeStrains::iNtegrate(EntitiesFieldData::EntData &data) {
+  MoFEMFunctionBegin;
+
+  const size_t nb_integration_pts = data.getN().size1();
+
+  const size_t nb_base_functions = data.getN().size2() / SPACE_DIM;
+  // get volume or area
+  const double vol = getMeasure();
+  // get integration weights
+  auto t_w = getFTensor0IntegrationWeight();
+  // get base function gradient on rows
+  auto t_base = data.getFTensor1N<3>();
+  // get coordinates
+  auto t_coords = getFTensor1CoordsAtGaussPts();
+  // create delta kronecker
+  constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+  //  get the values of flux
+  auto t_vec = getFTensor1FromMat<SPACE_DIM>(*sourceVec);
+  // calculate gradient
+  auto t_grad =
+      getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
+
+  auto &nf = AssemblyDomainEleOp::locF;
+  // loop the integration over all the integration points
+  for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+    // define the deformation grandient tensor
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_F;
+    // define the determinant of the deformation gradient tensor
+    double t_detF;
+    // calculate deformation gradient tensor
+    t_F(i, j) = t_grad(i, j) + t_kd(i, j);
+    // calculate deforemation gradient determinant
+    if (SPACE_DIM == 2) {
+      determinantTensor2by2(t_F, t_detF);
+    } else {
+      determinantTensor3by3(t_F, t_detF);
+    }
+
+    const double alpha =
+        vol * t_w * betaCoeff(t_coords(0), t_coords(1), t_coords(2)) / t_detF;
+
+    size_t rr = 0;
+    for (; rr != AssemblyDomainEleOp::nbRows; ++rr) {
+      nf[rr] += alpha * t_base(i) * t_F(k, j) * t_F(i, k) * t_vec(j);
+      ++t_base;
+    }
+    for (; rr < nb_base_functions; ++rr)
+      ++t_base;
+
+    ++t_w;
+    ++t_vec;
+    ++t_coords;
+    ++t_grad;
   }
 
   MoFEMFunctionReturn(0);
@@ -249,9 +315,9 @@ OpKCauchyThermoElasticity::OpKCauchyThermoElasticity(
   sYmm = false;
 }
 
-MoFEMErrorCode OpKCauchyThermoElasticity::iNtegrate(
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode
+OpKCauchyThermoElasticity::iNtegrate(EntitiesFieldData::EntData &row_data,
+                                     EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
@@ -308,8 +374,8 @@ OpKPiolaThermal::OpKPiolaThermal(
 }
 
 MoFEMErrorCode
-OpKPiolaThermal::iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                           DataForcesAndSourcesCore::EntData &col_data) {
+OpKPiolaThermal::iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
