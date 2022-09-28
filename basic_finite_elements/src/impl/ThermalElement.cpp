@@ -526,7 +526,7 @@ ThermalElement::addThermalFluxElement(const std::string field_name,
   // this is alternative method for setting boundary conditions, to bypass bu
   // in cubit file reader. not elegant, but good enough
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    if (it->getName().compare(0, 9, "HEAT_FLUX") == 0) {
+    if (std::regex_match(it->getName(), std::regex("(.*)HEAT_FLUX(.*)"))) {
       std::vector<double> data;
       CHKERR it->getAttributes(data);
       if (data.size() != 1) {
@@ -564,8 +564,7 @@ MoFEMErrorCode ThermalElement::addThermalConvectionElement(
   // this is alternative method for setting boundary conditions, to bypass bu
   // in cubit file reader. not elegant, but good enough
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    if (it->getName().compare(0, 13, "BC_CONVECTION") == 0) {
-
+    if (std::regex_match(it->getName(), std::regex("(.*)CONVECTION(.*)"))) {
       std::vector<double> data;
       CHKERR it->getAttributes(data);
       if (data.size() != 2) {
@@ -603,7 +602,7 @@ MoFEMErrorCode ThermalElement::addThermalRadiationElement(
   // this is alternative method for setting boundary conditions, to bypass bu
   // in cubit file reader. not elegant, but good enough
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    if (it->getName().compare(0, 12, "BC_RADIATION") == 0) {
+    if (std::regex_match(it->getName(), std::regex("(.*)RADIATION(.*)"))) {
       std::vector<double> data;
       ierr = it->getAttributes(data);
       if (data.size() != 3) {

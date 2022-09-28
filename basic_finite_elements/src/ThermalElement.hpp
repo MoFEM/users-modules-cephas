@@ -609,7 +609,7 @@ struct ThermalElement {
    * \ingroup mofem_thermal_elem
    *
    * It get data from heat flux set and define element in moab. Alternatively
-   * uses block set with name HEAT_FLUX.
+   * uses block set with name including substring HEAT_FLUX.
    *
    * \param field name
    * \param name of mesh nodal positions (if not defined nodal coordinates are
@@ -623,7 +623,7 @@ struct ThermalElement {
    * \ingroup mofem_thermal_elem
    *
    * It get data from convection set and define element in moab. Alternatively
-   * uses block set with name BC_CONVECTION.
+   * uses block set with name including substring CONVECTION.
    *
    * \param field name
    * \param name of mesh nodal positions (if not defined nodal coordinates are
@@ -637,7 +637,7 @@ struct ThermalElement {
    * \ingroup mofem_thermal_elem
    *
    * It get data from Radiation set and define element in moab. Alternatively
-   * uses block set with name BC_RADIATION.
+   * uses block set with name including substring RADIATION.
    *
    * \param field name
    * \param name of mesh nodal positions (if not defined nodal coordinates are
