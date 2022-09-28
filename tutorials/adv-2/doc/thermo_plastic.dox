@@ -1,4 +1,4 @@
-/*! \page tutorial_thermo_plastic ADV-2: Thermo-plastic example
+/*! \page tutorial_thermo_elastic ADV-2: Thermo-plastic example
 
 \note Prerequisites of this tutorial include \ref tutorial_elastic_problem
 
@@ -10,7 +10,7 @@
 
 \tableofcontents
 
-\include thermo_plastic.cpp
-\include PlasticThermalOps.hpp
+\include thermo_elastic.cpp
+\include ThermoElasticOps.hpp
 
 */

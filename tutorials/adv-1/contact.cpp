@@ -153,8 +153,6 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
-  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
-
   template <int DIM> Range getEntsOnMeshSkin();
 };
 
@@ -298,26 +296,8 @@ MoFEMErrorCode Example::bC() {
 
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "NO_CONTACT", "SIGMA", 0, 3);
-
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
-                                           "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Y",
-                                           "U", 1, 1);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Z",
-                                           "U", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "REMOVE_ALL", "U", 0, 3);
-
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_X", "U",
-                                        0, 0);
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Y", "U",
-                                        1, 1);
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Z", "U",
-                                        2, 2);
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
-                                        "U", 0, 3);
-
-  boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_"});
+  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+      simple->getProblemName(), "U");
 
   MoFEMFunctionReturn(0);
 }
@@ -358,7 +338,6 @@ MoFEMErrorCode Example::OPs() {
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     if (is_large_strains) {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -397,7 +376,6 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
     pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
 
-    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -413,8 +391,6 @@ MoFEMErrorCode Example::OPs() {
       t_source(1) = 1.0 * time;
       return t_source;
     };
-
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(new OpBodyForce("U", get_body_force));
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -473,7 +449,6 @@ MoFEMErrorCode Example::OPs() {
           "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
 
-    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -498,11 +473,9 @@ MoFEMErrorCode Example::OPs() {
         pipeline.push_back(new OpBoundaryMass(
             "U", "U", [](double, double, double) { return 1.; },
             bc.second->getBcEntsPtr()));
-        pipeline.push_back(new OpUnSetBc("U"));
       }
     }
 
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
@@ -513,8 +486,7 @@ MoFEMErrorCode Example::OPs() {
         [this](double, double, double) { return spring_stiffness; }
 
         ));
-    if (boundaryMarker)
-      pipeline.push_back(new OpUnSetBc("U"));
+
     MoFEMFunctionReturn(0);
   };
 
@@ -550,16 +522,13 @@ MoFEMErrorCode Example::OPs() {
             [](double, double, double) { return 1.; },
             bc.second->getBcEntsPtr()));
 
-        pipeline.push_back(new OpUnSetBc("U"));
       }
     }
 
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs(
         "U", commonDataPtr->contactDispPtr,
         [this](double, double, double) { return spring_stiffness; }));
-    pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
@@ -583,6 +552,17 @@ MoFEMErrorCode Example::OPs() {
   };
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
+
+  // Enforce non-homegonus boundary conditions
+  auto get_bc_hook = [&]() {
+    EssentialPreProc<DisplacementCubitBcData> hook(
+        mField, pipeline_mng->getDomainRhsFE(),
+        {boost::make_shared<TimeScale>()});
+    return hook;
+  };
+
+  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook();
+  pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook();
 
   MoFEMFunctionReturn(0);
 }

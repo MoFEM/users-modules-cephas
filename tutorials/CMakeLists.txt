@@ -45,6 +45,7 @@ function(tutorials_build_and_install target source)
     mofem_third_party
     mofem_matrix_function
     mofem_post_proc
+    mofem_boundary_conditions
     ${MoFEM_PROJECT_LIBS})
   install(TARGETS ${target} DESTINATION ${TUTORIALS_INSTALL_DIR}/${TUTORIALS_MOD_DIR})
 endfunction(tutorials_build_and_install)
@@ -123,6 +124,9 @@ foreach(LOOP_DIR ${TUTORIALS_DIRS})
     set(TUTORIALS_MOD_DIR ${LOOP_DIR})
     add_subdirectory(${LOOP_DIR})
     tutorials_install(${LOOP_DIR})
+    # TODO: we need a little help with this, maybe you can contribute?
+    # get_property(test_names DIRECTORY ${LOOP_DIR} PROPERTY TESTS)
+    # set_property(TEST ${test_names} PROPERTY LABELS "um-tutorials-ctests")
 
   endif(VAR_OP_NAME)
 

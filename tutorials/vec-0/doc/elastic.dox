@@ -264,7 +264,7 @@ will do the following steps
 - Third, in the terminal, run commands to partition the input mesh and start
   the analysis
   \code
-  ./elastic -file_name beam_3D.cub -order 2
+  ./elastic_2d -file_name beam_3D.cub -order 2
   \endcode
   where the mesh of a square plate is partitioned into two parts and then the
   program is run using two processors (the same number of partitions) with
@@ -282,7 +282,7 @@ We can also compute 2D case of the beam. In order to do that, change the below v
 
 to the value equal to 2 and compile the code (in your build directory) using `make` command. You should be able then to compute 2D variant as follows
 \code
-  ./elastic -file_name beam_2D.cub -order 2
+  ./elastic_2d -file_name beam_2D.cub -order 2
 \endcode
 and generate vtk file using:
 \code

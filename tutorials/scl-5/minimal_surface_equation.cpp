@@ -13,7 +13,7 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
 using OpBoundaryTimeScalarField = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1>;
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalar<1>;
 using OpBoundarySource = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
