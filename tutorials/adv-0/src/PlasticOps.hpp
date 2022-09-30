@@ -67,6 +67,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble plasticStrain;
   MatrixDouble plasticStrainDot;
   VectorDouble tempVal;
+  MatrixDouble tempFluxVal;
 
   inline auto getPlasticTauPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &plasticTau);
@@ -84,7 +85,9 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   inline auto getTempValPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &tempVal);
   }
-
+  inline auto getTempFluxValPtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &tempFluxVal);
+  }
 };
 //! [Common data]
 
@@ -272,6 +275,7 @@ struct OpCalculateContrainsLhs_dTAU : public AssemblyDomainEleOp {
                                boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
+
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
@@ -460,9 +464,7 @@ inline auto diff_plastic_flow_dstrain(
   return t_diff_flow;
 };
 
-inline double constrain_abs(long double x) {
-  return std::abs(x);
-};
+inline double constrain_abs(long double x) { return std::abs(x); };
 
 inline double constrian_sign(long double x) {
   if (x > 0)
@@ -565,10 +567,9 @@ static inline auto get_mat_scalar_dvector(MatrixDouble &mat,
 }
 //! [Auxiliary functions functions
 
-
 }; // namespace PlasticOps
 
 #include <PlasticOpsGeneric.hpp>
-#include<PlasticOpsSmallStrains.hpp> 
-#include<PlasticOpsLargeStrains.hpp>
+#include <PlasticOpsSmallStrains.hpp>
+#include <PlasticOpsLargeStrains.hpp>
 #include <PlasticOpsMonitor.hpp>

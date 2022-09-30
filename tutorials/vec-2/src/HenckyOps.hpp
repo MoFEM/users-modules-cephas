@@ -78,6 +78,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   boost::shared_ptr<MatrixDouble> matDPtr;
   boost::shared_ptr<MatrixDouble> matLogCPlastic;
   boost::shared_ptr<VectorDouble> tempValPtr;
+  boost::shared_ptr<MatrixDouble> tempFluxValPtr;
 
   MatrixDouble matEigVal;
   MatrixDouble matEigVec;

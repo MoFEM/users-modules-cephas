@@ -206,8 +206,8 @@ inline long double hardening_dtemp(long double tau, double temp) {
 #include <OpPostProcElastic.hpp>
 using namespace PlasticOps;
 #include <PlasticThermalOps.hpp>
-
 using namespace HenckyOps;
+
 struct Example {
 
   Example(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -447,6 +447,8 @@ MoFEMErrorCode Example::createCommonData() {
     commonHenckyDataPtr->matLogCPlastic =
         commonPlasticDataPtr->getPlasticStrainPtr();
     commonHenckyDataPtr->tempValPtr = commonPlasticDataPtr->getTempValPtr();
+    commonHenckyDataPtr->tempFluxValPtr =
+        commonPlasticDataPtr->getTempFluxValPtr();
     commonPlasticDataPtr->mStrainPtr = commonHenckyDataPtr->getMatLogC();
     commonPlasticDataPtr->mStressPtr =
         commonHenckyDataPtr->getMatHenckyStress();
@@ -901,7 +903,8 @@ MoFEMErrorCode Example::OPs() {
     auto unity = []() { return 1; };
     // NEW OPERATOR NEEDED TO CONVERT RESISTANCE to CURRENT CONFIG
     if (is_large_strains) {
-      pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
+      pipeline.push_back(new PlasticThermalOps::OpHdivHdivLargeStrains(
+          "FLUX", "FLUX", commonPlasticDataPtr, resistance));
     } else {
       pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
     }
@@ -922,8 +925,7 @@ MoFEMErrorCode Example::OPs() {
     auto unity = [](const double, const double, const double) { return 1; };
     if (is_large_strains) {
       pipeline.push_back(new PlasticThermalOps::OpHdivFluxLargeStrains(
-          "FLUX", commonPlasticDataPtr,
-          commonPlasticDataPtr->getTempFluxValPtr(), resistance));
+          "FLUX", commonPlasticDataPtr, resistance));
     } else {
       pipeline.push_back(new OpHdivFlux(
           "FLUX", commonPlasticDataPtr->getTempFluxValPtr(), resistance));

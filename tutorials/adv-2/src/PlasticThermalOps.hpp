@@ -25,13 +25,13 @@ struct CommonData : public PlasticOps::CommonData {
   // boost::shared_ptr<MatrixDouble> matDPtr;
   // boost::shared_ptr<MatrixDouble> matLogCPlastic;
 
-  MatrixDouble tempFluxVal;
+  // MatrixDouble tempFluxVal;
   VectorDouble templDivFlux;
   VectorDouble tempValDot;
 
-  inline auto getTempFluxValPtr() {
-    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &tempFluxVal);
-  }
+  // inline auto getTempFluxValPtr() {
+  //   return boost::shared_ptr<MatrixDouble>(shared_from_this(), &tempFluxVal);
+  // }
   inline auto getTempValDotPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &tempValDot);
   }
@@ -64,7 +64,6 @@ private:
 struct OpHdivFluxLargeStrains : public AssemblyDomainEleOp {
   OpHdivFluxLargeStrains(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr,
-                         boost::shared_ptr<MatrixDouble> vec,
                          ScalarFun beta_coeff);
 
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data);
@@ -72,7 +71,19 @@ struct OpHdivFluxLargeStrains : public AssemblyDomainEleOp {
 protected:
   ScalarFun betaCoeff;
   boost::shared_ptr<CommonData> commonDataPtr;
-  boost::shared_ptr<MatrixDouble> sourceVec;
+};
+
+struct OpHdivHdivLargeStrains : public AssemblyDomainEleOp {
+  OpHdivHdivLargeStrains(const std::string row_field_name,
+                         const std::string col_field_name,
+                         boost::shared_ptr<CommonData> common_data_ptr,
+                         ScalarFun beta_coeff);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+  ScalarFun betaCoeff;
 };
 
 struct OpKCauchyThermoElasticity : public AssemblyDomainEleOp {
@@ -174,9 +185,9 @@ OpPlasticHeatProduction::iNtegrate(EntitiesFieldData::EntData &data) {
 
 OpHdivFluxLargeStrains::OpHdivFluxLargeStrains(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<MatrixDouble> vec, ScalarFun beta_coeff)
+    ScalarFun beta_coeff)
     : AssemblyDomainEleOp(field_name, field_name, DomainEleOp::OPROW),
-      commonDataPtr(common_data_ptr), sourceVec(vec), betaCoeff(beta_coeff) {}
+      commonDataPtr(common_data_ptr), betaCoeff(beta_coeff) {}
 
 MoFEMErrorCode
 OpHdivFluxLargeStrains::iNtegrate(EntitiesFieldData::EntData &data) {
@@ -184,7 +195,7 @@ OpHdivFluxLargeStrains::iNtegrate(EntitiesFieldData::EntData &data) {
 
   const size_t nb_integration_pts = data.getN().size1();
 
-  const size_t nb_base_functions = data.getN().size2() / SPACE_DIM;
+  const size_t nb_base_functions = data.getN().size2() / 3;
   // get volume or area
   const double vol = getMeasure();
   // get integration weights
@@ -196,7 +207,7 @@ OpHdivFluxLargeStrains::iNtegrate(EntitiesFieldData::EntData &data) {
   // create delta kronecker
   constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
   //  get the values of flux
-  auto t_vec = getFTensor1FromMat<SPACE_DIM>(*sourceVec);
+  auto t_vec = getFTensor1FromMat<3, 1>(commonDataPtr->tempFluxVal);
   // calculate gradient
   auto t_grad =
       getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
@@ -208,6 +219,7 @@ OpHdivFluxLargeStrains::iNtegrate(EntitiesFieldData::EntData &data) {
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_F;
     // define the determinant of the deformation gradient tensor
     double t_detF;
+    double inv_t_detF;
     // calculate deformation gradient tensor
     t_F(i, j) = t_grad(i, j) + t_kd(i, j);
     // calculate deforemation gradient determinant
@@ -217,19 +229,98 @@ OpHdivFluxLargeStrains::iNtegrate(EntitiesFieldData::EntData &data) {
       determinantTensor3by3(t_F, t_detF);
     }
 
-    const double alpha =
-        vol * t_w * betaCoeff(t_coords(0), t_coords(1), t_coords(2)) / t_detF;
+    inv_t_detF = 1. / t_detF;
 
-    size_t rr = 0;
-    for (; rr != AssemblyDomainEleOp::nbRows; ++rr) {
-      nf[rr] += alpha * t_base(i) * t_F(k, j) * t_F(i, k) * t_vec(j);
+    const double alpha = vol * t_w *
+                         betaCoeff(t_coords(0), t_coords(1), t_coords(2)) *
+                         inv_t_detF;
+
+    size_t bb = 0;
+    for (; bb != AssemblyDomainEleOp::nbRows; ++bb) {
+      nf[bb] += alpha * t_base(i) * ((t_F(k, i) * t_F(k, j)) * t_vec(j));
       ++t_base;
     }
-    for (; rr < nb_base_functions; ++rr)
+    for (; bb < nb_base_functions; ++bb)
       ++t_base;
 
     ++t_w;
     ++t_vec;
+    ++t_coords;
+    ++t_grad;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+OpHdivHdivLargeStrains::OpHdivHdivLargeStrains(
+    const std::string row_field_name, const std::string col_field_name,
+    boost::shared_ptr<CommonData> common_data_ptr, ScalarFun beta_coeff)
+    : AssemblyDomainEleOp(row_field_name, col_field_name,
+                          DomainEleOp::OPROWCOL),
+      commonDataPtr(common_data_ptr), betaCoeff(beta_coeff) {
+  sYmm = false;
+}
+
+MoFEMErrorCode
+OpHdivHdivLargeStrains::iNtegrate(EntitiesFieldData::EntData &row_data,
+                                  EntitiesFieldData::EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  const size_t nb_integration_pts = row_data.getN().size1();
+
+  const size_t nb_row_base_functions = row_data.getN().size2() / 3;
+  // get volume or area
+  const double vol = getMeasure();
+  // get integration weights
+  auto t_w = getFTensor0IntegrationWeight();
+  // get base function gradient on rows
+  auto t_row_base = row_data.getFTensor1N<3>();
+  // get coordinates
+  auto t_coords = getFTensor1CoordsAtGaussPts();
+  // create delta kronecker
+  constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+  // calculate gradient
+  auto t_grad =
+      getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
+
+  for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+    // define the deformation grandient tensor
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_F;
+    // define the determinant of the deformation gradient tensor
+    double t_detF;
+    double inv_t_detF;
+    // calculate deformation gradient tensor
+    t_F(i, j) = t_grad(i, j) + t_kd(i, j);
+    // calculate deforemation gradient determinant
+    if (SPACE_DIM == 2) {
+      determinantTensor2by2(t_F, t_detF);
+    } else {
+      determinantTensor3by3(t_F, t_detF);
+    }
+
+    inv_t_detF = 1. / t_detF;
+
+    const double beta = vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
+    const double alpha = beta * t_w * inv_t_detF;
+
+    auto a_mat_ptr = &*AssemblyDomainEleOp::locMat.data().begin();
+    size_t rr = 0;
+    for (; rr != AssemblyDomainEleOp::nbRows / SPACE_DIM; ++rr) {
+      auto t_col_base = col_data.getFTensor1N<3>(gg, 0);
+
+      for (size_t cc = 0; cc != AssemblyDomainEleOp::nbCols; cc++) {
+        // calculate element of local matrix
+        (*a_mat_ptr) += alpha * (t_row_base(i) * t_col_base(i));
+        ++t_col_base;
+        ++a_mat_ptr;
+      }
+
+      ++t_row_base;
+    }
+    for (; rr != nb_row_base_functions; ++rr)
+      ++t_row_base;
+
+    ++t_w;
     ++t_coords;
     ++t_grad;
   }
