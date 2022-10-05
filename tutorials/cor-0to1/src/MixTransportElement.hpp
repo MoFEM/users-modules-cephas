@@ -5,8 +5,6 @@
  *
  */
 
-
-
 #ifndef _MIX_TRANPORT_ELEMENT_HPP_
 #define _MIX_TRANPORT_ELEMENT_HPP_
 
@@ -207,8 +205,8 @@ struct MixTransportElement {
   }
 
   /// \brief add finite elements
-  MoFEMErrorCode addFiniteElements(
-      const std::string &fluxes_name, const std::string &values_name) {
+  MoFEMErrorCode addFiniteElements(const std::string &fluxes_name,
+                                   const std::string &values_name) {
     MoFEMFunctionBegin;
 
     // Set up volume element operators. Operators are used to calculate
@@ -433,16 +431,7 @@ struct MixTransportElement {
     PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore> post_proc(
         mField);
 
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    post_proc.getOpPtrVector().push_back(new OpCalculateHOJac<3>(jac_ptr));
-    post_proc.getOpPtrVector().push_back(
-        new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
-    post_proc.getOpPtrVector().push_back(
-        new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
-    post_proc.getOpPtrVector().push_back(
-        new OpSetHOInvJacToScalarBases<3>(L2, inv_jac_ptr));
+    CHKERR AddHOOps<3, 3, 3>::add(post_proc.getOpPtrVector(), {HDIV, L2});
 
     auto values_ptr = boost::make_shared<VectorDouble>();
     auto grad_ptr = boost::make_shared<MatrixDouble>();
@@ -519,8 +508,7 @@ struct MixTransportElement {
     // clear operator, just in case if some other operators are left on this
     // element
     feTri.getOpPtrVector().clear();
-    feTri.getOpPtrVector().push_back(
-        new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
+    CHKERR AddHOOps<2, 3, 3>::add(feTri.getOpPtrVector(), {HDIV});
     // set operator to calculate essential boundary conditions
     feTri.getOpPtrVector().push_back(new OpEvaluateBcOnFluxes(*this, "FLUXES"));
     CHKERR mField.loop_finite_elements("MIX", "MIX_BCFLUX", feTri);
@@ -531,6 +519,7 @@ struct MixTransportElement {
 
     // set operators to calculate matrix and right hand side vectors
     feVol.getOpPtrVector().clear();
+    CHKERR AddHOOps<3, 3, 3>::add(feVol.getOpPtrVector(), {HDIV, L2});
     feVol.getOpPtrVector().push_back(new OpL2Source(*this, "VALUES", F));
     feVol.getOpPtrVector().push_back(
         new OpFluxDivergenceAtGaussPts(*this, "FLUXES"));
@@ -545,8 +534,7 @@ struct MixTransportElement {
 
     // calculate right hand side for natural boundary conditions
     feTri.getOpPtrVector().clear();
-    feTri.getOpPtrVector().push_back(
-        new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
+    CHKERR AddHOOps<2, 3, 3>::add(feTri.getOpPtrVector(), {HDIV});
     feTri.getOpPtrVector().push_back(new OpRhsBcOnValues(*this, "FLUXES", F));
     CHKERR mField.loop_finite_elements("MIX", "MIX_BCVALUE", feTri);
 
@@ -630,6 +618,7 @@ struct MixTransportElement {
     CHKERR VecAssemblyEnd(F);
     // calculate residuals
     feVol.getOpPtrVector().clear();
+    CHKERR AddHOOps<3, 3, 3>::add(feVol.getOpPtrVector(), {HDIV, L2});
     feVol.getOpPtrVector().push_back(new OpL2Source(*this, "VALUES", F));
     feVol.getOpPtrVector().push_back(
         new OpFluxDivergenceAtGaussPts(*this, "FLUXES"));
@@ -689,6 +678,7 @@ struct MixTransportElement {
     CHKERR mField.loop_finite_elements("MIX", "MIX_SKELETON", feTri, 0,
                                        mField.get_comm_size());
     feVol.getOpPtrVector().clear();
+    CHKERR AddHOOps<3, 3, 3>::add(feVol.getOpPtrVector(), {HDIV, L2});
     feVol.getOpPtrVector().push_back(
         new OpFluxDivergenceAtGaussPts(*this, "FLUXES"));
     feVol.getOpPtrVector().push_back(
@@ -912,7 +902,7 @@ struct MixTransportElement {
       int gg = 0;
       for (; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        for(auto &v : divVec) {
+        for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
         }
@@ -1112,7 +1102,7 @@ struct MixTransportElement {
         const double x = getCoordsAtGaussPts()(gg, 0);
         const double y = getCoordsAtGaussPts()(gg, 1);
         const double z = getCoordsAtGaussPts()(gg, 2);
-        
+
         double value;
         CHKERR cTx.getBcOnValues(fe_ent, gg, x, y, z, value);
         ;
@@ -1353,7 +1343,7 @@ struct MixTransportElement {
       auto t_base_diff_hdiv = data.getFTensor2DiffN<3, 3>();
 
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
-        for(auto &v : divVec) {
+        for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
         }
@@ -1434,7 +1424,7 @@ struct MixTransportElement {
         *error_face_jump_ptr = pow(*error_face_jump_ptr, 2);
         *error_jump_ptr += *error_face_jump_ptr;
       }
-       
+
       *error_flux_ptr = 0;
       *error_div_ptr = 0;
       deltaFlux.resize(3, false);
