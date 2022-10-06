@@ -30,6 +30,9 @@ template <> struct ElementsAndOps<3> {
 
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
+constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
+constexpr IntegrationType G =
+    IntegrationType::GAUSS; //< selected integration type
 
 constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
 using EntData = EntitiesFieldData::EntData;
@@ -39,54 +42,50 @@ using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
-using AssemblyDomainEleOp =
-    FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
+using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
 
 //! [Only used with Hooke equation (linear material model)]
-using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
 using OpInternalForceCauchy = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+    PETSC>::LinearForm<G>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 //! [Only used with Hooke equation (linear material model)]
 
 //! [Only used for dynamics]
-using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+using OpMass = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
 using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+    PETSC>::LinearForm<G>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Only used for dynamics]
 
 //! [Only used with Hencky/nonlinear material]
-using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
     GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+    PETSC>::LinearForm<G>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 //! [Only used with Hencky/nonlinear material]
 
 //! [Essential boundary conditions]
 using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpMass<1, SPACE_DIM>;
+    PETSC>::BiLinearForm<G>::OpMass<1, SPACE_DIM>;
 using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
+    PETSC>::LinearForm<G>::OpBaseTimesVector<1, SPACE_DIM, 0>;
 using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+    PETSC>::LinearForm<G>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Essential boundary conditions]
 using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 
-using DomainNaturalBC =
-    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using DomainNaturalBC = NaturalBC<DomainEleOp>::Assembly<A>::LinearForm<G>;
 using OpBodyForce =
     DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
 
-using BoundaryNaturalBC =
-    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using BoundaryNaturalBC = NaturalBC<BoundaryEleOp>::Assembly<A>::LinearForm<G>;
 using OpForce =
     BoundaryNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
 
-using OpEssentialLhs =
-    EssentialBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<
-        GAUSS>::OpEssentialLhs<DisplacementCubitBcData, 1, SPACE_DIM>;
-using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
+using OpEssentialLhs = EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<
+    GAUSS>::OpEssentialLhs<DisplacementCubitBcData, 1, SPACE_DIM>;
+using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<
     GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
 
 PetscBool is_large_strains = PETSC_TRUE;
@@ -542,7 +541,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_lhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<GAUSS>::
+    CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<G>::
         AddEssentialToPipeline<OpEssentialLhs>::add(
             mField, pipeline, simple->getProblemName(), "U");
     MoFEMFunctionReturn(0);
@@ -562,7 +561,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
 
-    CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>::
+    CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<G>::
         AddEssentialToPipeline<OpEssentialRhs>::add(
             mField, pipeline, simple->getProblemName(), "U", u_mat_ptr,
             {boost::make_shared<TimeScale>()});
