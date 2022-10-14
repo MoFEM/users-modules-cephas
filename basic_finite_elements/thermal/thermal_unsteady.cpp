@@ -90,7 +90,7 @@ struct MonitorPostProc: public FEMethod {
     int step;
     CHKERR TSGetTimeStepNumber(ts,&step); 
     
-    if((step)%pRT==0) {
+    if(pRT && (step)%pRT==0) {
       CHKERR mField.loop_finite_elements("DMTHERMAL","THERMAL_FE",postProc); 
       std::ostringstream sss;
       sss << "out_thermal_" << step << ".h5m";
@@ -569,7 +569,7 @@ int main(int argc, char *argv[]) {
   PetscBool is_partitioned = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-dm_is_partitioned",
                              &is_partitioned, PETSC_NULL);
-  if (save_solution)                           
+  if (save_solution) {                        
     if (is_partitioned) {
       CHKERR moab.write_file("solution.h5m");
     } else {
