@@ -563,14 +563,19 @@ int main(int argc, char *argv[]) {
 
   // save solution, if boundary conditions are defined you can use that file in
   // mechanical problem to calculate thermal stresses
+  PetscBool save_solution = PETSC_TRUE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-my_save_solution",
+                             &save_solution, PETSC_NULL);
   PetscBool is_partitioned = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-dm_is_partitioned",
                              &is_partitioned, PETSC_NULL);
-  if (is_partitioned) {
-    CHKERR moab.write_file("solution.h5m");
-  } else {
-    if (m_field.get_comm_rank() == 0) {
+  if (save_solution)                           
+    if (is_partitioned) {
       CHKERR moab.write_file("solution.h5m");
+    } else {
+      if (m_field.get_comm_rank() == 0) {
+        CHKERR moab.write_file("solution.h5m");
+      }
     }
   }
 
