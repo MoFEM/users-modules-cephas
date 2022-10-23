@@ -213,32 +213,6 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
     CHKERR damperElementPtr->setOperators(3);
 
     // auto dm = mField.getInterface<Simple>()->getDM();
-    auto bc_mng = mField.getInterface<BcManager>();
-    auto *pipeline_mng = mField.getInterface<PipelineManager>();
-
-    // FIXME: this has to also work with removeDofsOnEntitiesNotDistributed !!! 
-    // CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_X",
-    //                                          positionField, 0, 0);
-    // CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_Y",
-    //                                          positionField, 1, 1);
-    // CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_Z",
-    //                                          positionField, 2, 2);
-    // CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_ALL",
-    //                                          positionField, 0, 3);
-
-    CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "FIX_X",
-                                          positionField, 0, 0);
-    CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "FIX_Y",
-                                          positionField, 1, 1);
-    CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "FIX_Z",
-                                          positionField, 2, 2);
-    CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "FIX_ALL",
-                                          positionField, 0, 3);
-    CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "ROTATE",
-                                          positionField, 0, 3);
-
-    mBoundaryMarker =
-        bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE"});
 
     auto get_id_block_param = [&](string base_name, int id) {
       char load_hist_file[255] = "hist.in";
@@ -376,17 +350,41 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
       return 2 * approx_order + 1;
     };
 
-    // CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_vol);
-    // CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_vol);
-    // CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(
-    //     integration_rule_boundary);
-    // CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(
-    //     integration_rule_boundary);
-
     springLhsPtr->getRuleHook = integration_rule_boundary;
     springRhsPtr->getRuleHook = integration_rule_boundary;
     bodyForceLhsPtr->getRuleHook = integration_rule_vol;
     bodyForceRhsPtr->getRuleHook = integration_rule_vol;
+
+    // set other boundary conditions
+    auto bc_mng = mField.getInterface<BcManager>();
+    auto *pipeline_mng = mField.getInterface<PipelineManager>();
+
+    CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_X",
+                                             positionField, 0, 0, true,
+                                             isPartitioned);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_Y",
+                                             positionField, 1, 1, true,
+                                             isPartitioned);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_Z",
+                                             positionField, 2, 2, true,
+                                             isPartitioned);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(domainProblemName, "REMOVE_ALL",
+                                             positionField, 0, 2, true,
+                                             isPartitioned);
+
+    CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "FIX_X",
+                                          positionField, 0, 0);
+    CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "FIX_Y",
+                                          positionField, 1, 1);
+    CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "FIX_Z",
+                                          positionField, 2, 2);
+    CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "FIX_ALL",
+                                          positionField, 0, 2);
+    CHKERR bc_mng->pushMarkDOFsOnEntities(domainProblemName, "ROTATE",
+                                          positionField, 0, 2);
+
+    mBoundaryMarker =
+        bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE"});
 
     MoFEMFunctionReturnHot(0);
   };
@@ -414,7 +412,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
   MoFEMErrorCode updateElementVariables() override { return 0; };
   MoFEMErrorCode postProcessElement(int step) override { return 0; };
-
+  
   string getHistoryParam(string prefix) {
     char load_hist_file[255] = "hist.in";
     PetscBool ctg_flag = PETSC_FALSE;
@@ -549,12 +547,6 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
     MoFEMFunctionReturnHot(0);
   }
-
-  // template <> MoFEMErrorCode setupSolverFunction<SNES>(const TSType type);
-  // template <> MoFEMErrorCode setupSolverJacobian<SNES>(const TSType type);
-  // template <> MoFEMErrorCode setupSolverFunction<TS>(const TSType type);
-  // template <> MoFEMErrorCode setupSolverJacobian<TS>(const TSType type);
-
 
   MoFEMErrorCode setupSolverFunctionSNES() override {
     MoFEMFunctionBegin;
