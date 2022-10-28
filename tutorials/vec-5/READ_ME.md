@@ -62,7 +62,7 @@ mpirun -np 6 ./free_surface -ts_dt 1e-2 -ts_max_time 800 -file_name wetting_angl
 
 ../../tools/mofem_part -my_file super_fine_wetting_70.cub -output_file super_fine_wetting_70.h5m -my_nparts 6 -dim 2 -adj_dim 1
 
-mpirun -np 6 ./free_surface -ts_dt 1e-3 -ts_max_time 800 -file_name super_fine_wetting_70.h5m -log_sl inform -snes_stol 0 -snes_atol 1e-10 -snes_rtol 1e-10 -ts_adapt_type none -snes_monitor
+mpirun -np 6 ./free_surface -ts_dt 5e-4 -ts_max_time 800 -file_name super_fine_wetting_70.h5m -log_sl inform -snes_stol 0 -snes_atol 1e-10 -snes_rtol 1e-10 -ts_adapt_type none -snes_monitor
 
 
 
@@ -96,3 +96,4 @@ mpirun -np 6 ./free_surface -ts_dt 5e-4 -ts_max_time 800 -file_name super_duper_
 
 ------------------------------------
 ../../tools/convert.py -np 4  out_step*h5m
+zip out.zip out_step*.vtk
