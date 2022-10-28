@@ -48,15 +48,18 @@ MoFEMErrorCode FluidPressure::OpCalculatePressure::doWork(
                   &data.getN()(gg, 0), 1, &Nf[rr], rank);
     }
   }
+  
+  // Scale force using user defined scaling operator
+  CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
 
-  if (F == PETSC_NULL)
-    F = getKSPf();
+  auto get_f = [&]() {
+    if (F == PETSC_NULL)
+      return getKSPf();
+    return F;
+  };
 
-  if (F == PETSC_NULL)
-    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "impossible case");
-
-  CHKERR VecSetValues(F, data.getIndices().size(), &data.getIndices()[0],
-                      &Nf[0], ADD_VALUES);
+  // Assemble force into vector
+  CHKERR VecSetValues(get_f(), data, &*Nf.data().begin(), ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }

@@ -31,6 +31,8 @@ using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = EntitiesFieldData::EntData;
 
+constexpr int SPACE_DIM = 3;
+
 // Use forms iterators for Grad-Grad term
 using OpGradGrad = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradGrad<1, 1, 3>;
@@ -297,16 +299,34 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline_mng->getDomainLhsFE().reset();
     pipeline_mng->getDomainRhsFE().reset();
     auto post_proc_fe =
-        boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
-    post_proc_fe->generateReferenceElementMesh();
+        boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
+
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateHOJacForFaceEmbeddedIn3DSpace(jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
-        new OpInvertMatrix<3>(jac_ptr, det_ptr, inv_jac_ptr));
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(inv_jac_ptr));
-    post_proc_fe->addFieldValuesPostProc("U");
-    post_proc_fe->addFieldValuesGradientPostProc("U");
+
+    auto u_ptr = boost::make_shared<VectorDouble>();
+    auto grad_ptr = boost::make_shared<MatrixDouble>();
+
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("U", u_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldGradient<SPACE_DIM>("U", grad_ptr));
+
+    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+    post_proc_fe->getOpPtrVector().push_back(new OpPPMap(
+        post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+        {{"U", u_ptr}},
+
+        {{"GRAD_U", grad_ptr}},
+
+        {}, {}));
+
     pipeline_mng->getDomainRhsFE() = post_proc_fe;
     CHKERR pipeline_mng->loopFiniteElements();
     CHKERR post_proc_fe->writeFile(out_name);

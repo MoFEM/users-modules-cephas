@@ -114,106 +114,6 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
 
   MoFEMFunctionReturn(0);
 }
-template <int DIM> struct OpPostProcContact : public DomainEleOp {
-  OpPostProcContact(const std::string field_name,
-                    moab::Interface &post_proc_mesh,
-                    std::vector<EntityHandle> &map_gauss_pts,
-                    boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-private:
-  moab::Interface &postProcMesh;
-  std::vector<EntityHandle> &mapGaussPts;
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
-
-//! [Operators definitions]
-template <int DIM>
-OpPostProcContact<DIM>::OpPostProcContact(
-    const std::string field_name, moab::Interface &post_proc_mesh,
-    std::vector<EntityHandle> &map_gauss_pts,
-    boost::shared_ptr<CommonData> common_data_ptr)
-    : DomainEleOp(field_name, DomainEleOp::OPROW), postProcMesh(post_proc_mesh),
-      mapGaussPts(map_gauss_pts), commonDataPtr(common_data_ptr) {
-  // Opetor is only executed for vertices
-  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
-}
-
-//! [Postprocessing]
-template <int DIM>
-MoFEMErrorCode OpPostProcContact<DIM>::doWork(int side, EntityType type,
-                                              EntData &data) {
-  MoFEMFunctionBegin;
-
-  auto set_float_precision = [](const double x) {
-    if (std::abs(x) < std::numeric_limits<float>::epsilon())
-      return 0.;
-    else
-      return x;
-  };
-
-  auto get_tag_mat = [&](const std::string name) {
-    std::array<double, 9> def;
-    std::fill(def.begin(), def.end(), 0);
-    Tag th;
-    CHKERR postProcMesh.tag_get_handle(name.c_str(), 9, MB_TYPE_DOUBLE, th,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE,
-                                       def.data());
-    return th;
-  };
-
-  auto get_tag_vec = [&](const std::string name) {
-    std::array<double, 3> def;
-    std::fill(def.begin(), def.end(), 0);
-    Tag th;
-    CHKERR postProcMesh.tag_get_handle(name.c_str(), 3, MB_TYPE_DOUBLE, th,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE,
-                                       def.data());
-    return th;
-  };
-
-  MatrixDouble3by3 mat(3, 3);
-
-  auto set_matrix = [&](auto &t) -> MatrixDouble3by3 & {
-    mat.clear();
-    for (size_t r = 0; r != DIM; ++r)
-      for (size_t c = 0; c != DIM; ++c)
-        mat(r, c) = set_float_precision(t(r, c));
-    return mat;
-  };
-
-  auto set_vector = [&](auto &t) -> MatrixDouble3by3 & {
-    mat.clear();
-    for (size_t r = 0; r != DIM; ++r)
-      mat(0, r) = set_float_precision(t(r));
-    return mat;
-  };
-
-  auto set_tag = [&](auto th, auto gg, MatrixDouble3by3 &mat) {
-    return postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1,
-                                     &*mat.data().begin());
-  };
-
-  auto th_stress = get_tag_mat("SIGMA");
-  auto th_div = get_tag_vec("DIV_SIGMA");
-
-  size_t nb_gauss_pts = getGaussPts().size2();
-  auto t_stress =
-      getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->contactStressPtr));
-  auto t_div =
-      getFTensor1FromMat<DIM>(*(commonDataPtr->contactStressDivergencePtr));
-
-  for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-    CHKERR set_tag(th_stress, gg, set_matrix(t_stress));
-    CHKERR set_tag(th_div, gg, set_vector(t_div));
-    ++t_stress;
-    ++t_div;
-  }
-
-  MoFEMFunctionReturn(0);
-}
-//! [Postprocessing]
 
 struct Monitor : public FEMethod {
 
@@ -240,7 +140,6 @@ struct Monitor : public FEMethod {
         new OpPostProcVertex(*m_field_ptr, "U", commonDataPtr, &moabVertex));
 
     postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
-    postProcFe->generateReferenceElementMesh();
 
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -281,15 +180,31 @@ struct Monitor : public FEMethod {
         new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
             "SIGMA", commonDataPtr->contactStressPtr));
 
+    auto u_ptr = boost::make_shared<MatrixDouble>();
     postProcFe->getOpPtrVector().push_back(
-        new Tutorial::OpPostProcElastic<SPACE_DIM>(
-            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-            commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr));
+        new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
-    postProcFe->getOpPtrVector().push_back(new OpPostProcContact<SPACE_DIM>(
-        "SIGMA", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-        commonDataPtr));
-    postProcFe->addFieldValuesPostProc("U", "DISPLACEMENT");
+    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+    postProcFe->getOpPtrVector().push_back(
+
+        new OpPPMap(
+
+            postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
+
+            {},
+
+            {{"U", u_ptr}},
+
+            {{"SIGMA", commonDataPtr->contactStressPtr}},
+
+            {{"STRAIN", commonDataPtr->mStrainPtr},
+             {"STRESS", commonDataPtr->mStressPtr}}
+
+            )
+
+    );
+
   }
 
   MoFEMErrorCode preProcess() { return 0; }

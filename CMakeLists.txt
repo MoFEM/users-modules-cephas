@@ -3,14 +3,14 @@
 cmake_minimum_required (VERSION 3.1.3)
 
 project(MoFEM-UserModules 
-  VERSION 0.13.1
+  VERSION 0.13.2
   DESCRIPTION "Finite element framework" 
   LANGUAGES C CXX)
 
 # Set fallback version. Fallback version is version of users moudles which is used
 # as default version if version from the git tags can not be extracted. For example 
 # that is a case when someone install mofem from tarball.
-set(UM_FALLBACK_VERSION "0.13.1" CACHE STRING "Fallback version" FORCE)
+set(UM_FALLBACK_VERSION "0.13.2" CACHE STRING "Fallback version" FORCE)
 message(STATUS "Falback version v${UM_FALLBACK_VERSION}")
 
 #search include directories before system directories
@@ -97,6 +97,8 @@ include_directories(${MoFEM_INSTALL_DIR}/include/multi_indices)
 include_directories(${MoFEM_INSTALL_DIR}/include/interfaces)
 include_directories(${MoFEM_INSTALL_DIR}/include/petsc)
 include_directories(${MoFEM_INSTALL_DIR}/include/finite_elements)
+include_directories(${MoFEM_INSTALL_DIR}/include/post_proc)
+include_directories(${MoFEM_INSTALL_DIR}/include/boundary_conditions)
 include_directories(${MoFEM_INSTALL_DIR}/third_party)
 include_directories(${MoFEM_INSTALL_DIR}/third_party/cblas)
 

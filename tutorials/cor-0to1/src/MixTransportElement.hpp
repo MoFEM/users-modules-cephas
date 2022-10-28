@@ -5,8 +5,6 @@
  *
  */
 
-
-
 #ifndef _MIX_TRANPORT_ELEMENT_HPP_
 #define _MIX_TRANPORT_ELEMENT_HPP_
 
@@ -207,8 +205,8 @@ struct MixTransportElement {
   }
 
   /// \brief add finite elements
-  MoFEMErrorCode addFiniteElements(
-      const std::string &fluxes_name, const std::string &values_name) {
+  MoFEMErrorCode addFiniteElements(const std::string &fluxes_name,
+                                   const std::string &values_name) {
     MoFEMFunctionBegin;
 
     // Set up volume element operators. Operators are used to calculate
@@ -429,15 +427,42 @@ struct MixTransportElement {
    */
   MoFEMErrorCode postProc(const string out_file) {
     MoFEMFunctionBegin;
-    PostProcVolumeOnRefinedMesh post_proc(mField);
-    CHKERR post_proc.generateReferenceElementMesh();
-    CHKERR post_proc.addFieldValuesPostProc("VALUES");
-    CHKERR post_proc.addFieldValuesGradientPostProc("VALUES");
-    CHKERR post_proc.addFieldValuesPostProc("FLUXES");
-    // CHKERR post_proc.addHdivFunctionsPostProc("FLUXES");
+
+    PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore> post_proc(
+        mField);
+
+    CHKERR AddHOOps<3, 3, 3>::add(post_proc.getOpPtrVector(), {HDIV, L2});
+
+    auto values_ptr = boost::make_shared<VectorDouble>();
+    auto grad_ptr = boost::make_shared<MatrixDouble>();
+    auto flux_ptr = boost::make_shared<MatrixDouble>();
+
     post_proc.getOpPtrVector().push_back(
-        new OpPostProc(post_proc.postProcMesh, post_proc.mapGaussPts));
+        new OpCalculateScalarFieldValues("VALUES", values_ptr));
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateScalarFieldGradient<3>("VALUES", grad_ptr));
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateHVecVectorField<3>("FLUXES", flux_ptr));
+
+    using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+    post_proc.getOpPtrVector().push_back(
+
+        new OpPPMap(post_proc.getPostProcMesh(), post_proc.getMapGaussPts(),
+
+                    {{"VALUES", values_ptr}},
+
+                    {{"GRAD", grad_ptr}, {"FLUXES", flux_ptr}},
+
+                    {}, {}
+
+                    ));
+
+    post_proc.getOpPtrVector().push_back(new OpPostProc(
+        post_proc.getPostProcMesh(), post_proc.getMapGaussPts()));
+
     CHKERR mField.loop_finite_elements("MIX", "MIX", post_proc);
+
     CHKERR post_proc.writeFile(out_file.c_str());
     MoFEMFunctionReturn(0);
   }
@@ -483,8 +508,7 @@ struct MixTransportElement {
     // clear operator, just in case if some other operators are left on this
     // element
     feTri.getOpPtrVector().clear();
-    feTri.getOpPtrVector().push_back(
-        new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
+    CHKERR AddHOOps<2, 3, 3>::add(feTri.getOpPtrVector(), {HDIV});
     // set operator to calculate essential boundary conditions
     feTri.getOpPtrVector().push_back(new OpEvaluateBcOnFluxes(*this, "FLUXES"));
     CHKERR mField.loop_finite_elements("MIX", "MIX_BCFLUX", feTri);
@@ -495,6 +519,7 @@ struct MixTransportElement {
 
     // set operators to calculate matrix and right hand side vectors
     feVol.getOpPtrVector().clear();
+    CHKERR AddHOOps<3, 3, 3>::add(feVol.getOpPtrVector(), {HDIV, L2});
     feVol.getOpPtrVector().push_back(new OpL2Source(*this, "VALUES", F));
     feVol.getOpPtrVector().push_back(
         new OpFluxDivergenceAtGaussPts(*this, "FLUXES"));
@@ -509,8 +534,7 @@ struct MixTransportElement {
 
     // calculate right hand side for natural boundary conditions
     feTri.getOpPtrVector().clear();
-    feTri.getOpPtrVector().push_back(
-        new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
+    CHKERR AddHOOps<2, 3, 3>::add(feTri.getOpPtrVector(), {HDIV});
     feTri.getOpPtrVector().push_back(new OpRhsBcOnValues(*this, "FLUXES", F));
     CHKERR mField.loop_finite_elements("MIX", "MIX_BCVALUE", feTri);
 
@@ -594,6 +618,7 @@ struct MixTransportElement {
     CHKERR VecAssemblyEnd(F);
     // calculate residuals
     feVol.getOpPtrVector().clear();
+    CHKERR AddHOOps<3, 3, 3>::add(feVol.getOpPtrVector(), {HDIV, L2});
     feVol.getOpPtrVector().push_back(new OpL2Source(*this, "VALUES", F));
     feVol.getOpPtrVector().push_back(
         new OpFluxDivergenceAtGaussPts(*this, "FLUXES"));
@@ -653,6 +678,7 @@ struct MixTransportElement {
     CHKERR mField.loop_finite_elements("MIX", "MIX_SKELETON", feTri, 0,
                                        mField.get_comm_size());
     feVol.getOpPtrVector().clear();
+    CHKERR AddHOOps<3, 3, 3>::add(feVol.getOpPtrVector(), {HDIV, L2});
     feVol.getOpPtrVector().push_back(
         new OpFluxDivergenceAtGaussPts(*this, "FLUXES"));
     feVol.getOpPtrVector().push_back(
@@ -876,7 +902,7 @@ struct MixTransportElement {
       int gg = 0;
       for (; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        for(auto &v : divVec) {
+        for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
         }
@@ -1076,7 +1102,7 @@ struct MixTransportElement {
         const double x = getCoordsAtGaussPts()(gg, 0);
         const double y = getCoordsAtGaussPts()(gg, 1);
         const double z = getCoordsAtGaussPts()(gg, 2);
-        
+
         double value;
         CHKERR cTx.getBcOnValues(fe_ent, gg, x, y, z, value);
         ;
@@ -1317,7 +1343,7 @@ struct MixTransportElement {
       auto t_base_diff_hdiv = data.getFTensor2DiffN<3, 3>();
 
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
-        for(auto &v : divVec) {
+        for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
         }
@@ -1398,7 +1424,7 @@ struct MixTransportElement {
         *error_face_jump_ptr = pow(*error_face_jump_ptr, 2);
         *error_jump_ptr += *error_face_jump_ptr;
       }
-       
+
       *error_flux_ptr = 0;
       *error_div_ptr = 0;
       deltaFlux.resize(3, false);

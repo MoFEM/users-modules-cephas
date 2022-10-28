@@ -15,39 +15,37 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
-  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
 };
 
 template <> struct ElementsAndOps<3> {
   using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = FaceElementForcesAndSourcesCore;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
 constexpr int SPACE_DIM = 3; //< Space dimension of problem, mesh
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
-using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
-using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+using DomainEleOp = DomainEle::UserDataOperator;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
+
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
-using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpSource<1, SPACE_DIM>;
+using DomainNaturalBC =
+    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpBodyForce =
+    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
 
-using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
+using BoundaryNaturalBC =
+    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
 
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.3;
@@ -169,57 +167,27 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
-                                           "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
-                                           "U", 1, 1);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
-                                           "U", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
-                                           "U", 0, 3);
-
-  auto get_time = [&](double, double, double) {
-    auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-    return fe_domain_rhs->ts_t;
-  };
-
-  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    if (it->getName().compare(0, 5, "FORCE") == 0) {
-      Range force_edges;
-      std::vector<double> attr_vec;
-      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                 force_edges, true);
-      it->getAttributes(attr_vec);
-      if (attr_vec.size() < SPACE_DIM)
-        SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                "Wrong size of boundary attributes vector. Set right block "
-                "size attributes.");
-      auto force_vec_ptr = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
-      std::copy(&attr_vec[0], &attr_vec[SPACE_DIM],
-                force_vec_ptr->data().begin());
-      pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-          new OpBoundaryVec("U", force_vec_ptr, get_time,
-                            boost::make_shared<Range>(force_edges)));
-    }
-  }
+  CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
+      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U",
+      {boost::make_shared<TimeScale>()}, "FORCE", Sev::inform);
 
   //! [Define gravity vector]
-  auto get_body_force = [this](const double, const double, const double) {
-    auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    FTensor::Index<'i', SPACE_DIM> i;
-    FTensor::Tensor1<double, SPACE_DIM> t_source;
-    auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-    const auto time = fe_domain_rhs->ts_t;
-    // hardcoded gravity load in y direction
-    t_source(i) = 0;
-    t_source(1) = 1 * time;
-    return t_source;
-  };
-  //! [Define gravity vector]
+  CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
+      pipeline_mng->getOpDomainRhsPipeline(), mField, "U",
+      {boost::make_shared<TimeScale>()}, "BODY_FORCE", Sev::inform);
 
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", get_body_force));
+  // Essential BC
+  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+      simple->getProblemName(), "U");
+
+  auto get_bc_hook = [&]() {
+    EssentialPreProc<DisplacementCubitBcData> hook(
+        mField, pipeline_mng->getDomainRhsFE(),
+        {boost::make_shared<TimeScale>()});
+    return hook;
+  };
+
+  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook();
 
   MoFEMFunctionReturn(0);
 }
@@ -332,7 +300,6 @@ MoFEMErrorCode Example::solveSystem() {
 
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
 
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -358,11 +325,30 @@ MoFEMErrorCode Example::solveSystem() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
-  post_proc_fe->getOpPtrVector().push_back(new OpPostProcHencky<SPACE_DIM>(
-      "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
-      commonHenckyDataPtr));
+  auto u_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
-  post_proc_fe->addFieldValuesPostProc("U");
+  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(
+
+          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+          {},
+
+          {{"U", u_ptr}},
+
+          {{"GRAD", commonHenckyDataPtr->matGradPtr},
+           {"FIRST_PIOLA", commonHenckyDataPtr->getMatFirstPiolaStress()}},
+
+          {}
+
+          )
+
+  );
 
   // Add monitor to time solver
   boost::shared_ptr<FEMethod> null_fe;
@@ -413,7 +399,7 @@ MoFEMErrorCode Example::outputResults() {
     constexpr double regression_value = 1.09572;
     if (fabs(nrm2 - regression_value) > 1e-2)
       SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-              "Regression test faileed; wrong norm value.");
+              "Regression test field; wrong norm value.");
   }
   MoFEMFunctionReturn(0);
 }
@@ -455,7 +441,7 @@ int main(int argc, char *argv[]) {
 
     //! [Create MoFEM]
     MoFEM::Core core(moab);           ///< finite element database
-    MoFEM::Interface &m_field = core; ///< finite element database insterface
+    MoFEM::Interface &m_field = core; ///< finite element database interface
     //! [Create MoFEM]
 
     //! [Example]

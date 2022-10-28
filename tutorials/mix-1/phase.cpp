@@ -507,9 +507,10 @@ MoFEMErrorCode Example::outputResults(const int i) {
   pipeline_mng->getDomainLhsFE().reset();
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getBoundaryRhsFE().reset();
-  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-  post_proc_fe->generateReferenceElementMesh();
 
+  using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateHOJacForFace(jac_ptr));
@@ -517,8 +518,36 @@ MoFEMErrorCode Example::outputResults(const int i) {
   post_proc_fe->getOpPtrVector().push_back(
       new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
 
-  post_proc_fe->addFieldValuesPostProc("S");
-  post_proc_fe->addFieldValuesPostProc("PHI");
+  auto s_ptr = boost::make_shared<VectorDouble>();
+  auto phi_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues("S", s_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateHVecVectorField<3>("PHI", phi_ptr));
+
+  using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+  post_proc_fe->getOpPtrVector().push_back(
+
+      new OpPPMap(post_proc_fe->getPostProcMesh(),
+                  post_proc_fe->getMapGaussPts(),
+
+                  OpPPMap::DataMapVec{{"S", s_ptr}},
+
+                  OpPPMap::DataMapMat{{"PHI", phi_ptr}},
+
+                  OpPPMap::DataMapMat{},
+
+                  OpPPMap::DataMapMat{}
+
+                  )
+
+  );
+
+  // post_proc_fe->addFieldValuesPostProc("S");
+  // post_proc_fe->addFieldValuesPostProc("PHI");
+
+
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_" + boost::lexical_cast<std::string>(i) +

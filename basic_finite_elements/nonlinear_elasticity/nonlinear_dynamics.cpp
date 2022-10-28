@@ -480,8 +480,7 @@ int main(int argc, char *argv[]) {
                                                          "DISPLACEMENT");
       CHKERR m_field.modify_finite_element_add_field_data("DAMPER",
                                                           "DISPLACEMENT");
-      CHKERR m_field.modify_finite_element_add_field_data("DAMPER",
-                                                          "DOT_DISPLACEMENT");
+
       if (m_field.check_field("MESH_NODE_POSITIONS")) {
         CHKERR m_field.modify_finite_element_add_field_data(
             "DAMPER", "MESH_NODE_POSITIONS");

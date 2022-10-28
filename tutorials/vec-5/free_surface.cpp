@@ -26,11 +26,9 @@ template <int DIM> struct ElementsAndOps {};
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
   using DomianParentEle = FaceElementForcesAndSourcesCoreOnChildParent;
-  using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using BoundaryParentEle = EdgeElementForcesAndSourcesCoreOnChildParent;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
+  //using PostProcEle = PostProcFaceOnRefinedMesh;
   using SideEle = FaceElementForcesAndSourcesCoreOnSide;
   using SideOp = SideEle::UserDataOperator;
   using PostProcEdgeEle = PostProcEdgeOnRefinedMesh;
@@ -44,8 +42,11 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using SideEle = ElementsAndOps<SPACE_DIM>::SideEle;
 using EntData = DataForcesAndSourcesCore::EntData;
 using BoundaryParentEle = ElementsAndOps<SPACE_DIM>::BoundaryParentEle;
-using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
-using PostProcEdgeEle = ElementsAndOps<SPACE_DIM>::PostProcEdgeEle;
+
+using EntData = EntitiesFieldData::EntData;
+
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+using PostProcEdgeEle = PostProcBrokenMeshInMoab<BoundaryEle>;
 
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
@@ -65,8 +66,8 @@ using OpDomainSourceU = FormsIntegrators<DomainEleOp>::Assembly<
 using OpDomainSourceH = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, 1>;
 
-using OpBaseTimesScalarField = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalarField<1, 1>;
+using OpBaseTimesScalar = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesScalar<1, 1>;
 
 using OpMixScalarTimesDiv = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMixScalarTimesDiv<SPACE_DIM, coord_type>;
@@ -383,24 +384,23 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   auto post_proc = [&]() {
     MoFEMFunctionBegin;
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-    post_proc_fe->generateReferenceElementMesh();
 
     set_generic(post_proc_fe->getOpPtrVector(), post_proc_fe);
 
-    using OpPPMap = OpPostProcMap<2, 2>;
+    using OpPPMap = OpPostProcMapInMoab<2, 2>;
 
     post_proc_fe->getOpPtrVector().push_back(
 
         new OpPPMap(
-            post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-            OpPPMap::DataMapVec{{"H", h_ptr}, {"G", g_ptr}},
+            {{"H", h_ptr}, {"G", g_ptr}},
 
-            OpPPMap::DataMapMat{{"GRAD_H", grad_h_ptr}, {"GRAD_G", grad_g_ptr}},
+            {{"GRAD_H", grad_h_ptr}, {"GRAD_G", grad_g_ptr}},
 
-            OpPPMap::DataMapMat{},
+            {},
 
-            OpPPMap::DataMapMat{}
+            {}
 
             )
 
@@ -577,11 +577,11 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(new OpRhsH<false>("H", u_ptr, dot_h_ptr, h_ptr,
                                          grad_h_ptr, grad_g_ptr));
     pipeline.push_back(new OpRhsG<false>("G", h_ptr, grad_h_ptr, g_ptr));
-    pipeline.push_back(new OpBaseTimesScalarField(
+    pipeline.push_back(new OpBaseTimesScalar(
         "P", div_u_ptr, [](const double r, const double, const double) {
           return cylindrical(r);
         }));
-    pipeline.push_back(new OpBaseTimesScalarField(
+    pipeline.push_back(new OpBaseTimesScalar(
         "P", p_ptr, [](const double r, const double, const double) {
           return eps * cylindrical(r);
         }));
@@ -762,9 +762,6 @@ struct Monitor : public FEMethod {
     MoFEMFunctionBegin;
     constexpr int save_every_nth_step = 50;
     if (ts_step % save_every_nth_step == 0) {
-      postProc->elementsMap
-          .clear(); // clear map of post-processed elements, new set is
-                    // created each time mesh is refined.
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
                                       this->getCacheWeakPtr());
       CHKERR postProc->writeFile(
@@ -779,9 +776,6 @@ struct Monitor : public FEMethod {
       // VecView(ts_u, viewer);
       // PetscViewerDestroy(&viewer);
 
-      postProcEdge->elementsMap
-          .clear(); // clear map and post proc mesh after each mesh refinment
-      postProcEdge->postProcMesh.delete_mesh();
       CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcEdge,
                                       this->getCacheWeakPtr());
       //CHKERR postProcEdge->writeFile(
@@ -818,7 +812,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-    post_proc_fe->generateReferenceElementMesh();
 
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -857,21 +850,20 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
 
-    using OpPPMap = OpPostProcMap<2, 2>;
+    using OpPPMap = OpPostProcMapInMoab<2, 2>;
 
     post_proc_fe->getOpPtrVector().push_back(
 
         new OpPPMap(
-            post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-            OpPPMap::DataMapVec{{"H", h_ptr}, {"P", p_ptr}, {"G", g_ptr}},
+            {{"H", h_ptr}, {"P", p_ptr}, {"G", g_ptr}},
 
-            OpPPMap::DataMapMat{
-                {"U", u_ptr}, {"H_GRAD", grad_h_ptr}, {"G_GRAD", grad_g_ptr}},
+            {{"U", u_ptr}, {"H_GRAD", grad_h_ptr}, {"G_GRAD", grad_g_ptr}},
 
-            OpPPMap::DataMapMat{{"GRAD_U", grad_u_ptr}},
+            {{"GRAD_U", grad_u_ptr}},
 
-            OpPPMap::DataMapMat{}
+            {}
 
             )
 
@@ -882,7 +874,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
   auto get_bdy_post_proc_fe = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEdgeEle>(mField);
-    post_proc_fe->generateReferenceElementMesh();
 
     auto u_ptr = boost::make_shared<MatrixDouble>();
     auto p_ptr = boost::make_shared<VectorDouble>();
@@ -895,11 +886,12 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("P", p_ptr));
 
-    using OpPPMap = OpPostProcMap<2, 2>;
+    using OpPPMap = OpPostProcMapInMoab<2, 2>;
 
     post_proc_fe->getOpPtrVector().push_back(
 
-        new OpPPMap(post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts,
+        new OpPPMap(post_proc_fe->getPostProcMesh(),
+                    post_proc_fe->getMapGaussPts(),
 
                     OpPPMap::DataMapVec{{"L", lambda_ptr}, {"P", p_ptr}},
 

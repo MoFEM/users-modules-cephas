@@ -10,7 +10,7 @@ This directory contains the input and executable files for the tutorial [VEC-0: 
 ## Running code
 
 ```
-./elastic -file_name beam_3D.cub -order 2
+./elastic_2d -file_name beam_3D.cub -order 2
 ```
 
 ## Extra input

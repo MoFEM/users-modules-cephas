@@ -6,12 +6,12 @@
  *
  */
 
-
-
 #ifndef __UNSATURATD_FLOW_HPP__
 #define __UNSATURATD_FLOW_HPP__
 
 namespace MixTransport {
+
+using PostProcEle = PostProcBrokenMeshInMoab<VolumeElementForcesAndSourcesCore>;
 
 /**
  * \brief Generic material model for unsaturated water transport
@@ -25,9 +25,9 @@ struct GenericMaterial {
 
   static double ePsilon0; ///< Regularization parameter
   static double ePsilon1; ///< Regularization parameter
-  static double scaleZ; ///< Scale z direction
-  
-  double sCale;           ///< Scale time dependent eq.
+  static double scaleZ;   ///< Scale z direction
+
+  double sCale; ///< Scale time dependent eq.
 
   double h;   ///< hydraulic head
   double h_t; ///< rate of hydraulic head
@@ -351,7 +351,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         // Get divergence
-        for(auto &v : divVec) {
+        for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
         }
@@ -722,7 +722,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       int nb_gauss_pts = row_data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double alpha = getGaussPts()(3, gg) * getVolume() * scale;
-        for(auto &v : divVec) {
+        for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
         }
@@ -815,7 +815,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         const double KK = K * K;
         const double diffK = block_data->diffK;
         double alpha = t_w * vol;
-        for(auto &v : divVec) {
+        for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
         }
@@ -860,9 +860,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       MoFEMFunctionBegin;
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
-      int nb_dofs = data.getFieldData().size();
-      int nb_gauss_pts = data.getN().size1();
-      if (nb_dofs != static_cast<int>(data.getN().size2())) {
+      auto nb_dofs = data.getFieldData().size();
+      if (nb_dofs != data.getN().size2()) {
         SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
                 "wrong number of dofs");
       }
@@ -873,6 +872,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
 
       // Get EntityHandle of the finite element
       EntityHandle fe_ent = getFEEntityHandle();
+
+
       // Get material block id
       int block_id;
       CHKERR cTx.getMaterial(fe_ent, block_id);
@@ -880,13 +881,14 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       boost::shared_ptr<GenericMaterial> &block_data = cTx.dMatMap.at(block_id);
 
       // loop over integration points
-      for (int gg = 0; gg < nb_gauss_pts; gg++) {
+      auto nb_gauss_pts = getGaussPts().size2();
+      for (auto gg = 0; gg != nb_gauss_pts; gg++) {
         // get coordinates at integration point
         block_data->x = getCoordsAtGaussPts()(gg, 0);
         block_data->y = getCoordsAtGaussPts()(gg, 1);
         block_data->z = getCoordsAtGaussPts()(gg, 2);
         // get weight for integration rule
-        double alpha = getGaussPts()(2, gg) * getVolume();
+        double alpha = getGaussPts()(2, gg);
         nN += alpha * outer_prod(data.getN(gg), data.getN(gg));
         nF += alpha * block_data->initialPcEval() * data.getN(gg);
       }
@@ -1062,19 +1064,19 @@ struct UnsaturatedFlowElement : public MixTransportElement {
    * finite elements to evaluate material properties and save results on the
    * mesh.
    *
-   * \note Element overloaded only FEMethod::postProcess methos where other
+   * \note Element overloaded only FEMethod::postProcess methods where other
    * elements are called.
    */
   struct MonitorPostProc : public MoFEM::FEMethod {
 
     UnsaturatedFlowElement &cTx;
-    boost::shared_ptr<PostProcVolumeOnRefinedMesh> postProc;
+    boost::shared_ptr<PostProcEle> postProc;
     boost::shared_ptr<ForcesAndSourcesCore> fluxIntegrate;
 
     const int fRequency;
 
     MonitorPostProc(UnsaturatedFlowElement &ctx,
-                    boost::shared_ptr<PostProcVolumeOnRefinedMesh> &post_proc,
+                    boost::shared_ptr<PostProcEle> &post_proc,
                     boost::shared_ptr<ForcesAndSourcesCore> flux_Integrate,
                     const int frequency)
         : cTx(ctx), postProc(post_proc), fluxIntegrate(flux_Integrate),
@@ -1306,7 +1308,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
    *
    */
   struct VolRule {
-    int operator()(int, int, int p_data) const { return 2 * p_data + p_data; }
+    int operator()(int, int, int p_data) const { return 3 * p_data; }
   };
   /**
    * \brief Set integration rule to boundary elements
@@ -1323,7 +1325,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
 
   /**
    * \brief Pre-peprocessing
-   * Set head pressute rate and get inital essential boundary conditions
+   * Set head pressure rate and get inital essential boundary conditions
    */
   struct preProcessVol {
     UnsaturatedFlowElement &cTx;
@@ -1367,7 +1369,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
             if (auto dof_ptr =
                     fePtr->problemPtr->getColDofsByPetscGlobalDofIdx(*it)
                         .lock())
-            dof_ptr->getFieldData() = *vit;
+              dof_ptr->getFieldData() = *vit;
           }
         } else {
           cTx.bcVecIds.resize(0);
@@ -1469,10 +1471,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     feVolLhs->postProcessHook = postProcessVol(*this, feVolLhs);
 
     // Set Piola transform
-    feFaceBc->getOpPtrVector().push_back(
-        new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
-    feFaceRhs->getOpPtrVector().push_back(
-        new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
+    CHKERR AddHOOps<2, 3, 3>::add(feFaceBc->getOpPtrVector(), {HDIV});
+    CHKERR AddHOOps<2, 3, 3>::add(feFaceRhs->getOpPtrVector(), {HDIV});
 
     // create method for setting history for fluxes on boundary
     scaleMethodFlux = boost::shared_ptr<MethodForForceScaling>(
@@ -1482,12 +1482,12 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     scaleMethodValue = boost::shared_ptr<MethodForForceScaling>(
         new TimeForceScale("-head_history", false));
 
-
     // Set operator to calculate essential boundary conditions
     feFaceBc->getOpPtrVector().push_back(
         new OpEvaluateBcOnFluxes(*this, "FLUXES"));
 
     // Set operator to calculate initial capillary pressure
+    CHKERR AddHOOps<3, 3, 3>::add(feVolInitialPc->getOpPtrVector(), {HDIV, L2});
     feVolInitialPc->getOpPtrVector().push_back(
         new OpEvaluateInitiallHead(*this, "VALUES"));
 
@@ -1496,7 +1496,10 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         new OpRhsBcOnValues(*this, "FLUXES", scaleMethodValue));
     // set residual finite element operators
     headRateAtGaussPts = boost::make_shared<VectorDouble>();
+
+
     // resAtGaussPts = boost::make_shared<VectorDouble>();
+    CHKERR AddHOOps<3, 3, 3>::add(feVolRhs->getOpPtrVector(), {HDIV, L2});
     feVolRhs->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         string("VALUES") + "_t", headRateAtGaussPts, MBTET));
     feVolRhs->getOpPtrVector().push_back(
@@ -1508,6 +1511,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     feVolRhs->getOpPtrVector().back().opType =
         ForcesAndSourcesCore::UserDataOperator::OPROW;
     // set tangent matrix finite element operators
+    CHKERR AddHOOps<3, 3, 3>::add(feVolLhs->getOpPtrVector(), {HDIV, L2});
     feVolLhs->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         string("VALUES") + "_t", headRateAtGaussPts, MBTET));
     // feVolLhs->getOpPtrVector().push_back(
@@ -1534,23 +1538,55 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     CHKERR DMMoFEMTSSetIJacobian(dM, "MIX", feVolLhs, null, null);
 
     // setting up post-processing
-    boost::shared_ptr<PostProcVolumeOnRefinedMesh> post_process(
-        new PostProcVolumeOnRefinedMesh(mField));
-    CHKERR post_process->generateReferenceElementMesh();
-    CHKERR post_process->addFieldValuesPostProc("VALUES");
-    CHKERR post_process->addFieldValuesPostProc("VALUES_t");
-    // CHKERR post_process->addFieldValuesPostProc("FLUXES_residual");
-    CHKERR post_process->addFieldValuesPostProc("FLUXES");
+
+
+    auto get_post_process_ele = [&]() {
+      auto post_process = boost::make_shared<PostProcEle>(mField);
+
+      CHKERR AddHOOps<3, 3, 3>::add(post_process->getOpPtrVector(), {HDIV, L2});
+
+      auto values_ptr = boost::make_shared<VectorDouble>();
+      auto grad_ptr = boost::make_shared<MatrixDouble>();
+      auto flux_ptr = boost::make_shared<MatrixDouble>();
+
+      post_process->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldValues("VALUES", values_ptr));
+      post_process->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldGradient<3>("VALUES", grad_ptr));
+      post_process->getOpPtrVector().push_back(
+          new OpCalculateHVecVectorField<3>("FLUXES", flux_ptr));
+
+      using OpPPMap = OpPostProcMapInMoab<3, 3>;
+
+      post_process->getOpPtrVector().push_back(
+
+          new OpPPMap(post_process->getPostProcMesh(),
+                      post_process->getMapGaussPts(),
+
+                      {{"VALUES", values_ptr}},
+
+                      {{"GRAD", grad_ptr}, {"FLUXES", flux_ptr}},
+
+                      {}, {}
+
+                      ));
+
+      return post_process;
+    };
+
+    auto post_process = get_post_process_ele();
+
     post_process->getOpPtrVector().push_back(
         new OpValuesAtGaussPts(*this, "VALUES"));
     post_process->getOpPtrVector().push_back(
-        new OpPostProcMaterial(*this, post_process->postProcMesh,
-                               post_process->mapGaussPts, "VALUES"));
+        new OpPostProcMaterial(*this, post_process->getPostProcMesh(),
+                               post_process->getMapGaussPts(), "VALUES"));
 
     // Integrate fluxes on boundary
     boost::shared_ptr<ForcesAndSourcesCore> flux_integrate;
     flux_integrate = boost::shared_ptr<ForcesAndSourcesCore>(
         new FaceElementForcesAndSourcesCore(mField));
+    CHKERR AddHOOps<2, 3, 3>::add(flux_integrate->getOpPtrVector(), {HDIV});
     flux_integrate->getOpPtrVector().push_back(
         new OpIntegrateFluxes(*this, "FLUXES"));
     int frequency = 1;
@@ -1621,10 +1657,10 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     bcIndices.clear();
     // set operator to calculate essential boundary conditions
     CHKERR DMoFEMLoopFiniteElements(dM, "MIX_BCFLUX", feFaceBc);
-    CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR VecAssemblyBegin(D0);
     CHKERR VecAssemblyEnd(D0);
+    CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
     double norm2D0;
     CHKERR VecNorm(D0, NORM_2, &norm2D0);
     // CHKERR VecView(D0,PETSC_VIEWER_STDOUT_WORLD);
@@ -1645,10 +1681,10 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     // Calculate initial pressure head on each element
     CHKERR DMoFEMLoopFiniteElements(dM, "MIX", feVolInitialPc);
     // Assemble vector
-    CHKERR VecGhostUpdateBegin(D1, INSERT_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateEnd(D1, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR VecAssemblyBegin(D1);
     CHKERR VecAssemblyEnd(D1);
+    CHKERR VecGhostUpdateBegin(D1, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D1, INSERT_VALUES, SCATTER_FORWARD);
     // Calculate norm
     double norm2D1;
     CHKERR VecNorm(D1, NORM_2, &norm2D1);
