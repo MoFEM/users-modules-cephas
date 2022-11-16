@@ -43,11 +43,7 @@ ThermalElement::OpThermalRhs::doWork(int side, EntityType type,
       dAta.tEts.end()) {
     MoFEMFunctionReturnHot(0);
   }
-
   if (data.getIndices().size() == 0)
-    MoFEMFunctionReturnHot(0);
-  if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-      dAta.tEts.end())
     MoFEMFunctionReturnHot(0);
 
   int nb_row_dofs = data.getIndices().size();
@@ -125,8 +121,13 @@ MoFEMErrorCode ThermalElement::OpHeatCapacityRhs::doWork(
     int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
+  if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      dAta.tEts.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
   if (data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
+
   int nb_row = data.getN().size2();
   Nf.resize(nb_row);
   Nf.clear();
@@ -152,6 +153,11 @@ MoFEMErrorCode ThermalElement::OpHeatCapacityLhs::doWork(
     EntitiesFieldData::EntData &row_data,
     EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
+
+  if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      dAta.tEts.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
 
   if (row_data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
@@ -192,10 +198,11 @@ ThermalElement::OpHeatFlux::doWork(int side, EntityType type,
                                    EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
-  if (data.getIndices().size() == 0)
-    MoFEMFunctionReturnHot(0);
   if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-      dAta.tRis.end())
+      dAta.tRis.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
+  if (data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
 
   const auto &dof_ptr = data.getFieldDofs()[0];
@@ -235,6 +242,11 @@ MoFEMErrorCode ThermalElement::OpRadiationLhs::doWork(
     EntitiesFieldData::EntData &row_data,
     EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
+
+  if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      dAta.tRis.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
 
   if (row_data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
@@ -283,10 +295,11 @@ MoFEMErrorCode ThermalElement::OpRadiationRhs::doWork(
     int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
-  if (data.getIndices().size() == 0)
-    MoFEMFunctionReturnHot(0);
   if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-      dAta.tRis.end())
+      dAta.tRis.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
+  if (data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
 
   const auto &dof_ptr = data.getFieldDofs()[0];
@@ -333,10 +346,11 @@ MoFEMErrorCode ThermalElement::OpConvectionRhs::doWork(
     int side, EntityType type, EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
-  if (data.getIndices().size() == 0)
-    MoFEMFunctionReturnHot(0);
   if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-      dAta.tRis.end())
+      dAta.tRis.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
+  if (data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
 
   const auto &dof_ptr = data.getFieldDofs()[0];
@@ -378,8 +392,13 @@ MoFEMErrorCode ThermalElement::OpConvectionLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntitiesFieldData::EntData &row_data,
     EntitiesFieldData::EntData &col_data) {
-    MoFEMFunctionBegin;
-if (row_data.getIndices().size() == 0)
+  MoFEMFunctionBegin;
+
+  if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      dAta.tRis.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
+  if (row_data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
   if (col_data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
