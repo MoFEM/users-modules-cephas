@@ -148,7 +148,7 @@ MoFEMErrorCode Example::addMatBlockOps(
   };
 
   pipeline.push_back(new OpMatBlock(field_name, mat_D_Ptr, Range(),
-                                    shear_modulus_G, shear_modulus_G));
+                                    bulk_modulus_K, shear_modulus_G));
 
   auto add_op = [&](auto &&meshset_vec_ptr) {
     MoFEMFunctionBegin;
