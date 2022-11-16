@@ -200,7 +200,7 @@ MoFEMErrorCode Example::addMatBlockOps(
   pipeline.push_back(new OpMatBlocks(
       field_name, mat_D_Ptr, bulk_modulus_K, shear_modulus_G, mField, sev,
 
-      // Exytck blockets using regular expression
+      // Get blockets using regular expression
       mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
 
           (boost::format("%s(.*)") % block_name).str()
