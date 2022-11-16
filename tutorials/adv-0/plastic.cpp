@@ -145,12 +145,7 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<std::vector<unsigned char>> reactionMarker;
 
-  struct PlasticityTimeScale : public MoFEM::TimeScale {
-    using MoFEM::TimeScale::TimeScale;
-    double getScale(const double time) {
-      return scale * MoFEM::TimeScale::getScale(time);
-    };
-  };
+  std::vector<FTensor::Tensor1<double, 3>> bodyForces;
 };
 
 //! [Run problem]
@@ -484,8 +479,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
-        pipeline, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
-        "BODY_FORCE", Sev::inform);
+        pipeline, mField, "U", {boost::make_shared<TimeScale>()}, "BODY_FORCE",
+        Sev::inform);
 
     // Calculate internal forces
     if (is_large_strains) {
@@ -557,8 +552,8 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
-        pipeline, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
-        "FORCE", Sev::inform);
+        pipeline, mField, "U", {boost::make_shared<TimeScale>()}, "FORCE",
+        Sev::inform);
 
     pipeline.push_back(new OpUnSetBc("U"));
 
@@ -569,8 +564,7 @@ MoFEMErrorCode Example::OPs() {
     CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<G>::
         AddEssentialToPipeline<OpEssentialRhs>::add(
             mField, pipeline, simple->getProblemName(), "U", u_mat_ptr,
-            {boost::make_shared<TimeScale>()}); // note displacements have no
-                                                // scaling
+            {boost::make_shared<TimeScale>()});
 
     MoFEMFunctionReturn(0);
   };

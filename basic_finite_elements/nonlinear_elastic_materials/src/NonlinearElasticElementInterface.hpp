@@ -212,7 +212,8 @@ struct NonlinearElasticElementInterface : public GenericElementInterface {
     auto E = elasticElementPtr->getLoopFeEnergy().eNergy;
     // Print elastic energy
     MOFEM_LOG_C("WORLD", Sev::inform, "%d Time %3.2e Elastic energy %3.2e",
-                step, elasticElementPtr->getLoopFeRhs().ts_t, E);
+                elasticElementPtr->getLoopFeRhs().ts_step,
+                elasticElementPtr->getLoopFeRhs().ts_t, E);
 
     CHKERR DMoFEMLoopFiniteElements(dM, "ELASTIC", postProcMeshPtr);
     auto out_name = "out_vol_" + to_string(step) + ".h5m";
