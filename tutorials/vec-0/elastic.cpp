@@ -91,33 +91,83 @@ MoFEMErrorCode Example::addMatBlockOps(
     boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev) {
   MoFEMFunctionBegin;
 
-  struct OpMatBlock : public DomainEleOp {
-    OpMatBlock(std::string field_name, boost::shared_ptr<MatrixDouble> m,
-               Range &&ents, double bulk_modulus_K, double shear_modulus_G)
-        : DomainEleOp(field_name, DomainEleOp::OPROW), matDPtr(m), feEnts(ents),
-          bulkModulusK(bulk_modulus_K), shearModulusG(shear_modulus_G) {
+  struct OpMatBlocks : public DomainEleOp {
+    OpMatBlocks(std::string field_name, boost::shared_ptr<MatrixDouble> m,
+                double bulk_modulus_K, double shear_modulus_G,
+                MoFEM::Interface &m_field, Sev sev,
+                std::vector<const CubitMeshSets *> meshset_vec_ptr)
+        : DomainEleOp(field_name, DomainEleOp::OPROW), matDPtr(m),
+          bulkModulusKDefault(bulk_modulus_K),
+          shearModulusGDefault(shear_modulus_G) {
       std::fill(&(doEntities[MBEDGE]), &(doEntities[MBMAXTYPE]), false);
+      CHK_THROW_MESSAGE(extractBlockData(m_field, meshset_vec_ptr, sev),
+                        "Can not get data from block");
     }
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           EntitiesFieldData::EntData &data) {
       MoFEMFunctionBegin;
-      if (!feEnts.empty()) {
-        if (feEnts.find(getFEEntityHandle()) != feEnts.end()) {
-          CHKERR getMatDPtr(matDPtr, bulkModulusK, shearModulusG);
+
+      for (auto &b : blockData) {
+
+        if (b.blockEnts.find(getFEEntityHandle()) != b.blockEnts.end()) {
+          CHKERR getMatDPtr(matDPtr, b.bulkModulusK, b.shearModulusG);
+          MoFEMFunctionReturnHot(0);
         }
-      } else {
-        CHKERR getMatDPtr(matDPtr, bulkModulusK, shearModulusG);
       }
+
+      CHKERR getMatDPtr(matDPtr, bulkModulusKDefault, shearModulusGDefault);
       MoFEMFunctionReturn(0);
     }
 
   private:
     boost::shared_ptr<MatrixDouble> matDPtr;
 
-    Range feEnts;
-    double bulkModulusK;
-    double shearModulusG;
+    struct BlockData {
+      double bulkModulusK;
+      double shearModulusG;
+      Range blockEnts;
+    };
+
+    double bulkModulusKDefault;
+    double shearModulusGDefault;
+    std::vector<BlockData> blockData;
+
+    MoFEMErrorCode
+    extractBlockData(MoFEM::Interface &m_field,
+                     std::vector<const CubitMeshSets *> meshset_vec_ptr,
+                     Sev sev) {
+      MoFEMFunctionBegin;
+
+      for (auto m : meshset_vec_ptr) {
+        MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock") << *m;
+        std::vector<double> block_data;
+        CHKERR m->getAttributes(block_data);
+        if (block_data.size() != 2) {
+          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                  "Expected that block has two attribute");
+        }
+        auto get_block_ents = [&]() {
+          Range ents;
+          CHKERR
+          m_field.get_moab().get_entities_by_handle(m->meshset, ents, true);
+          return ents;
+        };
+
+        double young_modulus = block_data[0];
+        double poisson_ratio = block_data[1];
+        double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
+        double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+
+        MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock")
+            << "E = " << young_modulus << " nu = " << poisson_ratio;
+
+        blockData.push_back(
+            {bulk_modulus_K, shear_modulus_G, get_block_ents()});
+      }
+      MOFEM_LOG_CHANNEL("WORLD");
+      MoFEMFunctionReturn(0);
+    }
 
     MoFEMErrorCode getMatDPtr(boost::shared_ptr<MatrixDouble> mat_D_ptr,
                               double bulk_modulus_K, double shear_modulus_G) {
@@ -147,50 +197,17 @@ MoFEMErrorCode Example::addMatBlockOps(
     }
   };
 
-  pipeline.push_back(new OpMatBlock(field_name, mat_D_Ptr, Range(),
-                                    bulk_modulus_K, shear_modulus_G));
+  pipeline.push_back(new OpMatBlocks(
+      field_name, mat_D_Ptr, bulk_modulus_K, shear_modulus_G, mField, sev,
 
-  auto add_op = [&](auto &&meshset_vec_ptr) {
-    MoFEMFunctionBegin;
-    for (auto m : meshset_vec_ptr) {
-      MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock") << *m;
-      std::vector<double> block_data;
-      CHKERR m->getAttributes(block_data);
-      if (block_data.size() != 2) {
-        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                "Expected that block has two attribute");
-      }
-      auto get_block_ents = [&]() {
-        Range ents;
-        CHKERR
-        mField.get_moab().get_entities_by_handle(m->meshset, ents, true);
-        return ents;
-      };
-
-      double young_modulus = block_data[0];
-      double poisson_ratio = block_data[1];
-      double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
-      double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
-
-      MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock")
-          << "E = " << young_modulus << " nu = " << poisson_ratio;
-
-      pipeline.push_back(new OpMatBlock(field_name, mat_D_Ptr, get_block_ents(),
-                                        bulk_modulus_K, shear_modulus_G));
-    }
-    MOFEM_LOG_CHANNEL("WORLD");
-    MoFEMFunctionReturn(0);
-  };
-
-  CHKERR add_op(
-
+      // Exytck blockets using regular expression
       mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
 
           (boost::format("%s(.*)") % block_name).str()
 
               ))
 
-  );
+          ));
 
   MoFEMFunctionReturn(0);
 }
@@ -274,9 +291,9 @@ MoFEMErrorCode Example::boundaryCondition() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInternalForce(
-      "U", mat_stress_ptr,
-      [](double, double, double) constexpr { return -1; }));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpInternalForce("U", mat_stress_ptr,
+                          [](double, double, double) constexpr { return -1; }));
 
   // Body forces
   CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
