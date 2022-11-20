@@ -8,8 +8,8 @@ namespace PlasticOps {
 
 struct Monitor : public FEMethod {
 
-  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<PostProcEle> &post_proc_fe,
-          boost::shared_ptr<DomainEle> &reaction_fe,
+  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<PostProcEle> post_proc_fe,
+          boost::shared_ptr<DomainEle> reaction_fe,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
@@ -24,7 +24,7 @@ struct Monitor : public FEMethod {
 
     auto make_vtk = [&]() {
       MoFEMFunctionBegin;
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe, getCacheWeakPtr());
       CHKERR postProcFe->writeFile(
           "out_plastic_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
       MoFEMFunctionReturn(0);
@@ -68,7 +68,7 @@ struct Monitor : public FEMethod {
       CHKERR calculate_reaction();
     CHKERR print_max_min(uXScatter, "Ux");
     CHKERR print_max_min(uYScatter, "Uy");
-    if (SPACE_DIM == 3)
+    if constexpr (SPACE_DIM == 3)
       CHKERR print_max_min(uZScatter, "Uz");
 
     MoFEMFunctionReturn(0);

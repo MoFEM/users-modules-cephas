@@ -13,8 +13,6 @@ using namespace MoFEM;
 
 static char help[] = "...\n\n";
 
-static map<EntityType, std::string> type_name;
-
 #define HelloFunctionBegin                                                     \
   MoFEMFunctionBegin;                                                          \
   MOFEM_LOG_CHANNEL("SYNC");                                                   \
@@ -35,7 +33,8 @@ struct OpRow : public ForcesAndSourcesCore::UserDataOperator {
     MOFEM_LOG("SYNC", Sev::inform)
         << "Hello Operator OpRow:"
         << " field name " << rowFieldName << " side " << side << " type "
-        << type_name[type] << " nb dofs on entity " << data.getIndices().size();
+        << CN::EntityTypeName(type) << " nb dofs on entity "
+        << data.getIndices().size();
     MoFEMFunctionReturn(0);
   }
 };
@@ -53,11 +52,11 @@ struct OpRowCol : public ForcesAndSourcesCore::UserDataOperator {
     MOFEM_LOG("SYNC", Sev::inform)
         << "Hello Operator OpRowCol:"
         << " row field name " << rowFieldName << " row side " << row_side
-        << " row type " << type_name[row_type] << " nb dofs on row entity"
-        << row_data.getIndices().size() << " : "
+        << " row type " << CN::EntityTypeName(row_type)
+        << " nb dofs on row entity " << row_data.getIndices().size() << " : "
         << " col field name " << colFieldName << " col side " << col_side
-        << " col type " << type_name[col_type] << " nb dofs on col entity"
-        << col_data.getIndices().size();
+        << " col type " << CN::EntityTypeName(col_type)
+        << " nb dofs on col entity " << col_data.getIndices().size();
     MoFEMFunctionReturn(0);
   }
 };
@@ -134,11 +133,6 @@ int main(int argc, char *argv[]) {
   MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
 
   try {
-
-    type_name[MBVERTEX] = "Vertex";
-    type_name[MBEDGE] = "Edge";
-    type_name[MBTRI] = "Triangle";
-    type_name[MBTET] = "Tetrahedra";
 
     // Register DM Manager
     DMType dm_name = "DMMOFEM";
