@@ -2,6 +2,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-2/src)
 
+include_directories(${MoFEM_INSTALL_DIR}/third_party/phg-quadrule)
+
 set(permissions_default 
   OWNER_WRITE 
   OWNER_READ
