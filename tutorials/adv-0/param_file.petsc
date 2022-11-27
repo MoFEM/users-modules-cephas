@@ -25,13 +25,9 @@
 -ts_monitor
 -ts_adapt_monitor
 
-#-ts_type theta
-#-ts_theta_initial_guess_extrapolate 1
-#-ts_theta_theta 1
-
 -ts_type theta
--ts_theta_theta 0.5
--ts_theta_endpoint
+-ts_theta_initial_guess_extrapolate 1
+-ts_theta_theta 1
 
 -ts_max_snes_failures 20
 

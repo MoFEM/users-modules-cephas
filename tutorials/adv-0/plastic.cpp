@@ -14,17 +14,6 @@
 #include <MatrixFunction.hpp>
 #include <IntegrationRules.hpp>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <cblas.h>
-#include <lapack_wrap.h>
-// #include <gm_rule.h>
-#include <quad.h>
-#ifdef __cplusplus
-}
-#endif
-
 using namespace MoFEM;
 
 template <int DIM> struct ElementsAndOps {};
@@ -110,24 +99,34 @@ double rho = 0;
 double sigmaY = 450;
 double H = 129;
 double visH = 0;
-double cn = 1;
+double cn0 = 1;
+double cn1 = 1;
 double zeta = 5e-2;
 double Qinf = 265;
 double b_iso = 16.93;
 
-int order = 2; ///< Order if fixed.
+int order = 2;      ///< Order if fixed.
 int geom_order = 2; ///< Order if fixed.
 
-inline long double hardening(long double tau) {
-  return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
+constexpr size_t activ_history_sise = 1;
+
+inline double hardening_exp(double tau) {
+  return std::exp(
+      std::max(static_cast<double>(std::numeric_limits<float>::min_exponent10),
+               -b_iso * tau));
 }
 
-inline long double hardening_dtau(long double tau) {
-  return H + Qinf * b_iso * std::exp(-b_iso * tau);
+inline double hardening(double tau) {
+  return H * tau + Qinf * (1. - hardening_exp(tau)) + sigmaY;
 }
 
-inline long double hardening_dtau2(long double tau) {
-  return -(Qinf * (b_iso * b_iso)) * std::exp(-b_iso * tau);
+inline double hardening_dtau(double tau) {
+  auto r = [](auto tau) { return H + Qinf * b_iso * hardening_exp(tau); };
+  return std::max(r(tau), 1e-6 * r(0));
+}
+
+inline double hardening_dtau2(double tau) {
+  return -(Qinf * (b_iso * b_iso)) * hardening_exp(tau);
 }
 
 #include <HenckyOps.hpp>
@@ -226,8 +225,8 @@ MoFEMErrorCode Example::setupProblem() {
   MOFEM_LOG("WORLD", Sev::inform) << "Base " << ApproximationBaseNames[base];
 
   CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
-  CHKERR simple->addDomainField("TAU", L2, base, 1);
   CHKERR simple->addDomainField("EP", L2, base, size_symm);
+  CHKERR simple->addDomainField("TAU", L2, base, 1);
   CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
 
   CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
@@ -271,7 +270,8 @@ MoFEMErrorCode Example::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-yield_stress", &sigmaY,
                                  PETSC_NULL);
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn0", &cn0, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn1", &cn1, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-zeta", &zeta, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Qinf", &Qinf, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
@@ -289,7 +289,8 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "cn0 " << cn0;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "cn1 " << cn1;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "zeta " << zeta;
 
     MOFEM_LOG("EXAMPLE", Sev::inform) << "order " << order;
@@ -335,25 +336,24 @@ MoFEMErrorCode Example::createCommonData() {
     const double A = (SPACE_DIM == 2)
                          ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
-                         :
-      1;
+                         : 1;
 
-      auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
-          *commonPlasticDataPtr->mDPtr);
-      auto t_D_axiator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
-          *commonPlasticDataPtr->mDPtr_Axiator);
-      auto t_D_deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
-          *commonPlasticDataPtr->mDPtr_Deviator);
+    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+        *commonPlasticDataPtr->mDPtr);
+    auto t_D_axiator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+        *commonPlasticDataPtr->mDPtr_Axiator);
+    auto t_D_deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+        *commonPlasticDataPtr->mDPtr_Deviator);
 
-      constexpr double third = boost::math::constants::third<double>();
-      t_D_axiator(i, j, k, l) = A *
-                                (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
-                                t_kd(i, j) * t_kd(k, l);
-      t_D_deviator(i, j, k, l) =
-          2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
-      t_D(i, j, k, l) = t_D_axiator(i, j, k, l) + t_D_deviator(i, j, k, l);
+    constexpr double third = boost::math::constants::third<double>();
+    t_D_axiator(i, j, k, l) = A *
+                              (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
+                              t_kd(i, j) * t_kd(k, l);
+    t_D_deviator(i, j, k, l) =
+        2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
+    t_D(i, j, k, l) = t_D_axiator(i, j, k, l) + t_D_deviator(i, j, k, l);
 
-      MoFEMFunctionReturn(0);
+    MoFEMFunctionReturn(0);
   };
 
   auto make_d_mat = []() {
@@ -459,7 +459,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1, L2},
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1},
                                                           "GEOMETRY");
 
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
@@ -507,8 +507,8 @@ MoFEMErrorCode Example::OPs() {
     if (m_D_ptr != commonPlasticDataPtr->mDPtr_Axiator) {
       pipeline.push_back(
           new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
-      pipeline.push_back(
-          new OpCalculatePlasticity("U", commonPlasticDataPtr, m_D_ptr));
+      pipeline.push_back(new OpCalculatePlasticity(
+          "U", mField, commonPlasticDataPtr, m_D_ptr));
     }
 
     MoFEMFunctionReturn(0);
@@ -525,10 +525,18 @@ MoFEMErrorCode Example::OPs() {
           new OpKPiola("U", "U", commonHenckyDataPtr->getMatTangent()));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
           "U", "EP", commonPlasticDataPtr, commonHenckyDataPtr, m_D_ptr));
+      // pipeline.push_back(new OpCalculateArgLhs_LogStrain_dUdTau(
+      //     "U", "TAU", commonPlasticDataPtr, commonHenckyDataPtr));
+      // pipeline.push_back(new OpCalculateArgLhs_LogStrain_dUdU(
+      //     "U", "U", commonPlasticDataPtr, commonHenckyDataPtr));
     } else {
       pipeline.push_back(new OpKCauchy("U", "U", m_D_ptr));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
           "U", "EP", commonPlasticDataPtr, m_D_ptr));
+      // pipeline.push_back(
+      //     new OpCalculateArgLhs_dUdTau("U", "TAU", commonPlasticDataPtr));
+      // pipeline.push_back(
+      //     new OpCalculateArgLhs_dUdU("U", "U", commonPlasticDataPtr));
     }
 
     pipeline.push_back(new OpUnSetBc("U"));
@@ -593,6 +601,13 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculateConstraintsRhs("TAU", commonPlasticDataPtr, m_D_ptr));
     pipeline.push_back(
         new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr, m_D_ptr));
+
+    if (is_large_strains) {
+      // pipeline.push_back(new OpCalculateArgRhs_LogStrain_dU(
+      //     "U", commonPlasticDataPtr, commonHenckyDataPtr));
+    } else {
+      // pipeline.push_back(new OpCalculateArgRhs_dU("U", commonPlasticDataPtr));
+    }
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -668,7 +683,7 @@ MoFEMErrorCode Example::OPs() {
 
     if (reactionMarker) {
 
-      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1, L2},
+      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1},
                                                             "GEOMETRY");
 
       pipeline.push_back(
@@ -751,9 +766,8 @@ MoFEMErrorCode Example::tsSolve() {
     auto pp_fe = boost::make_shared<PostProcEle>(mField);
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-        
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-        pp_fe->getOpPtrVector(), {H1, L2}, "GEOMETRY");
+        CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        pp_fe->getOpPtrVector(), {H1}, "GEOMETRY");
 
     auto x_ptr = boost::make_shared<MatrixDouble>();
     pp_fe->getOpPtrVector().push_back(
@@ -929,20 +943,65 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto solver = pipeline_mng->createTSIM();
 
+  auto pre_rhs = [&]() {
+    MoFEMFunctionBegin;
+    std::fill(commonPlasticDataPtr->activityData.begin(),
+              commonPlasticDataPtr->activityData.end(), 0);
+    MoFEMFunctionReturn(0);
+  };
+
   auto post_rhs = [&]() {
     MoFEMFunctionBegin;
     auto get_iter = [&]() {
       SNES snes;
-      CHKERR TSGetSNES(solver, &snes);
+      CHK_THROW_MESSAGE(TSGetSNES(solver, &snes), "Can not get SNES");
       int iter;
-      CHKERR SNESGetIterationNumber(snes, &iter);
+      CHK_THROW_MESSAGE(SNESGetIterationNumber(snes, &iter),
+                        "Can not get iter");
       return iter;
     };
+
+    auto iter = get_iter();
+    if (iter >= 0) {
+
+      std::array<int, 5> activity_data;
+      std::fill(activity_data.begin(), activity_data.end(), 0);
+      MPI_Allreduce(commonPlasticDataPtr->activityData.data(),
+                    activity_data.data(), activity_data.size(), MPI_INT,
+                    MPI_SUM, mField.get_comm());
+
+      int &active_points = activity_data[0];
+      int &avtive_full_elems = activity_data[1];
+      int &avtive_elems = activity_data[2];
+      int &nb_points = activity_data[3];
+      int &nb_elements = activity_data[4];
+
+      if (nb_points) {
+
+        double proc_nb_points =
+            100 * static_cast<double>(active_points) / nb_points;
+        double proc_nb_active =
+            100 * static_cast<double>(avtive_elems) / nb_elements;
+        double proc_nb_full_active = 100;
+        if (avtive_elems)
+          proc_nb_full_active =
+              100 * static_cast<double>(avtive_full_elems) / avtive_elems;
+
+        MOFEM_LOG_C(
+            "EXAMPLE", Sev::inform,
+            "Iter %d nb pts %d nb avtive pts %d (%3.3f\%) nb active elemens %d "
+            "(%3.3f\%) nb full active elems %d (%3.3f\%)",
+            iter, nb_points, active_points, proc_nb_points, avtive_elems,
+            proc_nb_active, avtive_full_elems, proc_nb_full_active, iter);
+      }
+    }
 
     MoFEMFunctionReturn(0);
   };
 
-  mField.getInterface<PipelineManager>()->getDomainRhsFE()->postProcessHook =
+  mField.getInterface<PipelineManager>()->getDomainLhsFE()->preProcessHook =
+      pre_rhs;
+  mField.getInterface<PipelineManager>()->getDomainLhsFE()->postProcessHook =
       post_rhs;
 
   CHKERR TSSetSolution(solver, D);
