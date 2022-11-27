@@ -90,7 +90,7 @@ struct MonitorPostProc: public FEMethod {
     int step;
     CHKERR TSGetTimeStepNumber(ts,&step); 
     
-    if((step)%pRT==0) {
+    if(pRT && (step)%pRT==0) {
       CHKERR mField.loop_finite_elements("DMTHERMAL","THERMAL_FE",postProc); 
       std::ostringstream sss;
       sss << "out_thermal_" << step << ".h5m";
@@ -129,7 +129,13 @@ int main(int argc, char *argv[]) {
   }
 
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
-  
+
+  auto core_log = logging::core::get();
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmSync(), "THERMALSYNC"));
+  LogManager::setLog("THERMALSYNC");
+  MOFEM_LOG_TAG("THERMALSYNC", "thermal");
+
   try {
 
   PetscBool flg = PETSC_TRUE;
@@ -412,6 +418,12 @@ int main(int argc, char *argv[]) {
     CHKERR recorder_ptr->delete_recorder_series("THEMP_SERIES");
   }
 
+  std::array<double, 3> eval_coords({0, 0, 0});
+  int dim = 3;
+  PetscBool eval_coord_flg = PETSC_FALSE;
+  CHKERR PetscOptionsGetRealArray(NULL, NULL, "-my_eval_coords",
+                                  eval_coords.data(), &dim, &eval_coord_flg);
+
   // set dm data structure which created mofem data structures
   CHKERR DMMoFEMCreateMoFEM(dm, &m_field, dm_name, bit_level0);
   CHKERR DMSetFromOptions(dm);
@@ -438,7 +450,8 @@ int main(int argc, char *argv[]) {
   DirichletTemperatureBc dirichlet_bc(m_field, "TEMP", A, T, F);
   ThermalElement::UpdateAndControl update_velocities(m_field, "TEMP",
                                                      "TEMP_RATE");
-  ThermalElement::TimeSeriesMonitor monitor(m_field, "THEMP_SERIES", "TEMP");
+  ThermalElement::TimeSeriesMonitor monitor(m_field, "THEMP_SERIES", "TEMP",
+                                            eval_coord_flg, eval_coords);
   MonitorPostProc post_proc(m_field);
 
   // Initialize data with values save of on the field
@@ -550,14 +563,19 @@ int main(int argc, char *argv[]) {
 
   // save solution, if boundary conditions are defined you can use that file in
   // mechanical problem to calculate thermal stresses
+  PetscBool save_solution = PETSC_TRUE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-my_save_solution",
+                             &save_solution, PETSC_NULL);
   PetscBool is_partitioned = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-dm_is_partitioned",
                              &is_partitioned, PETSC_NULL);
-  if (is_partitioned) {
-    CHKERR moab.write_file("solution.h5m");
-  } else {
-    if (m_field.get_comm_rank() == 0) {
+  if (save_solution) {                        
+    if (is_partitioned) {
       CHKERR moab.write_file("solution.h5m");
+    } else {
+      if (m_field.get_comm_rank() == 0) {
+        CHKERR moab.write_file("solution.h5m");
+      }
     }
   }
 

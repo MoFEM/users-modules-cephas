@@ -447,6 +447,55 @@ MoFEMErrorCode ThermalElement::TimeSeriesMonitor::postProcess() {
                                     mask);
   CHKERR recorder_ptr->record_end(seriesName, ts_t);
 
+  auto post_proc_at_points = [&](std::array<double, 3> point) {
+    MoFEMFunctionBegin;
+
+    dataFieldEval->setEvalPoints(point.data(), point.size() / 3);
+
+    struct OpPrint : public VolOp {
+
+      std::array<double, 3> point;
+      boost::shared_ptr<VectorDouble> tempPtr;
+
+      OpPrint(boost::shared_ptr<VectorDouble> temp_ptr,
+              std::array<double, 3> &point)
+          : VolOp("TEMP", VolOp::OPROW), tempPtr(temp_ptr), point(point) {}
+
+      MoFEMErrorCode doWork(int side, EntityType type,
+                            DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
+        if (type == MBVERTEX) {
+          if (getGaussPts().size2()) {
+
+            auto t_p = getFTensor0FromVec(*tempPtr);
+
+            MOFEM_LOG("THERMALSYNC", Sev::inform)
+                << "Coordinates: " << getVectorAdaptor(point.data(), 3)
+                << " Temperature: " << t_p;
+          }
+        }
+        MoFEMFunctionReturn(0);
+      }
+    };
+
+    if (auto fe_ptr = dataFieldEval->feMethodPtr.lock()) {
+
+      fe_ptr->getOpPtrVector().push_back(new OpPrint(tempPtr, point));
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->evalFEAtThePoint3D(
+          point.data(), 1e-12, "DMTHERMAL", "THERMAL_FE", dataFieldEval,
+          mField.get_comm_rank(), mField.get_comm_rank(), nullptr, MF_EXIST,
+          QUIET);
+      fe_ptr->getOpPtrVector().pop_back();
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
+  if (evalCoordFlg) {
+    CHKERR post_proc_at_points(evalCoords);
+  }
+  MOFEM_LOG_SYNCHRONISE(mField.get_comm());
+
   MoFEMFunctionReturn(0);
 }
 

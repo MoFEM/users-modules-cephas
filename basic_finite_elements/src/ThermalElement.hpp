@@ -583,10 +583,41 @@ struct ThermalElement {
     const std::string tempName;
     BitRefLevel mask;
 
+    using Ele = ForcesAndSourcesCore;
+    using VolEle = VolumeElementForcesAndSourcesCore;
+    using VolOp = VolumeElementForcesAndSourcesCore::UserDataOperator;
+    using SetPtsData = FieldEvaluatorInterface::SetPtsData;
+
+    boost::shared_ptr<SetPtsData> dataFieldEval;
+    boost::shared_ptr<VectorDouble> tempPtr;
+
+    std::array<double, 3> evalCoords;
+    bool evalCoordFlg;
+
     TimeSeriesMonitor(MoFEM::Interface &m_field, const std::string series_name,
-                      const std::string temp_name)
-        : mField(m_field), seriesName(series_name), tempName(temp_name) {
+                      const std::string temp_name, bool eval_coord_flag = false,
+                      std::array<double, 3> eval_coords = {0., 0., 0})
+        : mField(m_field), seriesName(series_name), tempName(temp_name),
+          evalCoordFlg(eval_coord_flag), evalCoords(eval_coords),
+          dataFieldEval(m_field.getInterface<FieldEvaluatorInterface>()
+                            ->getData<VolEle>()) {
       mask.set();
+
+      if (eval_coord_flag) {
+        ierr = m_field.getInterface<FieldEvaluatorInterface>()->buildTree3D(
+            dataFieldEval, "THERMAL_FE");
+        CHKERRABORT(PETSC_COMM_WORLD, ierr);
+
+        auto no_rule = [](int, int, int) { return -1; };
+
+        tempPtr = boost::make_shared<VectorDouble>();
+
+        boost::shared_ptr<Ele> vol_ele(dataFieldEval->feMethodPtr.lock());
+        vol_ele->getRuleHook = no_rule;
+
+        vol_ele->getOpPtrVector().push_back(
+            new OpCalculateScalarFieldValues("TEMP", tempPtr));
+      }
     }
 
     MoFEMErrorCode postProcess();
