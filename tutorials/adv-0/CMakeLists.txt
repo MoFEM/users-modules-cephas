@@ -56,5 +56,5 @@ add_test(
   -large_strains 1
   -scale 1
   -hardening_viscous 0
-  -cn 1 -ksp_monitor 
+  -cn0 1 -ksp_monitor 
   -log_no_color)

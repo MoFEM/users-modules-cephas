@@ -43,9 +43,10 @@ MoFEMErrorCode OpCalculatePlasticSurface::doWork(int side, EntityType type,
 }
 
 OpCalculatePlasticity::OpCalculatePlasticity(
-    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr,
+    const std::string field_name, MoFEM::Interface &m_field,
+    boost::shared_ptr<CommonData> common_data_ptr,
     boost::shared_ptr<MatrixDouble> m_D_ptr)
-    : DomainEleOp(field_name, DomainEleOp::OPROW),
+    : DomainEleOp(field_name, DomainEleOp::OPROW), mField(m_field),
       commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
@@ -84,6 +85,7 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
   commonDataPtr->resC.resize(nb_gauss_pts, false);
   commonDataPtr->resCdTau.resize(nb_gauss_pts, false);
   commonDataPtr->resCdStrain.resize(size_symm, nb_gauss_pts, false);
+  commonDataPtr->resCdStrainDot.resize(size_symm, nb_gauss_pts, false);
   commonDataPtr->resFlow.resize(size_symm, nb_gauss_pts, false);
   commonDataPtr->resFlowDtau.resize(size_symm, nb_gauss_pts, false);
   commonDataPtr->resFlowDstrain.resize(size_symm * size_symm, nb_gauss_pts,
@@ -94,6 +96,7 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
   commonDataPtr->resC.clear();
   commonDataPtr->resCdTau.clear();
   commonDataPtr->resCdStrain.clear();
+  commonDataPtr->resCdStrainDot.clear();
   commonDataPtr->resFlow.clear();
   commonDataPtr->resFlowDtau.clear();
   commonDataPtr->resFlowDstrain.clear();
@@ -103,6 +106,8 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
   auto t_res_c_dtau = getFTensor0FromVec(commonDataPtr->resCdTau);
   auto t_res_c_dstrain =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resCdStrain);
+  auto t_res_c_dstrain_dot =
+      getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resCdStrainDot);
   auto t_res_flow =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resFlow);
   auto t_res_flow_dtau =
@@ -122,6 +127,7 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
     ++t_res_c;
     ++t_res_c_dtau;
     ++t_res_c_dstrain;
+    ++t_res_c_dstrain_dot;
     ++t_res_flow;
     ++t_res_flow_dtau;
     ++t_res_flow_dstrain;
@@ -129,31 +135,91 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
     ++t_w;
   };
 
+  auto get_avtive_pts = [&]() {
+    int nb_points_avtive_on_elem = 0;
+    int nb_points_on_elem = 0;
+
+    auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
+    auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
+    auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
+    auto t_plastic_strain_dot =
+        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticStrainDot);
+
+    for (auto &f : commonDataPtr->plasticSurface) {
+      auto eqiv = equivalent_strain_dot(t_plastic_strain_dot);
+      const auto ww = w(eqiv, t_tau_dot, t_f, hardening(t_tau));
+      const auto sign_ww = constrian_sign(ww);
+
+      ++nb_points_on_elem;
+      if (sign_ww > 0) {
+        ++nb_points_avtive_on_elem;
+      }
+
+      ++t_tau;
+      ++t_tau_dot;
+      ++t_f;
+      ++t_plastic_strain_dot;
+    }
+
+    int &active_points = commonDataPtr->activityData[0];
+    int &avtive_full_elems = commonDataPtr->activityData[1];
+    int &avtive_elems = commonDataPtr->activityData[2];
+    int &nb_points = commonDataPtr->activityData[3];
+    int &nb_elements = commonDataPtr->activityData[4];
+
+    ++nb_elements;
+    nb_points += nb_points_on_elem;
+    if (nb_points_avtive_on_elem > 0) {
+      ++avtive_elems;
+      active_points += nb_points_avtive_on_elem;
+      if (nb_points_avtive_on_elem == nb_points_on_elem) {
+        ++avtive_full_elems;
+      }
+    }
+
+    if (nb_points_avtive_on_elem != nb_points_on_elem)
+      return 1;
+    else
+      return 0;
+  };
+
+  if (getTSCtx() == TSMethod::TSContext::CTX_TSSETIJACOBIAN) {
+    get_avtive_pts();
+  }
+
   for (auto &f : commonDataPtr->plasticSurface) {
 
-    const auto ww = w(t_tau_dot, t_f, hardening(t_tau));
-    const auto abs_ww = constrain_abs(ww);
-    const auto sign_ww = constrian_sign(ww);
+    auto eqiv = equivalent_strain_dot(t_plastic_strain_dot);
+    auto t_diff_eqiv = diff_equivalent_strain_dot(eqiv, t_plastic_strain_dot,
+                                                  t_diff_plastic_strain);
 
     const auto sigma_y = hardening(t_tau);
     const auto d_sigma_y = hardening_dtau(t_tau);
 
-    const auto c = constrain(t_tau_dot, t_f, sigma_y, abs_ww);
+    auto ww = w(eqiv, t_tau_dot, t_f, sigma_y);
+    auto abs_ww = constrain_abs(ww);
+    auto sign_ww = constrian_sign(ww);
 
-    const auto c_dot_tau = diff_constrain_ddot_tau(sign_ww);
-    const auto c_sigma_y = diff_constrain_dsigma_y(sign_ww);
-    const auto c_f = diff_constrain_df(sign_ww);
+    auto c = constrain(eqiv, t_tau_dot, t_f, sigma_y, abs_ww);
+    auto c_dot_tau = diff_constrain_ddot_tau(sign_ww, eqiv);
+    auto c_equiv = diff_constrain_equiv(sign_ww, t_tau_dot);
+    auto c_sigma_y = diff_constrain_dsigma_y(sign_ww);
+    auto c_f = diff_constrain_df(sign_ww);
 
     auto t_dev_stress = deviator(t_stress, trace(t_stress));
     FTensor::Tensor2_symmetric<double, SPACE_DIM> t_flow_dir;
     t_flow_dir(k, l) = 1.5 * (t_dev_stress(I, J) * t_diff_deviator(I, J, k, l));
+    FTensor::Tensor2_symmetric<double, SPACE_DIM> t_flow_dstrain;
+    t_flow_dstrain(i, j) = t_flow(k, l) * t_D_Op(k, l, i, j);
 
     auto get_res_c = [&]() { return c; };
 
     auto get_res_c_dstrain = [&](auto &t_diff_res) {
-      FTensor::Tensor2_symmetric<double, SPACE_DIM> t_flow_dstrain;
-      t_flow_dstrain(i, j) = t_flow(k, l) * t_D_Op(k, l, i, j);
       t_diff_res(i, j) = c_f * t_flow_dstrain(i, j);
+    };
+
+    auto get_res_c_dstrain_dot = [&](auto &t_diff_res) {
+      t_diff_res(i, j) = (getTSa() * c_equiv) * t_diff_eqiv(i, j);
     };
 
     auto get_res_c_dtau = [&]() {
@@ -175,7 +241,7 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
 
     auto get_res_flow_dstrain = [&](auto &t_res_flow_dstrain) {
       const auto b = t_tau_dot;
-      t_res_flow_dstrain(m, n, k, l) = (-b) * t_flow_dir_dstrain(m, n, k, l);
+      t_res_flow_dstrain(m, n, k, l) = -t_flow_dir_dstrain(m, n, k, l) * b;
     };
 
     auto get_res_flow_dstrain_dot = [&](auto &t_res_flow_dstrain_dot) {
@@ -190,6 +256,7 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
     if (getTSCtx() == TSMethod::TSContext::CTX_TSSETIJACOBIAN) {
       t_res_c_dtau = get_res_c_dtau();
       get_res_c_dstrain(t_res_c_dstrain);
+      get_res_c_dstrain_dot(t_res_c_dstrain_dot);
       get_res_flow_dtau(t_res_flow_dtau);
       get_res_flow_dstrain(t_res_flow_dstrain);
       get_res_flow_dstrain_dot(t_res_flow_dstrain_dot);
@@ -254,6 +321,7 @@ OpCalculatePlasticFlowRhs::iNtegrate(EntitiesFieldData::EntData &data) {
 
   auto t_res_flow =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resFlow);
+
   auto t_L = symm_L_tensor();
 
   auto next = [&]() { ++t_res_flow; };
@@ -448,6 +516,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::iNtegrate(
 
   auto t_res_flow_dtau =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resFlowDtau);
+
   auto t_L = symm_L_tensor();
 
   auto next = [&]() { ++t_res_flow_dtau; };
@@ -510,8 +579,13 @@ OpCalculateConstraintsLhs_dEP::iNtegrate(EntitiesFieldData::EntData &row_data,
 
   auto t_c_dstrain =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resCdStrain);
+  auto t_c_dstrain_dot =
+      getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resCdStrainDot);
 
-  auto next = [&]() { ++t_c_dstrain; };
+  auto next = [&]() {
+    ++t_c_dstrain;
+    ++t_c_dstrain_dot;
+  };
 
   auto t_L = symm_L_tensor();
 
@@ -522,7 +596,7 @@ OpCalculateConstraintsLhs_dEP::iNtegrate(EntitiesFieldData::EntData &row_data,
     ++t_w;
 
     FTensor::Tensor1<double, size_symm> t_res_vec;
-    t_res_vec(L) = -(t_L(i, j, L) * t_c_dstrain(i, j));
+    t_res_vec(L) = t_L(i, j, L) * (t_c_dstrain_dot(i, j) - t_c_dstrain(i, j));
     next();
 
     auto t_mat =
@@ -571,7 +645,7 @@ MoFEMErrorCode OpCalculateConstraintsLhs_dTAU::iNtegrate(
     const double alpha = getMeasure() * t_w;
     ++t_w;
 
-    const auto res = alpha * t_res_c_dtau;
+    const auto res = alpha * (t_res_c_dtau);
     next();
 
     auto mat_ptr = locMat.data().begin();
