@@ -19,7 +19,8 @@ constexpr int BASE_DIM = 1;
 constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
 constexpr CoordinateTypes coord_type =
- e    EXECUTABLE_COORD_TYPE; ///< select coordinate system <CARTESIAN, CYLINDRICAL>;
+    EXECUTABLE_COORD_TYPE; ///< select coordinate system <CARTESIAN,
+                           ///< CYLINDRICAL>;
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -519,7 +520,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 //! [Boundary condition]
 
 //! [Push operators to pipeline]
-MoFEMErrorCode  v() {
+MoFEMErrorCode FreeSurface::assembleSystem() {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
 
