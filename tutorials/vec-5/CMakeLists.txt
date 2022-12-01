@@ -21,5 +21,15 @@ tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
+#tutorials_build_and_install(
+#free_surface ${CMAKE_CURRENT_SOURCE_DIR}/free_surface.cpp)
+
 tutorials_build_and_install(
-  free_surface ${CMAKE_CURRENT_SOURCE_DIR}/free_surface.cpp)
+  free_surface_cylindrical ${CMAKE_CURRENT_SOURCE_DIR}/free_surface.cpp)
+set_target_properties(
+  free_surface_cylindrical PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_COORD_TYPE=CYLINDRICAL")
+
+tutorials_build_and_install(
+  free_surface_cartesian ${CMAKE_CURRENT_SOURCE_DIR}/free_surface.cpp)
+set_target_properties(
+  free_surface_cartesian PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_COORD_TYPE=CARTESIAN")

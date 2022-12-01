@@ -19,7 +19,7 @@ constexpr int BASE_DIM = 1;
 constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
 constexpr CoordinateTypes coord_type =
-    CARTESIAN; ///< select coordinate system <CARTESIAN, CYLINDRICAL>;
+ e    EXECUTABLE_COORD_TYPE; ///< select coordinate system <CARTESIAN, CYLINDRICAL>;
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -85,9 +85,9 @@ constexpr int order = 3; ///< approximation order
 // Physical parameters 
 constexpr double a0 = 980;
 constexpr double rho_m = 0.998;
-constexpr double mu_m = 0.0101;
+constexpr double mu_m = 1.0101;
 constexpr double rho_p = 0.0012;
-constexpr double mu_p = 0.000182;
+constexpr double mu_p = 0.0182;
 constexpr double lambda = 73;
 constexpr double W = 0.25;
 constexpr double cos_alpha = 70; // wetting angle
@@ -287,7 +287,8 @@ MoFEMErrorCode FreeSurface::runProblem() {
 //! [Read mesh]
 MoFEMErrorCode FreeSurface::readMesh() {
   MoFEMFunctionBegin;
-
+  MOFEM_LOG("FS", Sev::inform)
+      << "Read mesh for problem in " << EXECUTABLE_COORD_TYPE;
   auto simple = mField.getInterface<Simple>();
 
   CHKERR simple->getOptions();
@@ -518,7 +519,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 //! [Boundary condition]
 
 //! [Push operators to pipeline]
-MoFEMErrorCode FreeSurface::assembleSystem() {
+MoFEMErrorCode  v() {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
 
@@ -625,7 +626,8 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, 13, "WETTING_ANGLE") == 0) {
+      std::string block_name = "WETTING_ANGLE";
+      if (it->getName().compare(0, block_name.length(), block_name) == 0) {
         Range force_edges;
         std::vector<double> attr_vec;
         CHKERR it->getMeshsetIdEntitiesByDimension(
@@ -640,7 +642,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
         // push operators to the side element which is called from op_bdy_side
-        auto op_bdy_side = new OpLoopSide(mField, simple->getDomainFEName());
+        auto op_bdy_side = new FreeSurfaceOps::OpLoopSide(mField, simple->getDomainFEName());
         op_bdy_side->getOpPtrVector().push_back(
             new OpCalculateHOJacForFace(jac_ptr));
         op_bdy_side->getOpPtrVector().push_back(
@@ -697,7 +699,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
         // push operators to the side element which is called from op_bdy_side
-        auto op_bdy_side = new OpLoopSide(mField, simple->getDomainFEName());
+        auto op_bdy_side = new FreeSurfaceOps::OpLoopSide(mField, simple->getDomainFEName());
         op_bdy_side->getOpPtrVector().push_back(
             new OpCalculateHOJacForFace(jac_ptr));
         op_bdy_side->getOpPtrVector().push_back(
