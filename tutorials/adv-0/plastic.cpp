@@ -122,7 +122,8 @@ inline double hardening(double tau) {
 
 inline double hardening_dtau(double tau) {
   auto r = [](auto tau) { return H + Qinf * b_iso * hardening_exp(tau); };
-  return std::max(r(tau), 1e-6 * r(0));
+  constexpr double eps = 1e-12;
+  return std::max(r(tau), eps * r(0));
 }
 
 inline double hardening_dtau2(double tau) {
