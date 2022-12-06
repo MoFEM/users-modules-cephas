@@ -591,19 +591,18 @@ struct ThermalElement {
     boost::shared_ptr<SetPtsData> dataFieldEval;
     boost::shared_ptr<VectorDouble> tempPtr;
 
-    std::array<double, 3> evalCoords;
-    bool evalCoordFlg;
+    std::vector<std::array<double, 3>> evalPoints;
 
     TimeSeriesMonitor(MoFEM::Interface &m_field, const std::string series_name,
-                      const std::string temp_name, bool eval_coord_flag = false,
-                      std::array<double, 3> eval_coords = {0., 0., 0})
+                      const std::string temp_name,
+                      std::vector<std::array<double, 3>> eval_points)
         : mField(m_field), seriesName(series_name), tempName(temp_name),
-          evalCoordFlg(eval_coord_flag), evalCoords(eval_coords),
+          evalPoints(eval_points),
           dataFieldEval(m_field.getInterface<FieldEvaluatorInterface>()
                             ->getData<VolEle>()) {
       mask.set();
 
-      if (eval_coord_flag) {
+      if (!evalPoints.empty()) {
         ierr = m_field.getInterface<FieldEvaluatorInterface>()->buildTree3D(
             dataFieldEval, "THERMAL_FE");
         CHKERRABORT(PETSC_COMM_WORLD, ierr);
