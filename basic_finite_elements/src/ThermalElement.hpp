@@ -595,7 +595,7 @@ struct ThermalElement {
 
     TimeSeriesMonitor(MoFEM::Interface &m_field, const std::string series_name,
                       const std::string temp_name,
-                      std::vector<std::array<double, 3>> eval_points)
+                      std::vector<std::array<double, 3>> eval_points = {})
         : mField(m_field), seriesName(series_name), tempName(temp_name),
           evalPoints(eval_points),
           dataFieldEval(m_field.getInterface<FieldEvaluatorInterface>()
