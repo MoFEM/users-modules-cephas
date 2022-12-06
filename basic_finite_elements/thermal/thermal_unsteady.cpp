@@ -405,6 +405,20 @@ int main(int argc, char *argv[]) {
   }
 
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+    if (std::regex_match(it->getName(), std::regex("INT_THERMAL(.*)"))) {
+      std::vector<double> data;
+      CHKERR it->getAttributes(data);
+      if (data.size() != 1)
+        SETERRQ(PETSC_COMM_SELF, 1, "Data inconsistency");
+      Range block_ents, block_verts;
+      CHKERR moab.get_entities_by_handle(it->getMeshset(), block_ents, true);
+      CHKERR moab.get_connectivity(block_ents, block_verts, true);
+      CHKERR m_field.getInterface<FieldBlas>()->setField(data[0], MBVERTEX,
+                                                         block_verts, "TEMP");
+    }
+  }
+
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
     if (block_data[it->getMeshsetId()].initTemp != 0) {
       Range block_ents;
       CHKERR moab.get_entities_by_handle(it->meshset, block_ents, true);
@@ -465,11 +479,23 @@ int main(int argc, char *argv[]) {
     CHKERR recorder_ptr->delete_recorder_series("THEMP_SERIES");
   }
 
-  std::array<double, 3> eval_coords({0, 0, 0});
-  int dim = 3;
-  PetscBool eval_coord_flg = PETSC_FALSE;
-  CHKERR PetscOptionsGetRealArray(NULL, NULL, "-my_eval_coords",
-                                  eval_coords.data(), &dim, &eval_coord_flg);
+  std::vector<std::array<double, 3>> eval_points;
+  eval_points.resize(0);
+  PetscBool eval_points_flg = PETSC_FALSE;
+  char eval_points_file[255];
+  CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL, "-my_eval_points_file",
+                               eval_points_file, 255, &eval_points_flg);
+  if (eval_points_flg) {
+    std::ifstream in_file(eval_points_file, std::ios::in);
+    if (!in_file.is_open()) {
+      SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Cannot open file %s",
+               eval_points_file);
+    }
+    double x, y, z;
+    while (in_file >> x >> y >> z) {
+      eval_points.push_back({x, y, z});
+    }
+  }
 
   // set dm data structure which created mofem data structures
   CHKERR DMMoFEMCreateMoFEM(dm, &m_field, dm_name, bit_level0);
@@ -499,7 +525,7 @@ int main(int argc, char *argv[]) {
   ThermalElement::UpdateAndControl update_velocities(m_field, "TEMP",
                                                      "TEMP_RATE");
   ThermalElement::TimeSeriesMonitor monitor(m_field, "THEMP_SERIES", "TEMP",
-                                            eval_coord_flg, eval_coords);
+                                            eval_points);
   MonitorPostProc post_proc(m_field);
 
   // Initialize data with values save of on the field
