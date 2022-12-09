@@ -200,7 +200,7 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
     auto abs_ww = constrain_abs(ww);
     auto sign_ww = constrian_sign(ww);
 
-    auto c = constrain(eqiv, t_tau_dot, t_f, sigma_y, abs_ww);
+    auto c = constraint(eqiv, t_tau_dot, t_f, sigma_y, abs_ww);
     auto c_dot_tau = diff_constrain_ddot_tau(sign_ww, eqiv);
     auto c_equiv = diff_constrain_equiv(sign_ww, t_tau_dot);
     auto c_sigma_y = diff_constrain_dsigma_y(sign_ww);
