@@ -7,14 +7,13 @@
 -snes_dtol 0
 -snes_max_linear_solve_fail 0
 #-snes_converged_reason
--snes_linesearch_type bt
--snes_linesearch_max_it 3
-# -snes_linesearch_keeplambda
+-snes_linesearch_type l2
+-snes_linesearch_max_it 1
 #-snes_linesearch_minlambda 0.01
 
 #-snes_linesearch_monitor 
 -snes_max_it 60
--ts_max_steps 150
+-ts_max_steps 300
 
 -ts_max_time 2
 -ts_exact_final_time matchstep
@@ -26,8 +25,7 @@
 -ts_monitor
 -ts_adapt_monitor
 
--quasi_static 1
--ts_type beuler
+-ts_type theta
 -ts_theta_initial_guess_extrapolate 1
 -ts_theta_theta 1
 

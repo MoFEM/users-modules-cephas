@@ -55,6 +55,18 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble plasticStrain;
   MatrixDouble plasticStrainDot;
 
+  VectorDouble resC;
+  VectorDouble resCdTau;
+  MatrixDouble resCdStrain;
+  MatrixDouble resCdStrainDot;
+  MatrixDouble resFlow;
+  MatrixDouble resFlowDtau;
+  MatrixDouble resFlowDstrain;
+  MatrixDouble resFlowDstrainDot;
+
+  std::array<int, 5> activityData;
+  Tag thActivityMarker;
+
   inline auto getPlasticSurfacePtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &plasticSurface);
   }
@@ -71,22 +83,28 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(),
                                            &plasticStrainDot);
   }
+  inline auto getPlasticFlowPtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &plasticFlow);
+  }
 };
 //! [Common data]
 
+FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
 FTensor::Index<'l', SPACE_DIM> l;
 FTensor::Index<'m', SPACE_DIM> m;
-FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'n', SPACE_DIM> n;
+FTensor::Index<'o', SPACE_DIM> o;
+FTensor::Index<'p', SPACE_DIM> p;
 
 FTensor::Index<'I', 3> I;
 FTensor::Index<'J', 3> J;
 FTensor::Index<'M', 3> M;
 FTensor::Index<'N', 3> N;
 
-FTensor::Index<'L', (SPACE_DIM * (SPACE_DIM + 1)) / 2> L;
+FTensor::Index<'L', size_symm> L;
+FTensor::Index<'O', size_symm> O;
 
 //! [Operators definitions]
 struct OpCalculatePlasticSurface : public DomainEleOp {
@@ -96,6 +114,18 @@ struct OpCalculatePlasticSurface : public DomainEleOp {
 
 protected:
   boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+struct OpCalculatePlasticity : public DomainEleOp {
+  OpCalculatePlasticity(const std::string field_name, MoFEM::Interface &m_field,
+                        boost::shared_ptr<CommonData> common_data_ptr,
+                        boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+protected:
+  MoFEM::Interface &mField;
+  boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
 struct OpPlasticStress : public DomainEleOp {
@@ -113,20 +143,24 @@ private:
 
 struct OpCalculatePlasticFlowRhs : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowRhs(const std::string field_name,
-                            boost::shared_ptr<CommonData> common_data_ptr);
+                            boost::shared_ptr<CommonData> common_data_ptr,
+                            boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculateContrainsRhs : public AssemblyDomainEleOp {
-  OpCalculateContrainsRhs(const std::string field_name,
-                          boost::shared_ptr<CommonData> common_data_ptr);
+struct OpCalculateConstraintsRhs : public AssemblyDomainEleOp {
+  OpCalculateConstraintsRhs(const std::string field_name,
+                            boost::shared_ptr<CommonData> common_data_ptr,
+                            boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
 struct OpCalculatePlasticInternalForceLhs_dEP : public AssemblyDomainEleOp {
@@ -157,6 +191,7 @@ private:
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   boost::shared_ptr<MatrixDouble> mDPtr;
   MatrixDouble locMat;
+  MatrixDouble resDiff;
 };
 
 struct OpCalculatePlasticFlowLhs_dU : public AssemblyDomainEleOp {
@@ -185,6 +220,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   boost::shared_ptr<MatrixDouble> mDPtr;
+  MatrixDouble resDiff;
 };
 
 struct OpCalculatePlasticFlowLhs_dEP : public AssemblyDomainEleOp {
@@ -203,19 +239,8 @@ private:
 struct OpCalculatePlasticFlowLhs_dTAU : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowLhs_dTAU(const std::string row_field_name,
                                  const std::string col_field_name,
-                                 boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
-                           EntitiesFieldData::EntData &col_data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
-
-struct OpCalculateContrainsLhs_dU : public AssemblyDomainEleOp {
-  OpCalculateContrainsLhs_dU(const std::string row_field_name,
-                             const std::string col_field_name,
-                             boost::shared_ptr<CommonData> common_data_ptr,
-                             boost::shared_ptr<MatrixDouble> m_D_ptr);
+                                 boost::shared_ptr<CommonData> common_data_ptr,
+                                 boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
@@ -224,8 +249,21 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculateContrainsLhs_LogStrain_dU : public AssemblyDomainEleOp {
-  OpCalculateContrainsLhs_LogStrain_dU(
+struct OpCalculateConstraintsLhs_dU : public AssemblyDomainEleOp {
+  OpCalculateConstraintsLhs_dU(const std::string row_field_name,
+                               const std::string col_field_name,
+                               boost::shared_ptr<CommonData> common_data_ptr,
+                               boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
+};
+
+struct OpCalculateConstraintsLhs_LogStrain_dU : public AssemblyDomainEleOp {
+  OpCalculateConstraintsLhs_LogStrain_dU(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
@@ -237,13 +275,14 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   boost::shared_ptr<MatrixDouble> mDPtr;
+  MatrixDouble resDiff;
 };
 
-struct OpCalculateContrainsLhs_dEP : public AssemblyDomainEleOp {
-  OpCalculateContrainsLhs_dEP(const std::string row_field_name,
-                              const std::string col_field_name,
-                              boost::shared_ptr<CommonData> common_data_ptr,
-                              boost::shared_ptr<MatrixDouble> mat_D_ptr);
+struct OpCalculateConstraintsLhs_dEP : public AssemblyDomainEleOp {
+  OpCalculateConstraintsLhs_dEP(const std::string row_field_name,
+                                const std::string col_field_name,
+                                boost::shared_ptr<CommonData> common_data_ptr,
+                                boost::shared_ptr<MatrixDouble> mat_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
@@ -252,28 +291,17 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculateContrainsLhs_dTAU : public AssemblyDomainEleOp {
-  OpCalculateContrainsLhs_dTAU(const std::string row_field_name,
-                               const std::string col_field_name,
-                               boost::shared_ptr<CommonData> common_data_ptr);
+struct OpCalculateConstraintsLhs_dTAU : public AssemblyDomainEleOp {
+  OpCalculateConstraintsLhs_dTAU(const std::string row_field_name,
+                                 const std::string col_field_name,
+                                 boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
+
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpPostProcPlastic : public DomainEleOp {
-  OpPostProcPlastic(const std::string field_name,
-                    moab::Interface &post_proc_mesh,
-                    std::vector<EntityHandle> &map_gauss_pts,
-                    boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-private:
-  moab::Interface &postProcMesh;
-  std::vector<EntityHandle> &mapGaussPts;
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
 //! [Operators definitions]
 
 //! [Lambda functions]
@@ -285,14 +313,13 @@ inline auto diff_tensor() {
 };
 
 inline auto symm_L_tensor() {
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   FTensor::Dg<double, SPACE_DIM, size_symm> t_L;
   t_L(i, j, L) = 0;
-  if (SPACE_DIM == 2) {
+  if constexpr (SPACE_DIM == 2) {
     t_L(0, 0, 0) = 1;
     t_L(1, 0, 1) = 1;
     t_L(1, 1, 2) = 1;
-  } else if (SPACE_DIM == 3) {
+  } else {
     t_L(0, 0, 0) = 1;
     t_L(1, 0, 1) = 1;
     t_L(2, 0, 2) = 1;
@@ -316,7 +343,7 @@ inline auto diff_symmetrize() {
   t_diff(0, 1, 0, 1) = 0.5;
   t_diff(0, 1, 1, 0) = 0.5;
 
-  if (SPACE_DIM == 3) {
+  if constexpr (SPACE_DIM == 3) {
     t_diff(2, 2, 2, 2) = 1;
 
     t_diff(2, 0, 2, 0) = 0.5;
@@ -336,7 +363,7 @@ inline auto diff_symmetrize() {
 template <typename T>
 inline double trace(FTensor::Tensor2_symmetric<T, SPACE_DIM> &t_stress) {
   constexpr double third = boost::math::constants::third<double>();
-  if (SPACE_DIM == 2)
+  if constexpr (SPACE_DIM == 2)
     return (t_stress(0, 0) + t_stress(1, 1)) * third;
   else
     return (t_stress(0, 0) + t_stress(1, 1) + t_stress(2, 2)) * third;
@@ -377,7 +404,7 @@ diff_deviator(FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> &&t_diff_stress) {
   t_diff_deviator(2, 2, 0, 0) -= third;
   t_diff_deviator(2, 2, 1, 1) -= third;
 
-  if (SPACE_DIM == 3) {
+  if constexpr (SPACE_DIM == 3) {
     t_diff_deviator(0, 0, 2, 2) -= third;
     t_diff_deviator(1, 1, 2, 2) -= third;
     t_diff_deviator(2, 2, 2, 2) -= third;
@@ -446,21 +473,45 @@ inline auto diff_plastic_flow_dstrain(
   return t_diff_flow;
 };
 
-inline double constrain_abs(long double x) {
-  return std::abs(x);
-};
-
-inline double constrian_sign(long double x) {
-  if (x > 0)
-    return 1;
-  else if (x < 0)
-    return -1;
-  else
+inline double constrain_diff_sign(double x) {
+  const auto y = x / zeta;
+  if (y > std::numeric_limits<float>::max_exponent10 ||
+      y < std::numeric_limits<float>::min_exponent10) {
     return 0;
+  } else {
+    const auto e = std::exp(y);
+    const auto ep1 = e + 1;
+    return (2 / zeta) * (e / (ep1 * ep1));
+  }
 };
 
-inline double w(long double dot_tau, long double f, long double sigma_y) {
-  return (f - sigma_y) / sigmaY + cn * dot_tau;
+inline double constrian_sign(double x) {
+  const auto y = x / zeta;
+  if (y > std::numeric_limits<float>::max_exponent10 ||
+      y < std::numeric_limits<float>::min_exponent10) {
+    if (x > 0)
+      return 1.;
+    else
+      return -1.;
+  } else {
+    const auto e = std::exp(y);
+    return (e - 1) / (1 + e);
+  }
+};
+
+inline double constrain_abs(double x) {
+  const auto y = -x / zeta;
+  if (y > std::numeric_limits<float>::max_exponent10 ||
+      y < std::numeric_limits<float>::min_exponent10) {
+    return std::abs(x);
+  } else {
+    const double e = std::exp(y);
+    return x + 2 * zeta * std::log1p(e);
+  }
+};
+
+inline double w(double eqiv, double dot_tau, double f, double sigma_y) {
+  return (f - sigma_y) / sigmaY + cn1 * (dot_tau * eqiv);
 };
 
 /**
@@ -474,32 +525,29 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 \f]
 
  */
-inline double constrain(long double dot_tau, long double f,
-                        long double sigma_y) {
+inline double constrain(double eqiv, double dot_tau, double f, double sigma_y,
+                        double abs_w) {
   return visH * dot_tau +
-         (sigmaY / 2) * ((cn * dot_tau - (f - sigma_y) / sigmaY) -
-                         constrain_abs(w(dot_tau, f, sigma_y)));
+         (sigmaY / 2) * ((cn0 * (dot_tau - eqiv) + cn1 * (eqiv * dot_tau) -
+                          (f - sigma_y) / sigmaY) -
+                         abs_w);
 };
 
-inline double diff_constrain_ddot_tau(long double dot_tau, long double f,
-                                      long double sigma_y) {
-  return visH +
-         (sigmaY / 2) * (cn - cn * constrian_sign(w(dot_tau, f, sigma_y)));
+inline double diff_constrain_ddot_tau(double sign, double eqiv) {
+  return visH + (sigmaY / 2) * (cn0 + cn1 * eqiv * (1 - sign));
 };
 
-inline auto diff_constrain_df(long double dot_tau, long double f,
-                              long double sigma_y) {
-  return (-1 - constrian_sign(w(dot_tau, f, sigma_y))) / 2;
+inline double diff_constrain_equiv(double sign, double dot_tau) {
+  return (sigmaY / 2) * (-cn0 + cn1 * dot_tau * (1 - sign));
 };
 
-inline auto diff_constrain_dsigma_y(long double dot_tau, long double f,
-                                    long double sigma_y) {
-  return (1 + constrian_sign(w(dot_tau, f, sigma_y))) / 2;
-}
+inline auto diff_constrain_df(double sign) { return (-1 - sign) / 2; };
+
+inline auto diff_constrain_dsigma_y(double sign) { return (1 + sign) / 2; }
 
 template <typename T>
 inline auto diff_constrain_dstress(
-    double &&diff_constrain_df,
+    double diff_constrain_df,
     FTensor::Tensor2_symmetric<T, SPACE_DIM> &t_plastic_flow) {
   FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_constrain_dstress;
   t_diff_constrain_dstress(i, j) = diff_constrain_df * t_plastic_flow(i, j);
@@ -513,48 +561,52 @@ inline auto diff_constrain_dstrain(T1 &t_D, T2 &&t_diff_constrain_dstress) {
       t_diff_constrain_dstress(i, j) * t_D(i, j, k, l);
   return t_diff_constrain_dstrain;
 };
+
+template <typename T>
+inline auto equivalent_strain_dot(
+    FTensor::Tensor2_symmetric<T, SPACE_DIM> &t_plastic_strain_dot) {
+  constexpr double A = 2. / 3;
+  return std::sqrt(A * t_plastic_strain_dot(i, j) *
+                   t_plastic_strain_dot(i, j)) +
+         std::numeric_limits<double>::epsilon();
+};
+
+template <typename T1, typename T2, typename T3>
+inline auto diff_equivalent_strain_dot(const T1 eqiv, T2 &t_plastic_strain_dot,
+                                       T3 &t_diff_plastic_strain) {
+  constexpr double A = 2. / 3;
+  FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_eqiv;
+  t_diff_eqiv(i, j) = A * (t_plastic_strain_dot(k, l) / eqiv) *
+                      t_diff_plastic_strain(k, l, i, j);
+  return t_diff_eqiv;
+};
+
 //! [Lambda functions]
 
 //! [Auxiliary functions functions
-static inline FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2>
-get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat, FTensor::Number<2>) {
-  return FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2>{
+static inline auto get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat,
+                                              FTensor::Number<2>) {
+  return FTensor::Tensor2<FTensor::PackPtr<double *, 2>, 3, 2>{
       &mat(3 * rr + 0, 0), &mat(3 * rr + 0, 1), &mat(3 * rr + 1, 0),
-      &mat(3 * rr + 1, 1), &mat(3 * rr + 1, 0), &mat(3 * rr + 1, 1),
-      &mat(3 * rr + 2, 0), &mat(3 * rr + 2, 1)};
+      &mat(3 * rr + 1, 1), &mat(3 * rr + 2, 0), &mat(3 * rr + 2, 1)};
 }
 
-static inline FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3>
-get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat, FTensor::Number<3>) {
-  return FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3>{
+static inline auto get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat,
+                                              FTensor::Number<3>) {
+  return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 6, 3>{
       &mat(6 * rr + 0, 0), &mat(6 * rr + 0, 1), &mat(6 * rr + 0, 2),
       &mat(6 * rr + 1, 0), &mat(6 * rr + 1, 1), &mat(6 * rr + 1, 2),
       &mat(6 * rr + 2, 0), &mat(6 * rr + 2, 1), &mat(6 * rr + 2, 2),
-      &mat(6 * rr + 1, 0), &mat(6 * rr + 1, 1), &mat(6 * rr + 1, 2),
       &mat(6 * rr + 3, 0), &mat(6 * rr + 3, 1), &mat(6 * rr + 3, 2),
-      &mat(6 * rr + 4, 0), &mat(6 * rr + 4, 1), &mat(6 * rr + 4, 2),
-      &mat(6 * rr + 2, 0), &mat(6 * rr + 2, 1), &mat(6 * rr + 2, 2),
       &mat(6 * rr + 4, 0), &mat(6 * rr + 4, 1), &mat(6 * rr + 4, 2),
       &mat(6 * rr + 5, 0), &mat(6 * rr + 5, 1), &mat(6 * rr + 5, 2)};
 }
 
-static inline auto get_mat_scalar_dvector(MatrixDouble &mat,
-                                          FTensor::Number<2>) {
-  return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>{&mat(0, 0),
-                                                            &mat(0, 1)};
-}
-
-static inline auto get_mat_scalar_dvector(MatrixDouble &mat,
-                                          FTensor::Number<3>) {
-  return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
-      &mat(0, 0), &mat(0, 1), &mat(0, 2)};
-}
 //! [Auxiliary functions functions
-
 
 }; // namespace PlasticOps
 
 #include <PlasticOpsGeneric.hpp>
-#include<PlasticOpsSmallStrains.hpp> 
-#include<PlasticOpsLargeStrains.hpp>
+#include <PlasticOpsSmallStrains.hpp>
+#include <PlasticOpsLargeStrains.hpp>
 #include <PlasticOpsMonitor.hpp>

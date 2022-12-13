@@ -2,6 +2,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-2/src)
 
+include_directories(${MoFEM_INSTALL_DIR}/third_party/phg-quadrule)
+
 set(permissions_default 
   OWNER_WRITE 
   OWNER_READ
@@ -54,5 +56,5 @@ add_test(
   -large_strains 1
   -scale 1
   -hardening_viscous 0
-  -cn 1 -ksp_monitor 
+  -cn0 1 -ksp_monitor 
   -log_no_color)
