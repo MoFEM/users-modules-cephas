@@ -197,9 +197,16 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
     dot_W.clear();
     H.clear();
     invH.clear();
-    for (int dd = 0; dd < 3; dd++) {
-      H(dd, dd) = 1;
-      invH(dd, dd) = 1;
+    for (int ii = 0; ii < 3; ii++) {
+      for (int jj = 0; jj < 3; jj++) {
+        if (ii == jj) {
+          H(ii, jj) = 1;
+          invH(ii, jj) = 1;
+        } else {
+          H(ii, jj) = 0;
+          invH(ii, jj) = 0;
+        }
+      }
     }
 
     int nb_gauss_pts = row_data.getN().size1();
