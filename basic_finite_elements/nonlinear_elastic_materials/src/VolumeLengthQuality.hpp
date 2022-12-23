@@ -134,12 +134,12 @@ struct VolumeLengthQuality
     }
     lrmsSquared = 0;
     lrmsSquared0 = 0;
-    dXdChiT.clear();
+    std::fill(dXdChiT.data().begin(), dXdChiT.data().end(), 0);
     for (int ee = 0; ee < 6; ee++) {
       for (int dd = 0; dd < 3; dd++) {
         deltaChi[dd] = coordsEdges[6 * ee + dd] - coordsEdges[6 * ee + 3 + dd];
       }
-      deltaX.clear();
+      std::fill(deltaX.begin(), deltaX.end(), 0);
       for (int ii = 0; ii != 3; ++ii)
         for (int jj = 0; jj != 3; ++jj)
           deltaX(ii) += this->F(ii, jj) * deltaChi(jj);
