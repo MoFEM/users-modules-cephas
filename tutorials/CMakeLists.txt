@@ -96,6 +96,7 @@ set(TUTORIALS_DIRS
   adv-0
   adv-1
   adv-2
+  adv-3
   cor-0to1
   cor-2to5
   cor-6

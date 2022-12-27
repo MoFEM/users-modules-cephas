@@ -105,8 +105,8 @@ CHKERR DMMoFEMCreateSubDM(dm_sub_KK,dm,"SUB_KK");
 CHKERR DMMoFEMSetSquareProblem(dm_sub_KK,PETSC_TRUE); 
 CHKERR DMMoFEMAddSubFieldRow(dm_sub_KK,"U"); 
 CHKERR DMMoFEMAddSubFieldCol(dm_sub_KK,"U"); 
-CHKERR DMMoFEMAddElement(dm_sub_KK,simple_interface->getDomainFEName().c_str()); 
-CHKERR DMMoFEMAddElement(dm_sub_KK,simple_interface->getBoundaryFEName().c_str()); 
+CHKERR DMMoFEMAddElement(dm_sub_KK,simple_interface->getDomainFEName()); 
+CHKERR DMMoFEMAddElement(dm_sub_KK,simple_interface->getBoundaryFEName()); 
 CHKERR DMSetUp(dm_sub_KK); 
 \endcode
 
@@ -141,7 +141,7 @@ CHKERR DMMoFEMCreateSubDM(dm_sub_LU,dm,"SUB_LU");
 CHKERR DMMoFEMSetSquareProblem(dm_sub_LU,PETSC_FALSE); 
 CHKERR DMMoFEMAddSubFieldRow(dm_sub_LU,"L"); 
 CHKERR DMMoFEMAddSubFieldCol(dm_sub_LU,"U"); 
-CHKERR DMMoFEMAddElement(dm_sub_LU,simple_interface->getBoundaryFEName().c_str()); 
+CHKERR DMMoFEMAddElement(dm_sub_LU,simple_interface->getBoundaryFEName()); 
 CHKERR DMSetUp(dm_sub_LU); 
 CHKERR DMMoFEMGetSubRowIS(dm_sub_LU,&nested_is[1]); 
 CHKERR DMCreateMatrix(dm_sub_LU,&nested_matrices(1,0)); 

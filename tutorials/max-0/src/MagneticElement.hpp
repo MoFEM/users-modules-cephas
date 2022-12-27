@@ -286,8 +286,8 @@ struct MagneticElement {
     CHKERR DMSetFromOptions(blockData.dM);
     CHKERR DMMoFEMSetIsPartitioned(blockData.dM, PETSC_TRUE);
     // add elements to blockData.dM
-    CHKERR DMMoFEMAddElement(blockData.dM, blockData.feName.c_str());
-    CHKERR DMMoFEMAddElement(blockData.dM, blockData.feNaturalBCName.c_str());
+    CHKERR DMMoFEMAddElement(blockData.dM, blockData.feName);
+    CHKERR DMMoFEMAddElement(blockData.dM, blockData.feNaturalBCName);
     CHKERR DMSetUp(blockData.dM);
 
     // remove essential DOFs
