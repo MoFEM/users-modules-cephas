@@ -1,7 +1,7 @@
 /**
- * @file test_tangent.cpp
- * @example test_tangent.cpp
- * @brief Test operators in forms integrators
+ * @file level_set.cpp
+ * @example level_set.cpp
+ * @brief Example with level set method
  * @date 2022-12-15
  *
  * @copyright Copyright (c) 2022
@@ -36,43 +36,80 @@ using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
-using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
-using OpMassLL =
-    FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<I>::OpMass<1, 1>;
-using OpSourceL =
-    FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<I>::OpSource<1, 1>;
-using OpMassVV = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
-    I>::OpMass<3, SPACE_DIM>;
-using OpSourceV = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
-    I>::OpSource<3, SPACE_DIM>;
+constexpr FieldSpace potential_velocity_space = SPACE_DIM == 2 ? H1 : HCURL;
+constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
 
 constexpr bool debug = true;
 
-struct OpRhs : public AssemblyDomainEleOp {
+struct LevelSet {
+
+  LevelSet(MoFEM::Interface &m_field) : mField(m_field) {}
+
+  MoFEMErrorCode runProblem();
+
+private:
+  MoFEMErrorCode readMesh();
+  MoFEMErrorCode setupProblem();
+
+  MoFEMErrorCode pushOp();
+  MoFEMErrorCode testOp();
+
+  MoFEMErrorCode initialiseFieldLevelSet();
+  MoFEMErrorCode initialiseFieldVelocity();
+  MoFEMErrorCode solveLevelSet();
+
+  struct OpRhs;
+  struct OpLhs;
+
+  // Main interfaces
+  MoFEM::Interface &mField;
+
+  using AssemblyDomainEleOp =
+      FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
+  using OpMassLL =
+      FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<I>::OpMass<1, 1>;
+  using OpSourceL =
+      FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<I>::OpSource<1, 1>;
+  using OpMassVV = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
+      I>::OpMass<potential_velocity_field_dim, potential_velocity_field_dim>;
+  using OpSourceV = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
+      I>::OpSource<potential_velocity_field_dim, potential_velocity_field_dim>;
+};
+
+MoFEMErrorCode LevelSet::runProblem() {
+  MoFEMFunctionBegin;
+  CHKERR readMesh();
+  CHKERR setupProblem();
+
+  if (debug)
+    CHKERR testOp();
+  CHKERR initialiseFieldVelocity();
+  CHKERR initialiseFieldLevelSet();
+  // CHKERR solveLevelSet();
+
+  MoFEMFunctionReturn(0);
+}
+
+struct LevelSet::OpRhs : public AssemblyDomainEleOp {
 
   OpRhs(const std::string field_name, boost::shared_ptr<VectorDouble> l_ptr,
-        boost::shared_ptr<VectorDouble> l_dot_ptr)
-      : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
-        lPtr(l_ptr), lDotPtr(l_dot_ptr) {}
-
+        boost::shared_ptr<VectorDouble> l_dot_ptr,
+        boost::shared_ptr<MatrixDouble> vel_ptr);
   MoFEMErrorCode iNtegrate(EntData &data);
 
 private:
   boost::shared_ptr<VectorDouble> lPtr;
   boost::shared_ptr<VectorDouble> lDotPtr;
+  boost::shared_ptr<MatrixDouble> velPtr;
 };
 
-struct OpLhs : public AssemblyDomainEleOp {
-  OpLhs(const std::string field_name)
-      : AssemblyDomainEleOp(field_name, field_name,
-                            AssemblyDomainEleOp::OPROWCOL) {}
-
+struct LevelSet::OpLhs : public AssemblyDomainEleOp {
+  OpLhs(const std::string field_name, boost::shared_ptr<MatrixDouble> vel_ptr);
   MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+
+private:
+  boost::shared_ptr<MatrixDouble> velPtr;
 };
-
-MoFEMErrorCode testOp(MoFEM::Interface &m_field);
-
-MoFEMErrorCode initialiseFieldLevelSet(MoFEM::Interface &m_field);
 
 int main(int argc, char *argv[]) {
 
@@ -101,33 +138,8 @@ int main(int argc, char *argv[]) {
     LogManager::setLog("LevelSet");
     MOFEM_LOG_TAG("LevelSet", "LevelSet");
 
-    // Simple interface
-    auto simple = m_field.getInterface<Simple>();
-
-    // get options from command line
-    CHKERR simple->getOptions();
-    // load mesh file
-    CHKERR simple->loadFile();
-
-    // Scalar fields and vector field is tested. Add more fields, i.e. vector
-    // field if needed.
-    CHKERR simple->addDomainField("L", H1, AINSWORTH_LEGENDRE_BASE, 1);
-    CHKERR simple->addDomainField("V", HCURL, AINSWORTH_LEGENDRE_BASE, 1);
-
-    // set fields order, i.e. for most first cases order is sufficient.
-    CHKERR simple->setFieldOrder("L", 2);
-    CHKERR simple->setFieldOrder("V", 2);
-
-    // setup problem
-    CHKERR simple->setUp();
-
-    auto pip = m_field.getInterface<PipelineManager>(); // get interface to
-                                                        // pipeline manager
-
-    if (debug)
-      CHKERR testOp(m_field);
-
-    CHKERR initialiseFieldLevelSet(m_field);
+    LevelSet level_set(m_field);
+    CHKERR level_set.runProblem();
   }
   CATCH_ERRORS;
 
@@ -137,20 +149,51 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
+MoFEMErrorCode LevelSet::readMesh() {
+  MoFEMFunctionBegin;
+  auto simple = mField.getInterface<Simple>();
+  // get options from command line
+  CHKERR simple->getOptions();
+
+  // Only L2 field is set in this example. Two lines bellow forces simple
+  // interface to creat lower dimension (edge) elements, despite that fact that
+  // there is no field spanning on such elements. We need them for DG method.
+  simple->getAddSkeletonFE() = true;
+  simple->getAddBoundaryFE() = true;
+
+  // load mesh file
+  CHKERR simple->loadFile();
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode LevelSet::setupProblem() {
+  MoFEMFunctionBegin;
+  auto simple = mField.getInterface<Simple>();
+  // Scalar fields and vector field is tested. Add more fields, i.e. vector
+  // field if needed.
+  CHKERR simple->addDomainField("L", L2, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addDomainField("V", potential_velocity_space,
+                                AINSWORTH_LEGENDRE_BASE, 1);
+
+  // set fields order, i.e. for most first cases order is sufficient.
+  CHKERR simple->setFieldOrder("L", 2);
+  CHKERR simple->setFieldOrder("V", 2);
+
+  // setup problem
+  CHKERR simple->setUp();
+
+  MoFEMFunctionReturn(0);
+}
+
 FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
 
-inline auto get_axis() { return FTensor::Tensor1<double, 3>{0, 0, 1}; }
+template <int SPACE_DIM>
+auto get_velocity_potential(double x, double y, double z);
 
-template <typename T> inline auto get_velocity(T &t_coords) {
-  FTensor::Index<'I', 3> I;
-  FTensor::Index<'J', 3> J;
-  FTensor::Index<'K', 3> K;
-  FTensor::Tensor1<double, 3> t_velocity;
-  auto t_axis = get_axis();
-  t_velocity(K) = (levi_civita(I, J, K) * t_coords(I)) * t_axis(J);
-  return t_velocity;
+template <> auto get_velocity_potential<2>(double x, double y, double z) {
+  return (x * x - 0.25) * (y * y - 0.25);
 }
 
 double get_level_set(const double x, const double y, const double z) {
@@ -161,7 +204,22 @@ double get_level_set(const double x, const double y, const double z) {
   return std::sqrt(pow(x - xc, 2) + pow(y - yc, 2) + pow(z - zc, 2)) - r;
 }
 
-MoFEMErrorCode OpRhs::iNtegrate(EntData &data) {
+LevelSet::OpRhs::OpRhs(const std::string field_name,
+                       boost::shared_ptr<VectorDouble> l_ptr,
+                       boost::shared_ptr<VectorDouble> l_dot_ptr,
+                       boost::shared_ptr<MatrixDouble> vel_ptr)
+    : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
+      lPtr(l_ptr), lDotPtr(l_dot_ptr), velPtr(vel_ptr) {}
+
+LevelSet::OpLhs::OpLhs(const std::string field_name,
+                       boost::shared_ptr<MatrixDouble> vel_ptr)
+    : AssemblyDomainEleOp(field_name, field_name,
+                          AssemblyDomainEleOp::OPROWCOL),
+      velPtr(vel_ptr) {
+  this->sYmm = false;
+}
+
+MoFEMErrorCode LevelSet::OpRhs::iNtegrate(EntData &data) {
   MoFEMFunctionBegin;
 
   const auto nb_int_points = getGaussPts().size1();
@@ -170,30 +228,29 @@ MoFEMErrorCode OpRhs::iNtegrate(EntData &data) {
 
   auto t_l = getFTensor0FromVec(*lPtr);
   auto t_l_dot = getFTensor0FromVec(*lDotPtr);
+  auto t_vel = getFTensor1FromMat<SPACE_DIM>(*velPtr);
 
-  auto t_coords = getFTensor1Coords();
   auto t_base = data.getFTensor0N();
   auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
 
   auto t_w = getFTensor0IntegrationWeight();
   for (auto gg = 0; gg != nb_int_points; ++gg) {
-    auto t_velocity = get_velocity(t_coords);
     const auto alpha = t_w * getMeasure();
 
     auto res0 = alpha * t_l_dot;
     FTensor::Tensor1<double, SPACE_DIM> t_res1;
-    t_res1(i) = (alpha * t_l) * t_velocity(i);
+    t_res1(i) = (alpha * t_l) * t_vel(i);
 
     ++t_w;
-    ++t_coords;
     ++t_l;
     ++t_l_dot;
+    ++t_vel;
 
     auto &nf = this->locF;
 
     int rr = 0;
     for (; rr != nb_dofs; ++rr) {
-      nf(rr) += res0 * t_base + t_res1(i) * t_diff_base(i);
+      nf(rr) += res0 * t_base - t_res1(i) * t_diff_base(i);
       ++t_base;
       ++t_diff_base;
     }
@@ -206,25 +263,25 @@ MoFEMErrorCode OpRhs::iNtegrate(EntData &data) {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode OpLhs::iNtegrate(EntData &row_data, EntData &col_data) {
+MoFEMErrorCode LevelSet::OpLhs::iNtegrate(EntData &row_data,
+                                          EntData &col_data) {
   MoFEMFunctionBegin;
 
   const auto nb_int_points = getGaussPts().size1();
+  const auto nb_base_func = row_data.getN().size2();
   const auto nb_row_dofs = row_data.getIndices().size();
   const auto nb_col_dofs = col_data.getIndices().size();
-  const auto nb_base_func = row_data.getN().size2();
 
-  auto t_coords = getFTensor1Coords();
+  auto t_vel = getFTensor1FromMat<SPACE_DIM>(*velPtr);
+
   auto t_row_base = row_data.getFTensor0N();
   auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
 
   auto t_w = getFTensor0IntegrationWeight();
   for (auto gg = 0; gg != nb_int_points; ++gg) {
-    auto t_velocity = get_velocity(t_coords);
     const auto alpha = t_w * getMeasure();
     const auto beta = alpha * getTSa();
     ++t_w;
-    ++t_coords;
 
     auto &mat = this->locMat;
 
@@ -232,9 +289,9 @@ MoFEMErrorCode OpLhs::iNtegrate(EntData &row_data, EntData &col_data) {
     for (; rr != nb_row_dofs; ++rr) {
       auto t_col_base = col_data.getFTensor0N(gg, 0);
       for (int cc = 0; cc != nb_col_dofs; ++cc) {
-        mat(rr, cc) += beta * t_row_base * t_col_base + (alpha * t_col_base) *
-                                                            t_row_diff_base(i) *
-                                                            t_velocity(i);
+        mat(rr, cc) +=
+            (beta * t_row_base - alpha * (t_row_diff_base(i) * t_vel(i))) *
+            t_col_base;
 
         ++t_col_base;
       }
@@ -245,25 +302,67 @@ MoFEMErrorCode OpLhs::iNtegrate(EntData &row_data, EntData &col_data) {
       ++t_row_base;
       ++t_row_diff_base;
     }
+
+    ++t_vel;
   }
 
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode testOp(MoFEM::Interface &m_field) {
+MoFEMErrorCode LevelSet::pushOp() {
+  MoFEMFunctionBegin;
+  auto pip = mField.getInterface<PipelineManager>(); // get interface to
+                                                     // pipeline manager
+
+  pip->getOpDomainLhsPipeline().clear();
+  pip->getOpDomainRhsPipeline().clear();
+
+  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 4 * o; });
+  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 4 * o; });
+
+  auto l_ptr = boost::make_shared<VectorDouble>();
+  auto l_dot_ptr = boost::make_shared<VectorDouble>();
+  auto vel_ptr = boost::make_shared<MatrixDouble>();
+
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      pip->getOpDomainRhsPipeline(), {potential_velocity_space, L2});
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      pip->getOpDomainLhsPipeline(), {potential_velocity_space, L2});
+
+  pip->getOpDomainRhsPipeline().push_back(
+      new OpCalculateScalarFieldValues("L", l_ptr));
+  pip->getOpDomainRhsPipeline().push_back(
+      new OpCalculateScalarFieldValuesDot("L", l_dot_ptr));
+  pip->getOpDomainRhsPipeline().push_back(
+      new OpCalculateHcurlVectorCurl<potential_velocity_field_dim, SPACE_DIM>(
+          "V", vel_ptr));
+  pip->getOpDomainLhsPipeline().push_back(
+      new OpCalculateHcurlVectorCurl<potential_velocity_field_dim, SPACE_DIM>(
+          "V", vel_ptr));
+
+  pip->getOpDomainRhsPipeline().push_back(
+      new OpRhs("L", l_ptr, l_dot_ptr, vel_ptr));
+  pip->getOpDomainLhsPipeline().push_back(new OpLhs("L", vel_ptr));
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode LevelSet::testOp() {
   MoFEMFunctionBegin;
 
   // get operators tester
-  auto simple = m_field.getInterface<Simple>();
-  auto opt = m_field.getInterface<OperatorsTester>(); // get interface to
-                                                      // OperatorsTester
-  auto pip = m_field.getInterface<PipelineManager>(); // get interface to
-                                                      // pipeline manager
+  auto simple = mField.getInterface<Simple>();
+  auto opt = mField.getInterface<OperatorsTester>(); // get interface to
+                                                     // OperatorsTester
+  auto pip = mField.getInterface<PipelineManager>(); // get interface to
+                                                     // pipeline manager
+
+  CHKERR pushOp();
 
   auto post_proc = [&](auto dm, auto f_res, auto out_name) {
     MoFEMFunctionBegin;
     auto post_proc_fe =
-        boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(m_field);
+        boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
 
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
@@ -291,31 +390,10 @@ MoFEMErrorCode testOp(MoFEM::Interface &m_field) {
     MoFEMFunctionReturn(0);
   };
 
-  pip->getOpDomainLhsPipeline().clear();
-  pip->getOpDomainRhsPipeline().clear();
-
-  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 2 * o; });
-  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 2 * o; });
-
-  auto l_ptr = boost::make_shared<VectorDouble>();
-  auto l_dot_ptr = boost::make_shared<VectorDouble>();
-
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      pip->getOpDomainRhsPipeline(), {H1, L2});
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      pip->getOpDomainLhsPipeline(), {H1, L2});
-
-  pip->getOpDomainRhsPipeline().push_back(
-      new OpCalculateScalarFieldValues("L", l_ptr));
-  pip->getOpDomainRhsPipeline().push_back(
-      new OpCalculateScalarFieldValuesDot("L", l_dot_ptr));
-  pip->getOpDomainRhsPipeline().push_back(new OpRhs("L", l_ptr, l_dot_ptr));
-
-  pip->getOpDomainLhsPipeline().push_back(new OpLhs("L"));
-
   constexpr double eps = 1e-6;
 
-  auto x = opt->setRandomFields(simple->getDM(), {{"L", {-1, 1}}});
+  auto x =
+      opt->setRandomFields(simple->getDM(), {{"L", {-1, 1}}, {"V", {-1, 1}}});
   auto dot_x = opt->setRandomFields(simple->getDM(), {{"L", {-1, 1}}});
   auto diff_x = opt->setRandomFields(simple->getDM(), {{"L", {-1, 1}}});
 
@@ -352,13 +430,20 @@ MoFEMErrorCode testOp(MoFEM::Interface &m_field) {
   MoFEMFunctionReturn(0);
 };
 
-MoFEMErrorCode initialiseFieldLevelSet(MoFEM::Interface &m_field) {
+MoFEMErrorCode LevelSet::initialiseFieldLevelSet() {
   MoFEMFunctionBegin;
 
   // get operators tester
-  auto simple = m_field.getInterface<Simple>();
+  auto simple = mField.getInterface<Simple>();
+  auto pip = mField.getInterface<PipelineManager>(); // get interface to
+                                                     // pipeline manager
 
-  auto sub_dm = createSmartDM(m_field.get_comm(), "DMMOFEM");
+  pip->getOpDomainLhsPipeline().clear();
+  pip->getOpDomainRhsPipeline().clear();
+  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 4 * o; });
+  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 4 * o; });
+
+  auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "SUB_LEVEL");
   CHKERR DMMoFEMSetDestroyProblem(sub_dm, PETSC_TRUE);
   CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
@@ -366,24 +451,14 @@ MoFEMErrorCode initialiseFieldLevelSet(MoFEM::Interface &m_field) {
   CHKERR DMMoFEMAddSubFieldRow(sub_dm, "L");
   CHKERR DMSetUp(sub_dm);
 
-  auto lhs_fe = boost::make_shared<DomainEle>(m_field);
-  auto rhs_fe = boost::make_shared<DomainEle>(m_field);
-
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      lhs_fe->getOpPtrVector(), {H1});
+      pip->getOpDomainRhsPipeline(), {potential_velocity_space, L2});
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      rhs_fe->getOpPtrVector(), {H1});
+      pip->getOpDomainLhsPipeline(), {potential_velocity_space, L2});
+  pip->getOpDomainLhsPipeline().push_back(new OpMassLL("L", "L"));
+  pip->getOpDomainRhsPipeline().push_back(new OpSourceL("L", get_level_set));
 
-  lhs_fe->getOpPtrVector().push_back(new OpMassLL("L", "L"));
-  rhs_fe->getOpPtrVector().push_back(new OpSourceL("L", get_level_set));
-
-  boost::shared_ptr<FEMethod> null_fe;
-  CHKERR DMMoFEMKSPSetComputeOperators(sub_dm, simple->getDomainFEName(),
-                                       lhs_fe, null_fe, null_fe);
-  CHKERR DMMoFEMKSPSetComputeRHS(sub_dm, simple->getDomainFEName(), rhs_fe,
-                                 null_fe, null_fe);
-
-  auto ksp = MoFEM::createKSP(m_field.get_comm());
+  auto ksp = pip->createKSP(sub_dm);
   CHKERR KSPSetDM(ksp, sub_dm);
   CHKERR KSPSetFromOptions(ksp);
   CHKERR KSPSetUp(ksp);
@@ -399,7 +474,7 @@ MoFEMErrorCode initialiseFieldLevelSet(MoFEM::Interface &m_field) {
   auto post_proc = [&](auto dm, auto out_name) {
     MoFEMFunctionBegin;
     auto post_proc_fe =
-        boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(m_field);
+        boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
 
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
@@ -427,18 +502,26 @@ MoFEMErrorCode initialiseFieldLevelSet(MoFEM::Interface &m_field) {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR post_proc(sub_dm, "inital_level_set.h5m");
+  if constexpr (debug)
+    CHKERR post_proc(sub_dm, "inital_level_set.h5m");
 
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode initialiseFieldVelocity(MoFEM::Interface &m_field) {
+MoFEMErrorCode LevelSet::initialiseFieldVelocity() {
   MoFEMFunctionBegin;
 
   // get operators tester
-  auto simple = m_field.getInterface<Simple>();
+  auto simple = mField.getInterface<Simple>();
+  auto pip = mField.getInterface<PipelineManager>(); // get interface to
+                                                     // pipeline manager
 
-  auto sub_dm = createSmartDM(m_field.get_comm(), "DMMOFEM");
+  pip->getOpDomainLhsPipeline().clear();
+  pip->getOpDomainRhsPipeline().clear();
+  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 4 * o; });
+  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 4 * o; });
+
+  auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "SUB_VELOCITY");
   CHKERR DMMoFEMSetDestroyProblem(sub_dm, PETSC_TRUE);
   CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
@@ -446,24 +529,16 @@ MoFEMErrorCode initialiseFieldVelocity(MoFEM::Interface &m_field) {
   CHKERR DMMoFEMAddSubFieldRow(sub_dm, "V");
   CHKERR DMSetUp(sub_dm);
 
-  auto lhs_fe = boost::make_shared<DomainEle>(m_field);
-  auto rhs_fe = boost::make_shared<DomainEle>(m_field);
-
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      lhs_fe->getOpPtrVector(), {HCURL});
+      pip->getOpDomainLhsPipeline(), {potential_velocity_space, L2});
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      rhs_fe->getOpPtrVector(), {HCURL});
+      pip->getOpDomainRhsPipeline(), {potential_velocity_space, L2});
 
-  lhs_fe->getOpPtrVector().push_back(new OpMassLL("L", "L"));
-  rhs_fe->getOpPtrVector().push_back(new OpSourceL("L", get_level_set));
+  pip->getOpDomainLhsPipeline().push_back(new OpMassVV("V", "V"));
+  pip->getOpDomainRhsPipeline().push_back(
+      new OpSourceV("V", get_velocity_potential<SPACE_DIM>));
 
-  boost::shared_ptr<FEMethod> null_fe;
-  CHKERR DMMoFEMKSPSetComputeOperators(sub_dm, simple->getDomainFEName(),
-                                       lhs_fe, null_fe, null_fe);
-  CHKERR DMMoFEMKSPSetComputeRHS(sub_dm, simple->getDomainFEName(), rhs_fe,
-                                 null_fe, null_fe);
-
-  auto ksp = MoFEM::createKSP(m_field.get_comm());
+  auto ksp = pip->createKSP(sub_dm);
   CHKERR KSPSetDM(ksp, sub_dm);
   CHKERR KSPSetFromOptions(ksp);
   CHKERR KSPSetUp(ksp);
@@ -479,13 +554,88 @@ MoFEMErrorCode initialiseFieldVelocity(MoFEM::Interface &m_field) {
   auto post_proc = [&](auto dm, auto out_name) {
     MoFEMFunctionBegin;
     auto post_proc_fe =
-        boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(m_field);
+        boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
+
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        post_proc_fe->getOpPtrVector(), {potential_velocity_space});
 
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
+    if constexpr (SPACE_DIM == 2) {
+      auto potential_vec = boost::make_shared<VectorDouble>();
+      auto velocity_mat = boost::make_shared<MatrixDouble>();
+
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldValues("V", potential_vec));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateHcurlVectorCurl<potential_velocity_field_dim,
+                                         SPACE_DIM>("V", velocity_mat));
+
+      post_proc_fe->getOpPtrVector().push_back(
+
+          new OpPPMap(
+
+              post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+              {{"VelocityPotential", potential_vec}},
+
+              {{"Velocity", velocity_mat}},
+
+              {}, {})
+
+      );
+
+    } else {
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "3d case not implemented");
+    }
+
+    CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(),
+                                    post_proc_fe);
+    post_proc_fe->writeFile(out_name);
+    MoFEMFunctionReturn(0);
+  };
+
+  if constexpr (debug)
+    CHKERR post_proc(sub_dm, "initial_velocity_potential.h5m");
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode LevelSet::solveLevelSet() {
+  MoFEMFunctionBegin;
+
+  // get operators tester
+  auto simple = mField.getInterface<Simple>();
+  auto pip = mField.getInterface<PipelineManager>(); // get interface to
+                                                     // pipeline manager
+
+  CHKERR pushOp();
+
+  auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
+  CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "SUB_LEVEL");
+  CHKERR DMMoFEMSetDestroyProblem(sub_dm, PETSC_TRUE);
+  CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
+  CHKERR DMMoFEMAddElement(sub_dm, simple->getDomainFEName());
+  CHKERR DMMoFEMAddSubFieldRow(sub_dm, "L");
+  CHKERR DMSetUp(sub_dm);
+
+  auto D = smartCreateDMVector(sub_dm);
+  CHKERR DMoFEMMeshToLocalVector(sub_dm, D, INSERT_VALUES, SCATTER_FORWARD);
+
+  auto add_post_proc_fe = [&]() {
+    auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
     auto l_vec = boost::make_shared<VectorDouble>();
+    auto vel_ptr = boost::make_shared<MatrixDouble>();
+
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        post_proc_fe->getOpPtrVector(), {H1});
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("L", l_vec));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateHcurlVectorCurl<potential_velocity_field_dim, SPACE_DIM>(
+            "V", vel_ptr));
 
     post_proc_fe->getOpPtrVector().push_back(
 
@@ -495,19 +645,54 @@ MoFEMErrorCode initialiseFieldVelocity(MoFEM::Interface &m_field) {
 
             {{"L", l_vec}},
 
-            {},
+            {{"Velocity", vel_ptr}},
 
             {}, {})
 
     );
-
-    CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(),
-                                    post_proc_fe);
-    post_proc_fe->writeFile(out_name);
-    MoFEMFunctionReturn(0);
+    return post_proc_fe;
   };
 
-  CHKERR post_proc(sub_dm, "inital_level_set.h5m");
+  auto post_proc_fe = add_post_proc_fe();
+
+  auto set_time_monitor = [&](auto dm, auto ts) {
+    auto monitor_ptr = boost::make_shared<FEMethod>();
+
+    monitor_ptr->preProcessHook = []() { return 0; };
+    monitor_ptr->operatorHook = []() { return 0; };
+    monitor_ptr->postProcessHook = [&]() {
+      MoFEMFunctionBegin;
+
+      if (!post_proc_fe)
+        SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                "Null pointer for post proc element");
+
+      CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(),
+                                      post_proc_fe);
+      CHKERR post_proc_fe->writeFile(
+          "level_set_" +
+          boost::lexical_cast<std::string>(monitor_ptr->ts_step) + ".h5m");
+      MoFEMFunctionReturn(0);
+    };
+
+    boost::shared_ptr<FEMethod> null;
+    DMMoFEMTSSetMonitor(sub_dm, ts, simple->getDomainFEName(), monitor_ptr,
+                        null, null);
+
+    return monitor_ptr;
+  };
+
+  auto ts = pip->createTSIM(sub_dm);
+  CHKERR TSSetSolution(ts, D);
+  auto monitor_ptr = set_time_monitor(sub_dm, ts);
+  CHKERR TSSetSolution(ts, D);
+  CHKERR TSSetFromOptions(ts);
+  CHKERR TSSetUp(ts);
+  CHKERR TSSolve(ts, NULL);
+
+  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR DMoFEMMeshToLocalVector(sub_dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
   MoFEMFunctionReturn(0);
 }
