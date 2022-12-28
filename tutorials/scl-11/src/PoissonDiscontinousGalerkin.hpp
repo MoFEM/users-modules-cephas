@@ -267,10 +267,9 @@ private:
   MatrixDouble locMat; ///< local operator matrix
 };
 
-
 /**
- * @brief Opator tp evaluate Dirichlet boundary conditions using DG 
- * 
+ * @brief Operator to evaluate Dirichlet boundary conditions using DG
+ *
  */
 struct OpL2BoundaryRhs : public BoundaryEleOp {
 public:
