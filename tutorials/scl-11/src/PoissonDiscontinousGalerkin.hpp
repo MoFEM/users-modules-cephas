@@ -68,7 +68,7 @@ struct OpCalculateSideData : public FaceSideOp {
       rowDiffBaseSideMap[nb_in_loop] = row_data.getDiffN();
       colDiffBaseSideMap[nb_in_loop] = col_data.getDiffN();
       areaMap[nb_in_loop] = getMeasure();
-      senseMap[nb_in_loop] = getEdgeSense();
+      senseMap[nb_in_loop] = getSkeletonSense();
       if (!nb_in_loop) {
         indicesRowSideMap[1].clear();
         indicesColSideMap[1].clear();
@@ -360,7 +360,7 @@ private:
   boost::shared_ptr<FaceSideEle>
       sideFEPtr;       ///< pointer to element to get data on edge/face sides
   ScalarFun sourceFun; ///< pointer to function to evaluate value of function on boundary
-  VectorDouble rhsF;   ///< vector to strore local operator right hand side
+  VectorDouble rhsF;   ///< vector to store local operator right hand side
 };
 
 }; // namespace Poisson2DiscontGalerkinOperators
