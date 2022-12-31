@@ -132,8 +132,8 @@ MoFEMErrorCode LevelSet::runProblem() {
   CHKERR setupProblem();
 
   if constexpr (debug) {
-    // CHKERR testSideFE();
-    // CHKERR testOp();
+    CHKERR testSideFE();
+    CHKERR testOp();
   }
   CHKERR initialiseFieldVelocity();
   CHKERR initialiseFieldLevelSet();
@@ -556,7 +556,7 @@ LevelSet::OpLhsSkeleton::doWork(int side, EntityType type,
             const auto dot = sense_row * (t_normal(i) * t_vel(i));
             const auto l_upwind_side = (dot > 0) ? s0 : opposite_s0;
             const auto sense_upwind = sideDataPtr->senseMap[l_upwind_side];
-            auto res = t_w * dot;// * sense_row * sense_upwind;
+            auto res = t_w * dot * 2;// * sense_row * sense_upwind;
             next();
             ++t_w;
             auto rr = 0;
