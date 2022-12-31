@@ -39,6 +39,21 @@ constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
 
 constexpr bool debug = true;
 
+template <int SPACE_DIM>
+auto get_velocity_potential(double x, double y, double z);
+
+template <> auto get_velocity_potential<2>(double x, double y, double z) {
+  return (x * x - 0.25) * (y * y - 0.25);
+}
+
+double get_level_set(const double x, const double y, const double z) {
+  constexpr double xc = 0.1;
+  constexpr double yc = 0.;
+  constexpr double zc = 0.;
+  constexpr double r = 0.2;
+  return std::sqrt(pow(x - xc, 2) + pow(y - yc, 2) + pow(z - zc, 2)) - r;
+}
+
 struct LevelSet {
 
   LevelSet(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -50,12 +65,18 @@ private:
   MoFEMErrorCode setupProblem();
 
   MoFEMErrorCode pushOpDomain();
+
+  boost::shared_ptr<FaceSideEle> getSideFE();  
   MoFEMErrorCode pushOpSkeleton();
 
   MoFEMErrorCode testOp();
 
-  MoFEMErrorCode initialiseFieldLevelSet();
-  MoFEMErrorCode initialiseFieldVelocity();
+  MoFEMErrorCode initialiseFieldLevelSet(
+      boost::function<double(double, double, double)> level_fun =
+          get_level_set);
+  MoFEMErrorCode initialiseFieldVelocity(
+      boost::function<double(double, double, double)> vel_fun =
+          get_velocity_potential<SPACE_DIM>);
   MoFEMErrorCode solveLevelSet();
 
   struct OpRhsDomain;
@@ -83,7 +104,7 @@ private:
   using VecSideArray = std::array<VectorDouble, 2>;
   using MatSideArray = std::array<MatrixDouble, 2>;
 
-  enum ElementSide { LEFT_SIDE = 0, RIGHT_SIDE };
+  enum ElementSide { LEFT_SIDE = 0, RIGHT_SIDE = 1 };
 
   struct SideData {
     // data for skeleton computation
@@ -93,10 +114,6 @@ private:
         indicesColSideMap; ///< indices on columns for left hand-side
     std::array<MatrixDouble, 2> rowBaseSideMap; // base functions on rows
     std::array<MatrixDouble, 2> colBaseSideMap; // base function  on columns
-    std::array<MatrixDouble, 2>
-        rowDiffBaseSideMap; // derivative of base functions
-    std::array<MatrixDouble, 2>
-        colDiffBaseSideMap;        // derivative of base functions
     std::array<double, 2> areaMap; // area/volume of elements on the side
     std::array<int, 2> senseMap;   // orientation of local element edge/face in
                                    // respect to global orientation of edge/face
@@ -111,10 +128,10 @@ MoFEMErrorCode LevelSet::runProblem() {
   CHKERR readMesh();
   CHKERR setupProblem();
 
-  if (debug)
+  if constexpr (debug)
     CHKERR testOp();
-  CHKERR initialiseFieldVelocity();
-  CHKERR initialiseFieldLevelSet();
+  // CHKERR initialiseFieldVelocity();
+  // CHKERR initialiseFieldLevelSet();
   // CHKERR solveLevelSet();
 
   MoFEMFunctionReturn(0);
@@ -237,8 +254,8 @@ MoFEMErrorCode LevelSet::setupProblem() {
                                 AINSWORTH_LEGENDRE_BASE, 1);
 
   // set fields order, i.e. for most first cases order is sufficient.
-  CHKERR simple->setFieldOrder("L", 1);
-  CHKERR simple->setFieldOrder("V", 1);
+  CHKERR simple->setFieldOrder("L", 2);
+  CHKERR simple->setFieldOrder("V", 4);
 
   // setup problem
   CHKERR simple->setUp();
@@ -249,21 +266,6 @@ MoFEMErrorCode LevelSet::setupProblem() {
 FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
-
-template <int SPACE_DIM>
-auto get_velocity_potential(double x, double y, double z);
-
-template <> auto get_velocity_potential<2>(double x, double y, double z) {
-  return (x * x - 0.25) * (y * y - 0.25);
-}
-
-double get_level_set(const double x, const double y, const double z) {
-  constexpr double xc = 0.1;
-  constexpr double yc = 0.;
-  constexpr double zc = 0.;
-  constexpr double r = 0.2;
-  return std::sqrt(pow(x - xc, 2) + pow(y - yc, 2) + pow(z - zc, 2)) - r;
-}
 
 LevelSet::OpRhsDomain::OpRhsDomain(const std::string field_name,
                                    boost::shared_ptr<VectorDouble> l_ptr,
@@ -290,9 +292,7 @@ LevelSet::OpLhsSkeleton::OpLhsSkeleton(
     boost::shared_ptr<SideData> side_data_ptr,
     boost::shared_ptr<FaceSideEle> side_fe_ptr)
     : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE),
-      sideDataPtr(side_data_ptr), sideFEPtr(side_fe_ptr) {
-  sYmm = false;
-}
+      sideDataPtr(side_data_ptr), sideFEPtr(side_fe_ptr) {}
 
 MoFEMErrorCode LevelSet::OpRhsDomain::iNtegrate(EntData &data) {
   MoFEMFunctionBegin;
@@ -389,24 +389,25 @@ LevelSet::OpRhsSkeleton::doWork(int side, EntityType type,
                                 EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
-  // Collect data from side domian elements
+  // Collect data from side domain elements
   CHKERR loopSideFaces("dFE", *sideFEPtr);
   const auto in_the_loop =
       sideFEPtr->nInTheLoop; // return number of elements on the side
+
+  auto not_side = [](auto s) {
+    return s == LEFT_SIDE ? RIGHT_SIDE : LEFT_SIDE;
+  };
+
+  auto get_ntensor = [](auto &base_mat) {
+    return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(
+        &*base_mat.data().begin());
+  };
 
   if (in_the_loop > 0) {
 
     // get normal of the face or edge
     auto t_normal = getFTensor1Normal();
-    t_normal.normalize();
-
     const auto nb_gauss_pts = getGaussPts().size2();
-
-#ifndef NDEBUG
-    if (sideDataPtr->senseMap[0] * sideDataPtr->senseMap[1] >= 0)
-      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-              "Both sided should have opposite sense");
-#endif // NDEBUG
 
     for (auto s0 : {LEFT_SIDE, RIGHT_SIDE}) {
 
@@ -415,11 +416,24 @@ LevelSet::OpRhsSkeleton::doWork(int side, EntityType type,
 
       if (nb_rows) {
 
+        resSkelton.resize(nb_rows, false);
+        resSkelton.clear();
+
         // get orientation of the local element edge
+        const auto opposite_s0 = not_side(s0);
         const auto sense_row = sideDataPtr->senseMap[s0];
+#ifndef NDEBUG
+        const auto opposite_sense_row = sideDataPtr->senseMap[opposite_s0];
+        if (sense_row * opposite_sense_row > 0)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                  "Should be opposite sign");
+#endif
+
+        // iterate the side cols
+        const auto nb_row_base_functions =
+            sideDataPtr->rowBaseSideMap[s0].size2();
 
         auto t_w = getFTensor0IntegrationWeight();
-
         auto arr_t_l =
             make_array(getFTensor0FromVec(sideDataPtr->lVec[LEFT_SIDE]),
                        getFTensor0FromVec(sideDataPtr->lVec[RIGHT_SIDE]));
@@ -427,50 +441,38 @@ LevelSet::OpRhsSkeleton::doWork(int side, EntityType type,
             getFTensor1FromMat<SPACE_DIM>(sideDataPtr->velMat[LEFT_SIDE]),
             getFTensor1FromMat<SPACE_DIM>(sideDataPtr->velMat[RIGHT_SIDE]));
 
-        auto get_ntensor = [](auto &base_mat) {
-          return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(
-              &*base_mat.data().begin());
-        };
-        auto t_row_base = get_ntensor(sideDataPtr->rowBaseSideMap[s0]);
-        resSkelton.resize(nb_rows, false);
-        resSkelton.clear();
-
-        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-
-          const auto alpha = getMeasure() * t_w;
-          const auto dot = (t_normal(i) * (arr_t_vel[LEFT_SIDE](i) +
-                                           arr_t_vel[RIGHT_SIDE](i))) *
-                           (sense_row / 2);
-
-          auto not_side = [](auto s) {
-            return s == LEFT_SIDE ? RIGHT_SIDE : LEFT_SIDE;
-          };
-
-          auto get_side = [&]() {
-            if (dot > 0)
-              return s0;
-            else
-              return not_side(s0);
-          };
-
-          const auto res = alpha * dot * arr_t_l[get_side()];
-
-          for (auto t_l : arr_t_l)
+        auto next = [&]() {
+          for (auto &t_l : arr_t_l)
             ++t_l;
-          for (auto t_vel : arr_t_vel)
+          for (auto &t_vel : arr_t_vel)
             ++t_vel;
+        };
 
-          for (auto rr = 0; rr != nb_rows; ++rr) {
-            resSkelton[rr] = t_row_base * res;
+        auto t_row_base = get_ntensor(sideDataPtr->rowBaseSideMap[s0]);
+        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+          const auto dot =
+              (sense_row / 2.) * (t_normal(i) * (arr_t_vel[LEFT_SIDE](i) +
+                                                 arr_t_vel[RIGHT_SIDE](i)));
+          const auto l_upwind = (dot > 0) ? arr_t_l[s0] : arr_t_l[opposite_s0];
+          const auto alpha = t_w;
+          const auto res = alpha * dot * l_upwind;
+          next();
+          ++t_w;
+          auto rr = 0;
+          for (; rr != nb_rows; ++rr) {
+            resSkelton[rr] += t_row_base * res;
+            ++t_row_base;
+          }
+          for (; rr < nb_row_base_functions; ++rr) {
             ++t_row_base;
           }
         }
 
         // assemble local operator vector to global vector
-        CHKERR ::VecSetValues(getKSPf(),
-                              sideDataPtr->indicesRowSideMap[0].size(),
-                              &*sideDataPtr->indicesRowSideMap[0].begin(),
-                              &*resSkelton.data().begin(), ADD_VALUES);
+        CHKERR ::VecSetValues(getTSf(),
+                              sideDataPtr->indicesRowSideMap[s0].size(),
+                              &*sideDataPtr->indicesRowSideMap[s0].begin(),
+                              &*resSkelton.begin(), ADD_VALUES);
       }
     }
   }
@@ -483,35 +485,26 @@ LevelSet::OpLhsSkeleton::doWork(int side, EntityType type,
                                 EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
-  // Collect data from side domian elements
+  // Collect data from side domain elements
   CHKERR loopSideFaces("dFE", *sideFEPtr);
   const auto in_the_loop =
       sideFEPtr->nInTheLoop; // return number of elements on the side
 
-#ifndef NDEBUG
-  const std::array<std::string, 2> ele_type_name = {"BOUNDARY", "SKELETON"};
-  MOFEM_LOG("SELF", Sev::noisy)
-      << "OpLhsSkeleton inTheLoop " << ele_type_name[in_the_loop];
-  MOFEM_LOG("SELF", Sev::noisy)
-      << "OpLhsSkeleton sense " << sideDataPtr->senseMap[0] << " "
-      << sideDataPtr->senseMap[1];
-#endif
+  auto not_side = [](auto s) {
+    return s == LEFT_SIDE ? RIGHT_SIDE : LEFT_SIDE;
+  };
+
+  auto get_ntensor = [](auto &base_mat) {
+    return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(
+        &*base_mat.data().begin());
+  };
 
   if (in_the_loop > 0) {
 
     // get normal of the face or edge
     auto t_normal = getFTensor1Normal();
-    t_normal.normalize();
+    const auto nb_gauss_pts = getGaussPts().size2();
 
-    // get number of integration points on face
-    const size_t nb_integration_pts = getGaussPts().size2();
-
-    auto get_ntensor = [](auto &base_mat) {
-      return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(
-          &*base_mat.data().begin());
-    };
-
-    // iterate the sides rows
     for (auto s0 : {LEFT_SIDE, RIGHT_SIDE}) {
 
       // gent number of DOFs on the right side.
@@ -520,96 +513,65 @@ LevelSet::OpLhsSkeleton::doWork(int side, EntityType type,
       if (nb_rows) {
 
         // get orientation of the local element edge
+        const auto opposite_s0 = not_side(s0);
         const auto sense_row = sideDataPtr->senseMap[s0];
 
         // iterate the side cols
         const auto nb_row_base_functions =
             sideDataPtr->rowBaseSideMap[s0].size2();
+
         for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
 
-          // get orientation of the edge
-          const auto sense_col = sideDataPtr->senseMap[s1];
-
-          // number of dofs, for homogenous approximation this value is
-          // constant.
+          // gent number of DOFs on the right side.
           const auto nb_cols = sideDataPtr->indicesColSideMap[s1].size();
+          const auto sense_col = sideDataPtr->senseMap[s1];
 
           // resize local element matrix
           matSkeleton.resize(nb_rows, nb_cols, false);
           matSkeleton.clear();
 
-          // get base functions, and integration weights
-          auto t_row_base = get_ntensor(sideDataPtr->rowBaseSideMap[s0]);
           auto t_w = getFTensor0IntegrationWeight();
-
-          auto arr_t_l =
-              make_array(getFTensor0FromVec(sideDataPtr->lVec[LEFT_SIDE]),
-                         getFTensor0FromVec(sideDataPtr->lVec[RIGHT_SIDE]));
           auto arr_t_vel = make_array(
               getFTensor1FromMat<SPACE_DIM>(sideDataPtr->velMat[LEFT_SIDE]),
               getFTensor1FromMat<SPACE_DIM>(sideDataPtr->velMat[RIGHT_SIDE]));
 
-          // iterate integration points on face/edge
-          for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+          auto next = [&]() {
+            for (auto &t_vel : arr_t_vel)
+              ++t_vel;
+          };
 
-            const auto alpha = getMeasure() * t_w;
-            const auto dot = (t_normal(i) * (arr_t_vel[LEFT_SIDE](i) +
-                                             arr_t_vel[RIGHT_SIDE](i))) *
-                             (sense_row / 2);
-
-            auto not_side = [](auto s) {
-              return s == LEFT_SIDE ? RIGHT_SIDE : LEFT_SIDE;
-            };
-
-            auto get_side = [&]() {
-              if (dot > 0)
-                return s0;
-              else
-                return not_side(s0);
-            };
-
+          auto t_row_base = get_ntensor(sideDataPtr->rowBaseSideMap[s0]);
+          for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+            const auto dot =
+                (sense_row / 2.) * (t_normal(i) * (arr_t_vel[LEFT_SIDE](i) +
+                                                   arr_t_vel[RIGHT_SIDE](i)));
+            const auto l_upwind_side = (dot > 0) ? s0 : opposite_s0;
+            const auto alpha = t_w;
             const auto res = alpha * dot;
-
-            size_t rr = 0;
-            for (; rr != nb_rows; ++rr) {
-
-              if (s1 == get_side()) {
-
+            next();
+            ++t_w;
+            auto rr = 0;
+            if (s1 == l_upwind_side) {
+              for (; rr != nb_rows; ++rr) {
                 auto get_ntensor = [](auto &base_mat, auto gg, auto bb) {
                   double *ptr = &base_mat(gg, bb);
                   return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(ptr);
                 };
-
-                const auto res_row = res * t_row_base;
-
                 auto t_col_base =
                     get_ntensor(sideDataPtr->colBaseSideMap[s1], gg, 0);
-
+                const auto res_row = res * t_row_base;
+                ++t_row_base;
                 // iterate columns
                 for (size_t cc = 0; cc != nb_cols; ++cc) {
-
                   matSkeleton(rr, cc) += res_row * t_col_base;
-
-                  // move to next column base and element of matrix
                   ++t_col_base;
                 }
               }
-
-              // move to next row base
-              ++t_row_base;
             }
-
-            // this is obsolete for this particular example, we keep it for
-            // generality. in case of multi-physics problems different fields
-            // can chare hierarchical base but use different approx. order, so
-            // is possible to have more base functions than DOFs on element.
             for (; rr < nb_row_base_functions; ++rr) {
               ++t_row_base;
             }
-
-            ++t_w;
           }
-
           // assemble system
           CHKERR ::MatSetValues(getTSB(),
                                 sideDataPtr->indicesRowSideMap[s0].size(),
@@ -633,8 +595,8 @@ MoFEMErrorCode LevelSet::pushOpDomain() {
   pip->getOpDomainLhsPipeline().clear();
   pip->getOpDomainRhsPipeline().clear();
 
-  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 4 * o; });
-  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 4 * o; });
+  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 3 * o; });
+  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 3 * o; });
 
   auto l_ptr = boost::make_shared<VectorDouble>();
   auto l_dot_ptr = boost::make_shared<VectorDouble>();
@@ -663,6 +625,11 @@ MoFEMErrorCode LevelSet::pushOpDomain() {
   MoFEMFunctionReturn(0);
 }
 
+boots::shared_ptr<FaceSideEle> getSideFE() {
+
+
+};
+ 
 MoFEMErrorCode LevelSet::pushOpSkeleton() {
   MoFEMFunctionBegin;
   auto pip = mField.getInterface<PipelineManager>(); // get interface to
@@ -676,11 +643,11 @@ MoFEMErrorCode LevelSet::pushOpSkeleton() {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
       MoFEMFunctionBegin;
       const auto nb_in_loop = getFEMethod()->nInTheLoop;
-      (sideDataPtr->lVec)[nb_in_loop].swap(*lPtr);
-      (sideDataPtr->velMat)[nb_in_loop].swap(*velPtr);
+      (sideDataPtr->lVec)[nb_in_loop] = *lPtr;
+      (sideDataPtr->velMat)[nb_in_loop] = *velPtr;
       if (!nb_in_loop) {
-        (sideDataPtr->lVec)[1].resize(0, false);
-        (sideDataPtr->velMat)[1].resize(0, 0, false);
+        (sideDataPtr->lVec)[1] = sideDataPtr->lVec[0];
+        (sideDataPtr->velMat)[1] = (sideDataPtr->velMat)[0];
       }
       MoFEMFunctionReturn(0);
     };
@@ -693,12 +660,13 @@ MoFEMErrorCode LevelSet::pushOpSkeleton() {
 
   struct OpSideData : public FaceSideEleOp {
     OpSideData(boost::shared_ptr<SideData> side_data_ptr)
-        : FaceSideEleOp("L", FaceSideEleOp::OPROWCOL),
+        : FaceSideEleOp("L", "L", FaceSideEleOp::OPROWCOL),
           sideDataPtr(side_data_ptr) {
       std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
       for (auto t = moab::CN::TypeDimensionMap[SPACE_DIM].first;
            t <= moab::CN::TypeDimensionMap[SPACE_DIM].second; ++t)
         doEntities[t] = true;
+      sYmm = false;
     }
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
@@ -712,8 +680,6 @@ MoFEMErrorCode LevelSet::pushOpSkeleton() {
         sideDataPtr->indicesColSideMap[nb_in_loop] = col_data.getIndices();
         sideDataPtr->rowBaseSideMap[nb_in_loop] = row_data.getN();
         sideDataPtr->colBaseSideMap[nb_in_loop] = col_data.getN();
-        sideDataPtr->rowDiffBaseSideMap[nb_in_loop] = row_data.getDiffN();
-        sideDataPtr->colDiffBaseSideMap[nb_in_loop] = col_data.getDiffN();
         sideDataPtr->areaMap[nb_in_loop] = getMeasure();
         sideDataPtr->senseMap[nb_in_loop] = getSkeletonSense();
         if (!nb_in_loop) {
@@ -721,8 +687,6 @@ MoFEMErrorCode LevelSet::pushOpSkeleton() {
           sideDataPtr->indicesColSideMap[1].clear();
           sideDataPtr->rowBaseSideMap[1].clear();
           sideDataPtr->colBaseSideMap[1].clear();
-          sideDataPtr->rowDiffBaseSideMap[1].clear();
-          sideDataPtr->colDiffBaseSideMap[1].clear();
           sideDataPtr->areaMap[1] = 0;
           sideDataPtr->senseMap[1] = 0;
         }
@@ -737,11 +701,11 @@ MoFEMErrorCode LevelSet::pushOpSkeleton() {
     boost::shared_ptr<SideData> sideDataPtr;
   };
 
-  pip->getOpDomainLhsPipeline().clear();
-  pip->getOpDomainRhsPipeline().clear();
+  pip->getOpSkeletonLhsPipeline().clear();
+  pip->getOpSkeletonRhsPipeline().clear();
 
-  pip->setSkeletonLhsIntegrationRule([](int, int, int o) { return 4 * o; });
-  pip->setSkeletonRhsIntegrationRule([](int, int, int o) { return 4 * o; });
+  pip->setSkeletonLhsIntegrationRule([](int, int, int o) { return 3 * o; });
+  pip->setSkeletonRhsIntegrationRule([](int, int, int o) { return 3 * o; });
 
   auto l_ptr = boost::make_shared<VectorDouble>();
   auto l_dot_ptr = boost::make_shared<VectorDouble>();
@@ -769,6 +733,188 @@ MoFEMErrorCode LevelSet::pushOpSkeleton() {
       new OpRhsSkeleton(side_data_ptr, side_fe_ptr));
   pip->getOpSkeletonLhsPipeline().push_back(
       new OpLhsSkeleton(side_data_ptr, side_fe_ptr));
+
+  if constexpr (debug) {
+
+    struct DivergenceVol : public DomainEleOp {
+      DivergenceVol(boost::shared_ptr<VectorDouble> l_ptr,
+                    boost::shared_ptr<MatrixDouble> vel_ptr,
+                    SmartPetscObj<Vec> div_vec)
+          : DomainEleOp("L", DomainEleOp::OPROW), lPtr(l_ptr), velPtr(vel_ptr),
+            divVec(div_vec) {}
+      MoFEMErrorCode doWork(int side, EntityType type,
+                            EntitiesFieldData::EntData &data) {
+        MoFEMFunctionBegin;
+        const auto nb_dofs = data.getIndices().size();
+        if (nb_dofs) {
+          const auto nb_gauss_pts = getGaussPts().size2();
+          const auto t_w = getFTensor0IntegrationWeight();
+          auto t_diff = data.getFTensor1DiffN<SPACE_DIM>();
+          auto t_l = getFTensor0FromVec(*lPtr);
+          auto t_vel = getFTensor1FromMat<SPACE_DIM>(*velPtr);
+          double div = 0;
+          for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
+            for (int rr = 0; rr != nb_dofs; ++rr) {
+              div += getMeasure() * t_w * t_l * (t_diff(i) * t_vel(i));
+              ++t_diff;
+            }
+            ++t_w;
+            ++t_l;
+            ++t_vel;
+          }
+          CHKERR VecSetValue(divVec, 0, div, ADD_VALUES);
+        }
+        MoFEMFunctionReturn(0);
+      }
+
+    private:
+      boost::shared_ptr<VectorDouble> lPtr;
+      boost::shared_ptr<MatrixDouble> velPtr;
+      SmartPetscObj<Vec> divVec;
+    };
+
+    struct DivergenceSkeleton : public BoundaryEleOp {
+      DivergenceSkeleton(boost::shared_ptr<SideData> side_data_ptr,
+                         boost::shared_ptr<FaceSideEle> side_fe_ptr,
+                         SmartPetscObj<Vec> div_vec)
+          : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE),
+            sideDataPtr(side_data_ptr), sideFEPtr(side_fe_ptr),
+            divVec(div_vec) {}
+      MoFEMErrorCode doWork(int side, EntityType type,
+                            EntitiesFieldData::EntData &data) {
+        MoFEMFunctionBegin;
+
+        auto get_ntensor = [](auto &base_mat) {
+          return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(
+              &*base_mat.data().begin());
+        };
+
+        auto not_side = [](auto s) {
+          return s == LEFT_SIDE ? RIGHT_SIDE : LEFT_SIDE;
+        };
+
+        // Collect data from side domain elements
+        CHKERR loopSideFaces("dFE", *sideFEPtr);
+        const auto in_the_loop =
+            sideFEPtr->nInTheLoop; // return number of elements on the side
+
+        auto t_normal = getFTensor1Normal();
+        const auto nb_gauss_pts = getGaussPts().size2();
+        for (auto s0 : {LEFT_SIDE, RIGHT_SIDE}) {
+          const auto nb_dofs = sideDataPtr->indicesRowSideMap[s0].size();
+          if (nb_dofs) {
+            auto t_base = get_ntensor(sideDataPtr->rowBaseSideMap[s0]);
+            auto side_sense = sideDataPtr->senseMap[s0];
+            auto opposite_s0 = not_side(s0);
+
+            auto arr_t_l =
+                make_array(getFTensor0FromVec(sideDataPtr->lVec[LEFT_SIDE]),
+                           getFTensor0FromVec(sideDataPtr->lVec[RIGHT_SIDE]));
+            auto arr_t_vel = make_array(
+                getFTensor1FromMat<SPACE_DIM>(sideDataPtr->velMat[LEFT_SIDE]),
+                getFTensor1FromMat<SPACE_DIM>(sideDataPtr->velMat[RIGHT_SIDE]));
+
+            auto next = [&]() {
+              for (auto &t_l : arr_t_l)
+                ++t_l;
+              for (auto &t_vel : arr_t_vel)
+                ++t_vel;
+            };
+
+            double div = 0;
+
+            auto t_w = getFTensor0IntegrationWeight();
+            for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+              FTensor::Tensor1<double, SPACE_DIM> t_vel;
+              t_vel(i) =
+                  (arr_t_vel[LEFT_SIDE](i) + arr_t_vel[RIGHT_SIDE](i)) / 2.;
+              const auto dot = (t_normal(i) * t_vel(i)) * side_sense;
+              const auto l_upwind =
+                  (dot > 0) ? arr_t_l[s0] : arr_t_l[opposite_s0];
+              for (int rr = 0; rr != nb_dofs; ++rr) {
+                div += t_w * t_base * l_upwind * dot;
+                ++t_base;
+              }
+              ++t_w;
+              next();
+            }
+
+            CHKERR VecSetValue(divVec, 0, div, ADD_VALUES);
+          }
+          if (!in_the_loop)
+            break;
+        }
+
+        MoFEMFunctionReturn(0);
+      }
+
+    private:
+      boost::shared_ptr<SideData> sideDataPtr;
+      boost::shared_ptr<FaceSideEle> sideFEPtr;
+      boost::shared_ptr<MatrixDouble> velPtr;
+      SmartPetscObj<Vec> divVec;
+    };
+
+    auto vol_fe = boost::make_shared<DomainEle>(mField);
+    auto skel_fe = boost::make_shared<BoundaryEle>(mField);
+
+    vol_fe->getRuleHook = [](int, int, int) { return 6; };
+    skel_fe->getRuleHook = [](int, int, int) { return 6; };
+
+    auto div_vol_vec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
+    auto div_skel_vec =
+        createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
+
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        vol_fe->getOpPtrVector(), {potential_velocity_space, L2});
+    vol_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("L", l_ptr));
+    vol_fe->getOpPtrVector().push_back(
+        new OpCalculateHcurlVectorCurl<potential_velocity_field_dim, SPACE_DIM>(
+            "V", vel_ptr));
+    vol_fe->getOpPtrVector().push_back(
+        new DivergenceVol(l_ptr, vel_ptr, div_vol_vec));
+
+    CHKERR AddHOOps<1, SPACE_DIM, SPACE_DIM>::add(skel_fe->getOpPtrVector(),
+                                                  {NOSPACE});
+    skel_fe->getOpPtrVector().push_back(
+        new DivergenceSkeleton(side_data_ptr, side_fe_ptr, div_skel_vec));
+
+    auto simple = mField.getInterface<Simple>();
+    auto dm = simple->getDM();
+
+    CHKERR initialiseFieldVelocity(
+        [](double x, double y, double z) { return x * x + y * y; });
+    CHKERR initialiseFieldLevelSet(
+        [](double x, double y, double) { return x * x + y * y; });
+
+    CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(), vol_fe);
+    CHKERR DMoFEMLoopFiniteElements(dm, simple->getSkeletonFEName(), skel_fe);
+    CHKERR DMoFEMLoopFiniteElements(dm, simple->getBoundaryFEName(), skel_fe);
+
+    auto assemble_and_sum = [](auto vec) {
+      CHK_THROW_MESSAGE(VecAssemblyBegin(vec), "assemble");
+      CHK_THROW_MESSAGE(VecAssemblyEnd(vec), "assemble");
+      double sum;
+      CHK_THROW_MESSAGE(VecSum(vec, &sum), "assemble");
+      return sum;
+    };
+
+    auto div_vol = assemble_and_sum(div_vol_vec);
+    auto div_skel = assemble_and_sum(div_skel_vec);
+
+    auto eps = std::abs((div_vol - div_skel) / (div_vol + div_skel));
+
+    MOFEM_LOG("WORLD", Sev::inform) << "Testing divergence volume: " << div_vol;
+    MOFEM_LOG("WORLD", Sev::inform)
+        << "Testing divergence skeleton: " << div_skel
+        << " relative difference: " << eps;
+
+    constexpr double eps_err = 1e-6;
+    if (eps > eps_err)
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "No consistency between skeleton integral and volume integral");
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -817,22 +963,22 @@ MoFEMErrorCode LevelSet::testOp() {
     MoFEMFunctionReturn(0);
   };
 
-  constexpr double eps = 1e-6;
+  constexpr double eps = 1e-4;
 
   auto x =
       opt->setRandomFields(simple->getDM(), {{"L", {-1, 1}}, {"V", {-1, 1}}});
   auto dot_x = opt->setRandomFields(simple->getDM(), {{"L", {-1, 1}}});
   auto diff_x = opt->setRandomFields(simple->getDM(), {{"L", {-1, 1}}});
 
-  auto test_domain_ops = [&](auto fe_name, auto &lhs_pipeline,
-                             auto &rhs_pipeline) {
+  auto test_domain_ops = [&](auto fe_name, auto lhs_pipeline,
+                             auto rhs_pipeline) {
     MoFEMFunctionBegin;
 
     auto diff_res = opt->checkCentralFiniteDifference(
         simple->getDM(), fe_name, rhs_pipeline, lhs_pipeline, x, dot_x,
         SmartPetscObj<Vec>(), diff_x, 0, 1, eps);
 
-    if (debug) {
+    if constexpr (debug) {
       // Example how to plot direction in direction diff_x. If instead
       // directionalCentralFiniteDifference(...) diff_res is used, then error
       // on directive is plotted.
@@ -862,7 +1008,8 @@ MoFEMErrorCode LevelSet::testOp() {
   MoFEMFunctionReturn(0);
 };
 
-MoFEMErrorCode LevelSet::initialiseFieldLevelSet() {
+MoFEMErrorCode LevelSet::initialiseFieldLevelSet(
+    boost::function<double(double, double, double)> level_fun) {
   MoFEMFunctionBegin;
 
   // get operators tester
@@ -870,8 +1017,14 @@ MoFEMErrorCode LevelSet::initialiseFieldLevelSet() {
   auto pip = mField.getInterface<PipelineManager>(); // get interface to
                                                      // pipeline manager
 
-  pip->getOpDomainLhsPipeline().clear();
-  pip->getOpDomainRhsPipeline().clear();
+  boost::shared_ptr<FEMethod> lhs_fe = boost::make_shared<DomainEle>(mField);
+  boost::shared_ptr<FEMethod> rhs_fe = boost::make_shared<DomainEle>(mField);
+  auto swap_fe = [&]() {
+    lhs_fe.swap(pip->getDomainLhsFE());
+    rhs_fe.swap(pip->getDomainRhsFE());
+  };
+  swap_fe();
+
   pip->setDomainLhsIntegrationRule([](int, int, int o) { return 4 * o; });
   pip->setDomainRhsIntegrationRule([](int, int, int o) { return 4 * o; });
 
@@ -888,7 +1041,7 @@ MoFEMErrorCode LevelSet::initialiseFieldLevelSet() {
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       pip->getOpDomainLhsPipeline(), {potential_velocity_space, L2});
   pip->getOpDomainLhsPipeline().push_back(new OpMassLL("L", "L"));
-  pip->getOpDomainRhsPipeline().push_back(new OpSourceL("L", get_level_set));
+  pip->getOpDomainRhsPipeline().push_back(new OpSourceL("L", level_fun));
 
   auto ksp = pip->createKSP(sub_dm);
   CHKERR KSPSetDM(ksp, sub_dm);
@@ -935,12 +1088,15 @@ MoFEMErrorCode LevelSet::initialiseFieldLevelSet() {
   };
 
   if constexpr (debug)
-    CHKERR post_proc(sub_dm, "inital_level_set.h5m");
+    CHKERR post_proc(sub_dm, "initial_level_set.h5m");
+
+  swap_fe();
 
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode LevelSet::initialiseFieldVelocity() {
+MoFEMErrorCode LevelSet::initialiseFieldVelocity(
+    boost::function<double(double, double, double)> vel_fun) {
   MoFEMFunctionBegin;
 
   // get operators tester
@@ -948,8 +1104,14 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity() {
   auto pip = mField.getInterface<PipelineManager>(); // get interface to
                                                      // pipeline manager
 
-  pip->getOpDomainLhsPipeline().clear();
-  pip->getOpDomainRhsPipeline().clear();
+  boost::shared_ptr<FEMethod> lhs_fe = boost::make_shared<DomainEle>(mField);
+  boost::shared_ptr<FEMethod> rhs_fe = boost::make_shared<DomainEle>(mField);
+  auto swap_fe = [&]() {
+    lhs_fe.swap(pip->getDomainLhsFE());
+    rhs_fe.swap(pip->getDomainRhsFE());
+  };
+  swap_fe();
+
   pip->setDomainLhsIntegrationRule([](int, int, int o) { return 4 * o; });
   pip->setDomainRhsIntegrationRule([](int, int, int o) { return 4 * o; });
 
@@ -967,8 +1129,7 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity() {
       pip->getOpDomainRhsPipeline(), {potential_velocity_space, L2});
 
   pip->getOpDomainLhsPipeline().push_back(new OpMassVV("V", "V"));
-  pip->getOpDomainRhsPipeline().push_back(
-      new OpSourceV("V", get_velocity_potential<SPACE_DIM>));
+  pip->getOpDomainRhsPipeline().push_back(new OpSourceV("V", vel_fun));
 
   auto ksp = pip->createKSP(sub_dm);
   CHKERR KSPSetDM(ksp, sub_dm);
@@ -1031,6 +1192,8 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity() {
   if constexpr (debug)
     CHKERR post_proc(sub_dm, "initial_velocity_potential.h5m");
 
+  swap_fe();
+
   MoFEMFunctionReturn(0);
 }
 
@@ -1043,12 +1206,14 @@ MoFEMErrorCode LevelSet::solveLevelSet() {
                                                      // pipeline manager
 
   CHKERR pushOpDomain();
+  CHKERR pushOpSkeleton();
 
   auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "SUB_LEVEL");
   CHKERR DMMoFEMSetDestroyProblem(sub_dm, PETSC_TRUE);
   CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
   CHKERR DMMoFEMAddElement(sub_dm, simple->getDomainFEName());
+  CHKERR DMMoFEMAddElement(sub_dm, simple->getSkeletonFEName());
   CHKERR DMMoFEMAddSubFieldRow(sub_dm, "L");
   CHKERR DMSetUp(sub_dm);
 
