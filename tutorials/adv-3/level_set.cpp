@@ -259,7 +259,7 @@ MoFEMErrorCode LevelSet::setupProblem() {
                                 AINSWORTH_LEGENDRE_BASE, 1);
 
   // set fields order, i.e. for most first cases order is sufficient.
-  CHKERR simple->setFieldOrder("L", 1);
+  CHKERR simple->setFieldOrder("L", 4);
   CHKERR simple->setFieldOrder("V", 4);
 
   // setup problem
@@ -302,7 +302,7 @@ LevelSet::OpLhsSkeleton::OpLhsSkeleton(
 MoFEMErrorCode LevelSet::OpRhsDomain::iNtegrate(EntData &data) {
   MoFEMFunctionBegin;
 
-  const auto nb_int_points = getGaussPts().size1();
+  const auto nb_int_points = getGaussPts().size2();
   const auto nb_dofs = data.getIndices().size();
   const auto nb_base_func = data.getN().size2();
 
@@ -345,7 +345,7 @@ MoFEMErrorCode LevelSet::OpLhsDomain::iNtegrate(EntData &row_data,
                                                 EntData &col_data) {
   MoFEMFunctionBegin;
 
-  const auto nb_int_points = getGaussPts().size1();
+  const auto nb_int_points = getGaussPts().size2();
   const auto nb_base_func = row_data.getN().size2();
   const auto nb_row_dofs = row_data.getIndices().size();
   const auto nb_col_dofs = col_data.getIndices().size();
@@ -453,7 +453,7 @@ LevelSet::OpRhsSkeleton::doWork(int side, EntityType type,
 #ifndef NDEBUG
         if(nb_gauss_pts != sideDataPtr->rowBaseSideMap[s0].size1())
           SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                  "Inocnistent number of DOFs");
+                  "Inconsistent number of DOFs");
 #endif
 
         auto t_row_base = get_ntensor(sideDataPtr->rowBaseSideMap[s0]);
@@ -464,7 +464,7 @@ LevelSet::OpRhsSkeleton::doWork(int side, EntityType type,
           const auto l_upwind_side = (dot > 0) ? s0 : opposite_s0;
           const auto sense_upwind = sideDataPtr->senseMap[l_upwind_side];
           const auto l_upwind = arr_t_l[l_upwind_side];
-          const auto res = t_w * dot * l_upwind * 2;
+          const auto res = t_w * dot * l_upwind;
           next();
           ++t_w;
           auto rr = 0;
@@ -556,7 +556,7 @@ LevelSet::OpLhsSkeleton::doWork(int side, EntityType type,
             const auto dot = sense_row * (t_normal(i) * t_vel(i));
             const auto l_upwind_side = (dot > 0) ? s0 : opposite_s0;
             const auto sense_upwind = sideDataPtr->senseMap[l_upwind_side];
-            auto res = t_w * dot * 2;// * sense_row * sense_upwind;
+            auto res = t_w * dot; // * sense_row * sense_upwind;
             next();
             ++t_w;
             auto rr = 0;
@@ -603,8 +603,8 @@ MoFEMErrorCode LevelSet::pushOpDomain() {
   pip->getOpDomainLhsPipeline().clear();
   pip->getOpDomainRhsPipeline().clear();
 
-  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 4 * o; });
-  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 4 * o; });
+  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 3 * o; });
+  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 3 * o; });
 
   auto l_ptr = boost::make_shared<VectorDouble>();
   auto l_dot_ptr = boost::make_shared<VectorDouble>();
@@ -868,8 +868,8 @@ MoFEMErrorCode LevelSet::testSideFE() {
   auto vol_fe = boost::make_shared<DomainEle>(mField);
   auto skel_fe = boost::make_shared<BoundaryEle>(mField);
 
-  vol_fe->getRuleHook = [](int, int, int) { return 6; };
-  skel_fe->getRuleHook = [](int, int, int) { return 6; };
+  vol_fe->getRuleHook = [](int, int, int o) { return 3 * o; };
+  skel_fe->getRuleHook = [](int, int, int o) { return 3 * o; };
 
   auto div_vol_vec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
   auto div_skel_vec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
@@ -1035,8 +1035,8 @@ MoFEMErrorCode LevelSet::initialiseFieldLevelSet(
   };
   swap_fe();
 
-  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 4 * o; });
-  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 4 * o; });
+  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 3 * o; });
+  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 3 * o; });
 
   auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "SUB_LEVEL");
@@ -1127,8 +1127,8 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity(
   };
   swap_fe();
 
-  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 4 * o; });
-  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 4 * o; });
+  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 3 * o; });
+  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 3 * o; });
 
   auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "SUB_VELOCITY");
