@@ -1,12 +1,10 @@
 /**
  * @file level_set.cpp
  * @example level_set.cpp
- * @brief Example with level set method
+ * @brief Implementation DG upwind method for advection/level set problem
  * @date 2022-12-15
  *
  * @copyright Copyright (c) 2022
- *
- * TODO: Add more operators.
  *
  */
 
@@ -39,21 +37,6 @@ constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
 
 constexpr bool debug = true;
 
-template <int SPACE_DIM>
-auto get_velocity_potential(double x, double y, double z);
-
-template <> auto get_velocity_potential<2>(double x, double y, double z) {
-  return (x * x - 0.25) * (y * y - 0.25);
-}
-
-double get_level_set(const double x, const double y, const double z) {
-  constexpr double xc = 0.1;
-  constexpr double yc = 0.;
-  constexpr double zc = 0.;
-  constexpr double r = 0.2;
-  return std::sqrt(pow(x - xc, 2) + pow(y - yc, 2) + pow(z - zc, 2)) - r;
-}
-
 struct LevelSet {
 
   LevelSet(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -61,10 +44,13 @@ struct LevelSet {
   MoFEMErrorCode runProblem();
 
 private:
-
   using VecSideArray = std::array<VectorDouble, 2>;
   using MatSideArray = std::array<MatrixDouble, 2>;
 
+  /**
+   * @brief data structure carrying information on skeleton on both sides.
+   *
+   */
   struct SideData {
     // data for skeleton computation
     std::array<VectorInt, 2>
@@ -77,34 +63,117 @@ private:
     std::array<int, 2> senseMap;   // orientation of local element edge/face in
                                    // respect to global orientation of edge/face
 
-    VecSideArray lVec;
-    MatSideArray velMat;
+    VecSideArray lVec; //< Values of level set field
+    MatSideArray velMat; //< Values of velocity field
   };
 
+  /**
+   * @brief advection velocity field
+   *
+   * \note in current implementation is assumed that advection field has zero
+   * normal component.
+   *
+   * \note function define a vector velocity potential field, curl of potential
+   * field gives velocity, thus velocity is divergence free.
+   *
+   * @tparam SPACE_DIM
+   * @param x
+   * @param y
+   * @param z
+   * @return auto
+   */
+  template <int SPACE_DIM>
+  static double get_velocity_potential(double x, double y, double z);
+
+  /**
+   * @brief inital level set, i.e. advected filed
+   *
+   * @param x
+   * @param y
+   * @param z
+   * @return double
+   */
+  static double get_level_set(const double x, const double y, const double z);
+
+  /**
+   * @brief read mesh
+   * 
+   * @return MoFEMErrorCode 
+   */
   MoFEMErrorCode readMesh();
+
+  /**
+   * @brief create fields, and set approximation order
+   *
+   * @return MoFEMErrorCode
+   */
   MoFEMErrorCode setupProblem();
 
+  /**
+   * @brief push operators to integrate operators on domain
+   * 
+   * @return MoFEMErrorCode 
+   */
   MoFEMErrorCode pushOpDomain();
 
+  /**
+   * @brief create side element to assemble data from sides
+   * 
+   * @param side_data_ptr 
+   * @return boost::shared_ptr<FaceSideEle> 
+   */
   boost::shared_ptr<FaceSideEle>
   getSideFE(boost::shared_ptr<SideData> side_data_ptr);
+
+  /**
+   * @brief push operator to integrate on skeleton
+   * 
+   * @return MoFEMErrorCode 
+   */
   MoFEMErrorCode pushOpSkeleton();
 
+  /**
+   * @brief test integration side elements
+   *
+   * Check consistency between volume and skeleton integral.
+   *
+   * @return MoFEMErrorCode
+   */
   MoFEMErrorCode testSideFE();
+
+  /**
+   * @brief test consistency between tangent matrix and the right hand side
+   * vectors
+   *
+   * @return MoFEMErrorCode
+   */
   MoFEMErrorCode testOp();
 
+  /**
+   * @brief initialise field set
+   * 
+   * @param level_fun 
+   * @return MoFEMErrorCode 
+   */
   MoFEMErrorCode initialiseFieldLevelSet(
       boost::function<double(double, double, double)> level_fun =
           get_level_set);
+
+  /**
+   * @brief initialise potential velocity field
+   * 
+   * @param vel_fun 
+   * @return MoFEMErrorCode 
+   */
   MoFEMErrorCode initialiseFieldVelocity(
       boost::function<double(double, double, double)> vel_fun =
           get_velocity_potential<SPACE_DIM>);
   MoFEMErrorCode solveLevelSet();
 
-  struct OpRhsDomain;
-  struct OpLhsDomain;
-  struct OpRhsSkeleton;
-  struct OpLhsSkeleton;
+  struct OpRhsDomain; ///< integrate volume operators on rhs
+  struct OpLhsDomain; ///< integrate volume operator on lhs
+  struct OpRhsSkeleton; ///< integrate skeleton operators on rhs
+  struct OpLhsSkeleton; ///< integrate skeleton operators on khs
 
   // Main interfaces
   MoFEM::Interface &mField;
@@ -125,6 +194,19 @@ private:
 
   enum ElementSide { LEFT_SIDE = 0, RIGHT_SIDE = 1 };
 };
+
+template <>
+double LevelSet::get_velocity_potential<2>(double x, double y, double z) {
+  return (x * x - 0.25) * (y * y - 0.25);
+}
+
+double LevelSet::get_level_set(const double x, const double y, const double z) {
+  constexpr double xc = 0.1;
+  constexpr double yc = 0.;
+  constexpr double zc = 0.;
+  constexpr double r = 0.2;
+  return std::sqrt(pow(x - xc, 2) + pow(y - yc, 2) + pow(z - zc, 2)) - r;
+}
 
 MoFEMErrorCode LevelSet::runProblem() {
   MoFEMFunctionBegin;
@@ -451,7 +533,7 @@ LevelSet::OpRhsSkeleton::doWork(int side, EntityType type,
         };
 
 #ifndef NDEBUG
-        if(nb_gauss_pts != sideDataPtr->rowBaseSideMap[s0].size1())
+        if (nb_gauss_pts != sideDataPtr->rowBaseSideMap[s0].size1())
           SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                   "Inconsistent number of DOFs");
 #endif
@@ -462,7 +544,6 @@ LevelSet::OpRhsSkeleton::doWork(int side, EntityType type,
           t_vel(i) = (arr_t_vel[LEFT_SIDE](i) + arr_t_vel[RIGHT_SIDE](i)) / 2.;
           const auto dot = sense_row * (t_normal(i) * t_vel(i));
           const auto l_upwind_side = (dot > 0) ? s0 : opposite_s0;
-          const auto sense_upwind = sideDataPtr->senseMap[l_upwind_side];
           const auto l_upwind = arr_t_l[l_upwind_side];
           const auto res = t_w * dot * l_upwind;
           next();
@@ -740,9 +821,21 @@ MoFEMErrorCode LevelSet::pushOpSkeleton() {
   MoFEMFunctionReturn(0);
 }
 
+/**
+ * @brief test side element
+ * 
+ * Check consistency between volume and skeleton integral
+ * 
+ * @return MoFEMErrorCode 
+ */
 MoFEMErrorCode LevelSet::testSideFE() {
   MoFEMFunctionBegin;
 
+
+  /**
+   * @brief calculate volume
+   * 
+   */
   struct DivergenceVol : public DomainEleOp {
     DivergenceVol(boost::shared_ptr<VectorDouble> l_ptr,
                   boost::shared_ptr<MatrixDouble> vel_ptr,
@@ -780,6 +873,10 @@ MoFEMErrorCode LevelSet::testSideFE() {
     SmartPetscObj<Vec> divVec;
   };
 
+  /**
+   * @brief calculate skeleton integral
+   * 
+   */
   struct DivergenceSkeleton : public BoundaryEleOp {
     DivergenceSkeleton(boost::shared_ptr<SideData> side_data_ptr,
                        boost::shared_ptr<FaceSideEle> side_fe_ptr,
@@ -836,7 +933,12 @@ MoFEMErrorCode LevelSet::testSideFE() {
             t_vel(i) =
                 (arr_t_vel[LEFT_SIDE](i) + arr_t_vel[RIGHT_SIDE](i)) / 2.;
             const auto dot = (t_normal(i) * t_vel(i)) * side_sense;
-            const auto l_upwind = arr_t_l[s0];
+            const auto l_upwind_side = (dot > 0) ? s0 : opposite_s0;
+            const auto l_upwind =
+                arr_t_l[l_upwind_side]; //< assume that field is continues,
+                                        //initialisation field has to be smooth
+                                        // and exactly approximated by approx
+                                        // base
             auto res = t_w * l_upwind * dot;
             ++t_w;
             next();
@@ -894,6 +996,12 @@ MoFEMErrorCode LevelSet::testSideFE() {
 
   auto simple = mField.getInterface<Simple>();
   auto dm = simple->getDM();
+
+  /**
+   * Set up problem such that gradient of level set field is orthogonal to
+   * velocity field. Then volume and skeleton integral should yield the same
+   * value.
+   */
 
   CHKERR initialiseFieldVelocity(
       [](double x, double y, double) { return x - y; });
