@@ -37,7 +37,7 @@ auto marker = [](auto l) {
  * @brief lambda function used to select elements on which finite element
  * pipelines are executed.
  *
- * @note childs elements on pipeline, retrive data from parents using operators
+ * @note childs elements on pipeline, retrieve data from parents using operators
  * pushed by \ref set_parent_dofs
  *
  */
@@ -241,10 +241,6 @@ auto random_mesh_refine = [](MoFEM::Interface &m_field) {
   // Using that information MAtrixManager  allocate appropriately size of
   // matrix.
   simple->getParentAdjacencies() = true;
-  BitRefLevel bit_marker;
-  for (auto l = 1; l <= nb_ref_levels; ++l)
-    bit_marker |= marker(l);
-  simple->getBitAdjEnt() = bit_marker;
 
   MoFEMFunctionReturn(0);
 };
