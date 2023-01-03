@@ -53,6 +53,7 @@ private:
    */
   struct SideData {
     // data for skeleton computation
+    std::array<EntityHandle, 2> feSideHandle;
     std::array<VectorInt, 2>
         indicesRowSideMap; ///< indices on rows for left hand-side
     std::array<VectorInt, 2>
@@ -115,6 +116,13 @@ private:
    * @return MoFEMErrorCode 
    */
   MoFEMErrorCode pushOpDomain();
+
+  /**
+   * @brief evaluate error
+   * 
+   * @return MoFEMErrorCode 
+   */
+  std::tuple<double, Tag> evaluateError();
 
   /**
    * @brief create side element to assemble data from sides
@@ -757,6 +765,7 @@ LevelSet::getSideFE(boost::shared_ptr<SideData> side_data_ptr) {
       if ((CN::Dimension(row_type) == SPACE_DIM) &&
           (CN::Dimension(col_type) == SPACE_DIM)) {
         const auto nb_in_loop = getFEMethod()->nInTheLoop;
+        sideDataPtr->feSideHandle[nb_in_loop] = getFEEntityHandle();
         sideDataPtr->indicesRowSideMap[nb_in_loop] = row_data.getIndices();
         sideDataPtr->indicesColSideMap[nb_in_loop] = col_data.getIndices();
         sideDataPtr->rowBaseSideMap[nb_in_loop] = row_data.getN();
@@ -764,6 +773,7 @@ LevelSet::getSideFE(boost::shared_ptr<SideData> side_data_ptr) {
         sideDataPtr->areaMap[nb_in_loop] = getMeasure();
         sideDataPtr->senseMap[nb_in_loop] = getSkeletonSense();
         if (!nb_in_loop) {
+          sideDataPtr->feSideHandle[nb_in_loop] = 0;
           sideDataPtr->indicesRowSideMap[1].clear();
           sideDataPtr->indicesColSideMap[1].clear();
           sideDataPtr->rowBaseSideMap[1].clear();
@@ -819,6 +829,124 @@ MoFEMErrorCode LevelSet::pushOpSkeleton() {
       new OpLhsSkeleton(side_data_ptr, side_fe_ptr));
 
   MoFEMFunctionReturn(0);
+}
+
+std::tuple<double, Tag> LevelSet::evaluateError() {
+
+  struct OpErrorSkel : BoundaryEleOp {
+
+    OpErrorSkel(boost::shared_ptr<FaceSideEle> side_fe_ptr,
+                boost::shared_ptr<SideData> side_data_ptr,
+                SmartPetscObj<Vec> error_sum_ptr, Tag th_error)
+        : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE),
+          sideFEPtr(side_fe_ptr), sideDataPtr(side_data_ptr),
+          errorSumPtr(error_sum_ptr), thError(th_error) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+      // Collect data from side domain elements
+      CHKERR loopSideFaces("dFE", *sideFEPtr);
+      const auto in_the_loop =
+          sideFEPtr->nInTheLoop; // return number of elements on the side
+
+      auto not_side = [](auto s) {
+        return s == LEFT_SIDE ? RIGHT_SIDE : LEFT_SIDE;
+      };
+
+      auto nb_gauss_pts = getGaussPts().size2();
+
+      for (auto s : {LEFT_SIDE, RIGHT_SIDE}) {
+
+        auto arr_t_l =
+            make_array(getFTensor0FromVec(sideDataPtr->lVec[LEFT_SIDE]),
+                       getFTensor0FromVec(sideDataPtr->lVec[RIGHT_SIDE]));
+        auto arr_t_vel = make_array(
+            getFTensor1FromMat<SPACE_DIM>(sideDataPtr->velMat[LEFT_SIDE]),
+            getFTensor1FromMat<SPACE_DIM>(sideDataPtr->velMat[RIGHT_SIDE]));
+
+        auto next = [&]() {
+          for (auto &t_l : arr_t_l)
+            ++t_l;
+          for (auto &t_vel : arr_t_vel)
+            ++t_vel;
+        };
+
+        double e = 0;
+        auto t_w = getFTensor0IntegrationWeight();
+        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+          e += t_w * pow(arr_t_l[LEFT_SIDE] - arr_t_l[RIGHT_SIDE], 2);
+          next();
+          ++t_w;
+        }
+        e = std::sqrt(e);
+
+        moab::Interface &moab =
+            getNumeredEntFiniteElementPtr()->getBasicDataPtr()->moab;
+        const void *tags_ptr[2];
+        CHKERR moab.tag_get_by_ptr(thError, sideDataPtr->feSideHandle.data(), 2,
+                                   tags_ptr);
+        for (auto ff : {0, 1}) {
+          *((double *)tags_ptr[ff]) += e;
+        }
+        CHKERR VecSetValue(errorSumPtr, 0, e, ADD_VALUES);
+      };
+
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    boost::shared_ptr<FaceSideEle> sideFEPtr;
+    boost::shared_ptr<SideData> sideDataPtr;
+    SmartPetscObj<Vec> errorSumPtr;
+    Tag thError;
+  };
+
+  auto simple = mField.getInterface<Simple>();
+
+  auto error_sum_ptr = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
+  Tag th_error;
+  double def_val = 0;
+  CHKERR mField.get_moab().tag_get_handle("Error", 1, MB_TYPE_DOUBLE, th_error,
+                                          MB_TAG_CREAT | MB_TAG_SPARSE,
+                                          &def_val);
+
+  auto clear_tags = [&]() {
+    MoFEMFunctionBegin;
+    Range fe_ents;
+    CHKERR mField.get_finite_element_entities_by_handle(
+        simple->getDomainFEName(), fe_ents);
+    double zero;
+    CHKERR mField.get_moab().tag_clear_data(th_error, fe_ents, &zero);
+    MoFEMFunctionReturn(0);
+  };
+
+  auto evaluate_error = [&]() {
+    MoFEMFunctionBegin;
+    auto skel_fe = boost::make_shared<BoundaryEle>(mField);
+    skel_fe->getRuleHook = [](int, int, int o) { return 3 * o; };
+    auto side_data_ptr = boost::make_shared<SideData>();
+    auto side_fe_ptr = getSideFE(side_data_ptr);
+    skel_fe->getOpPtrVector().push_back(
+        new OpErrorSkel(side_fe_ptr, side_data_ptr, error_sum_ptr, th_error));
+    auto simple = mField.getInterface<Simple>();
+    CHKERR DMoFEMLoopFiniteElements(simple->getDM(),
+                                    simple->getSkeletonFEName(), skel_fe);
+    MoFEMFunctionReturn(0);
+  };
+
+  auto assemble_and_sum = [](auto vec) {
+    CHK_THROW_MESSAGE(VecAssemblyBegin(vec), "assemble");
+    CHK_THROW_MESSAGE(VecAssemblyEnd(vec), "assemble");
+    double sum;
+    CHK_THROW_MESSAGE(VecSum(vec, &sum), "assemble");
+    return sum;
+  };
+
+  CHK_THROW_MESSAGE(clear_tags(), "clear error tags");
+  CHK_THROW_MESSAGE(evaluate_error(), "evaluate error");
+
+  return std::make_tuple(assemble_and_sum(error_sum_ptr), th_error);
 }
 
 /**
@@ -1320,6 +1448,8 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity(
   MoFEMFunctionReturn(0);
 }
 
+LevelSet *level_set_raw_ptr = nullptr;
+
 MoFEMErrorCode LevelSet::solveLevelSet() {
   MoFEMFunctionBegin;
 
@@ -1408,6 +1538,26 @@ MoFEMErrorCode LevelSet::solveLevelSet() {
   CHKERR TSSetSolution(ts, D);
   CHKERR TSSetFromOptions(ts);
   CHKERR TSSetUp(ts);
+
+  level_set_raw_ptr = this;
+  auto ts_pre_step = [](TS ts) {
+    auto &m_field = level_set_raw_ptr->mField;
+    auto simple = m_field.getInterface<Simple>();
+    MoFEMFunctionBegin;
+    auto [error, th_error] = level_set_raw_ptr->evaluateError();
+    MOFEM_LOG("LevelSet", Sev::inform) << "Error indicator " << error;
+    auto fe_meshset =
+        m_field.get_finite_element_meshset(simple->getDomainFEName());
+    std::vector<Tag> tags{th_error};
+    CHKERR m_field.get_moab().write_file("error.h5m", "MOAB",
+                                         "PARALLEL=WRITE_PART", &fe_meshset, 1,
+                                         &*tags.begin(), tags.size());
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR TSSetPreStep(ts, ts_pre_step);
+
+
   CHKERR TSSolve(ts, NULL);
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
