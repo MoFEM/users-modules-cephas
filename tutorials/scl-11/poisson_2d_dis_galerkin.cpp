@@ -7,26 +7,20 @@
 
 #include <BasicFiniteElements.hpp>
 
-template <int DIM> struct ElementsAndOps {};
-
-template <> struct ElementsAndOps<2> {
-  using DomainEle = PipelineManager::FaceEle;
-  using BoundaryEle = PipelineManager::EdgeEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
-  using FaceSideEle = FaceElementForcesAndSourcesCoreOnSide;
-};
-
 constexpr int BASE_DIM = 1;
 constexpr int FIELD_DIM = 1;
 constexpr int SPACE_DIM = 2;
 
 using EntData = EntitiesFieldData::EntData;
-using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+
+using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 
-using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
-using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
-using FaceSideEle = ElementsAndOps<SPACE_DIM>::FaceSideEle;
+using BoundaryEle =
+    PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
+using FaceSideEle =
+    PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::FaceSideEle;
 using FaceSideOp = FaceSideEle::UserDataOperator;
 
 using PostProcEle =  PostProcBrokenMeshInMoab<DomainEle>;

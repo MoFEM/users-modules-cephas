@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
 
     boost::shared_ptr<MatrixDouble> B(new MatrixDouble());
     vol_ele->getOpPtrVector().push_back(
-        new OpCalculateHcurlVectorCurl<3>("MAGNETIC_POTENTIAL", B));
+        new OpCalculateHcurlVectorCurl<3, 3>("MAGNETIC_POTENTIAL", B));
     // vol_ele->getOpPtrVector().push_back(new MyOpDebug(B));
 
     const MoFEM::Problem *prb_ptr;
