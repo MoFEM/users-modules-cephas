@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "none", "none");
     CHKERRQ(ierr);
 
-    CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
+    CHKERR PetscOptionsString("-file_name", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
     CHKERR PetscOptionsString("-output_file", "output mesh file name", "",
                               "mesh.h5m", mesh_out_file, 255, PETSC_NULL);
@@ -167,9 +167,11 @@ int main(int argc, char *argv[]) {
       CHKERR moab.delete_entities(&meshset_ref_edges, 1);
     }
 
-    if (shift == PETSC_TRUE)
+    if (shift == PETSC_TRUE) {
+      MOFEM_LOG("WORLD", Sev::inform) << "Shift bits";
       CHKERR core.getInterface<BitRefManager>()->shiftRightBitRef(
           nb_levels, BitRefLevel().set(), VERBOSE);
+    }
 
     CHKERR moab.write_file(mesh_out_file);
   }
