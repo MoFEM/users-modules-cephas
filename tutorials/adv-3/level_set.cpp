@@ -21,6 +21,8 @@ constexpr IntegrationType I =
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
+using DomianParentEle =
+    PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomianParentEle;
 using BoundaryEle =
     PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
 using FaceSideEle =
@@ -37,7 +39,7 @@ constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
 
 constexpr bool debug = true;
 constexpr int start_bit = 10;
-constexpr int nb_levels = 3;
+constexpr int nb_levels = 2;
 
 struct LevelSet {
 
@@ -124,7 +126,7 @@ private:
    *
    * @return MoFEMErrorCode
    */
-  std::tuple<double, Tag> evaluateError();
+  std::tuple<double, Tag> evaluateError(const BitRefLevel &mesh_bit);
 
   /**
    * @brief create side element to assemble data from sides
@@ -133,14 +135,15 @@ private:
    * @return boost::shared_ptr<FaceSideEle>
    */
   boost::shared_ptr<FaceSideEle>
-  getSideFE(boost::shared_ptr<SideData> side_data_ptr);
+  getSideFE(boost::shared_ptr<SideData> side_data_ptr,
+            const BitRefLevel &mesh_bit);
 
   /**
    * @brief push operator to integrate on skeleton
    *
    * @return MoFEMErrorCode
    */
-  MoFEMErrorCode pushOpSkeleton();
+  MoFEMErrorCode pushOpSkeleton(const BitRefLevel &mesh_bit);
 
   /**
    * @brief test integration side elements
@@ -178,17 +181,32 @@ private:
   MoFEMErrorCode initialiseFieldVelocity(
       boost::function<double(double, double, double)> vel_fun =
           get_velocity_potential<SPACE_DIM>);
-  MoFEMErrorCode solveLevelSet();
+
+  /**
+   * @brief dg level set projection
+   *
+   * @param prj_bit
+   * @param mesh_bit
+   * @return MoFEMErrorCode
+   */
+  MoFEMErrorCode dgProjection(const BitRefLevel &mesh_bit);
+
+  /**
+   * @brief solve advection problem
+   *
+   * @return * MoFEMErrorCode
+   */
+  MoFEMErrorCode solveAdvection();
 
   struct WrapperrClass {
     WrapperrClass() = default;
     virtual MoFEMErrorCode setBits(LevelSet &level_set, const int l) = 0;
     virtual MoFEMErrorCode runCalcs(LevelSet &level_set) = 0;
-    virtual int getTreshold() = 0;
+    virtual double getThreshold() = 0;
   };
 
   struct WrapperrClascInitalSolution : public WrapperrClass {
-    MoFEMErrorCode setBits(LevelSet &level_set, const int l)  {
+    MoFEMErrorCode setBits(LevelSet &level_set, const int l) {
       MoFEMFunctionBegin;
       auto simple = level_set.mField.getInterface<Simple>();
       simple->getBitRefLevel() = BitRefLevel().set(start_bit + l);
@@ -202,11 +220,10 @@ private:
       MoFEMFunctionReturn(0);
     }
 
-    int getTreshold() { return 2. / 3.; }
+    double getThreshold() { return 2. / 3.; }
   };
 
   MoFEMErrorCode refineMesh(WrapperrClass &&wp);
-
 
   struct OpRhsDomain;   ///< integrate volume operators on rhs
   struct OpLhsDomain;   ///< integrate volume operator on lhs
@@ -226,6 +243,8 @@ private:
       I>::OpMass<potential_velocity_field_dim, potential_velocity_field_dim>;
   using OpSourceV = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
       I>::OpSource<potential_velocity_field_dim, potential_velocity_field_dim>;
+  using OpScalarFieldL = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
+      I>::OpBaseTimesScalar<1>;
 
   using AssemblyBoundaryEleOp =
       FormsIntegrators<BoundaryEleOp>::Assembly<A>::OpBase;
@@ -255,11 +274,13 @@ MoFEMErrorCode LevelSet::runProblem() {
   //   CHKERR testSideFE();
   //   CHKERR testOp();
   // }
-  CHKERR initialiseFieldLevelSet();
+  // CHKERR initialiseFieldLevelSet();
   CHKERR refineMesh(WrapperrClascInitalSolution());
+  CHKERR dgProjection(BitRefLevel().set(0));
+
   // CHKERR initialiseFieldVelocity();
 
-  // CHKERR solveLevelSet();
+  // CHKERR solveAdvection();
 
   MoFEMFunctionReturn(0);
 }
@@ -412,8 +433,8 @@ MoFEMErrorCode LevelSet::setupProblem() {
                                 AINSWORTH_LEGENDRE_BASE, 1);
 
   // set fields order, i.e. for most first cases order is sufficient.
-  CHKERR simple->setFieldOrder("L", 4);
-  CHKERR simple->setFieldOrder("V", 4);
+  CHKERR simple->setFieldOrder("L", 2);
+  CHKERR simple->setFieldOrder("V", 2);
 
   // setup problem
   CHKERR simple->setUp();
@@ -785,7 +806,16 @@ MoFEMErrorCode LevelSet::pushOpDomain() {
 }
 
 boost::shared_ptr<FaceSideEle>
-LevelSet::getSideFE(boost::shared_ptr<SideData> side_data_ptr) {
+LevelSet::getSideFE(boost::shared_ptr<SideData> side_data_ptr,
+                    const BitRefLevel &mesh_bit) {
+
+  auto simple = mField.getInterface<Simple>();
+  BitRefLevel flip_mesh_bit = mesh_bit;
+  flip_mesh_bit.flip();
+
+  auto l_ptr = boost::make_shared<VectorDouble>();
+  auto vel_ptr = boost::make_shared<MatrixDouble>();
+
   struct OpSwap : public FaceSideEleOp {
     OpSwap(boost::shared_ptr<VectorDouble> l_ptr,
            boost::shared_ptr<MatrixDouble> vel_ptr,
@@ -855,25 +885,56 @@ LevelSet::getSideFE(boost::shared_ptr<SideData> side_data_ptr) {
     boost::shared_ptr<SideData> sideDataPtr;
   };
 
-  auto l_ptr = boost::make_shared<VectorDouble>();
-  auto vel_ptr = boost::make_shared<MatrixDouble>();
-  auto side_fe_ptr = boost::make_shared<FaceSideEle>(mField);
+  // Calculate fields on parem mesh bit element
+  auto get_parent_this = [&]() {
 
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      side_fe_ptr->getOpPtrVector(), {potential_velocity_space, L2});
-  side_fe_ptr->getOpPtrVector().push_back(new OpSideData(side_data_ptr));
-  side_fe_ptr->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldValues("L", l_ptr));
-  side_fe_ptr->getOpPtrVector().push_back(
-      new OpCalculateHcurlVectorCurl<potential_velocity_field_dim, SPACE_DIM>(
-          "V", vel_ptr));
-  side_fe_ptr->getOpPtrVector().push_back(
-      new OpSwap(l_ptr, vel_ptr, side_data_ptr));
+    auto parent_fe_ptr = boost::make_shared<DomianParentEle>(mField);
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        parent_fe_ptr->getOpPtrVector(), {potential_velocity_space, L2});
+    parent_fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("L", l_ptr));
+    parent_fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateHcurlVectorCurl<potential_velocity_field_dim, SPACE_DIM>(
+            "V", vel_ptr));
+    return parent_fe_ptr;
+  };
 
-  return side_fe_ptr;
+  auto get_parents_fe_ptr = [&](auto this_fe_ptr) {
+    std::vector<boost::shared_ptr<DomianParentEle>> parents_elems_ptr_vec;
+    for (int l = 0; l < nb_levels; ++l)
+      parents_elems_ptr_vec.emplace_back(
+          boost::make_shared<DomianParentEle>(mField));
+    for (auto l = 1; l < nb_levels; ++l) {
+      parents_elems_ptr_vec[l - 1]->getOpPtrVector().push_back(new OpRunParent(
+          parents_elems_ptr_vec[l], BitRefLevel().set(), flip_mesh_bit,
+          this_fe_ptr, mesh_bit, BitRefLevel().set()));
+    }
+    return parents_elems_ptr_vec[0];
+  };
+
+  // Create aliased shared pointers, all elements are destroyed if side_fe_ptr
+  // is destroyed
+  auto get_side_fe_ptr = [&]() {
+    auto side_fe_ptr = boost::make_shared<FaceSideEle>(mField);
+
+    auto this_fe_ptr = get_parent_this();
+    auto parent_fe_ptr = get_parents_fe_ptr(this_fe_ptr);
+
+    side_fe_ptr->getOpPtrVector().push_back(new OpSideData(side_data_ptr));
+    side_fe_ptr->getOpPtrVector().push_back(
+        new OpRunParent(parent_fe_ptr, BitRefLevel().set(), flip_mesh_bit,
+                        this_fe_ptr, mesh_bit, BitRefLevel().set()));
+    side_fe_ptr->getOpPtrVector().push_back(
+        new OpSwap(l_ptr, vel_ptr, side_data_ptr));
+
+
+    return side_fe_ptr;
+  };
+
+  return get_side_fe_ptr();
 };
 
-MoFEMErrorCode LevelSet::pushOpSkeleton() {
+MoFEMErrorCode LevelSet::pushOpSkeleton(const BitRefLevel &mesh_bit) {
   MoFEMFunctionBegin;
   auto pip = mField.getInterface<PipelineManager>(); // get interface to
 
@@ -884,7 +945,7 @@ MoFEMErrorCode LevelSet::pushOpSkeleton() {
   pip->setSkeletonRhsIntegrationRule([](int, int, int o) { return 18; });
 
   auto side_data_ptr = boost::make_shared<SideData>();
-  auto side_fe_ptr = getSideFE(side_data_ptr);
+  auto side_fe_ptr = getSideFE(side_data_ptr, mesh_bit);
 
   pip->getOpSkeletonRhsPipeline().push_back(
       new OpRhsSkeleton(side_data_ptr, side_fe_ptr));
@@ -894,7 +955,7 @@ MoFEMErrorCode LevelSet::pushOpSkeleton() {
   MoFEMFunctionReturn(0);
 }
 
-std::tuple<double, Tag> LevelSet::evaluateError() {
+std::tuple<double, Tag> LevelSet::evaluateError(const BitRefLevel &mesh_bit) {
 
   struct OpErrorSkel : BoundaryEleOp {
 
@@ -989,7 +1050,7 @@ std::tuple<double, Tag> LevelSet::evaluateError() {
     auto skel_fe = boost::make_shared<BoundaryEle>(mField);
     skel_fe->getRuleHook = [](int, int, int o) { return 3 * o; };
     auto side_data_ptr = boost::make_shared<SideData>();
-    auto side_fe_ptr = getSideFE(side_data_ptr);
+    auto side_fe_ptr = getSideFE(side_data_ptr, mesh_bit);
     skel_fe->getOpPtrVector().push_back(
         new OpErrorSkel(side_fe_ptr, side_data_ptr, error_sum_ptr, th_error));
     auto simple = mField.getInterface<Simple>();
@@ -1169,7 +1230,7 @@ MoFEMErrorCode LevelSet::testSideFE() {
   auto l_ptr = boost::make_shared<VectorDouble>();
   auto vel_ptr = boost::make_shared<MatrixDouble>();
   auto side_data_ptr = boost::make_shared<SideData>();
-  auto side_fe_ptr = getSideFE(side_data_ptr);
+  auto side_fe_ptr = getSideFE(side_data_ptr, BitRefLevel().set());
 
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       vol_fe->getOpPtrVector(), {potential_velocity_space, L2});
@@ -1238,7 +1299,7 @@ MoFEMErrorCode LevelSet::testOp() {
                                                      // pipeline manager
 
   CHKERR pushOpDomain();
-  CHKERR pushOpSkeleton();
+  CHKERR pushOpSkeleton(BitRefLevel().set());
 
   auto post_proc = [&](auto dm, auto f_res, auto out_name) {
     MoFEMFunctionBegin;
@@ -1364,7 +1425,7 @@ MoFEMErrorCode LevelSet::initialiseFieldLevelSet(
   CHKERR VecGhostUpdateEnd(L, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR DMoFEMMeshToLocalVector(sub_dm, L, INSERT_VALUES, SCATTER_REVERSE);
 
-  auto [error, th_error] = evaluateError();
+  auto [error, th_error] = evaluateError(BitRefLevel().set());
   MOFEM_LOG("LevelSet", Sev::inform) << "Error indicator " << error;
 #ifndef NDEBUG
   auto fe_meshset =
@@ -1524,7 +1585,7 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity(
 
 LevelSet *level_set_raw_ptr = nullptr;
 
-MoFEMErrorCode LevelSet::solveLevelSet() {
+MoFEMErrorCode LevelSet::solveAdvection() {
   MoFEMFunctionBegin;
 
   // get operators tester
@@ -1533,7 +1594,7 @@ MoFEMErrorCode LevelSet::solveLevelSet() {
                                                      // pipeline manager
 
   CHKERR pushOpDomain();
-  CHKERR pushOpSkeleton();
+  CHKERR pushOpSkeleton(BitRefLevel().set());
 
   auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "SUB_LEVEL");
@@ -1624,7 +1685,8 @@ MoFEMErrorCode LevelSet::solveLevelSet() {
     auto &m_field = level_set_raw_ptr->mField;
     auto simple = m_field.getInterface<Simple>();
     MoFEMFunctionBegin;
-    auto [error, th_error] = level_set_raw_ptr->evaluateError();
+    auto [error, th_error] =
+        level_set_raw_ptr->evaluateError(BitRefLevel().set());
     MOFEM_LOG("LevelSet", Sev::inform) << "Error indicator " << error;
 #ifndef NDEBUG
     auto fe_meshset =
@@ -1677,7 +1739,7 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperrClass &&wp) {
     double max;
     MPI_Allreduce(&*it, &max, 1, MPI_DOUBLE, MPI_MAX, mField.get_comm());
     MOFEM_LOG("LevelSet", Sev::inform) << "Max error: " << max;
-    auto threshold = wp.getTreshold() * max;
+    auto threshold = wp.getThreshold() * max;
 
     std::vector<EntityHandle> fe_to_refine;
     fe_to_refine.reserve(fe_ents.size());
@@ -1769,14 +1831,206 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperrClass &&wp) {
 
   for (auto l = 0; l != nb_levels; ++l) {
     MOFEM_LOG("WORLD", Sev::inform) << "Process level: " << l;
-    CHKERR initialiseFieldLevelSet();
     CHKERR wp.runCalcs(*this);
     CHKERR refine_mesh(l + 1, get_refined_elements_meshset(
                                   set_bit(start_bit + l), BitRefLevel().set()));
-    CHKERR wp.setBits(*this, 0);
+    CHKERR wp.setBits(*this, l + 1);
     simple->reSetUp(true);
   }
   CHKERR wp.runCalcs(*this);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode LevelSet::dgProjection(const BitRefLevel &mesh_bit) {
+  MoFEMFunctionBegin;
+
+  // get operators tester
+  auto simple = mField.getInterface<Simple>();
+  auto pip = mField.getInterface<PipelineManager>(); // get interface to
+  auto bit_mng = mField.getInterface<BitRefManager>();
+  auto prb_mng = mField.getInterface<ProblemsManager>();
+
+  boost::shared_ptr<FEMethod> lhs_fe = boost::make_shared<DomainEle>(mField);
+  boost::shared_ptr<FEMethod> rhs_fe = boost::make_shared<DomainEle>(mField);
+  auto swap_fe = [&]() {
+    lhs_fe.swap(pip->getDomainLhsFE());
+    rhs_fe.swap(pip->getDomainRhsFE());
+  };
+  swap_fe();
+
+  pip->setDomainLhsIntegrationRule([](int, int, int o) { return 3 * o; });
+  pip->setDomainRhsIntegrationRule([](int, int, int o) { return 3 * o; });
+
+  BitRefLevel start_mask;
+  for (auto s = 0; s != start_bit; ++s)
+    start_mask[s] = true;
+
+  BitRefLevel prj_bit = BitRefLevel().set(start_bit + nb_levels);
+#ifndef NDEBUG
+  CHKERR bit_mng->writeBitLevelByDim(prj_bit, BitRefLevel().set(), SPACE_DIM,
+                                     "prj_mesh.vtk", "VTK", "");
+#endif
+
+  simple->getBitRefLevel() = start_mask.flip();
+  simple->getBitRefLevelMask() = BitRefLevel().set();
+  simple->reSetUp(true);
+
+  BitRefLevel remove_mask = mesh_bit;
+  remove_mask.flip();
+  CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "L",
+                                       BitRefLevel().set(), remove_mask);
+
+  auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
+  CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "DG_PROJECTION");
+  CHKERR DMMoFEMSetDestroyProblem(sub_dm, PETSC_TRUE);
+  CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
+  CHKERR DMMoFEMAddElement(sub_dm, simple->getDomainFEName());
+  CHKERR DMMoFEMAddSubFieldRow(sub_dm, "L");
+  CHKERR DMSetUp(sub_dm);
+
+
+  auto test_mesh_bit = [&](FEMethod *fe_ptr) {
+    return (fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel() & mesh_bit)
+        .any();
+  };
+
+  auto test_prj_bit = [&](FEMethod *fe_ptr) {
+    return (fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel() & prj_bit)
+        .any();
+  };
+
+  pip->getDomainLhsFE()->exeTestHook = test_mesh_bit;
+  pip->getDomainRhsFE()->exeTestHook = test_prj_bit;
+
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      pip->getOpDomainLhsPipeline(), {potential_velocity_space, L2});
+  pip->getOpDomainLhsPipeline().push_back(new OpMassLL("L", "L"));
+
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      pip->getOpDomainRhsPipeline(), {potential_velocity_space, L2});
+  auto l_vec = boost::make_shared<VectorDouble>();
+  pip->getOpDomainRhsPipeline().push_back(
+      new OpCalculateScalarFieldValues("L", l_vec));
+
+  auto set_ops_on_last_parent = [&]() {
+    auto fe_parent_this = boost::make_shared<DomianParentEle>(mField);
+    fe_parent_this->getOpPtrVector().push_back(new OpScalarFieldL("L", l_vec));
+    return fe_parent_this;
+  };
+
+  auto fe_parent_this = set_ops_on_last_parent();
+  std::vector<boost::shared_ptr<DomianParentEle>> parents_elems_ptr_vec;
+
+  auto set_moving_over_hierarchy_of_child_parent_elements = [&]() {
+
+    size_t level_counter = 0; // level counter
+
+    // Zero counter on top child
+    auto op_counter = new DomainEleOp(NOSPACE, BoundaryEleOp::OPSPACE);
+    op_counter->doWorkRhsHook = [&](DataOperator *op_ptr, int side,
+                                    EntityType type, EntData &data) {
+      level_counter = 0;
+      return 0;
+    };
+    pip->getOpDomainRhsPipeline().push_back(op_counter);
+
+    // Iterate parent, until parent with mesh_bit, then evaluate rhs
+    DataOperator::DoWorkRhsHookFunType op_do_work =
+        [&](DataOperator *op_ptr, int side, EntityType type, EntData &data) {
+          MoFEMFunctionBegin;
+          auto &fe_bit = static_cast<DomainEleOp *>(op_ptr)
+                             ->getFEMethod()
+                             ->numeredEntFiniteElementPtr->getBitRefLevel();
+
+          if ((fe_bit & mesh_bit).any()) {
+            CHKERR static_cast<DomainEleOp *>(op_ptr)->loopThis(
+                simple->getDomainFEName(), fe_parent_this.get(), QUIET,
+                Sev::noisy);
+          } else {
+            CHKERR static_cast<DomainEleOp *>(op_ptr)->loopParent(
+                simple->getDomainFEName(),
+                parents_elems_ptr_vec[level_counter++].get(), QUIET,
+                Sev::noisy);
+          }
+          MoFEMFunctionReturn(0);
+        };
+
+    auto set_op = [&](auto &pipeline) {
+      auto op = new DomainEleOp(NOSPACE, BoundaryEleOp::OPSPACE);
+      op->doWorkRhsHook = op_do_work;
+      pipeline.push_back(op);
+    };
+
+    for (auto l = 0; l != nb_levels; ++l)
+      parents_elems_ptr_vec.push_back(
+          boost::make_shared<DomianParentEle>(mField));
+    for (auto fe_ptr : parents_elems_ptr_vec)
+      set_op(fe_ptr->getOpPtrVector());
+    set_op(pip->getOpDomainRhsPipeline());
+
+  };
+
+  set_moving_over_hierarchy_of_child_parent_elements();
+
+  auto ksp = pip->createKSP(sub_dm);
+  CHKERR KSPSetDM(ksp, sub_dm);
+  CHKERR KSPSetFromOptions(ksp);
+  CHKERR KSPSetUp(ksp);
+
+  auto L = smartCreateDMVector(sub_dm);
+  auto F = smartVectorDuplicate(L);
+
+  CHKERR KSPSolve(ksp, F, L);
+  CHKERR VecGhostUpdateBegin(L, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(L, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR DMoFEMMeshToLocalVector(sub_dm, L, INSERT_VALUES, SCATTER_REVERSE);
+
+  auto [error, th_error] = evaluateError(BitRefLevel().set());
+  MOFEM_LOG("LevelSet", Sev::inform) << "Error indicator " << error;
+
+  auto post_proc = [&](auto dm, auto out_name) {
+    MoFEMFunctionBegin;
+    auto post_proc_fe =
+        boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
+    post_proc_fe->setTagsToTransfer({th_error});
+    post_proc_fe->exeTestHook = test_mesh_bit;
+
+    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+    auto l_vec = boost::make_shared<VectorDouble>();
+    auto l_grad_mat = boost::make_shared<MatrixDouble>();
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        post_proc_fe->getOpPtrVector(), {potential_velocity_space, L2});
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues("L", l_vec));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldGradient<SPACE_DIM>("L", l_grad_mat));
+
+    post_proc_fe->getOpPtrVector().push_back(
+
+        new OpPPMap(
+
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+            {{"L", l_vec}},
+
+            {{"GradL", l_grad_mat}},
+
+            {}, {})
+
+    );
+
+    CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(),
+                                    post_proc_fe);
+    post_proc_fe->writeFile(out_name);
+    MoFEMFunctionReturn(0);
+  };
+
+  if constexpr (debug)
+    CHKERR post_proc(sub_dm, "dg_projection.h5m");
+
+  swap_fe();
 
   MoFEMFunctionReturn(0);
 }
