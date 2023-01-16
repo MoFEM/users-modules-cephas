@@ -1813,6 +1813,14 @@ MoFEMErrorCode LevelSet::solveAdvection() {
 
   auto add_post_proc_fe = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+
+    Tag th_error;
+    double def_val = 0;
+    CHKERR mField.get_moab().tag_get_handle(
+        "Error", 1, MB_TYPE_DOUBLE, th_error, MB_TAG_CREAT | MB_TAG_SPARSE,
+        &def_val);
+    post_proc_fe->setTagsToTransfer({th_error});
+    
     post_proc_fe->exeTestHook = [&](FEMethod *fe_ptr) {
       return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
           current_bit);
