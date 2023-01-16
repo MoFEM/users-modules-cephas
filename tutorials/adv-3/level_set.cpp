@@ -1702,7 +1702,7 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity(
     return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(0);
   };
   pip->getDomainLhsFE()->exeTestHook = test_bit;
-  pip->getDomainLhsFE()->exeTestHook = test_bit;
+  pip->getDomainRhsFE()->exeTestHook = test_bit;
 
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       pip->getOpDomainLhsPipeline(), {potential_velocity_space, L2});
@@ -1741,8 +1741,6 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity(
       auto velocity_mat = boost::make_shared<MatrixDouble>();
 
       post_proc_fe->getOpPtrVector().push_back(
-          new OpCalculateScalarFieldValues("L", l_vec));
-      post_proc_fe->getOpPtrVector().push_back(
           new OpCalculateScalarFieldValues("V", potential_vec));
       post_proc_fe->getOpPtrVector().push_back(
           new OpCalculateHcurlVectorCurl<potential_velocity_field_dim,
@@ -1754,7 +1752,7 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity(
 
               post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-              {{"L", l_vec}, {"VelocityPotential", potential_vec}},
+              {{"VelocityPotential", potential_vec}},
 
               {{"Velocity", velocity_mat}},
 
