@@ -482,7 +482,7 @@ struct KelvinVoigtDamper {
         }
 
         if (nb_active_variables != nbActiveVariables[tagS[DAMPERSTRESS]]) {
-          SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE,
+          SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSSIBLE_CASE,
                   "Number of active variables does not much");
         }
 
