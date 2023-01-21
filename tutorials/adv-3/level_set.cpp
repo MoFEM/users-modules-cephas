@@ -1181,8 +1181,7 @@ std::tuple<double, Tag> LevelSet::evaluateError() {
   auto clear_tags = [&]() {
     MoFEMFunctionBegin;
     Range fe_ents;
-    CHKERR mField.get_finite_element_entities_by_handle(
-        simple->getDomainFEName(), fe_ents);
+    CHKERR mField.get_moab().get_entities_by_dimension(0, SPACE_DIM, fe_ents);
     double zero;
     CHKERR mField.get_moab().tag_clear_data(th_error, fe_ents, &zero);
     MoFEMFunctionReturn(0);
