@@ -1808,7 +1808,7 @@ MoFEMErrorCode LevelSet::solveAdvection() {
         "Error", 1, MB_TYPE_DOUBLE, th_error, MB_TAG_CREAT | MB_TAG_SPARSE,
         &def_val);
     post_proc_fe->setTagsToTransfer({th_error});
-    
+
     post_proc_fe->exeTestHook = [&](FEMethod *fe_ptr) {
       return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
           current_bit);
