@@ -1881,11 +1881,6 @@ MoFEMErrorCode LevelSet::solveAdvection() {
   level_set_raw_ptr = this;
 
   auto ts_pre_step = [](TS ts) {
-    MoFEMFunctionBegin;
-    MoFEMFunctionReturn(0);
-  };
-
-  auto ts_post_step = [](TS ts) {
     auto &m_field = level_set_raw_ptr->mField;
     auto simple = m_field.getInterface<Simple>();
     MoFEMFunctionBegin;
@@ -1899,6 +1894,11 @@ MoFEMErrorCode LevelSet::solveAdvection() {
                                          "PARALLEL=WRITE_PART", &fe_meshset, 1,
                                          &*tags.begin(), tags.size());
 #endif
+    MoFEMFunctionReturn(0);
+  };
+
+  auto ts_post_step = [](TS ts) {
+    MoFEMFunctionBegin;
     MoFEMFunctionReturn(0);
   };
 
