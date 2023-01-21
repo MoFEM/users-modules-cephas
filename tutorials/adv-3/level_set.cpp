@@ -138,9 +138,9 @@ private:
 
   /**
    * @brief Get operator calculating velocity on coarse mesh
-   * 
-   * @param vel_ptr 
-   * @return DomainEleOp* 
+   *
+   * @param vel_ptr
+   * @return DomainEleOp*
    */
   ForcesAndSourcesCore::UserDataOperator *
   getZeroLevelVelOp(boost::shared_ptr<MatrixDouble> vel_ptr);
