@@ -1208,17 +1208,6 @@ std::tuple<double, Tag> LevelSet::evaluateError() {
     MoFEMFunctionReturn(0);
   };
 
-  auto reduce_error_tags = [&]() {
-    MoFEMFunctionBegin;
-    ParallelComm *pcomm = ParallelComm::get_pcomm(
-        &mField.get_moab(), mField.get_basic_entity_data_ptr()->pcommID);
-    Range fe_ents;
-    CHKERR mField.get_finite_element_entities_by_handle(
-        simple->getDomainFEName(), fe_ents);
-    CHKERR pcomm->reduce_tags(th_error, MPI_SUM, fe_ents);
-    MoFEMFunctionReturn(0);
-  };
-
   auto assemble_and_sum = [](auto vec) {
     CHK_THROW_MESSAGE(VecAssemblyBegin(vec), "assemble");
     CHK_THROW_MESSAGE(VecAssemblyEnd(vec), "assemble");
@@ -1229,7 +1218,6 @@ std::tuple<double, Tag> LevelSet::evaluateError() {
 
   CHK_THROW_MESSAGE(clear_tags(), "clear error tags");
   CHK_THROW_MESSAGE(evaluate_error(), "evaluate error");
-  // CHK_THROW_MESSAGE(reduce_error_tags(), "reduce tags");
 
   return std::make_tuple(assemble_and_sum(error_sum_ptr), th_error);
 }
