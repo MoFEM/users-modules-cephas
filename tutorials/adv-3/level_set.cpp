@@ -1929,13 +1929,22 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
 
   auto simple = mField.getInterface<Simple>();
   auto bit_mng = mField.getInterface<BitRefManager>();
+  ParallelComm *pcomm =
+      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+  auto proc_str = boost::lexical_cast<std::string>(mField.get_comm_rank());
 
   auto set_bit = [](auto l) { return BitRefLevel().set(l); };
 
-  BitRefLevel start_mask;
-  for (auto s = 0; s != start_bit; ++s)
-    start_mask[s] = true;
+  auto save_range = [&](const std::string name, const Range &r) {
+    MoFEMFunctionBegin;
+    auto meshset_ptr = get_temp_meshset_ptr(mField.get_moab());
+    CHKERR mField.get_moab().add_entities(*meshset_ptr, r);
+    CHKERR mField.get_moab().write_file(name.c_str(), "VTK", "",
+                                        meshset_ptr->get_ptr(), 1);
+    MoFEMFunctionReturn(0);
+  };
 
+  // select domain elements to refine by threshold
   auto get_refined_elements_meshset = [&](auto bit, auto mask) {
     Range fe_ents;
     CHKERR bit_mng->getEntitiesByDimAndRefLevel(bit, mask, SPACE_DIM, fe_ents);
@@ -1966,42 +1975,63 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
       ++error_it;
     }
 
-    Range verts;
-    CHKERR mField.get_moab().get_connectivity(&*fe_to_refine.begin(),
-                                              fe_to_refine.size(), verts, true);
     Range ents;
-    CHKERR mField.get_moab().get_adjacencies(verts, SPACE_DIM, false, ents,
-                                             moab::Interface::UNION);
+    ents.insert_list(fe_to_refine.begin(), fe_to_refine.end());
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(ents,
+                                                                     NOISY);
+
+    auto get_neighbours_by_bridge_vertices = [&](auto &&ents) {
+      Range verts;
+      CHKERR mField.get_moab().get_connectivity(ents, verts, true);
+      CHKERR mField.get_moab().get_adjacencies(verts, SPACE_DIM, false, ents,
+                                               moab::Interface::UNION);
+      CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(ents);
+      return ents;
+    };
+
+    ents = get_neighbours_by_bridge_vertices(ents);
 
 #ifndef NDEBUG
     if (debug) {
-
       auto meshset_ptr = get_temp_meshset_ptr(mField.get_moab());
       CHK_MOAB_THROW(mField.get_moab().add_entities(*meshset_ptr, ents),
                      "add entities to meshset");
-      CHKERR mField.get_moab().write_file("fe_to_refine.h5m", "MOAB",
-                                          "PARALLEL=WRITE_PART",
-                                          meshset_ptr->get_ptr(), 1);
+      CHKERR mField.get_moab().write_file(
+          (proc_str + "_fe_to_refine.vtk").c_str(), "VTK", "",
+          meshset_ptr->get_ptr(), 1);
     }
 #endif
 
     return ents;
   };
 
+  // refine elements, and set bit ref level
   auto refine_mesh = [&](auto l, auto &&fe_to_refine) {
     MoFEMFunctionBegin;
 
+    // get entities in "l-1" level
     Range level_ents;
     CHKERR bit_mng->getEntitiesByDimAndRefLevel(
         set_bit(start_bit + l - 1), BitRefLevel().set(), SPACE_DIM, level_ents);
+    // select entities to refine
     fe_to_refine = intersect(level_ents, fe_to_refine);
+    // select entities not to refine
     level_ents = subtract(level_ents, fe_to_refine);
+    // CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+    //     level_ents);
 
+    // for entities to refine get children, i.e. redlined entities
     Range fe_to_refine_children;
     bit_mng->updateRangeByChildren(fe_to_refine, fe_to_refine_children);
-    level_ents.merge(fe_to_refine_children.subset_by_dimension(SPACE_DIM));
+    // add entities to to level "l"
+    fe_to_refine_children =
+        fe_to_refine_children.subset_by_dimension(SPACE_DIM);
+    level_ents.merge(fe_to_refine_children);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+        level_ents);
 
-    for (auto d = 0; d != SPACE_DIM; ++d)
+    // get lower dimension entities for level "l"
+    for (auto d = 0; d != SPACE_DIM; ++d) {
       if (d == 0) {
         CHKERR mField.get_moab().get_connectivity(
             level_ents.subset_by_dimension(SPACE_DIM), level_ents, true);
@@ -2010,39 +2040,64 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
             level_ents.subset_by_dimension(SPACE_DIM), d, false, level_ents,
             moab::Interface::UNION);
       }
+    }
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+        level_ents);
 
+    // set bit ref level to level entities
+    CHKERR bit_mng->setNthBitRefLevel(start_bit + l, false);
     CHKERR bit_mng->setNthBitRefLevel(level_ents, start_bit + l, true);
 
 #ifndef NDEBUG
+    auto proc_str = boost::lexical_cast<std::string>(mField.get_comm_rank());
     CHKERR bit_mng->writeBitLevelByDim(
         set_bit(start_bit + l), BitRefLevel().set(), SPACE_DIM,
-        (boost::lexical_cast<std::string>(l) + "_ref_mesh.vtk").c_str(), "VTK",
-        "");
+        (boost::lexical_cast<std::string>(l) + "_" + proc_str + "_ref_mesh.vtk")
+            .c_str(),
+        "VTK", "");
 #endif
 
     MoFEMFunctionReturn(0);
   };
 
+  // set skeleton
   auto set_skelton_bit = [&](auto l) {
     MoFEMFunctionBegin;
+
+    // get entities of dim-1 on level "l"
     Range level_edges;
     CHKERR bit_mng->getEntitiesByDimAndRefLevel(set_bit(start_bit + l),
                                                 BitRefLevel().set(),
                                                 SPACE_DIM - 1, level_edges);
+
+    // get parent of entities of level "l"
     Range level_edges_parents;
     CHKERR bit_mng->updateRangeByParent(level_edges, level_edges_parents);
+    level_edges_parents =
+        level_edges_parents.subset_by_dimension(SPACE_DIM - 1);
+    CHKERR bit_mng->filterEntitiesByRefLevel(
+        set_bit(start_bit + l), BitRefLevel().set(), level_edges_parents);
+
+    // skeleton entities which do not have parents
     auto parent_skeleton = intersect(level_edges, level_edges_parents);
     auto skeleton = subtract(level_edges, level_edges_parents);
+
+    // add adjacent domain entities
     CHKERR mField.get_moab().get_adjacencies(unite(parent_skeleton, skeleton),
                                              SPACE_DIM, false, skeleton,
                                              moab::Interface::UNION);
+
+    // set levels
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(skeleton);
     CHKERR bit_mng->setNthBitRefLevel(skeleton_bit, false);
     CHKERR bit_mng->setNthBitRefLevel(skeleton, skeleton_bit, true);
+
 #ifndef NDEBUG
     CHKERR bit_mng->writeBitLevel(
         set_bit(skeleton_bit), BitRefLevel().set(),
-        (boost::lexical_cast<std::string>(l) + "_skeleton.vtk").c_str(), "VTK",
-        "");
+        (boost::lexical_cast<std::string>(l) + "_" + proc_str + "_skeleton.vtk")
+            .c_str(),
+        "VTK", "");
 #endif
     MoFEMFunctionReturn(0);
   };
@@ -2052,6 +2107,7 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
     Range level;
     CHKERR bit_mng->getEntitiesByRefLevel(set_bit(start_bit + l),
                                           BitRefLevel().set(), level);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(level);
     CHKERR bit_mng->setNthBitRefLevel(current_bit, false);
     CHKERR bit_mng->setNthBitRefLevel(level, current_bit, true);
     CHKERR bit_mng->setNthBitRefLevel(level, aggregate_bit, true);
@@ -2067,6 +2123,9 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
   CHKERR bit_mng->getEntitiesByRefLevel(BitRefLevel().set(aggregate_bit),
                                         BitRefLevel().set(), level0_aggregate);
 
+  BitRefLevel start_mask;
+  for (auto s = 0; s != start_bit; ++s)
+    start_mask[s] = true;
   CHKERR bit_mng->lambdaBitRefLevel(
       [&](EntityHandle ent, BitRefLevel &bit) { bit &= start_mask; });
   CHKERR bit_mng->setNthBitRefLevel(level0_current, projection_bit, true);
@@ -2084,6 +2143,7 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
   Range skeleton = level0.subset_by_dimension(SPACE_DIM - 1);
   CHKERR mField.get_moab().get_adjacencies(skeleton, SPACE_DIM, false, skeleton,
                                            moab::Interface::UNION);
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(skeleton);
   CHKERR bit_mng->setNthBitRefLevel(skeleton, skeleton_bit, true);
 
   CHKERR wp.setBits(*this, 0);
