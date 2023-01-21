@@ -456,11 +456,12 @@ MoFEMErrorCode LevelSet::readMesh() {
     simple->getBitRefLevelMask() = BitRefLevel().set();
 
 #ifndef NDEBUG
-    CHKERR bit_mng->writeBitLevelByDim(BitRefLevel().set(0),
-                                       BitRefLevel().set(), SPACE_DIM,
-                                       "level_base.vtk", "VTK", "");
-    CHKERR bit_mng->writeBitLevelByDim(bit0, BitRefLevel().set(), SPACE_DIM,
-                                       "level0.vtk", "VTK", "");
+    if (debug) {
+      auto proc_str = boost::lexical_cast<std::string>(mField.get_comm_rank());
+      CHKERR bit_mng->writeBitLevelByDim(
+          BitRefLevel().set(0), BitRefLevel().set(), SPACE_DIM,
+          (proc_str + "level_base.vtk").c_str(), "VTK", "");
+    }
 #endif
 
     MoFEMFunctionReturn(0);
