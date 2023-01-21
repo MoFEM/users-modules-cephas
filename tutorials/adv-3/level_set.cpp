@@ -976,16 +976,17 @@ LevelSet::getSideFE(boost::shared_ptr<SideData> side_data_ptr) {
         (sideDataPtr->lVec)[nb_in_loop] = *lPtr;
         (sideDataPtr->velMat)[nb_in_loop] = *velPtr;
 
+#ifndef NDEBUG
         if ((sideDataPtr->lVec)[nb_in_loop].size() !=
             (sideDataPtr->velMat)[nb_in_loop].size2())
           SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                    "Wrong number of integaration pts %d != %d",
                    (sideDataPtr->lVec)[nb_in_loop].size(),
                    (sideDataPtr->velMat)[nb_in_loop].size2());
-        if((sideDataPtr->velMat)[nb_in_loop].size1()!=SPACE_DIM)
+        if ((sideDataPtr->velMat)[nb_in_loop].size1() != SPACE_DIM)
           SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                  "Wrong size of velocity vector size = %d",
-                  (sideDataPtr->velMat)[nb_in_loop].size1());
+                   "Wrong size of velocity vector size = %d",
+                   (sideDataPtr->velMat)[nb_in_loop].size1());
 
         if (!nb_in_loop) {
           (sideDataPtr->lVec)[1] = sideDataPtr->lVec[0];
@@ -1004,7 +1005,7 @@ LevelSet::getSideFE(boost::shared_ptr<SideData> side_data_ptr) {
                     "Wrong number of integaration pt");
           }
         }
-
+#endif
 
       } else {
         SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Should not happen");
