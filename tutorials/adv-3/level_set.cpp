@@ -1718,6 +1718,7 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity(
     MoFEMFunctionBegin;
     auto post_proc_fe =
         boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
+    post_proc_fe->exeTestHook = test_bit;
 
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         post_proc_fe->getOpPtrVector(), {potential_velocity_space});
