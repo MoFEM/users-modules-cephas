@@ -37,7 +37,7 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 constexpr FieldSpace potential_velocity_space = SPACE_DIM == 2 ? H1 : HCURL;
 constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
 
-constexpr bool debug = true;
+constexpr bool debug = false;
 constexpr int nb_levels = 2;
 
 constexpr int start_bit = nb_levels + 1;
@@ -71,8 +71,8 @@ private:
         indicesColSideMap; ///< indices on columns for left hand-side
     std::array<MatrixDouble, 2> rowBaseSideMap; // base functions on rows
     std::array<MatrixDouble, 2> colBaseSideMap; // base function  on columns
-    std::array<int, 2> senseMap;   // orientation of local element edge/face in
-                                   // respect to global orientation of edge/face
+    std::array<int, 2> senseMap; // orientation of local element edge/face in
+                                 // respect to global orientation of edge/face
 
     VecSideArray lVec;   //< Values of level set field
     MatSideArray velMat; //< Values of velocity field
@@ -205,7 +205,7 @@ private:
    * @param mesh_bit
    * @return MoFEMErrorCode
    */
-  MoFEMErrorCode dgProjection();
+  MoFEMErrorCode dgProjection(const int prj_bit = projection_bit);
 
   /**
    * @brief solve advection problem
@@ -218,6 +218,7 @@ private:
     WrapperClass() = default;
     virtual MoFEMErrorCode setBits(LevelSet &level_set, int l) = 0;
     virtual MoFEMErrorCode runCalcs(LevelSet &level_set, int l) = 0;
+    virtual MoFEMErrorCode setAggregateBit(LevelSet &level_set, int l) = 0;
     virtual double getThreshold() = 0;
   };
 
@@ -238,27 +239,41 @@ private:
       MoFEMFunctionReturn(0);
     }
 
-    double getThreshold() { return 1. / 5.; }
-  };
-
-  struct WrapperClassDgProjection : public WrapperClass {
-    MoFEMErrorCode setBits(LevelSet &level_set, int l) {
+    MoFEMErrorCode setAggregateBit(LevelSet &level_set, int l) {
+      auto bit_mng = level_set.mField.getInterface<BitRefManager>();
+      auto set_bit = [](auto l) { return BitRefLevel().set(l); };
       MoFEMFunctionBegin;
-      auto simple = level_set.mField.getInterface<Simple>();
-      simple->getBitRefLevel() = BitRefLevel().set(skeleton_bit) |
-                                 BitRefLevel().set(aggregate_bit) |
-                                 BitRefLevel().set(aggregate_projection_bit);
-      simple->getBitRefLevelMask() = BitRefLevel().set();
-      simple->reSetUp(true);
-      MoFEMFunctionReturn(0);
-    };
-
-    MoFEMErrorCode runCalcs(LevelSet &level_set, int l) {
-      MoFEMFunctionBegin;
-      CHKERR level_set.dgProjection();
+      Range level;
+      CHKERR bit_mng->getEntitiesByRefLevel(set_bit(start_bit + l),
+                                            BitRefLevel().set(), level);
+      CHKERR level_set.mField.getInterface<CommInterface>()
+          ->synchroniseEntities(level);
+      CHKERR bit_mng->setNthBitRefLevel(current_bit, false);
+      CHKERR bit_mng->setNthBitRefLevel(level, current_bit, true);
+      CHKERR bit_mng->setNthBitRefLevel(level, aggregate_bit, true);
       MoFEMFunctionReturn(0);
     }
 
+    double getThreshold() { return 1. / 2.; }
+  };
+
+  struct WrapperClassErrorProjection : public WrapperClass {
+    MoFEMErrorCode setBits(LevelSet &level_set, int l) { return 0; };
+    MoFEMErrorCode runCalcs(LevelSet &level_set, int l) { return 0; }
+    MoFEMErrorCode setAggregateBit(LevelSet &level_set, int l) {
+      auto bit_mng = level_set.mField.getInterface<BitRefManager>();
+      auto set_bit = [](auto l) { return BitRefLevel().set(l); };
+      MoFEMFunctionBegin;
+      Range level;
+      CHKERR bit_mng->getEntitiesByRefLevel(set_bit(start_bit + l),
+                                            BitRefLevel().set(), level);
+      CHKERR level_set.mField.getInterface<CommInterface>()
+          ->synchroniseEntities(level);
+      CHKERR bit_mng->setNthBitRefLevel(current_bit, false);
+      CHKERR bit_mng->setNthBitRefLevel(level, current_bit, true);
+      CHKERR bit_mng->setNthBitRefLevel(level, aggregate_bit, true);
+      MoFEMFunctionReturn(0);
+    }
     double getThreshold() { return 1. / 2.; }
   };
 
@@ -313,15 +328,16 @@ MoFEMErrorCode LevelSet::runProblem() {
     CHKERR testSideFE();
     CHKERR testOp();
   }
-  CHKERR refineMesh(WrapperrClascInitalSolution());
-  CHKERR refineMesh(WrapperrClascDgProjection());
+
+  CHKERR initialiseFieldVelocity();
+  CHKERR refineMesh(WrapperClassInitalSolution());
 
   auto simple = mField.getInterface<Simple>();
-  simple->getBitRefLevel() = BitRefLevel().set(current_bit);
+  simple->getBitRefLevel() = BitRefLevel().set(skeleton_bit) |
+                             BitRefLevel().set(aggregate_bit);
   simple->getBitRefLevelMask() = BitRefLevel().set();
   simple->reSetUp(true);
 
-  CHKERR initialiseFieldVelocity();
   CHKERR solveAdvection();
 
   MoFEMFunctionReturn(0);
@@ -456,7 +472,7 @@ MoFEMErrorCode LevelSet::readMesh() {
     simple->getBitRefLevelMask() = BitRefLevel().set();
 
 #ifndef NDEBUG
-    if (debug) {
+    if constexpr (debug) {
       auto proc_str = boost::lexical_cast<std::string>(mField.get_comm_rank());
       CHKERR bit_mng->writeBitLevelByDim(
           BitRefLevel().set(0), BitRefLevel().set(), SPACE_DIM,
@@ -482,8 +498,8 @@ MoFEMErrorCode LevelSet::setupProblem() {
                                 AINSWORTH_LEGENDRE_BASE, 1);
 
   // set fields order, i.e. for most first cases order is sufficient.
-  CHKERR simple->setFieldOrder("L", 1);
-  CHKERR simple->setFieldOrder("V", 1);
+  CHKERR simple->setFieldOrder("L", 4);
+  CHKERR simple->setFieldOrder("V", 4);
 
   // setup problem
   CHKERR simple->setUp();
@@ -987,25 +1003,27 @@ LevelSet::getSideFE(boost::shared_ptr<SideData> side_data_ptr) {
           SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                    "Wrong size of velocity vector size = %d",
                    (sideDataPtr->velMat)[nb_in_loop].size1());
+#endif
 
         if (!nb_in_loop) {
           (sideDataPtr->lVec)[1] = sideDataPtr->lVec[0];
           (sideDataPtr->velMat)[1] = (sideDataPtr->velMat)[0];
         } else {
+#ifndef NDEBUG
           if (sideDataPtr->rowBaseSideMap[0].size1() !=
               sideDataPtr->rowBaseSideMap[1].size1()) {
             SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                     "Wrong number of integaration pt %d != %d",
+                     "Wrong number of integration pt %d != %d",
                      sideDataPtr->rowBaseSideMap[0].size1(),
                      sideDataPtr->rowBaseSideMap[1].size1());
           }
           if (sideDataPtr->colBaseSideMap[0].size1() !=
               sideDataPtr->colBaseSideMap[1].size1()) {
             SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                    "Wrong number of integaration pt");
+                    "Wrong number of integration pt");
           }
-        }
 #endif
+        }
 
       } else {
         SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Should not happen");
@@ -1216,8 +1234,59 @@ std::tuple<double, Tag> LevelSet::evaluateError() {
     return sum;
   };
 
+  auto propagate_error_to_parents = [&]() {
+    MoFEMFunctionBegin;
+
+    auto &moab = mField.get_moab();
+    auto fe_ptr = boost::make_shared<FEMethod>();
+    fe_ptr->exeTestHook = [&](FEMethod *fe_ptr) {
+      return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
+          current_bit);
+    };
+
+    fe_ptr->preProcessHook = []() { return 0; };
+    fe_ptr->postProcessHook = []() { return 0; };
+    fe_ptr->operatorHook = [&]() {
+      MoFEMFunctionBegin;
+
+      auto fe_ent = fe_ptr->numeredEntFiniteElementPtr->getEnt();
+      auto parent = fe_ptr->numeredEntFiniteElementPtr->getParentEnt();
+      auto th_parent = fe_ptr->numeredEntFiniteElementPtr->getBasicDataPtr()
+                           ->th_RefParentHandle;
+
+      double error;
+      CHKERR moab.tag_get_data(th_error, &fe_ent, 1, &error);
+
+      boost::function<MoFEMErrorCode(EntityHandle, double)> add_error =
+          [&](auto fe_ent, auto error) {
+            MoFEMFunctionBegin;
+            double *e_ptr;
+            CHKERR moab.tag_get_by_ptr(th_error, &fe_ent, 1,
+                                       (const void **)&e_ptr);
+            (*e_ptr) += error;
+
+            EntityHandle parent;
+            CHKERR moab.tag_get_data(th_parent, &fe_ent, 1, &parent);
+            if (parent != fe_ent && parent)
+              CHKERR add_error(parent, *e_ptr);
+
+            MoFEMFunctionReturn(0);
+          };
+
+      CHKERR add_error(parent, error);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR DMoFEMLoopFiniteElements(simple->getDM(), simple->getDomainFEName(),
+                                    fe_ptr);
+
+    MoFEMFunctionReturn(0);
+  };
+
   CHK_THROW_MESSAGE(clear_tags(), "clear error tags");
   CHK_THROW_MESSAGE(evaluate_error(), "evaluate error");
+  CHK_THROW_MESSAGE(propagate_error_to_parents(), "propagate error");
 
   return std::make_tuple(assemble_and_sum(error_sum_ptr), th_error);
 }
@@ -1770,6 +1839,7 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity(
 }
 
 LevelSet *level_set_raw_ptr = nullptr;
+MoFEM::TsCtx *ts_ctx;
 
 MoFEMErrorCode LevelSet::solveAdvection() {
   MoFEMFunctionBegin;
@@ -1795,9 +1865,6 @@ MoFEMErrorCode LevelSet::solveAdvection() {
   remove_mask.flip(); // DOFs which are not on bit_domain_ele should be removed
   CHKERR prb_mng->removeDofsOnEntities("ADVECTION", "L", BitRefLevel().set(),
                                        remove_mask);
-
-  auto D = smartCreateDMVector(sub_dm);
-  CHKERR DMoFEMMeshToLocalVector(sub_dm, D, INSERT_VALUES, SCATTER_FORWARD);
 
   auto add_post_proc_fe = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
@@ -1872,44 +1939,111 @@ MoFEMErrorCode LevelSet::solveAdvection() {
   };
 
   auto ts = pip->createTSIM(sub_dm);
-  CHKERR TSSetSolution(ts, D);
-  auto monitor_pt = set_time_monitor(sub_dm, ts);
-  CHKERR TSSetSolution(ts, D);
-  CHKERR TSSetFromOptions(ts);
-  CHKERR TSSetUp(ts);
 
+  auto set_solution = [&](auto ts) {
+    MoFEMFunctionBegin;
+    auto D = smartCreateDMVector(sub_dm);
+    CHKERR DMoFEMMeshToLocalVector(sub_dm, D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR TSSetSolution(ts, D);
+    MoFEMFunctionReturn(0);
+  };
+  CHKERR set_solution(ts);
+
+  auto monitor_pt = set_time_monitor(sub_dm, ts);
+  CHKERR TSSetFromOptions(ts);
+
+  auto B = smartCreateDMMatrix(sub_dm);
+  CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, ts_ctx);
   level_set_raw_ptr = this;
+
+  CHKERR TSSetUp(ts);
 
   auto ts_pre_step = [](TS ts) {
     auto &m_field = level_set_raw_ptr->mField;
     auto simple = m_field.getInterface<Simple>();
+    auto bit_mng = m_field.getInterface<BitRefManager>();
     MoFEMFunctionBegin;
+
     auto [error, th_error] = level_set_raw_ptr->evaluateError();
     MOFEM_LOG("LevelSet", Sev::inform) << "Error indicator " << error;
-#ifndef NDEBUG
-    auto fe_meshset =
-        m_field.get_finite_element_meshset(simple->getDomainFEName());
-    std::vector<Tag> tags{th_error};
-    CHKERR m_field.get_moab().write_file("error.h5m", "MOAB",
-                                         "PARALLEL=WRITE_PART", &fe_meshset, 1,
-                                         &*tags.begin(), tags.size());
-#endif
+
+    auto get_norm = [&](auto x) {
+      double nrm;
+      CHKERR VecNorm(x, NORM_2, &nrm);
+      return nrm;
+    };
+
+    auto set_solution = [&](auto ts) {
+      MoFEMFunctionBegin;
+      DM dm;
+      CHKERR TSGetDM(ts, &dm);
+      auto prb_ptr = getProblemPtr(dm);
+
+      auto x = smartCreateDMVector(dm);
+      CHKERR DMoFEMMeshToLocalVector(dm, x, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateBegin(x, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(x, INSERT_VALUES, SCATTER_FORWARD);
+
+      MOFEM_LOG("LevelSet", Sev::inform)
+          << "Problem " << prb_ptr->getName() << " solution vector norm "
+          << get_norm(x);
+      CHKERR TSSetSolution(ts, x);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto refine_and_project = [&](auto ts) {
+      MoFEMFunctionBegin;
+
+      CHKERR level_set_raw_ptr->refineMesh(WrapperClassErrorProjection());
+      simple->getBitRefLevel() = BitRefLevel().set(skeleton_bit) |
+                                 BitRefLevel().set(aggregate_bit) |
+                                 BitRefLevel().set(aggregate_projection_bit);
+
+      simple->reSetUp(true);
+      DM dm;
+      CHKERR TSGetDM(ts, &dm);
+      CHKERR DMSubDMSetUp_MoFEM(dm);
+
+      BitRefLevel remove_mask = BitRefLevel().set(current_bit);
+      remove_mask
+          .flip(); // DOFs which are not on bit_domain_ele should be removed
+      CHKERR level_set_raw_ptr->mField.getInterface<ProblemsManager>()
+          ->removeDofsOnEntities("ADVECTION", "L", BitRefLevel().set(),
+                                 remove_mask);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto ts_reset_theta = [&](auto ts) {
+      MoFEMFunctionBegin;
+      DM dm;
+      CHKERR TSGetDM(ts, &dm);
+
+      CHKERR TSReset(ts);
+      CHKERR TSSetUp(ts);
+
+      CHKERR level_set_raw_ptr->dgProjection(projection_bit);
+      CHKERR set_solution(ts);
+
+      auto B = smartCreateDMMatrix(dm);
+      CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, ts_ctx);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR refine_and_project(ts);
+    CHKERR ts_reset_theta(ts);
+
     MoFEMFunctionReturn(0);
   };
 
-  auto ts_post_step = [](TS ts) {
-    MoFEMFunctionBegin;
-    MoFEMFunctionReturn(0);
-  };
+  auto ts_post_step = [](TS ts) { return 0; };
 
   CHKERR TSSetPreStep(ts, ts_pre_step);
   CHKERR TSSetPostStep(ts, ts_post_step);
 
   CHKERR TSSolve(ts, NULL);
-
-  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR DMoFEMMeshToLocalVector(sub_dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
   MoFEMFunctionReturn(0);
 }
@@ -1997,6 +2131,7 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
 
   // refine elements, and set bit ref level
   auto refine_mesh = [&](auto l, auto &&fe_to_refine) {
+    Skinner skin(&mField.get_moab());
     MoFEMFunctionBegin;
 
     // get entities in "l-1" level
@@ -2007,8 +2142,6 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
     fe_to_refine = intersect(level_ents, fe_to_refine);
     // select entities not to refine
     level_ents = subtract(level_ents, fe_to_refine);
-    // CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
-    //     level_ents);
 
     // for entities to refine get children, i.e. redlined entities
     Range fe_to_refine_children;
@@ -2017,6 +2150,43 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
     fe_to_refine_children =
         fe_to_refine_children.subset_by_dimension(SPACE_DIM);
     level_ents.merge(fe_to_refine_children);
+
+    auto fix_neighbour_level = [&](auto ll) {
+      MoFEMFunctionBegin;
+      auto level_ll = level_ents;
+      CHKERR bit_mng->filterEntitiesByRefLevel(set_bit(ll), BitRefLevel().set(),
+                                               level_ll);
+      Range skin_edges;
+      CHKERR skin.find_skin(0, level_ll, false, skin_edges);
+      Range skin_parents;
+      for (auto lll = 0; lll <= ll; ++lll) {
+        CHKERR bit_mng->updateRangeByParent(skin_edges, skin_parents);
+        skin_edges = skin_parents;
+      }
+      BitRefLevel bad_bit;
+      for (auto lll = 0; lll <= ll - 2; ++lll) {
+        bad_bit[lll] = true;
+      }
+      CHKERR bit_mng->filterEntitiesByRefLevel(bad_bit, BitRefLevel().set(),
+                                               skin_edges);
+      Range skin_adj_ents;
+      CHKERR mField.get_moab().get_adjacencies(skin_parents, SPACE_DIM, false,
+                                               skin_adj_ents,
+                                               moab::Interface::UNION);
+      CHKERR bit_mng->filterEntitiesByRefLevel(bad_bit, BitRefLevel().set(),
+                                               skin_adj_ents);
+      skin_adj_ents = intersect(skin_adj_ents, level_ents);
+      if (!skin_adj_ents.empty()) {
+        level_ents = subtract(level_ents, skin_adj_ents);
+        Range skin_adj_ents_children;
+        bit_mng->updateRangeByChildren(skin_adj_ents, skin_adj_ents_children);
+        level_ents.merge(skin_adj_ents_children);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR fix_neighbour_level(l);
+
     CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
         level_ents);
 
@@ -2092,18 +2262,6 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
     MoFEMFunctionReturn(0);
   };
 
-  auto set_aggregate_bit = [&](auto l) {
-    MoFEMFunctionBegin;
-    Range level;
-    CHKERR bit_mng->getEntitiesByRefLevel(set_bit(start_bit + l),
-                                          BitRefLevel().set(), level);
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(level);
-    CHKERR bit_mng->setNthBitRefLevel(current_bit, false);
-    CHKERR bit_mng->setNthBitRefLevel(level, current_bit, true);
-    CHKERR bit_mng->setNthBitRefLevel(level, aggregate_bit, true);
-    MoFEMFunctionReturn(0);
-  };
-
   // Reset bit sand set old current and aggregate bits as projection bits
   Range level0_current;
   CHKERR bit_mng->getEntitiesByRefLevel(BitRefLevel().set(current_bit),
@@ -2129,12 +2287,7 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
   CHKERR bit_mng->setNthBitRefLevel(level0, start_bit, true);
   CHKERR bit_mng->setNthBitRefLevel(level0, current_bit, true);
   CHKERR bit_mng->setNthBitRefLevel(level0, aggregate_bit, true);
-
-  Range skeleton = level0.subset_by_dimension(SPACE_DIM - 1);
-  CHKERR mField.get_moab().get_adjacencies(skeleton, SPACE_DIM, false, skeleton,
-                                           moab::Interface::UNION);
-  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(skeleton);
-  CHKERR bit_mng->setNthBitRefLevel(skeleton, skeleton_bit, true);
+  CHKERR bit_mng->setNthBitRefLevel(level0, skeleton_bit, true);
 
   CHKERR wp.setBits(*this, 0);
   CHKERR wp.runCalcs(*this, 0);
@@ -2143,7 +2296,7 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
     CHKERR refine_mesh(l + 1, get_refined_elements_meshset(
                                   set_bit(start_bit + l), BitRefLevel().set()));
     CHKERR set_skelton_bit(l + 1);
-    CHKERR set_aggregate_bit(l + 1);
+    CHKERR wp.setAggregateBit(*this, l + 1);
     CHKERR wp.setBits(*this, l + 1);
     CHKERR wp.runCalcs(*this, l + 1);
   }
@@ -2151,7 +2304,7 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode LevelSet::dgProjection() {
+MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
   MoFEMFunctionBegin;
 
   // get operators tester
@@ -2176,21 +2329,6 @@ MoFEMErrorCode LevelSet::dgProjection() {
   CHKERR DMMoFEMAddSubFieldRow(sub_dm, "L");
   CHKERR DMSetUp(sub_dm);
 
-  BitRefLevel remove_mask = BitRefLevel().set(current_bit);
-  remove_mask.flip(); // DOFs which are not on bit_domain_ele should be removed
-  CHKERR prb_mng->removeDofsOnEntities(
-      "DG_PROJECTION", "L", BitRefLevel().set(), remove_mask, nullptr, 0,
-      MAX_DOFS_ON_ENTITY, 0, 100, NOISY, true);
-
-  auto test_mesh_bit = [&](FEMethod *fe_ptr) {
-    return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
-        current_bit);
-  };
-  auto test_prj_bit = [&](FEMethod *fe_ptr) {
-    return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
-        projection_bit);
-  };
-
   Range current_ents;
   CHKERR bit_mng->getEntitiesByDimAndRefLevel(BitRefLevel().set(current_bit),
                                               BitRefLevel().set(), SPACE_DIM,
@@ -2204,6 +2342,14 @@ MoFEMErrorCode LevelSet::dgProjection() {
   }
   current_ents = subtract(current_ents, prj_ents);
 
+  auto test_mesh_bit = [&](FEMethod *fe_ptr) {
+    return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
+        current_bit);
+  };
+  auto test_prj_bit = [&](FEMethod *fe_ptr) {
+    return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel().test(
+        projection_bit);
+  };
   auto test_current_bit = [&](FEMethod *fe_ptr) {
     return current_ents.find(fe_ptr->getFEEntityHandle()) != current_ents.end();
   };
@@ -2211,6 +2357,12 @@ MoFEMErrorCode LevelSet::dgProjection() {
   lhs_fe->exeTestHook = test_mesh_bit;
   rhs_fe_prj->exeTestHook = test_prj_bit;
   rhs_fe_current->exeTestHook = test_current_bit;
+
+  BitRefLevel remove_mask = BitRefLevel().set(current_bit);
+  remove_mask.flip(); // DOFs which are not on bit_domain_ele should be removed
+  CHKERR prb_mng->removeDofsOnEntities(
+      "DG_PROJECTION", "L", BitRefLevel().set(), remove_mask, nullptr, 0,
+      MAX_DOFS_ON_ENTITY, 0, 100, NOISY, true);
 
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       lhs_fe->getOpPtrVector(), {potential_velocity_space, L2});
