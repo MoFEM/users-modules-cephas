@@ -38,7 +38,7 @@ constexpr FieldSpace potential_velocity_space = SPACE_DIM == 2 ? H1 : HCURL;
 constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
 
 constexpr bool debug = false;
-constexpr int nb_levels = 2;
+constexpr int nb_levels = 3;
 
 constexpr int start_bit = nb_levels + 1;
 
@@ -223,6 +223,10 @@ private:
   };
 
   struct WrapperClassInitalSolution : public WrapperClass {
+
+    WrapperClassInitalSolution(boost::shared_ptr<double> max_ptr)
+        : WrapperClass(), maxPtr(max_ptr) {}
+
     MoFEMErrorCode setBits(LevelSet &level_set, int l) {
       MoFEMFunctionBegin;
       auto simple = level_set.mField.getInterface<Simple>();
@@ -254,13 +258,22 @@ private:
       MoFEMFunctionReturn(0);
     }
 
-    double getThreshold(const double max) { return 0.125 * max; }
+    double getThreshold(const double max) {
+      *maxPtr = std::max(*maxPtr, max);
+      return 0.05 * (*maxPtr);
+    }
+
+    private:
+      boost::shared_ptr<double> maxPtr;
   };
 
   struct WrapperClassErrorProjection : public WrapperClass {
-    MoFEMErrorCode setBits(LevelSet &level_set, int l) { return 0; };
-    MoFEMErrorCode runCalcs(LevelSet &level_set, int l) { return 0; }
-    MoFEMErrorCode setAggregateBit(LevelSet &level_set, int l) {
+      WrapperClassErrorProjection(boost::shared_ptr<double> max_ptr)
+          : maxPtr(max_ptr) {}
+
+      MoFEMErrorCode setBits(LevelSet &level_set, int l) { return 0; };
+      MoFEMErrorCode runCalcs(LevelSet &level_set, int l) { return 0; }
+      MoFEMErrorCode setAggregateBit(LevelSet &level_set, int l) {
       auto bit_mng = level_set.mField.getInterface<BitRefManager>();
       auto set_bit = [](auto l) { return BitRefLevel().set(l); };
       MoFEMFunctionBegin;
@@ -274,7 +287,11 @@ private:
       CHKERR bit_mng->setNthBitRefLevel(level, aggregate_bit, true);
       MoFEMFunctionReturn(0);
     }
-    double getThreshold(const double max) { return 0.125 * max; }
+    double getThreshold(const double max) { return 0.05 * (*maxPtr); }
+
+  private:
+    boost::shared_ptr<double> maxPtr;
+
   };
 
   MoFEMErrorCode refineMesh(WrapperClass &&wp);
@@ -304,6 +321,10 @@ private:
       FormsIntegrators<BoundaryEleOp>::Assembly<A>::OpBase;
 
   enum ElementSide { LEFT_SIDE = 0, RIGHT_SIDE = 1 };
+
+private:
+  boost::shared_ptr<double> maxPtr;
+
 };
 
 template <>
@@ -330,7 +351,9 @@ MoFEMErrorCode LevelSet::runProblem() {
   }
 
   CHKERR initialiseFieldVelocity();
-  CHKERR refineMesh(WrapperClassInitalSolution());
+
+  maxPtr = boost::make_shared<double>(0);
+  CHKERR refineMesh(WrapperClassInitalSolution(maxPtr));
 
   auto simple = mField.getInterface<Simple>();
   simple->getBitRefLevel() = BitRefLevel().set(skeleton_bit) |
@@ -1995,7 +2018,8 @@ MoFEMErrorCode LevelSet::solveAdvection() {
     auto refine_and_project = [&](auto ts) {
       MoFEMFunctionBegin;
 
-      CHKERR level_set_raw_ptr->refineMesh(WrapperClassErrorProjection());
+      CHKERR level_set_raw_ptr->refineMesh(
+          WrapperClassErrorProjection(level_set_raw_ptr->maxPtr));
       simple->getBitRefLevel() = BitRefLevel().set(skeleton_bit) |
                                  BitRefLevel().set(aggregate_bit) |
                                  BitRefLevel().set(aggregate_projection_bit);
