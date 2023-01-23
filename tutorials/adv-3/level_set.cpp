@@ -219,7 +219,7 @@ private:
     virtual MoFEMErrorCode setBits(LevelSet &level_set, int l) = 0;
     virtual MoFEMErrorCode runCalcs(LevelSet &level_set, int l) = 0;
     virtual MoFEMErrorCode setAggregateBit(LevelSet &level_set, int l) = 0;
-    virtual double getThreshold() = 0;
+    virtual double getThreshold(const double max) = 0;
   };
 
   struct WrapperClassInitalSolution : public WrapperClass {
@@ -254,7 +254,7 @@ private:
       MoFEMFunctionReturn(0);
     }
 
-    double getThreshold() { return 1. / 2.; }
+    double getThreshold(const double max) { return 0.125 * max; }
   };
 
   struct WrapperClassErrorProjection : public WrapperClass {
@@ -274,7 +274,7 @@ private:
       CHKERR bit_mng->setNthBitRefLevel(level, aggregate_bit, true);
       MoFEMFunctionReturn(0);
     }
-    double getThreshold() { return 1. / 2.; }
+    double getThreshold(const double max) { return 0.125 * max; }
   };
 
   MoFEMErrorCode refineMesh(WrapperClass &&wp);
@@ -2084,7 +2084,7 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
     double max;
     MPI_Allreduce(&*it, &max, 1, MPI_DOUBLE, MPI_MAX, mField.get_comm());
     MOFEM_LOG("LevelSet", Sev::inform) << "Max error: " << max;
-    auto threshold = wp.getThreshold() * max;
+    auto threshold = wp.getThreshold(max);
 
     std::vector<EntityHandle> fe_to_refine;
     fe_to_refine.reserve(fe_ents.size());
