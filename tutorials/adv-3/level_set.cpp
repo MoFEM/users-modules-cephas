@@ -1698,7 +1698,7 @@ MoFEMErrorCode LevelSet::initialiseFieldLevelSet(
                                       &*tags.begin(), tags.size());
 #endif
 
-  auto post_proc = [&](auto dm, auto out_name) {
+  auto post_proc = [&](auto dm, auto out_name, auto th_error) {
     MoFEMFunctionBegin;
     auto post_proc_fe =
         boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
@@ -1737,7 +1737,7 @@ MoFEMErrorCode LevelSet::initialiseFieldLevelSet(
   };
 
   if constexpr (debug)
-    CHKERR post_proc(sub_dm, "initial_level_set.h5m");
+    CHKERR post_proc(sub_dm, "initial_level_set.h5m", th_error);
 
   swap_fe();
 
@@ -2500,7 +2500,7 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
   auto [error, th_error] = evaluateError();
   MOFEM_LOG("LevelSet", Sev::inform) << "Error indicator " << error;
 
-  auto post_proc = [&](auto dm, auto out_name) {
+  auto post_proc = [&](auto dm, auto out_name, auto th_error) {
     MoFEMFunctionBegin;
     auto post_proc_fe =
         boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
@@ -2539,7 +2539,7 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
   };
 
   if constexpr (debug)
-    CHKERR post_proc(sub_dm, "dg_projection.h5m");
+    CHKERR post_proc(sub_dm, "dg_projection.h5m", th_error);
 
   MoFEMFunctionReturn(0);
 }
