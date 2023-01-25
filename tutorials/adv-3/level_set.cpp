@@ -214,6 +214,9 @@ private:
    */
   MoFEMErrorCode solveAdvection();
 
+  /**
+   * @brief Wrapper executing stages while mesh refinement
+   */
   struct WrapperClass {
     WrapperClass() = default;
     virtual MoFEMErrorCode setBits(LevelSet &level_set, int l) = 0;
@@ -222,6 +225,10 @@ private:
     virtual double getThreshold(const double max) = 0;
   };
 
+  /**
+   * @brief Used to execute inital mesh approximation while mesh refinment
+   * 
+   */
   struct WrapperClassInitalSolution : public WrapperClass {
 
     WrapperClassInitalSolution(boost::shared_ptr<double> max_ptr)
@@ -267,6 +274,10 @@ private:
       boost::shared_ptr<double> maxPtr;
   };
 
+  /**
+   * @brief Use peculated errors on all levels while mesh projection
+   * 
+   */
   struct WrapperClassErrorProjection : public WrapperClass {
       WrapperClassErrorProjection(boost::shared_ptr<double> max_ptr)
           : maxPtr(max_ptr) {}
