@@ -34,8 +34,10 @@ int main(int argc, char *argv[]) {
         << "In " << mesh_file_name << " out " << out_file_name;
 
     CHKERR moab.load_file(mesh_file_name, 0, option);
-		CHKERR BitRefManager::fixTagSize(moab);
-    CHKERR moab.write_file(out_file_name);
+    bool changes = false;
+    CHKERR BitRefManager::fixTagSize(moab, &changes);
+    if (changes)
+      CHKERR moab.write_file(out_file_name);
   }
 
   CATCH_ERRORS;
