@@ -1,4 +1,12 @@
-#include <stdlib.h>
+/**
+ * @file poisson_3d_homogeneous.cpp
+ * @example poisson_3d_homogeneous.cpp
+ * @brief Poisson problem 3D 
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
+
 #include <BasicFiniteElements.hpp>
 #include <poisson_3d_homogeneous.hpp>
 
@@ -68,24 +76,13 @@ MoFEMErrorCode Poisson3DHomogeneous::setupProblem() {
 MoFEMErrorCode Poisson3DHomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
-  // Get boundary edges marked in block named "BOUNDARY_CONDITION"
-  Range boundary_entities;
-  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    std::string entity_name = it->getName();
-    if (entity_name.compare(0, 18, "BOUNDARY_CONDITION") == 0) {
-      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                 boundary_entities, true);
-    }
-  }
-  // Add vertices to boundary entities
-  Range boundary_vertices;
-  CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                            boundary_vertices, true);
-  boundary_entities.merge(boundary_vertices);
+  auto bc_mng = mField.getInterface<BcManager>();
 
-  // Remove DOFs as homogeneous boundary condition is used
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simpleInterface->getProblemName(), domainField, boundary_entities);
+  CHKERR bc_mng->removeBlockDOFsOnEntities<BcScalarMeshsetType<BLOCKSET>>(
+      simpleInterface->getProblemName(), "BOUNDARY_CONDITION", domainField,
+      true);
+  CHKERR bc_mng->removeBlockDOFsOnEntities<TemperatureCubitBcData>(
+      simpleInterface->getProblemName(), domainField, true, false, true);
 
   MoFEMFunctionReturn(0);
 }
@@ -101,6 +98,24 @@ MoFEMErrorCode Poisson3DHomogeneous::assembleSystem() {
   }
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
+    auto get_bc_hook = [&]() {
+      EssentialPreProc<TemperatureCubitBcData> hook(
+          mField, pipeline_mng->getDomainRhsFE(), {});
+      return hook;
+    };
+    pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook();
+
+    using DomainEle = PipelineManager::VolEle;
+    using DomainEleOp = DomainEle::UserDataOperator;
+    using OpInternal = FormsIntegrators<DomainEleOp>::Assembly<
+        PETSC>::LinearForm<GAUSS>::OpBaseTimesScalar<1>;
+
+    auto u_vals_ptr = boost::make_shared<VectorDouble>();
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateScalarFieldValues(domainField, u_vals_ptr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpInternal(domainField, u_vals_ptr,
+                       [](double, double, double) constexpr { return -1; }));
 
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsVectorF(domainField));
@@ -190,8 +205,8 @@ MoFEMErrorCode Poisson3DHomogeneous::runProgram() {
   CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR boundaryCondition();
-  CHKERR assembleSystem();
   CHKERR setIntegrationRules();
+  CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
 
