@@ -495,7 +495,7 @@ MoFEMErrorCode LevelSet::readMesh() {
     Range level0;
     CHKERR bit_mng->getEntitiesByRefLevel(BitRefLevel().set(0),
                                           BitRefLevel().set(), level0);
-    CHKERR bit_mng->setNthBitRefLevel(level0, start_bit, true);
+                                          
     CHKERR bit_mng->setNthBitRefLevel(level0, current_bit, true);
     CHKERR bit_mng->setNthBitRefLevel(level0, aggregate_bit, true);
     CHKERR bit_mng->setNthBitRefLevel(level0, skeleton_bit, true);
