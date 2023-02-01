@@ -78,10 +78,11 @@ MoFEMErrorCode Poisson3DHomogeneous::boundaryCondition() {
 
   auto bc_mng = mField.getInterface<BcManager>();
 
-  // Remove BCs from blockset name "BOUNDARY_CONDITION";
+  // Remove BCs from blockset name "BOUNDARY_CONDITION" or SETU, note that you
+  // can use regular expression to put list of blocksets;
   CHKERR bc_mng->removeBlockDOFsOnEntities<BcScalarMeshsetType<BLOCKSET>>(
-      simpleInterface->getProblemName(), "BOUNDARY_CONDITION", domainField,
-      true);
+      simpleInterface->getProblemName(), "(BOUNDARY_CONDITION|SETU)",
+      domainField, true);
 
   // Remove BCs from cubit TEMPERATURESET, i.e. set by cubit, and meshsets named
   // FIX_SCALAR (default name to name boundary conditions for scalar fields)
