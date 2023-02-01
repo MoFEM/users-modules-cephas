@@ -62,7 +62,7 @@ MoFEMErrorCode Poisson3DHomogeneous::setupProblem() {
   MoFEMFunctionBegin;
 
   CHKERR simpleInterface->addDomainField(domainField, H1,
-                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+                                         AINSWORTH_LEGENDRE_BASE, 1);
 
   int oRder = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
@@ -93,6 +93,7 @@ MoFEMErrorCode Poisson3DHomogeneous::assembleSystem() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
+    CHKERR AddHOOps<3, 3, 3>::add(pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField));
   }
@@ -105,16 +106,19 @@ MoFEMErrorCode Poisson3DHomogeneous::assembleSystem() {
     };
     pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook();
 
+    constexpr int space_dim = 3;
     using DomainEle = PipelineManager::VolEle;
     using DomainEleOp = DomainEle::UserDataOperator;
     using OpInternal = FormsIntegrators<DomainEleOp>::Assembly<
-        PETSC>::LinearForm<GAUSS>::OpBaseTimesScalar<1>;
+        PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, space_dim>;
 
-    auto u_vals_ptr = boost::make_shared<VectorDouble>();
+    auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
+    CHKERR AddHOOps<3, 3, 3>::add(pipeline_mng->getOpDomainRhsPipeline(), {H1});
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpCalculateScalarFieldValues(domainField, u_vals_ptr));
+        new OpCalculateScalarFieldGradient<3>(domainField,
+                                                      grad_u_vals_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpInternal(domainField, u_vals_ptr,
+        new OpInternal(domainField, grad_u_vals_ptr,
                        [](double, double, double) constexpr { return -1; }));
 
     pipeline_mng->getOpDomainRhsPipeline().push_back(
