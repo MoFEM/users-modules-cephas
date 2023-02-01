@@ -84,24 +84,12 @@ MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
 MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
-  // Get boundary edges marked in block named "BOUNDARY_CONDITION"
-  Range boundary_entities;
-  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    std::string entity_name = it->getName();
-    if (entity_name.compare(0, 18, "BOUNDARY_CONDITION") == 0) {
-      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                 boundary_entities, true);
-    }
-  }
-  // Add vertices to boundary entities
-  Range boundary_vertices;
-  CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                            boundary_vertices, true);
-  boundary_entities.merge(boundary_vertices);
+  auto bc_mng = mField.getInterface<BcManager>();
 
-  // Remove DOFs as homogeneous boundary condition is used
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simpleInterface->getProblemName(), field_name, boundary_entities);
+  // Remove BCs from blockset name "BOUNDARY_CONDITION";
+  CHKERR bc_mng->removeBlockDOFsOnEntities<BcScalarMeshsetType<BLOCKSET>>(
+      simpleInterface->getProblemName(), "BOUNDARY_CONDITION",
+      std::string(field_name), true);
 
   MoFEMFunctionReturn(0);
 }
@@ -113,29 +101,46 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  constexpr int space_dim = 2;
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
-
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateHOJac<2>(jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetHOWeightsOnFace());
-
-
+    CHKERR AddHOOps<space_dim, space_dim, space_dim>::add(
+        pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(field_name, field_name));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS
 
+    auto set_values_to_bc_dofs = [&](auto &fe) {
+      auto get_bc_hook = [&]() {
+        EssentialPreProc<TemperatureCubitBcData> hook(mField, fe, {});
+        return hook;
+      };
+      fe->preProcessHook = get_bc_hook();
+    };
 
+    auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
+      using DomainEle =
+          PipelineManager::ElementsAndOpsByDim<space_dim>::DomainEle;
+      using DomainEleOp = DomainEle::UserDataOperator;
+      using OpInternal = FormsIntegrators<DomainEleOp>::Assembly<
+          PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, space_dim>;
+
+      auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateScalarFieldGradient<space_dim>(field_name,
+                                                        grad_u_vals_ptr));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpInternal(field_name, grad_u_vals_ptr,
+                         [](double, double, double) constexpr { return -1; }));
+    };
+
+    CHKERR AddHOOps<space_dim, space_dim, space_dim>::add(
+        pipeline_mng->getOpDomainRhsPipeline(), {H1});
+    set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
+    calculate_residual_from_set_values_on_bc(
+        pipeline_mng->getOpDomainRhsPipeline());
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsVectorF(field_name));
   }

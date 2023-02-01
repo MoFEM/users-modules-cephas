@@ -78,9 +78,13 @@ MoFEMErrorCode Poisson3DHomogeneous::boundaryCondition() {
 
   auto bc_mng = mField.getInterface<BcManager>();
 
+  // Remove BCs from blockset name "BOUNDARY_CONDITION";
   CHKERR bc_mng->removeBlockDOFsOnEntities<BcScalarMeshsetType<BLOCKSET>>(
       simpleInterface->getProblemName(), "BOUNDARY_CONDITION", domainField,
       true);
+
+  // Remove BCs from cubit TEMPERATURESET, i.e. set by cubit, and meshsets named
+  // FIX_SCALAR (default name to name boundary conditions for scalar fields)
   CHKERR bc_mng->removeBlockDOFsOnEntities<TemperatureCubitBcData>(
       simpleInterface->getProblemName(), domainField, true, false, true);
 
@@ -99,28 +103,38 @@ MoFEMErrorCode Poisson3DHomogeneous::assembleSystem() {
   }
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
-    auto get_bc_hook = [&]() {
-      EssentialPreProc<TemperatureCubitBcData> hook(
-          mField, pipeline_mng->getDomainRhsFE(), {});
-      return hook;
-    };
-    pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook();
 
     constexpr int space_dim = 3;
-    using DomainEle = PipelineManager::VolEle;
-    using DomainEleOp = DomainEle::UserDataOperator;
-    using OpInternal = FormsIntegrators<DomainEleOp>::Assembly<
-        PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, space_dim>;
 
-    auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
-    CHKERR AddHOOps<3, 3, 3>::add(pipeline_mng->getOpDomainRhsPipeline(), {H1});
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpCalculateScalarFieldGradient<3>(domainField,
-                                                      grad_u_vals_ptr));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpInternal(domainField, grad_u_vals_ptr,
-                       [](double, double, double) constexpr { return -1; }));
+    auto set_values_to_bc_dofs = [&](auto &fe) {
+      auto get_bc_hook = [&]() {
+        EssentialPreProc<TemperatureCubitBcData> hook(mField, fe, {});
+        return hook;
+      };
+      fe->preProcessHook = get_bc_hook();
+    };
 
+    auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
+      using DomainEle =
+          PipelineManager::ElementsAndOpsByDim<space_dim>::DomainEle;
+      using DomainEleOp = DomainEle::UserDataOperator;
+      using OpInternal = FormsIntegrators<DomainEleOp>::Assembly<
+          PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, space_dim>;
+
+      auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateScalarFieldGradient<space_dim>(domainField,
+                                                        grad_u_vals_ptr));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpInternal(domainField, grad_u_vals_ptr,
+                         [](double, double, double) constexpr { return -1; }));
+    };
+
+    CHKERR AddHOOps<space_dim, space_dim, space_dim>::add(
+        pipeline_mng->getOpDomainRhsPipeline(), {H1});
+    set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
+    calculate_residual_from_set_values_on_bc(
+        pipeline_mng->getOpDomainRhsPipeline());
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsVectorF(domainField));
   }
