@@ -1,10 +1,10 @@
 /**
  * @file poisson_3d_homogeneous.cpp
  * @example poisson_3d_homogeneous.cpp
- * @brief Poisson problem 3D 
- * 
+ * @brief Poisson problem 3D
+ *
  * @copyright Copyright (c) 2023
- * 
+ *
  */
 
 #include <BasicFiniteElements.hpp>
@@ -42,7 +42,6 @@ private:
   // Field name and approximation order
   std::string domainField;
   int oRder;
-
 };
 
 Poisson3DHomogeneous::Poisson3DHomogeneous(MoFEM::Interface &m_field)
