@@ -1,3 +1,13 @@
+/**
+ * @file poisson_3d_homogeneous.hpp
+ * @example poisson_3d_homogeneous.hpp
+ * @brief Operator for 3D poisson problem example
+ * @date 2023-01-31
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
+
 #ifndef __POISSON3DHOMOGENEOUS_HPP__
 #define __POISSON3DHOMOGENEOUS_HPP__
 

@@ -148,6 +148,18 @@ target_link_libraries(get_skin
 )
 install(TARGETS get_skin DESTINATION bin)
 
+add_executable(fix_file ${CMAKE_CURRENT_SOURCE_DIR}/fix_file.cpp)
+target_link_libraries(fix_file
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS fix_file DESTINATION bin)
+
 cm_export_file("convert.py" export_tools)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/convert.py
   DESTINATION bin

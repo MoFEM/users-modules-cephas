@@ -431,14 +431,19 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  auto get_bc_hook = [&]() {
+  auto get_bc_hook_rhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
         mField, pipeline_mng->getDomainRhsFE(), {time_scale});
     return hook;
   };
+  auto get_bc_hook_lhs = [&]() {
+    EssentialPreProc<DisplacementCubitBcData> hook(
+        mField, pipeline_mng->getDomainLhsFE(), {time_scale});
+    return hook;
+  };
 
-  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook();
-  pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook();
+  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
+  pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
 
   CHKERR add_domain_ops(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_domain_rhs_ops(pipeline_mng->getOpDomainRhsPipeline());

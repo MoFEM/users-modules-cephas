@@ -554,15 +554,22 @@ MoFEMErrorCode Example::OPs() {
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
 
   // Enforce non-homegonus boundary conditions
-  auto get_bc_hook = [&]() {
+  auto get_bc_hook_rhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
         mField, pipeline_mng->getDomainRhsFE(),
         {boost::make_shared<TimeScale>()});
     return hook;
   };
 
-  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook();
-  pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook();
+  auto get_bc_hook_lhs = [&]() {
+    EssentialPreProc<DisplacementCubitBcData> hook(
+        mField, pipeline_mng->getDomainLhsFE(),
+        {boost::make_shared<TimeScale>()});
+    return hook;
+  };
+
+  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
+  pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
 
   MoFEMFunctionReturn(0);
 }
