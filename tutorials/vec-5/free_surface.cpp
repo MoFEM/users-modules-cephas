@@ -402,7 +402,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
       CHKERR DMCreate(mField.get_comm(), &subdm);
       CHKERR DMSetType(subdm, "DMMOFEM");
       CHKERR DMMoFEMCreateSubDM(subdm, dm, "SUB");
-      CHKERR DMMoFEMAddElement(subdm, simple->getDomainFEName().c_str());
+      CHKERR DMMoFEMAddElement(subdm, simple->getDomainFEName());
       CHKERR DMMoFEMSetSquareProblem(subdm, PETSC_TRUE);
       CHKERR DMMoFEMSetDestroyProblem(subdm, PETSC_TRUE);
       CHKERR DMMoFEMAddSubFieldRow(subdm, "H");

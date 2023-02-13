@@ -10,15 +10,10 @@
  * implement data operator from scratch.
  */
 
-static const int nb_ref_levels =
-    1; ///< if larger than zero set n-levels of random mesh refinements with
-       ///< hanging nodes
-
 constexpr auto field_name = "U";
 
 #include <BasicFiniteElements.hpp>
 #include <poisson_2d_homogeneous.hpp>
-#include <random_mesh_refine.hpp>
 
 using namespace MoFEM;
 using namespace Poisson2DHomogeneousOperators;
@@ -79,16 +74,7 @@ MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder(field_name, oRder);
 
-  // Refine random elements and create hanging nodes. This is only need if one
-  // like to refine mesh.
-  if (nb_ref_levels)
-    CHKERR random_mesh_refine(mField);
-
   CHKERR simpleInterface->setUp();
-
-  // Remove hanging nodes
-  if(nb_ref_levels)
-    CHKERR remove_hanging_dofs(mField);
 
   MoFEMFunctionReturn(0);
 }
@@ -98,24 +84,12 @@ MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
 MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
-  // Get boundary edges marked in block named "BOUNDARY_CONDITION"
-  Range boundary_entities;
-  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    std::string entity_name = it->getName();
-    if (entity_name.compare(0, 18, "BOUNDARY_CONDITION") == 0) {
-      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                 boundary_entities, true);
-    }
-  }
-  // Add vertices to boundary entities
-  Range boundary_vertices;
-  CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                            boundary_vertices, true);
-  boundary_entities.merge(boundary_vertices);
+  auto bc_mng = mField.getInterface<BcManager>();
 
-  // Remove DOFs as homogeneous boundary condition is used
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simpleInterface->getProblemName(), field_name, boundary_entities);
+  // Remove BCs from blockset name "BOUNDARY_CONDITION";
+  CHKERR bc_mng->removeBlockDOFsOnEntities<BcScalarMeshsetType<BLOCKSET>>(
+      simpleInterface->getProblemName(), "BOUNDARY_CONDITION",
+      std::string(field_name), true);
 
   MoFEMFunctionReturn(0);
 }
@@ -127,53 +101,46 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  constexpr int space_dim = 2;
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
-
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateHOJac<2>(jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetHOWeightsOnFace());
-
-    if (nb_ref_levels) { // This part is advanced. Can be skipped for not
-                         // refined meshes with
-      // hanging nodes.
-      // Force integration on last refinement level, and add to top elements
-      // DOFs and based from underlying elements.
-      pipeline_mng->getDomainLhsFE()->exeTestHook = test_bit_child;
-      set_parent_dofs(mField, pipeline_mng->getDomainLhsFE(),
-                      OpFaceEle::OPSPACE, QUIET, Sev::noisy);
-      set_parent_dofs(mField, pipeline_mng->getDomainLhsFE(), OpFaceEle::OPROW,
-                      QUIET, Sev::noisy);
-      set_parent_dofs(mField, pipeline_mng->getDomainLhsFE(), OpFaceEle::OPCOL,
-                      QUIET, Sev::noisy);
-    }
-
+    CHKERR AddHOOps<space_dim, space_dim, space_dim>::add(
+        pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(field_name, field_name));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS
 
-    if (nb_ref_levels) { // This part is advanced. Can be skipped for not
-                         // refined meshes with
-      // hanging nodes.
-      // Force integration on last refinement level, and add to top elements
-      // DOFs and based from underlying elements.
-      pipeline_mng->getDomainRhsFE()->exeTestHook = test_bit_child;
-      set_parent_dofs(mField, pipeline_mng->getDomainRhsFE(),
-                      OpFaceEle::OPSPACE, QUIET, Sev::noisy);
-      set_parent_dofs(mField, pipeline_mng->getDomainRhsFE(), OpFaceEle::OPROW,
-                      QUIET, Sev::noisy);
-    }
+    auto set_values_to_bc_dofs = [&](auto &fe) {
+      auto get_bc_hook = [&]() {
+        EssentialPreProc<TemperatureCubitBcData> hook(mField, fe, {});
+        return hook;
+      };
+      fe->preProcessHook = get_bc_hook();
+    };
 
+    auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
+      using DomainEle =
+          PipelineManager::ElementsAndOpsByDim<space_dim>::DomainEle;
+      using DomainEleOp = DomainEle::UserDataOperator;
+      using OpInternal = FormsIntegrators<DomainEleOp>::Assembly<
+          PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, space_dim>;
+
+      auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateScalarFieldGradient<space_dim>(field_name,
+                                                        grad_u_vals_ptr));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpInternal(field_name, grad_u_vals_ptr,
+                         [](double, double, double) constexpr { return -1; }));
+    };
+
+    CHKERR AddHOOps<space_dim, space_dim, space_dim>::add(
+        pipeline_mng->getOpDomainRhsPipeline(), {H1});
+    set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
+    calculate_residual_from_set_values_on_bc(
+        pipeline_mng->getOpDomainRhsPipeline());
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsVectorF(field_name));
   }
@@ -246,14 +213,6 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
-  if (nb_ref_levels) { // This part is advanced. Can be skipped for not refined
-                       // meshes with
-    // hanging nodes.
-    post_proc_fe->exeTestHook = test_bit_child;
-    set_parent_dofs(mField, post_proc_fe, OpFaceEle::OPSPACE, QUIET,
-                    Sev::noisy);
-    set_parent_dofs(mField, post_proc_fe, OpFaceEle::OPROW, QUIET, Sev::noisy);
-  }
 
   auto u_ptr = boost::make_shared<VectorDouble>();
   auto grad_u_ptr = boost::make_shared<MatrixDouble>();

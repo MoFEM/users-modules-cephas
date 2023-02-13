@@ -160,7 +160,7 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-base", list_bases, LASBASETOP,
                               &choice_base_value, &flg);
   if (flg != PETSC_TRUE)
-    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "base not set");
+    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSSIBLE_CASE, "base not set");
   base = AINSWORTH_LEGENDRE_BASE;
   if (choice_base_value == AINSWORTH)
     base = AINSWORTH_LEGENDRE_BASE;
@@ -177,7 +177,7 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-space", list_spaces,
                               LASBASETSPACE, &choice_space_value, &flg);
   if (flg != PETSC_TRUE)
-    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "space not set");
+    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSSIBLE_CASE, "space not set");
   space = H1;
   if (choice_space_value == H1SPACE)
     space = H1;

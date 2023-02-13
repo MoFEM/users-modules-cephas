@@ -184,7 +184,7 @@ MoFEMErrorCode ProjectionMatrixMultOpQ(Mat Q, Vec x, Vec f) {
     PetscBool flg;
     CHKERR VecEqual(x, f, &flg);
     if (flg == PETSC_FALSE)
-      SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "scatter is not working");
+      SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSSIBLE_CASE, "scatter is not working");
   }
   CHKERR MatMult(ctx->C, ctx->X, ctx->Cx);
   CHKERR KSPSolve(ctx->kSP, ctx->Cx, ctx->CCTm1_Cx);
@@ -229,7 +229,7 @@ MoFEMErrorCode ConstrainMatrixMultOpR(Mat R, Vec x, Vec f) {
   ConstrainMatrixCtx *ctx = (ConstrainMatrixCtx *)void_ctx;
   PetscLogEventBegin(ctx->MOFEM_EVENT_projR, 0, 0, 0, 0);
   if (ctx->initQorP)
-    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE,
+    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSSIBLE_CASE,
             "you have to call first initQorP or use Q matrix");
   CHKERR KSPSolve(ctx->kSP, x, ctx->CCTm1_Cx);
   CHKERR MatMult(ctx->CT, ctx->CCTm1_Cx, ctx->CT_CCTm1_Cx);
@@ -251,7 +251,7 @@ MoFEMErrorCode ConstrainMatrixMultOpRT(Mat RT, Vec x, Vec f) {
   ConstrainMatrixCtx *ctx = (ConstrainMatrixCtx *)void_ctx;
   PetscLogEventBegin(ctx->MOFEM_EVENT_projRT, 0, 0, 0, 0);
   if (ctx->initQorP)
-    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE,
+    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSSIBLE_CASE,
             "you have to call first initQorP or use Q matrix");
   CHKERR VecScatterBegin(ctx->sCatter, x, ctx->X, INSERT_VALUES,
                          SCATTER_FORWARD);

@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool(
         "-my_create_lower_dim_ents", "if tru create lower dimension entireties",
         "", create_lower_dim_ents, &create_lower_dim_ents, PETSC_NULL);
-    CHKERR PetscOptionsBool("-block_tags", "obly block and meshsests tags", "",
+    CHKERR PetscOptionsBool("-block_tags", "only block and meshsests tags", "",
                             only_tags, &only_tags, PETSC_NULL);
 
     ierr = PetscOptionsEnd();

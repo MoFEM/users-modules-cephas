@@ -4,8 +4,6 @@
  *
  */
 
-
-
 #include <MoFEM.hpp>
 using namespace MoFEM;
 
@@ -28,7 +26,7 @@ ConvectiveMassElement::MyVolumeFE::MyVolumeFE(MoFEM::Interface &m_field)
   auto create_vec = [&]() {
     constexpr int ghosts[] = {0};
     if (mField.get_comm_rank() == 0) {
-      return createSmartVectorMPI(mField.get_comm(), 1,1);
+      return createSmartVectorMPI(mField.get_comm(), 1, 1);
     } else {
       return createSmartVectorMPI(mField.get_comm(), 0, 1);
     }
@@ -163,8 +161,7 @@ ConvectiveMassElement::OpMassJacobian::OpMassJacobian(
       lInear(commonData.lInear), fieldDisp(false), methodsOp(methods_op) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
-    int row_side, EntityType row_type,
-    EntitiesFieldData::EntData &row_data) {
+    int row_side, EntityType row_type, EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -194,12 +191,12 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
       F.resize(3, 3, false);
     }
 
-    dot_W.clear();
-    H.clear();
-    invH.clear();
-    for (int dd = 0; dd < 3; dd++) {
-      H(dd, dd) = 1;
-      invH(dd, dd) = 1;
+    std::fill(dot_W.begin(), dot_W.end(), 0);
+    std::fill(H.data().begin(), H.data().end(), 0);
+    std::fill(invH.data().begin(), invH.data().end(), 0);
+    for (int ii = 0; ii != 3; ii++) {
+      H(ii, ii) = 1;
+      invH(ii, ii) = 1;
     }
 
     int nb_gauss_pts = row_data.getN().size1();
@@ -292,18 +289,17 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
         t_G(i, j) = t_g(i, k) * t_invH(k, j);
         t_a_res(i) = t_a(i) - t_a0(i) + t_G(i, j) * t_dotW(j);
 
-        //FIXME: there is error somewhere for nonlinear case
-        // test dam example with -is_linear 0
+        // FIXME: there is error somewhere for nonlinear case
+        //  test dam example with -is_linear 0
         if (!lInear) {
 
-          t_F(i,j) = t_h(i,k)*t_invH(k,j);
+          t_F(i, j) = t_h(i, k) * t_invH(k, j);
           t_a_res(i) *= rho0 * detH;
           t_a_res(i) *= determinantTensor3by3(t_F);
 
         } else {
 
           t_a_res(i) *= rho0 * detH;
-
         }
 
         // dependant
@@ -391,9 +387,9 @@ ConvectiveMassElement::OpMassRhs::OpMassRhs(const std::string field_name,
           field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
       dAta(data), commonData(common_data) {}
 
-MoFEMErrorCode ConvectiveMassElement::OpMassRhs::doWork(
-    int row_side, EntityType row_type,
-    EntitiesFieldData::EntData &row_data) {
+MoFEMErrorCode
+ConvectiveMassElement::OpMassRhs::doWork(int row_side, EntityType row_type,
+                                         EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -737,9 +733,9 @@ ConvectiveMassElement::OpEnergy::OpEnergy(const std::string field_name,
       dAta(data), commonData(common_data), V(v, true),
       lInear(commonData.lInear) {}
 
-MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
-    int row_side, EntityType row_type,
-    EntitiesFieldData::EntData &row_data) {
+MoFEMErrorCode
+ConvectiveMassElement::OpEnergy::doWork(int row_side, EntityType row_type,
+                                        EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (row_type != MBVERTEX) {
@@ -798,8 +794,7 @@ ConvectiveMassElement::OpVelocityJacobian::OpVelocityJacobian(
       fieldDisp(false) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpVelocityJacobian::doWork(
-    int row_side, EntityType row_type,
-    EntitiesFieldData::EntData &row_data) {
+    int row_side, EntityType row_type, EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -1016,8 +1011,7 @@ ConvectiveMassElement::OpVelocityRhs::OpVelocityRhs(
       dAta(data), commonData(common_data) {}
 
 MoFEMErrorCode ConvectiveMassElement::OpVelocityRhs::doWork(
-    int row_side, EntityType row_type,
-    EntitiesFieldData::EntData &row_data) {
+    int row_side, EntityType row_type, EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -1248,8 +1242,7 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumJacobian::
 
 MoFEMErrorCode
 ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumJacobian::doWork(
-    int row_side, EntityType row_type,
-    EntitiesFieldData::EntData &row_data) {
+    int row_side, EntityType row_type, EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -1471,8 +1464,7 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumRhs::
 
 MoFEMErrorCode
 ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumRhs::doWork(
-    int row_side, EntityType row_type,
-    EntitiesFieldData::EntData &row_data) {
+    int row_side, EntityType row_type, EntitiesFieldData::EntData &row_data) {
   MoFEMFunctionBeginHot;
 
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
@@ -2442,7 +2434,6 @@ MoFEMErrorCode ConvectiveMassElement::ShellResidualElement::preProcess() {
 
   MoFEMFunctionReturnHot(0);
 }
-
 
 #ifdef __DIRICHLET_HPP__
 

@@ -250,15 +250,16 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
    * \ingroup mofem_fs_post_proc
 
    */
-  MoFEMErrorCode writeFile(const std::string file_name) {
+  MoFEMErrorCode writeFile(const std::string file_name,
+                           const char *file_type = "MOAB",
+                           const char *file_options = "PARALLEL=WRITE_PART") {
     MoFEMFunctionBegin;
     ParallelComm *pcomm_post_proc_mesh =
         ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
     if (pcomm_post_proc_mesh == NULL)
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
               "ParallelComm not allocated");
-    CHKERR postProcMesh.write_file(file_name.c_str(), "MOAB",
-                                   "PARALLEL=WRITE_PART");
+    CHKERR postProcMesh.write_file(file_name.c_str(), file_type, file_options);
     MoFEMFunctionReturn(0);
   }
 };

@@ -774,7 +774,7 @@ SphericalArcLengthControl::calculateInitDlambda(double *dlambda) {
     MOFEM_LOG("WORLD", Sev::error)
         << "s " << arcPtrRaw->s << " " << arcPtrRaw->beta << " "
         << arcPtrRaw->F_lambda2;
-    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE,
+    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSSIBLE_CASE,
             "Increment of lambda is not a number");
   }
   MoFEMFunctionReturn(0);
@@ -792,7 +792,7 @@ MoFEMErrorCode SphericalArcLengthControl::setDlambdaToX(Vec x, double dlambda) {
       MOFEM_LOG("WORLD", Sev::error)
           << "s " << arcPtrRaw->s << " " << arcPtrRaw->beta << " "
           << arcPtrRaw->F_lambda2;
-      SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE,
+      SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSSIBLE_CASE,
               "Increment of lambda is not a number");
     }
     array[arcPtrRaw->getPetscLocalDofIdx()] = lambda_old + dlambda;

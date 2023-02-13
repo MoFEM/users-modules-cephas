@@ -331,16 +331,9 @@ continuing with the one you are most excited about.
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref ADV-3: Various fields and finite element spaces</td>
-       <td> Problem with various fields and finite element spaces
-       <br/> *Keywords:* 
-       </td>
-  </tr>
-
-  <tr valign="top">
-       <td width="350px">\ref ADV-4: Elasticity with spring and rod elements</td>
-       <td> Problem with mixed dimension (1D, 2D, 3D)
-       <br/> *Keywords:* 
+       <td width="350px">\ref tutorial_level_set</td>
+       <td> Upwind Discountinous Galerkin for Level-Set
+       <br/> *Keywords:* *Keywords:* upwind dg, level set
        </td>
   </tr>
 
