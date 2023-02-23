@@ -453,7 +453,6 @@ int main(int argc, char *argv[]) {
   } else {
     proc_skin = skin_faces;
   }
-  proc_skin = skin_faces;
   CHKERR m_field.add_finite_element("POST_PROC_SKIN");
   CHKERR m_field.modify_finite_element_add_field_row("POST_PROC_SKIN", "TEMP");
   CHKERR m_field.modify_finite_element_add_field_col("POST_PROC_SKIN", "TEMP");
