@@ -964,7 +964,7 @@ override methods and properties as required. Each class has method
 MoFEM::ForcesAndSourcesCore::getOpPtrVector, returning reference to vector of
 shared pointers to MoFEM::ForcesAndSourcesCore::UserDataOperator, i.e.
 \code
-boost::ptr_vector<MoFEM::ForcesAndSourcesCore::UserDataOperator>& MoFEM::ForcesAndSourcesCore::getOpPtrVector ();
+boost::ptr_deque<MoFEM::ForcesAndSourcesCore::UserDataOperator>& MoFEM::ForcesAndSourcesCore::getOpPtrVector ();
 \endcode
 
 Instances of operator classes derived from MoFEM::DataOperator.

@@ -205,7 +205,7 @@ domain_lhs_fe->getOpPtrVector().push_back(new OpK());
 \endcode
 Dissecting the line, first we start with explicit code
 \code
-boost::ptr_vector<UserDataOperator>& sequence_of_operators = domain_lhs_fe->getOpPtrVector();
+boost::ptr_deque<UserDataOperator>& sequence_of_operators = domain_lhs_fe->getOpPtrVector();
 \endcode
 You can see now \e getOpPtrVector returns vector of pointers to operators acting on
 finite element lower dimension entities. Now, having vector of pointers, we are going
