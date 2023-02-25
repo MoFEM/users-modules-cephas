@@ -69,13 +69,14 @@ private:
   MoFEMErrorCode checkResults();
 
   MoFEMErrorCode addMatBlockOps(
-      boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
       std::string field_name, std::string block_name,
       boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev);
+
 };
 
 MoFEMErrorCode Example::addMatBlockOps(
-    boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
     std::string field_name, std::string block_name,
     boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev) {
   MoFEMFunctionBegin;
@@ -255,7 +256,7 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Boundary condition]
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
-  auto *pip = mField.getInterface<PipelineManager>();
+  auto pip = mField.getInterface<PipelineManager>();
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
@@ -299,6 +300,7 @@ MoFEMErrorCode Example::boundaryCondition() {
   // Add force boundary condition
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
       pip->getOpBoundaryRhsPipeline(), mField, "U", -1, Sev::inform);
+
   CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
       pip->getOpBoundaryLhsPipeline(), mField, "U", Sev::verbose);
 
@@ -322,6 +324,7 @@ MoFEMErrorCode Example::boundaryCondition() {
 MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   auto pip = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>();
 
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       pip->getOpDomainLhsPipeline(), {H1}, "GEOMETRY");
@@ -329,15 +332,13 @@ MoFEMErrorCode Example::assembleSystem() {
   auto mat_D_ptr = boost::make_shared<MatrixDouble>();
   CHKERR addMatBlockOps(pip->getOpDomainLhsPipeline(), "U",
                         "MAT_ELASTIC", mat_D_ptr, Sev::verbose);
-  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleBegin());
   pip->getOpDomainLhsPipeline().push_back(
       new OpK("U", "U", mat_D_ptr));
-  pip->getOpDomainLhsPipeline().push_back(
-      new OpSchurAssembleEnd({}, {}, {}, {}));
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order;
+    return 2 * (approx_order - 1);
   };
+
   CHKERR pip->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pip->setDomainLhsIntegrationRule(integration_rule);
   CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule);
@@ -350,17 +351,110 @@ MoFEMErrorCode Example::assembleSystem() {
 //! [Solve]
 MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
-  auto *simple = mField.getInterface<Simple>();
-  auto *pip = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>();
+  auto pip = mField.getInterface<PipelineManager>();
   auto solver = pip->createKSP();
   CHKERR KSPSetFromOptions(solver);
+
+  MOFEM_LOG_CHANNEL("TIMER");
+  MOFEM_LOG_TAG("TIMER", "timer");
+
+  auto get_volumes = [&]() {
+    Range vols;
+    CHKERR mField.get_moab().get_entities_by_dimension(simple->getMeshSet(),
+                                                       SPACE_DIM, vols);
+    return boost::make_shared<Range>(vols);
+  };
+
+  auto get_sub_ents = [&](auto vols) {
+    Range ents;
+    CHKERR mField.get_moab().get_entities_by_handle(simple->getMeshSet(), ents);
+    return boost::make_shared<Range>(subtract(ents, *vols));
+  };
+
+  auto vol_ents = get_volumes();
+  auto sub_ents = get_sub_ents(vol_ents);
+
+  auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
+  CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "SUB");
+  CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
+  CHKERR DMMoFEMAddElement(sub_dm, simple->getDomainFEName());
+  CHKERR DMMoFEMAddSubFieldRow(sub_dm, "U", sub_ents);
+  CHKERR DMMoFEMAddSubFieldCol(sub_dm, "U", sub_ents);
+  CHKERR DMSetUp(sub_dm);
+  auto S = smartCreateDMMatrix(sub_dm);
+
+  auto set_shur_assemble = [&]() {
+    MoFEMFunctionBegin;
+    auto get_is = [&](auto vols) {
+      SmartPetscObj<IS> is;
+      CHK_THROW_MESSAGE(
+          mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+              simple->getProblemName(), ROW, "U", 0, SPACE_DIM, is, vols.get()),
+          "get is");
+      return is;
+    };
+
+    pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
+    pip->getOpBoundaryLhsPipeline().push_back(
+        new OpSchurAssembleEnd({}, {}, {}, {}));
+
+    PC pc;
+    CHKERR KSPGetPC(solver, &pc);
+
+    PetscBool is_pcfs = PETSC_FALSE;
+    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+    if (is_pcfs) {
+
+      pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
+      pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd(
+          {"U"}, {vol_ents}, {getDMSubData(sub_dm)->getSmartRowMap()}, {S}));
+      auto is = get_is(vol_ents);
+      CHKERR PCFieldSplitSetIS(pc, NULL, is);
+      // CHKERR PCFieldSplitSetIS(pc, NULL, getDMSubData(sub_dm)->getSmartRowIs());
+      CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
+
+    } else {
+      pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
+      pip->getOpDomainLhsPipeline().push_back(
+          new OpSchurAssembleEnd({}, {}, {}, {}));
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
+
+  CHKERR set_shur_assemble();
+  pip->getDomainLhsFE()->preProcessHook = [&]() {
+    MoFEMFunctionBegin;
+    CHKERR MatZeroEntries(S);
+    MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble Begin";
+    MoFEMFunctionReturn(0);
+  };
+  pip->getDomainLhsFE()->postProcessHook = [&]() {
+    MoFEMFunctionBegin;
+    MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
+    CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
+    // MatView(S, PETSC_VIEWER_DRAW_WORLD);
+    // std::string wait;
+    // std::cin >> wait;
+    MoFEMFunctionReturn(0);
+  };
+
+  BOOST_LOG_SCOPED_THREAD_ATTR("Timeline", attrs::timer());
+  MOFEM_LOG("TIMER", Sev::inform) << "KSPSetUp";
   CHKERR KSPSetUp(solver);
+  MOFEM_LOG("TIMER", Sev::inform) << "KSPSetUp <= Done";
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
 
+  MOFEM_LOG("TIMER", Sev::inform) << "KSPSolve";
   CHKERR KSPSolve(solver, F, D);
+  MOFEM_LOG("TIMER", Sev::inform) << "KSPSolve <= Done";
+
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
@@ -371,7 +465,7 @@ MoFEMErrorCode Example::solveSystem() {
 //! [Postprocess results]
 MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
-  PipelineManager *pip = mField.getInterface<PipelineManager>();
+  auto pip = mField.getInterface<PipelineManager>();
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
@@ -440,15 +534,15 @@ MoFEMErrorCode Example::outputResults() {
 //! [Check]
 MoFEMErrorCode Example::checkResults() {
   MOFEM_LOG_CHANNEL("WORLD");
-  Simple *simple = mField.getInterface<Simple>();
-  PipelineManager *pip = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>();
+  auto pip = mField.getInterface<PipelineManager>();
   MoFEMFunctionBegin;
   pip->getDomainRhsFE().reset();
   pip->getDomainLhsFE().reset();
   pip->getBoundaryRhsFE().reset();
   pip->getBoundaryLhsFE().reset();
 
-  auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
+  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR pip->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule);
 
@@ -516,6 +610,10 @@ int main(int argc, char *argv[]) {
   // Initialisation of MoFEM/PETSc and MOAB data structures
   const char param_file[] = "param_file.petsc";
   MoFEM::Core::Initialize(&argc, &argv, param_file, help);
+
+  auto core_log = logging::core::get();
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "TIMER"));
 
   try {
 
