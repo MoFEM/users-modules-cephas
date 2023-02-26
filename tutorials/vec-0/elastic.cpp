@@ -15,10 +15,9 @@ using namespace MoFEM;
 //! [Define dimension]
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
-// constexpr AssemblyType A = (SCHUR_ASSEMBLE)
-//                                ? AssemblyType::SCHUR
-//                                : AssemblyType::PETSC; //< selected assembly type
-constexpr AssemblyType A = AssemblyType::PETSC;       //< selected assembly type
+constexpr AssemblyType A = (SCHUR_ASSEMBLE)
+                               ? AssemblyType::SCHUR
+                               : AssemblyType::PETSC; //< selected assembly type
 
 constexpr IntegrationType I =
     IntegrationType::GAUSS; //< selected integration type
@@ -69,7 +68,7 @@ constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
  * methods have advantages and disadvantages. Type of BC depends on problem.
  *
  */
-constexpr double essential_by_removing_dofs = false;
+constexpr double essential_by_removing_dofs = true;
 
 struct Example {
 
@@ -332,8 +331,7 @@ MoFEMErrorCode Example::boundaryCondition() {
 
     CHKERR add_boundary_ops_rhs_mechanical(pip->getOpBoundaryRhsPipeline());
     CHKERR add_boundary_ops_lhs_mechanical(pip->getOpBoundaryLhsPipeline());
-    
-  }
+    }
 
   // Infernal forces
   auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
@@ -457,13 +455,13 @@ MoFEMErrorCode Example::solveSystem() {
   MOFEM_LOG_CHANNEL("TIMER");
   MOFEM_LOG_TAG("TIMER", "timer");
 
-  // if (A == AssemblyType::SCHUR) {
-  //   auto schur_ptr = SetUpSchur::createSetUpSchur(mField);
-  //   CHKERR schur_ptr->setUp(solver);
-  //   CHKERR setup_and_solve();
-  // } else {
+  if (A == AssemblyType::SCHUR) {
+    auto schur_ptr = SetUpSchur::createSetUpSchur(mField);
+    CHKERR schur_ptr->setUp(solver);
     CHKERR setup_and_solve();
-  // }
+  } else {
+    CHKERR setup_and_solve();
+  }
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -687,8 +685,6 @@ private:
   MoFEMErrorCode setOperator();
   MoFEMErrorCode setPC(PC pc);
 
-  static MoFEMErrorCode preProcessHook();
-  static MoFEMErrorCode postProcessHook();
   static SmartPetscObj<Mat> S;
 
   MoFEM::Interface &mField;
@@ -717,7 +713,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
     CHKERR setEntities();
     CHKERR setUpSubDM();
     S = smartCreateDMMatrix(subDM);
-    // CHKERR MatSetBlockSize(S, SPACE_DIM);
+    CHKERR MatSetBlockSize(S, SPACE_DIM);
     CHKERR MatSetOption(S, MAT_SYMMETRIC, PETSC_TRUE);
     CHKERR setOperator();
     CHKERR setPC(pc);
@@ -729,11 +725,14 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
       MoFEMFunctionReturn(0);
     };
 
-    pip->getDomainLhsFE()->postProcessHook = []() {
+    pip->getBoundaryLhsFE()->postProcessHook = []() {
       MoFEMFunctionBegin;
       MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
       CHKERR MatAssemblyBegin(SetUpSchurImpl::S, MAT_FINAL_ASSEMBLY);
       CHKERR MatAssemblyEnd(SetUpSchurImpl::S, MAT_FINAL_ASSEMBLY);
+      // MatView(SetUpSchurImpl::S, PETSC_VIEWER_DRAW_WORLD);
+      // std::string wait;
+      // std::cin >> wait;
       MoFEMFunctionReturn(0);
     };
 
@@ -788,8 +787,9 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
   auto pip = mField.getInterface<PipelineManager>();
   // Boundary
   pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
-  pip->getOpBoundaryLhsPipeline().push_back(
-      new OpSchurAssembleEnd({}, {}, {}, {}, {}));
+  pip->getOpBoundaryLhsPipeline().push_back(new OpSchurAssembleEnd(
+      {"U"}, {boost::make_shared<Range>(volEnts)},
+      {getDMSubData(subDM)->getSmartRowMap()}, {S}, {true}));
   // Domain
   pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
   pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd(
