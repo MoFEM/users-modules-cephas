@@ -59,17 +59,6 @@ constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
-/**
- * \brief If true essential bc are enforced by removing DOFs
- *
- * \note We have two generic methods enforcing essential bc, one by removing
- * DOFs from the problem, and then setting values of the DOFs. Second enforcing
- * bc by adding equations to the system, enforcing BC by elast squares. Both
- * methods have advantages and disadvantages. Type of BC depends on problem.
- *
- */
-constexpr double essential_by_removing_dofs = true;
-
 struct Example {
 
   Example(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -295,43 +284,14 @@ MoFEMErrorCode Example::boundaryCondition() {
       pip->getOpBoundaryRhsPipeline(), {NOSPACE}, "GEOMETRY");
 
   // Essential boundary condition.
-  if (essential_by_removing_dofs) {
-    CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
-        simple->getProblemName(), "U");
-    auto get_pre_proc_hook = [&]() {
-      return EssentialPreProc<DisplacementCubitBcData>(
-          mField, pip->getDomainRhsFE(), {});
-    };
-    pip->getDomainRhsFE()->preProcessHook = get_pre_proc_hook();
-    pip->getBoundaryRhsFE()->preProcessHook = get_pre_proc_hook();
-
-  } else {
-    CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
-        simple->getProblemName(), "U");
-    boundaryMarker =
-        bc_mng->getMergedBlocksMarker(vector<string>{"FIX", "DISPLACEMENT"});
-
-    auto add_boundary_ops_lhs_mechanical = [&](auto &fe) {
-      MoFEMFunctionBegin;
-      CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<I>::
-          AddEssentialToPipeline<OpEssentialLhs>::add(
-              mField, fe, simple->getProblemName(), "U");
-      MoFEMFunctionReturn(0);
-    };
-
-    auto add_boundary_ops_rhs_mechanical = [&](auto &fe) {
-      MoFEMFunctionBegin;
-      auto u_mat_ptr = boost::make_shared<MatrixDouble>();
-      fe.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
-      CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<I>::
-          AddEssentialToPipeline<OpEssentialRhs>::add(
-              mField, fe, simple->getProblemName(), "U", u_mat_ptr, {});
-      MoFEMFunctionReturn(0);
-    };
-
-    CHKERR add_boundary_ops_rhs_mechanical(pip->getOpBoundaryRhsPipeline());
-    CHKERR add_boundary_ops_lhs_mechanical(pip->getOpBoundaryLhsPipeline());
-    }
+  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+      simple->getProblemName(), "U");
+  auto get_pre_proc_hook = [&]() {
+    return EssentialPreProc<DisplacementCubitBcData>(mField,
+                                                     pip->getDomainRhsFE(), {});
+  };
+  pip->getDomainRhsFE()->preProcessHook = get_pre_proc_hook();
+  pip->getBoundaryRhsFE()->preProcessHook = get_pre_proc_hook();
 
   // Infernal forces
   auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
@@ -348,35 +308,20 @@ MoFEMErrorCode Example::boundaryCondition() {
   pip->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
-  pip->getOpDomainRhsPipeline().push_back(new OpSetBc(
-      "U", true,
-      boundaryMarker)); // If boundaryMarker is not set that do nothing. You can
-                        // skip this if essential is enforced by removing DOFs.
   pip->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", mat_stress_ptr,
 
                           [](double, double, double) constexpr { return -1; }));
-  pip->getOpDomainRhsPipeline().push_back(new OpUnSetBc("U"));
 
   // Body forces
-  pip->getOpBoundaryRhsPipeline().push_back(new OpSetBc(
-      "U", true,
-      boundaryMarker)); // If boundaryMarker is not set that do nothing. You can
-                        // skip this if essential is enforced by removing DOFs.
   CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
       pip->getOpDomainRhsPipeline(), mField, "U", Sev::inform);
   // Add force boundary condition
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
       pip->getOpBoundaryRhsPipeline(), mField, "U", -1, Sev::inform);
-  pip->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("U"));
-
-  pip->getOpBoundaryLhsPipeline().push_back(new OpSetBc(
-      "U", true,
-      boundaryMarker)); // If boundaryMarker is not set that do nothing. You can
-                        // skip this if essential is enforced by removing DOFs.
+  // Add case for mix type of BCs 
   CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
       pip->getOpBoundaryLhsPipeline(), mField, "U", Sev::verbose);
-  pip->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("U"));
 
   MoFEMFunctionReturn(0);
 }
@@ -395,10 +340,6 @@ MoFEMErrorCode Example::assembleSystem() {
   CHKERR addMatBlockOps(pip->getOpDomainLhsPipeline(), "U", "MAT_ELASTIC",
                         mat_D_ptr, Sev::verbose);
 
-  pip->getOpDomainLhsPipeline().push_back(new OpSetBc(
-      "U", true,
-      boundaryMarker)); // If boundaryMarker is not set that do nothing. You can
-                        // skip this if essential is enforced by removing DOFs.
   pip->getOpDomainLhsPipeline().push_back(new OpK("U", "U", mat_D_ptr));
   pip->getOpDomainLhsPipeline().push_back(new OpUnSetBc("U"));
 
@@ -575,13 +516,9 @@ MoFEMErrorCode Example::checkResults() {
   pip->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
-  pip->getOpDomainRhsPipeline().push_back(new OpSetBc(
-      "U", true,
-      boundaryMarker)); // If boundaryMarker is not set that do nothing. You can
-                        // skip this if essential is enforced by removing DOFs.
+
   pip->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", mat_stress_ptr));
-  pip->getOpDomainRhsPipeline().push_back(new OpUnSetBc("U"));
 
   pip->getOpBoundaryRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
@@ -590,7 +527,6 @@ MoFEMErrorCode Example::checkResults() {
       pip->getOpDomainRhsPipeline(), mField, "U", Sev::verbose);
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
       pip->getOpBoundaryRhsPipeline(), mField, "U", 1, Sev::verbose);
-  pip->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("U"));
 
   auto dm = simple->getDM();
   auto res = smartCreateDMVector(dm);
@@ -713,8 +649,8 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
     CHKERR setEntities();
     CHKERR setUpSubDM();
     S = smartCreateDMMatrix(subDM);
-    CHKERR MatSetBlockSize(S, SPACE_DIM);
-    CHKERR MatSetOption(S, MAT_SYMMETRIC, PETSC_TRUE);
+    // CHKERR MatSetBlockSize(S, SPACE_DIM);
+    // CHKERR MatSetOption(S, MAT_SYMMETRIC, PETSC_TRUE);
     CHKERR setOperator();
     CHKERR setPC(pc);
 

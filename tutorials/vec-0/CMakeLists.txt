@@ -27,15 +27,16 @@ tutorials_copy_and_install("../vec-2/beam_3D.cub" "${permissions_default}")
 tutorials_build_and_install(
   elastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/elastic.cpp)
 set_target_properties(
-  elastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
+  elastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1")
 
 tutorials_build_and_install(
   elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/elastic.cpp)
 set_target_properties(
-  elastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+  elastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1")
 
 add_test(
   elastic
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   ${CMAKE_CURRENT_BINARY_DIR}/elastic_2d
-  -file_name part.h5m -order 3 -log_no_color)
+  -file_name part.h5m -order 3 
+  -ksp_rtol 1e-12 -ksp_atol 1e-9 -test -log_no_color)
