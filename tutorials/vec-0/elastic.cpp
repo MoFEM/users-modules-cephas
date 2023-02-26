@@ -15,7 +15,11 @@ using namespace MoFEM;
 //! [Define dimension]
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
-constexpr AssemblyType A = AssemblyType::SCHUR; //< selected assembly type
+// constexpr AssemblyType A = (SCHUR_ASSEMBLE)
+//                                ? AssemblyType::SCHUR
+//                                : AssemblyType::PETSC; //< selected assembly type
+constexpr AssemblyType A = AssemblyType::PETSC;       //< selected assembly type
+
 constexpr IntegrationType I =
     IntegrationType::GAUSS; //< selected integration type
 
@@ -42,6 +46,11 @@ using OpBoundaryRhsBCs = BoundaryRhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<I>;
 using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 
+using OpEssentialLhs = EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<
+    GAUSS>::OpEssentialLhs<DisplacementCubitBcData, 1, SPACE_DIM>;
+using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<
+    GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
+
 #include <ElasticSpring.hpp>
 #include <NaturalDomainBC.hpp>
 #include <NaturalBoundaryBC.hpp>
@@ -50,6 +59,17 @@ constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+
+/**
+ * \brief If true essential bc are enforced by removing DOFs
+ *
+ * \note We have two generic methods enforcing essential bc, one by removing
+ * DOFs from the problem, and then setting values of the DOFs. Second enforcing
+ * bc by adding equations to the system, enforcing BC by elast squares. Both
+ * methods have advantages and disadvantages. Type of BC depends on problem.
+ *
+ */
+constexpr double essential_by_removing_dofs = false;
 
 struct Example {
 
@@ -73,6 +93,7 @@ private:
       std::string field_name, std::string block_name,
       boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev);
 
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 };
 
 MoFEMErrorCode Example::addMatBlockOps(
@@ -274,6 +295,46 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
       pip->getOpBoundaryRhsPipeline(), {NOSPACE}, "GEOMETRY");
 
+  // Essential boundary condition.
+  if (essential_by_removing_dofs) {
+    CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+        simple->getProblemName(), "U");
+    auto get_pre_proc_hook = [&]() {
+      return EssentialPreProc<DisplacementCubitBcData>(
+          mField, pip->getDomainRhsFE(), {});
+    };
+    pip->getDomainRhsFE()->preProcessHook = get_pre_proc_hook();
+    pip->getBoundaryRhsFE()->preProcessHook = get_pre_proc_hook();
+
+  } else {
+    CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
+        simple->getProblemName(), "U");
+    boundaryMarker =
+        bc_mng->getMergedBlocksMarker(vector<string>{"FIX", "DISPLACEMENT"});
+
+    auto add_boundary_ops_lhs_mechanical = [&](auto &fe) {
+      MoFEMFunctionBegin;
+      CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<I>::
+          AddEssentialToPipeline<OpEssentialLhs>::add(
+              mField, fe, simple->getProblemName(), "U");
+      MoFEMFunctionReturn(0);
+    };
+
+    auto add_boundary_ops_rhs_mechanical = [&](auto &fe) {
+      MoFEMFunctionBegin;
+      auto u_mat_ptr = boost::make_shared<MatrixDouble>();
+      fe.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
+      CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<I>::
+          AddEssentialToPipeline<OpEssentialRhs>::add(
+              mField, fe, simple->getProblemName(), "U", u_mat_ptr, {});
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR add_boundary_ops_rhs_mechanical(pip->getOpBoundaryRhsPipeline());
+    CHKERR add_boundary_ops_lhs_mechanical(pip->getOpBoundaryLhsPipeline());
+    
+  }
+
   // Infernal forces
   auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
   auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
@@ -283,38 +344,41 @@ MoFEMErrorCode Example::boundaryCondition() {
                                                                mat_grad_ptr));
   pip->getOpDomainRhsPipeline().push_back(
       new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
-
   auto mat_D_ptr = boost::make_shared<MatrixDouble>();
-  CHKERR addMatBlockOps(pip->getOpDomainRhsPipeline(), "U",
-                        "MAT_ELASTIC", mat_D_ptr, Sev::inform);
+  CHKERR addMatBlockOps(pip->getOpDomainRhsPipeline(), "U", "MAT_ELASTIC",
+                        mat_D_ptr, Sev::inform);
   pip->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
+  pip->getOpDomainRhsPipeline().push_back(new OpSetBc(
+      "U", true,
+      boundaryMarker)); // If boundaryMarker is not set that do nothing. You can
+                        // skip this if essential is enforced by removing DOFs.
   pip->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", mat_stress_ptr,
+
                           [](double, double, double) constexpr { return -1; }));
+  pip->getOpDomainRhsPipeline().push_back(new OpUnSetBc("U"));
 
   // Body forces
+  pip->getOpBoundaryRhsPipeline().push_back(new OpSetBc(
+      "U", true,
+      boundaryMarker)); // If boundaryMarker is not set that do nothing. You can
+                        // skip this if essential is enforced by removing DOFs.
   CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
       pip->getOpDomainRhsPipeline(), mField, "U", Sev::inform);
   // Add force boundary condition
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
       pip->getOpBoundaryRhsPipeline(), mField, "U", -1, Sev::inform);
+  pip->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("U"));
 
+  pip->getOpBoundaryLhsPipeline().push_back(new OpSetBc(
+      "U", true,
+      boundaryMarker)); // If boundaryMarker is not set that do nothing. You can
+                        // skip this if essential is enforced by removing DOFs.
   CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
       pip->getOpBoundaryLhsPipeline(), mField, "U", Sev::verbose);
-
-  // Essential boundary condition
-  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
-      simple->getProblemName(), "U");
-
-  auto get_pre_proc_hook = [&]() {
-    return EssentialPreProc<DisplacementCubitBcData>(
-        mField, pip->getDomainRhsFE(), {});
-  };
-
-  pip->getDomainRhsFE()->preProcessHook = get_pre_proc_hook();
-  pip->getBoundaryRhsFE()->preProcessHook = get_pre_proc_hook();
+  pip->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("U"));
 
   MoFEMFunctionReturn(0);
 }
@@ -330,25 +394,43 @@ MoFEMErrorCode Example::assembleSystem() {
       pip->getOpDomainLhsPipeline(), {H1}, "GEOMETRY");
 
   auto mat_D_ptr = boost::make_shared<MatrixDouble>();
-  CHKERR addMatBlockOps(pip->getOpDomainLhsPipeline(), "U",
-                        "MAT_ELASTIC", mat_D_ptr, Sev::verbose);
-  pip->getOpDomainLhsPipeline().push_back(
-      new OpK("U", "U", mat_D_ptr));
+  CHKERR addMatBlockOps(pip->getOpDomainLhsPipeline(), "U", "MAT_ELASTIC",
+                        mat_D_ptr, Sev::verbose);
+
+  pip->getOpDomainLhsPipeline().push_back(new OpSetBc(
+      "U", true,
+      boundaryMarker)); // If boundaryMarker is not set that do nothing. You can
+                        // skip this if essential is enforced by removing DOFs.
+  pip->getOpDomainLhsPipeline().push_back(new OpK("U", "U", mat_D_ptr));
+  pip->getOpDomainLhsPipeline().push_back(new OpUnSetBc("U"));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);
   };
 
+  auto integration_rule_bc = [](int, int, int approx_order) {
+    return 2 * approx_order;
+  };
+
   CHKERR pip->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pip->setDomainLhsIntegrationRule(integration_rule);
-  CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule);
-  CHKERR pip->setBoundaryLhsIntegrationRule(integration_rule);
+  CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule_bc);
+  CHKERR pip->setBoundaryLhsIntegrationRule(integration_rule_bc);
 
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
 
 //! [Solve]
+struct SetUpSchur {
+  static boost::shared_ptr<SetUpSchur>
+  createSetUpSchur(MoFEM::Interface &m_field);
+  virtual MoFEMErrorCode setUp(SmartPetscObj<KSP> solver) = 0;
+
+protected:
+  SetUpSchur() = default;
+};
+
 MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
@@ -356,104 +438,32 @@ MoFEMErrorCode Example::solveSystem() {
   auto solver = pip->createKSP();
   CHKERR KSPSetFromOptions(solver);
 
-  MOFEM_LOG_CHANNEL("TIMER");
-  MOFEM_LOG_TAG("TIMER", "timer");
-
-  auto get_volumes = [&]() {
-    Range vols;
-    CHKERR mField.get_moab().get_entities_by_dimension(simple->getMeshSet(),
-                                                       SPACE_DIM, vols);
-    return boost::make_shared<Range>(vols);
-  };
-
-  auto get_sub_ents = [&](auto vols) {
-    Range ents;
-    CHKERR mField.get_moab().get_entities_by_handle(simple->getMeshSet(), ents);
-    return boost::make_shared<Range>(subtract(ents, *vols));
-  };
-
-  auto vol_ents = get_volumes();
-  auto sub_ents = get_sub_ents(vol_ents);
-
-  auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
-  CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "SUB");
-  CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
-  CHKERR DMMoFEMAddElement(sub_dm, simple->getDomainFEName());
-  CHKERR DMMoFEMAddSubFieldRow(sub_dm, "U", sub_ents);
-  CHKERR DMMoFEMAddSubFieldCol(sub_dm, "U", sub_ents);
-  CHKERR DMSetUp(sub_dm);
-  auto S = smartCreateDMMatrix(sub_dm);
-
-  auto set_shur_assemble = [&]() {
-    MoFEMFunctionBegin;
-    auto get_is = [&](auto vols) {
-      SmartPetscObj<IS> is;
-      CHK_THROW_MESSAGE(
-          mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-              simple->getProblemName(), ROW, "U", 0, SPACE_DIM, is, vols.get()),
-          "get is");
-      return is;
-    };
-
-    pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
-    pip->getOpBoundaryLhsPipeline().push_back(
-        new OpSchurAssembleEnd({}, {}, {}, {}));
-
-    PC pc;
-    CHKERR KSPGetPC(solver, &pc);
-
-    PetscBool is_pcfs = PETSC_FALSE;
-    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
-    if (is_pcfs) {
-
-      pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
-      pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd(
-          {"U"}, {vol_ents}, {getDMSubData(sub_dm)->getSmartRowMap()}, {S}));
-      auto is = get_is(vol_ents);
-      CHKERR PCFieldSplitSetIS(pc, NULL, is);
-      // CHKERR PCFieldSplitSetIS(pc, NULL, getDMSubData(sub_dm)->getSmartRowIs());
-      CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
-
-    } else {
-      pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
-      pip->getOpDomainLhsPipeline().push_back(
-          new OpSchurAssembleEnd({}, {}, {}, {}));
-    }
-
-    MoFEMFunctionReturn(0);
-  };
-
-
-  CHKERR set_shur_assemble();
-  pip->getDomainLhsFE()->preProcessHook = [&]() {
-    MoFEMFunctionBegin;
-    CHKERR MatZeroEntries(S);
-    MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble Begin";
-    MoFEMFunctionReturn(0);
-  };
-  pip->getDomainLhsFE()->postProcessHook = [&]() {
-    MoFEMFunctionBegin;
-    MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
-    CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-    // MatView(S, PETSC_VIEWER_DRAW_WORLD);
-    // std::string wait;
-    // std::cin >> wait;
-    MoFEMFunctionReturn(0);
-  };
-
-  BOOST_LOG_SCOPED_THREAD_ATTR("Timeline", attrs::timer());
-  MOFEM_LOG("TIMER", Sev::inform) << "KSPSetUp";
-  CHKERR KSPSetUp(solver);
-  MOFEM_LOG("TIMER", Sev::inform) << "KSPSetUp <= Done";
-
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
 
-  MOFEM_LOG("TIMER", Sev::inform) << "KSPSolve";
-  CHKERR KSPSolve(solver, F, D);
-  MOFEM_LOG("TIMER", Sev::inform) << "KSPSolve <= Done";
+  auto setup_and_solve = [&]() {
+    MoFEMFunctionBegin;
+    BOOST_LOG_SCOPED_THREAD_ATTR("Timeline", attrs::timer());
+    MOFEM_LOG("TIMER", Sev::inform) << "KSPSetUp";
+    CHKERR KSPSetUp(solver);
+    MOFEM_LOG("TIMER", Sev::inform) << "KSPSetUp <= Done";
+    MOFEM_LOG("TIMER", Sev::inform) << "KSPSolve";
+    CHKERR KSPSolve(solver, F, D);
+    MOFEM_LOG("TIMER", Sev::inform) << "KSPSolve <= Done";
+    MoFEMFunctionReturn(0);
+  };
+
+  MOFEM_LOG_CHANNEL("TIMER");
+  MOFEM_LOG_TAG("TIMER", "timer");
+
+  // if (A == AssemblyType::SCHUR) {
+  //   auto schur_ptr = SetUpSchur::createSetUpSchur(mField);
+  //   CHKERR schur_ptr->setUp(solver);
+  //   CHKERR setup_and_solve();
+  // } else {
+    CHKERR setup_and_solve();
+  // }
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -562,18 +572,27 @@ MoFEMErrorCode Example::checkResults() {
       new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
 
   auto mat_D_ptr = boost::make_shared<MatrixDouble>();
-  CHKERR addMatBlockOps(pip->getOpDomainRhsPipeline(), "U",
-                        "MAT_ELASTIC", mat_D_ptr, Sev::verbose);
+  CHKERR addMatBlockOps(pip->getOpDomainRhsPipeline(), "U", "MAT_ELASTIC",
+                        mat_D_ptr, Sev::verbose);
   pip->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
+  pip->getOpDomainRhsPipeline().push_back(new OpSetBc(
+      "U", true,
+      boundaryMarker)); // If boundaryMarker is not set that do nothing. You can
+                        // skip this if essential is enforced by removing DOFs.
   pip->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", mat_stress_ptr));
+  pip->getOpDomainRhsPipeline().push_back(new OpUnSetBc("U"));
 
+  pip->getOpBoundaryRhsPipeline().push_back(
+      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+          "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
   CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
       pip->getOpDomainRhsPipeline(), mField, "U", Sev::verbose);
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
       pip->getOpBoundaryRhsPipeline(), mField, "U", 1, Sev::verbose);
+  pip->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("U"));
 
   auto dm = simple->getDM();
   auto res = smartCreateDMVector(dm);
@@ -595,9 +614,15 @@ MoFEMErrorCode Example::checkResults() {
   CHKERR VecNorm(res, NORM_2, &nrm2);
   MOFEM_LOG_CHANNEL("WORLD");
   MOFEM_LOG_C("WORLD", Sev::inform, "residual = %3.4e\n", nrm2);
-  constexpr double eps = 1e-8;
-  if (nrm2 > eps)
-    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not zero");
+
+  PetscBool test = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test, PETSC_NULL);
+  if (test == PETSC_TRUE) {
+    constexpr double eps = 1e-8;
+    if (nrm2 > eps)
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+              "Residual is not zero");
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -640,4 +665,151 @@ int main(int argc, char *argv[]) {
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
+}
+
+struct SetUpSchurImpl : public SetUpSchur {
+
+  SetUpSchurImpl(MoFEM::Interface &m_field) : SetUpSchur(), mField(m_field) {
+    if (S) {
+      CHK_THROW_MESSAGE(
+          MOFEM_DATA_INCONSISTENCY,
+          "Is expected that schur matrix is not allocated. This is "
+          "possible only is PC is set up twice");
+    }
+  }
+  virtual ~SetUpSchurImpl() { S.reset(); }
+
+  MoFEMErrorCode setUp(SmartPetscObj<KSP> solver);
+
+private:
+  MoFEMErrorCode setEntities();
+  MoFEMErrorCode setUpSubDM();
+  MoFEMErrorCode setOperator();
+  MoFEMErrorCode setPC(PC pc);
+
+  static MoFEMErrorCode preProcessHook();
+  static MoFEMErrorCode postProcessHook();
+  static SmartPetscObj<Mat> S;
+
+  MoFEM::Interface &mField;
+
+  SmartPetscObj<DM> subDM;
+  Range volEnts;
+  Range subEnts;
+};
+
+SmartPetscObj<Mat> SetUpSchurImpl::S;
+
+MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
+  MoFEMFunctionBegin;
+  auto pip = mField.getInterface<PipelineManager>();
+  PC pc;
+  CHKERR KSPGetPC(solver, &pc);
+  PetscBool is_pcfs = PETSC_FALSE;
+  PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+  if (is_pcfs) {
+    if (S) {
+      CHK_THROW_MESSAGE(
+          MOFEM_DATA_INCONSISTENCY,
+          "Is expected that schur matrix is not allocated. This is "
+          "possible only is PC is set up twice");
+    }
+    CHKERR setEntities();
+    CHKERR setUpSubDM();
+    S = smartCreateDMMatrix(subDM);
+    // CHKERR MatSetBlockSize(S, SPACE_DIM);
+    CHKERR MatSetOption(S, MAT_SYMMETRIC, PETSC_TRUE);
+    CHKERR setOperator();
+    CHKERR setPC(pc);
+
+    pip->getDomainLhsFE()->preProcessHook = []() {
+      MoFEMFunctionBegin;
+      CHKERR MatZeroEntries(SetUpSchurImpl::S);
+      MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble Begin";
+      MoFEMFunctionReturn(0);
+    };
+
+    pip->getDomainLhsFE()->postProcessHook = []() {
+      MoFEMFunctionBegin;
+      MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
+      CHKERR MatAssemblyBegin(SetUpSchurImpl::S, MAT_FINAL_ASSEMBLY);
+      CHKERR MatAssemblyEnd(SetUpSchurImpl::S, MAT_FINAL_ASSEMBLY);
+      MoFEMFunctionReturn(0);
+    };
+
+  } else {
+    pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
+    pip->getOpBoundaryLhsPipeline().push_back(
+        new OpSchurAssembleEnd({}, {}, {}, {}, {}));
+    pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
+    pip->getOpDomainLhsPipeline().push_back(
+        new OpSchurAssembleEnd({}, {}, {}, {}, {}));
+    pip->getDomainLhsFE()->preProcessHook = []() {
+      MoFEMFunctionBegin;
+      MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble Begin";
+      MoFEMFunctionReturn(0);
+    };
+    pip->getDomainLhsFE()->postProcessHook = []() {
+      MoFEMFunctionBegin;
+      MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
+      MoFEMFunctionReturn(0);
+    };
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SetUpSchurImpl::setEntities() {
+  MoFEMFunctionBegin;
+  auto simple = mField.getInterface<Simple>();
+  CHKERR mField.get_moab().get_entities_by_dimension(simple->getMeshSet(),
+                                                     SPACE_DIM, volEnts);
+  CHKERR mField.get_moab().get_entities_by_handle(simple->getMeshSet(),
+                                                  subEnts);
+  subEnts = subtract(subEnts, volEnts);
+  MoFEMFunctionReturn(0);
+};
+
+MoFEMErrorCode SetUpSchurImpl::setUpSubDM() {
+  MoFEMFunctionBegin;
+  auto simple = mField.getInterface<Simple>();
+  subDM = createSmartDM(mField.get_comm(), "DMMOFEM");
+  CHKERR DMMoFEMCreateSubDM(subDM, simple->getDM(), "SUB");
+  CHKERR DMMoFEMSetSquareProblem(subDM, PETSC_TRUE);
+  CHKERR DMMoFEMAddElement(subDM, simple->getDomainFEName());
+  auto sub_ents_ptr = boost::make_shared<Range>(subEnts);
+  CHKERR DMMoFEMAddSubFieldRow(subDM, "U", sub_ents_ptr);
+  CHKERR DMMoFEMAddSubFieldCol(subDM, "U", sub_ents_ptr);
+  CHKERR DMSetUp(subDM);
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SetUpSchurImpl::setOperator() {
+  MoFEMFunctionBegin;
+  auto pip = mField.getInterface<PipelineManager>();
+  // Boundary
+  pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
+  pip->getOpBoundaryLhsPipeline().push_back(
+      new OpSchurAssembleEnd({}, {}, {}, {}, {}));
+  // Domain
+  pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
+  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd(
+      {"U"}, {boost::make_shared<Range>(volEnts)},
+      {getDMSubData(subDM)->getSmartRowMap()}, {S}, {true}));
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SetUpSchurImpl::setPC(PC pc) {
+  MoFEMFunctionBegin;
+  auto simple = mField.getInterface<Simple>();
+  SmartPetscObj<IS> vol_is;
+  mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+      simple->getProblemName(), ROW, "U", 0, SPACE_DIM, vol_is, &volEnts);
+  CHKERR PCFieldSplitSetIS(pc, NULL, vol_is);
+  CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
+  MoFEMFunctionReturn(0);
+}
+
+boost::shared_ptr<SetUpSchur>
+SetUpSchur::createSetUpSchur(MoFEM::Interface &m_field) {
+  return boost::shared_ptr<SetUpSchur>(new SetUpSchurImpl(m_field));
 }
