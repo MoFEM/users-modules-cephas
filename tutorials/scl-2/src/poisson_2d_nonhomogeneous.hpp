@@ -14,9 +14,6 @@ using EntData = EntitiesFieldData::EntData;
 
 namespace Poisson2DNonhomogeneousOperators {
 
-constexpr auto VecSetValues = MoFEM::VecSetValues<MoFEM::EssentialBcStorage>;
-constexpr auto MatSetValues = MoFEM::MatSetValues<MoFEM::EssentialBcStorage>;
-
 FTensor::Index<'i', 2> i;
 
 typedef boost::function<double(const double, const double, const double)>
@@ -81,15 +78,15 @@ public:
       // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
 
       // Fill value to local stiffness matrix ignoring boundary DOFs
-      CHKERR MatSetValues(getKSPB(), row_data, col_data, &locLhs(0, 0),
-                          ADD_VALUES);
+      CHKERR MatSetValues<MoFEM::EssentialBcStorage>(
+          getKSPB(), row_data, col_data, &locLhs(0, 0), ADD_VALUES);
 
       // Fill values of symmetric local stiffness matrix
       if (row_side != col_side || row_type != col_type) {
         transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
         noalias(transLocLhs) = trans(locLhs);
-        CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
-                            ADD_VALUES);
+        CHKERR MatSetValues<MoFEM::EssentialBcStorage>(
+            getKSPB(), col_data, row_data, &transLocLhs(0, 0), ADD_VALUES);
       }
     }
 
@@ -152,7 +149,8 @@ public:
       }
 
       // FILL VALUES OF THE GLOBAL VECTOR ENTRIES FROM THE LOCAL ONES
-      CHKERR VecSetValues(getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
+      CHKERR VecSetValues<MoFEM::EssentialBcStorage>(
+          getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
     }
 
     MoFEMFunctionReturn(0);
@@ -218,13 +216,14 @@ public:
       }
 
       // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
-      CHKERR MatSetValues(getKSPB(), row_data, col_data, &locBoundaryLhs(0, 0),
-                          ADD_VALUES);
+      CHKERR MatSetValues<MoFEM::EssentialBcStorage>(
+          getKSPB(), row_data, col_data, &locBoundaryLhs(0, 0), ADD_VALUES);
       if (row_side != col_side || row_type != col_type) {
         transLocBoundaryLhs.resize(nb_col_dofs, nb_row_dofs, false);
         noalias(transLocBoundaryLhs) = trans(locBoundaryLhs);
-        CHKERR MatSetValues(getKSPB(), col_data, row_data,
-                            &transLocBoundaryLhs(0, 0), ADD_VALUES);
+        CHKERR MatSetValues<MoFEM::EssentialBcStorage>(
+            getKSPB(), col_data, row_data, &transLocBoundaryLhs(0, 0),
+            ADD_VALUES);
       }
     }
 
@@ -286,8 +285,8 @@ public:
       }
 
       // FILL VALUES OF LOCAL VECTOR ENTRIES TO THE GLOBAL VECTOR
-      CHKERR VecSetValues(getKSPf(), data, &*locBoundaryRhs.begin(),
-                          ADD_VALUES);
+      CHKERR VecSetValues<MoFEM::EssentialBcStorage>(
+          getKSPf(), data, &*locBoundaryRhs.begin(), ADD_VALUES);
     }
 
     MoFEMFunctionReturn(0);
