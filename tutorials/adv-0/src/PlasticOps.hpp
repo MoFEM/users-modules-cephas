@@ -526,7 +526,7 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 
  */
 inline double constraint(double eqiv, double dot_tau, double f, double sigma_y,
-                        double abs_w) {
+                         double abs_w) {
   return visH * dot_tau +
          (sigmaY / 2) * ((cn0 * (dot_tau - eqiv) + cn1 * (eqiv * dot_tau) -
                           (f - sigma_y) / sigmaY) -
