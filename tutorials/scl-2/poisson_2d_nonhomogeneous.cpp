@@ -256,6 +256,8 @@ MoFEMErrorCode Poisson2DNonhomogeneous::outputResults() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
   pipeline_mng->getBoundaryLhsFE().reset();
+  pipeline_mng->getDomainRhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
 
   auto d_ptr = boost::make_shared<VectorDouble>();
   auto l_ptr = boost::make_shared<VectorDouble>();
