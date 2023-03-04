@@ -917,19 +917,25 @@ MoFEMErrorCode Example::tsSolve() {
     if (is_pcfs == PETSC_TRUE) {
 
       auto bc_mng = mField.getInterface<BcManager>();
-      auto name_prb = simple->getProblemName();
-      auto is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_X", "U", 0, 0);
-      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Y", "U", 1, 1, is_all_bc);
-      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Z", "U", 2, 2, is_all_bc);
-      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_ALL", "U", 0, 2, is_all_bc);
 
-      int is_all_bc_size;
-      CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
-      MOFEM_LOG("EXAMPLE", Sev::inform)
-          << "Field split block size " << is_all_bc_size;
+      auto create_all_bc_is = [&]() {
+        auto name_prb = simple->getProblemName();
+        auto is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_X", "U", 0, 0);
+        is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Y", "U", 1, 1, is_all_bc);
+        is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Z", "U", 2, 2, is_all_bc);
+        is_all_bc =
+            bc_mng->getBlockIS(name_prb, "FIX_ALL", "U", 0, 2, is_all_bc);
+        int is_all_bc_size;
+        CHK_THROW_MESSAGE(ISGetSize(is_all_bc, &is_all_bc_size), "get size");
+        MOFEM_LOG("EXAMPLE", Sev::inform)
+            << "Field split block size " << is_all_bc_size;
+        return is_all_bc;
+      };
 
+      auto is_all_bc = create_all_bc_is();
       CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
                                is_all_bc); // boundary block
+
     }
 
     MoFEMFunctionReturnHot(0);
