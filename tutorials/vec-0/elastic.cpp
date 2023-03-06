@@ -365,6 +365,8 @@ struct SetUpSchur {
   static boost::shared_ptr<SetUpSchur>
   createSetUpSchur(MoFEM::Interface &m_field);
   virtual MoFEMErrorCode setUp(SmartPetscObj<KSP> solver) = 0;
+  virtual MoFEMErrorCode preProc() = 0;
+  virtual MoFEMErrorCode postProc() = 0;
 
 protected:
   SetUpSchur() = default;
@@ -399,6 +401,20 @@ MoFEMErrorCode Example::solveSystem() {
   if (A == AssemblyType::SCHUR) {
     auto schur_ptr = SetUpSchur::createSetUpSchur(mField);
     CHKERR schur_ptr->setUp(solver);
+
+    pip->getDomainLhsFE()->preProcessHook = [&]() {
+      MoFEMFunctionBegin;
+      if (schur_ptr)
+        CHKERR schur_ptr->preProc();
+      MoFEMFunctionReturn(0);
+    };
+    pip->getBoundaryLhsFE()->postProcessHook = [&]() {
+      MoFEMFunctionBegin;
+      if (schur_ptr)
+        CHKERR schur_ptr->postProc();
+      MoFEMFunctionReturn(0);
+    };
+
     CHKERR setup_and_solve();
   } else {
     CHKERR setup_and_solve();
@@ -614,6 +630,8 @@ struct SetUpSchurImpl : public SetUpSchur {
   virtual ~SetUpSchurImpl() { S.reset(); }
 
   MoFEMErrorCode setUp(SmartPetscObj<KSP> solver);
+  MoFEMErrorCode preProc();
+  MoFEMErrorCode postProc();
 
 private:
   MoFEMErrorCode setEntities();
@@ -621,7 +639,7 @@ private:
   MoFEMErrorCode setOperator();
   MoFEMErrorCode setPC(PC pc);
 
-  static SmartPetscObj<Mat> S;
+  SmartPetscObj<Mat> S;
 
   MoFEM::Interface &mField;
 
@@ -630,7 +648,6 @@ private:
   Range subEnts;
 };
 
-SmartPetscObj<Mat> SetUpSchurImpl::S;
 
 MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
   MoFEMFunctionBegin;
@@ -653,25 +670,6 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
     // CHKERR MatSetOption(S, MAT_SYMMETRIC, PETSC_TRUE);
     CHKERR setOperator();
     CHKERR setPC(pc);
-
-    pip->getDomainLhsFE()->preProcessHook = []() {
-      MoFEMFunctionBegin;
-      CHKERR MatZeroEntries(SetUpSchurImpl::S);
-      MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble Begin";
-      MoFEMFunctionReturn(0);
-    };
-
-    pip->getBoundaryLhsFE()->postProcessHook = []() {
-      MoFEMFunctionBegin;
-      MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
-      CHKERR MatAssemblyBegin(SetUpSchurImpl::S, MAT_FINAL_ASSEMBLY);
-      CHKERR MatAssemblyEnd(SetUpSchurImpl::S, MAT_FINAL_ASSEMBLY);
-      // MatView(SetUpSchurImpl::S, PETSC_VIEWER_DRAW_WORLD);
-      // std::string wait;
-      // std::cin >> wait;
-      MoFEMFunctionReturn(0);
-    };
-
   } else {
     pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
     pip->getOpBoundaryLhsPipeline().push_back(
@@ -679,16 +677,6 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
     pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
     pip->getOpDomainLhsPipeline().push_back(
         new OpSchurAssembleEnd({}, {}, {}, {}, {}));
-    pip->getDomainLhsFE()->preProcessHook = []() {
-      MoFEMFunctionBegin;
-      MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble Begin";
-      MoFEMFunctionReturn(0);
-    };
-    pip->getDomainLhsFE()->postProcessHook = []() {
-      MoFEMFunctionBegin;
-      MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
-      MoFEMFunctionReturn(0);
-    };
   }
   MoFEMFunctionReturn(0);
 }
@@ -742,6 +730,25 @@ MoFEMErrorCode SetUpSchurImpl::setPC(PC pc) {
       simple->getProblemName(), ROW, "U", 0, SPACE_DIM, vol_is, &volEnts);
   CHKERR PCFieldSplitSetIS(pc, NULL, vol_is);
   CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SetUpSchurImpl::preProc() {
+  MoFEMFunctionBegin;
+  if (S) {
+    CHKERR MatZeroEntries(S);
+    MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble Begin";
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SetUpSchurImpl::postProc() {
+  MoFEMFunctionBegin;
+  if (S) {
+    CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
+  }
+  MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
   MoFEMFunctionReturn(0);
 }
 
