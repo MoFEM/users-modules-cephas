@@ -528,18 +528,10 @@ MoFEMErrorCode Example::OPs() {
           new OpKPiola("U", "U", commonHenckyDataPtr->getMatTangent()));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
           "U", "EP", commonPlasticDataPtr, commonHenckyDataPtr, m_D_ptr));
-      // pipeline.push_back(new OpCalculateArgLhs_LogStrain_dUdTau(
-      //     "U", "TAU", commonPlasticDataPtr, commonHenckyDataPtr));
-      // pipeline.push_back(new OpCalculateArgLhs_LogStrain_dUdU(
-      //     "U", "U", commonPlasticDataPtr, commonHenckyDataPtr));
     } else {
       pipeline.push_back(new OpKCauchy("U", "U", m_D_ptr));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
           "U", "EP", commonPlasticDataPtr, m_D_ptr));
-      // pipeline.push_back(
-      //     new OpCalculateArgLhs_dUdTau("U", "TAU", commonPlasticDataPtr));
-      // pipeline.push_back(
-      //     new OpCalculateArgLhs_dUdU("U", "U", commonPlasticDataPtr));
     }
 
     pipeline.push_back(new OpUnSetBc("U"));
@@ -604,14 +596,6 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculateConstraintsRhs("TAU", commonPlasticDataPtr, m_D_ptr));
     pipeline.push_back(
         new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr, m_D_ptr));
-
-    if (is_large_strains) {
-      // pipeline.push_back(new OpCalculateArgRhs_LogStrain_dU(
-      //     "U", commonPlasticDataPtr, commonHenckyDataPtr));
-    } else {
-      // pipeline.push_back(new OpCalculateArgRhs_dU("U",
-      // commonPlasticDataPtr));
-    }
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -1271,8 +1255,6 @@ private:
   SmartPetscObj<AO> subAO;
 };
 
-// SmartPetscObj<Mat> SetUpSchurImpl::S = SmartPetscObj<Mat>();
-
 MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
   MoFEMFunctionBegin;
   auto pip = mField.getInterface<PipelineManager>();
@@ -1301,9 +1283,9 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
         new OpSchurAssembleEnd({}, {}, {}, {}, {}));
   }
 
-  // subDM.reset();
-  // subIS.reset();
-  // subAO.reset();
+  subDM.reset();
+  subIS.reset();
+  subAO.reset();
   MoFEMFunctionReturn(0);
 }
 
@@ -1325,21 +1307,6 @@ MoFEMErrorCode SetUpSchurImpl::setPC(PC pc) {
   MoFEMFunctionBegin;
   smartPC = SmartPetscObj<PC>(pc, true);
   CHKERR PCFieldSplitSetIS(pc, NULL, subIS);
-
-#ifndef NDEBUG
-  // auto *prb_ptr = getProblemPtr(subDM);
-  // if (auto sub_data = prb_ptr->getSubData()) {
-  //   SmartPetscObj<IS> is_sub;
-  //   CHKERR mField.getInterface<ISManager>()->isCreateProblem("SUB_U", ROW,
-  //                                                            is_sub);
-  //   auto ao_sub = sub_data->getSmartRowMap();
-  //   CHKERR AOPetscToApplicationIS(ao_sub, is_sub);
-  //   CHKERR PCFieldSplitSetIS(pc, NULL, is_sub);
-  // } else {
-  //         SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "No sub data");
-  // }
-#endif
-
   CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
   MoFEMFunctionReturn(0);
 }
@@ -1347,7 +1314,6 @@ MoFEMErrorCode SetUpSchurImpl::setPC(PC pc) {
 MoFEMErrorCode SetUpSchurImpl::preProc() {
   MoFEMFunctionBegin;
   if (SetUpSchurImpl::S) {
-    cerr << "ZZZZZZZeeeeerrrrooooo" << endl;
     CHKERR MatZeroEntries(S);
   }
   MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble Begin";
@@ -1360,12 +1326,6 @@ MoFEMErrorCode SetUpSchurImpl::postProc() {
   if (S) {
     CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-
-    // CHKERR PCReset(smartPC);
-    // CHKERR PCFieldSplitSetIS(smartPC, NULL, subIS);
-    // CHKERR PCFieldSplitSetSchurPre(smartPC, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
-
-    cerr << "Assssseeemble" << endl;
   }
   MoFEMFunctionReturn(0);
 }
