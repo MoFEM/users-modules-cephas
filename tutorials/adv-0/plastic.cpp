@@ -973,7 +973,7 @@ MoFEMErrorCode Example::tsSolve() {
         CHKERR DMMoFEMSetSquareProblem(dm_sub, PETSC_TRUE);
         CHKERR DMMoFEMAddElement(dm_sub, simple->getDomainFEName());
         CHKERR DMMoFEMAddElement(dm_sub, simple->getBoundaryFEName());
-        for (auto f : {"U", "TAU"}) {
+        for (auto f : {"U"}) {
           CHKERR DMMoFEMAddSubFieldRow(dm_sub, f);
           CHKERR DMMoFEMAddSubFieldCol(dm_sub, f);
         }
@@ -1032,6 +1032,12 @@ MoFEMErrorCode Example::tsSolve() {
         SmartPetscObj<IS> is_epp;
         CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
             "SUB_BC", ROW, "EP", 0, MAX_DOFS_ON_ENTITY, is_epp);
+        SmartPetscObj<IS> is_tau;
+        CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+            "SUB_BC", ROW, "TAU", 0, MAX_DOFS_ON_ENTITY, is_tau);
+        IS is_union_raw;
+        CHKERR ISExpand(is_epp, is_tau, &is_union_raw);
+        SmartPetscObj<IS> is_union(is_union_raw);
 
         SmartPetscObj<DM> dm_u_sub;
         SmartPetscObj<IS> is_u_sub;
@@ -1044,7 +1050,7 @@ MoFEMErrorCode Example::tsSolve() {
         CHKERR AOPetscToApplicationIS(ao_bc_sub, is_up);
         auto ao_up = createAOMappingIS(is_u_sub, PETSC_NULL);
         schur_ptr =
-            SetUpSchur::createSetUpSchur(mField, dm_u_sub, is_epp, ao_up);
+            SetUpSchur::createSetUpSchur(mField, dm_u_sub, is_union, ao_up);
         PetscInt n;
         KSP *ksps;
         CHKERR PCFieldSplitGetSubKSP(pc, &n, &ksps);
@@ -1294,12 +1300,20 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
   auto pip = mField.getInterface<PipelineManager>();
   // Boundary
   pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
-  pip->getOpBoundaryLhsPipeline().push_back(
-      new OpSchurAssembleEnd({"EP"}, {nullptr}, {subAO}, {S}, {false}));
+  pip->getOpBoundaryLhsPipeline().push_back(new OpSchurAssembleEnd(
+
+      {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), subAO},
+      {SmartPetscObj<Mat>(), S}, {false, false}
+
+      ));
   // Domain
   pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
-  pip->getOpDomainLhsPipeline().push_back(
-      new OpSchurAssembleEnd({"EP"}, {nullptr}, {subAO}, {S}, {false}));
+  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd(
+
+      {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), subAO},
+      {SmartPetscObj<Mat>(), S}, {false, false}
+
+      ));
   MoFEMFunctionReturn(0);
 }
 
