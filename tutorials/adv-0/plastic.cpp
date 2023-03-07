@@ -802,8 +802,7 @@ MoFEMErrorCode Example::tsSolve() {
           new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
       pp_fe->getOpPtrVector().push_back(
           new OpCalculateHenckyPlasticStress<SPACE_DIM>(
-              "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr,
-              1 /*scale*/));
+              "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr, scale));
       pp_fe->getOpPtrVector().push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
@@ -831,7 +830,7 @@ MoFEMErrorCode Example::tsSolve() {
           new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
                                             commonPlasticDataPtr->mStrainPtr));
       pp_fe->getOpPtrVector().push_back(new OpPlasticStress(
-          "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, 1 /*scale*/));
+          "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
 
       pp_fe->getOpPtrVector().push_back(
 
