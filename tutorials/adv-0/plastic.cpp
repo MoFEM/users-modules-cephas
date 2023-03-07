@@ -92,6 +92,7 @@ using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<
     GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
 
 PetscBool is_large_strains = PETSC_TRUE;
+PetscBool set_timer = PETSC_FALSE;
 
 double scale = 1.;
 
@@ -280,6 +281,8 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-set_timer", &set_timer,
+                               PETSC_NULL);
 
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-geom_order", &geom_order,
@@ -693,7 +696,7 @@ MoFEMErrorCode Example::OPs() {
         pipeline.push_back(
             new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
         pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
-            "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr));
+            "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr, scale));
         pipeline.push_back(
             new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
@@ -1161,13 +1164,14 @@ MoFEMErrorCode Example::tsSolve() {
 
   MOFEM_LOG_CHANNEL("TIMER");
   MOFEM_LOG_TAG("TIMER", "timer");
-  BOOST_LOG_SCOPED_THREAD_ATTR("Timeline", attrs::timer());
-  MOFEM_LOG("TIMER", Sev::inform) << "TSSetUp";
+  if(set_timer)
+    BOOST_LOG_SCOPED_THREAD_ATTR("Timeline", attrs::timer());
+  MOFEM_LOG("TIMER", Sev::verbose) << "TSSetUp";
   CHKERR TSSetUp(solver);
-  MOFEM_LOG("TIMER", Sev::inform) << "TSSetUp <= done";
-  MOFEM_LOG("TIMER", Sev::inform) << "TSSolve";
+  MOFEM_LOG("TIMER", Sev::verbose) << "TSSetUp <= done";
+  MOFEM_LOG("TIMER", Sev::verbose) << "TSSolve";
   CHKERR TSSolve(solver, NULL);
-  MOFEM_LOG("TIMER", Sev::inform) << "TSSolve <= done";
+  MOFEM_LOG("TIMER", Sev::verbose) << "TSSolve <= done";
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
