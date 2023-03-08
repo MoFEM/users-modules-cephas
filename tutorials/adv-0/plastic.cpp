@@ -32,7 +32,9 @@ constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
 
-constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
+constexpr AssemblyType A = (SCHUR_ASSEMBLE)
+                               ? AssemblyType::SCHUR
+                               : AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType G =
     IntegrationType::GAUSS; //< selected integration type
 
@@ -90,6 +92,7 @@ using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<
     GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
 
 PetscBool is_large_strains = PETSC_TRUE;
+PetscBool set_timer = PETSC_FALSE;
 
 double scale = 1.;
 
@@ -278,6 +281,8 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-set_timer", &set_timer,
+                               PETSC_NULL);
 
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-geom_order", &geom_order,
@@ -453,7 +458,7 @@ MoFEMErrorCode Example::bC() {
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  auto pip = mField.getInterface<PipelineManager>();
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
@@ -526,18 +531,10 @@ MoFEMErrorCode Example::OPs() {
           new OpKPiola("U", "U", commonHenckyDataPtr->getMatTangent()));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
           "U", "EP", commonPlasticDataPtr, commonHenckyDataPtr, m_D_ptr));
-      // pipeline.push_back(new OpCalculateArgLhs_LogStrain_dUdTau(
-      //     "U", "TAU", commonPlasticDataPtr, commonHenckyDataPtr));
-      // pipeline.push_back(new OpCalculateArgLhs_LogStrain_dUdU(
-      //     "U", "U", commonPlasticDataPtr, commonHenckyDataPtr));
     } else {
       pipeline.push_back(new OpKCauchy("U", "U", m_D_ptr));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
           "U", "EP", commonPlasticDataPtr, m_D_ptr));
-      // pipeline.push_back(
-      //     new OpCalculateArgLhs_dUdTau("U", "TAU", commonPlasticDataPtr));
-      // pipeline.push_back(
-      //     new OpCalculateArgLhs_dUdU("U", "U", commonPlasticDataPtr));
     }
 
     pipeline.push_back(new OpUnSetBc("U"));
@@ -603,13 +600,6 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr, m_D_ptr));
 
-    if (is_large_strains) {
-      // pipeline.push_back(new OpCalculateArgRhs_LogStrain_dU(
-      //     "U", commonPlasticDataPtr, commonHenckyDataPtr));
-    } else {
-      // pipeline.push_back(new OpCalculateArgRhs_dU("U", commonPlasticDataPtr));
-    }
-
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
@@ -648,36 +638,36 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
-  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline(),
+  CHKERR add_domain_base_ops(pip->getOpDomainLhsPipeline());
+  CHKERR add_domain_stress_ops(pip->getOpDomainLhsPipeline(),
                                commonPlasticDataPtr->mDPtr);
-  CHKERR add_domain_ops_lhs_mechanical(pipeline_mng->getOpDomainLhsPipeline(),
+  CHKERR add_domain_ops_lhs_mechanical(pip->getOpDomainLhsPipeline(),
                                        commonPlasticDataPtr->mDPtr);
-  CHKERR add_domain_ops_lhs_constrain(pipeline_mng->getOpDomainLhsPipeline(),
+  CHKERR add_domain_ops_lhs_constrain(pip->getOpDomainLhsPipeline(),
                                       commonPlasticDataPtr->mDPtr);
   CHKERR
-  add_boundary_ops_lhs_mechanical(pipeline_mng->getOpBoundaryLhsPipeline());
+  add_boundary_ops_lhs_mechanical(pip->getOpBoundaryLhsPipeline());
 
-  CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline(),
+  CHKERR add_domain_base_ops(pip->getOpDomainRhsPipeline());
+  CHKERR add_domain_stress_ops(pip->getOpDomainRhsPipeline(),
                                commonPlasticDataPtr->mDPtr);
-  CHKERR add_domain_ops_rhs_mechanical(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_domain_ops_rhs_constrain(pipeline_mng->getOpDomainRhsPipeline(),
+  CHKERR add_domain_ops_rhs_mechanical(pip->getOpDomainRhsPipeline());
+  CHKERR add_domain_ops_rhs_constrain(pip->getOpDomainRhsPipeline(),
                                       commonPlasticDataPtr->mDPtr);
 
   // Boundary
   CHKERR
-  add_boundary_ops_rhs_mechanical(pipeline_mng->getOpBoundaryRhsPipeline());
+  add_boundary_ops_rhs_mechanical(pip->getOpBoundaryRhsPipeline());
 
   auto integration_rule_bc = [](int, int, int ao) { return 2 * ao; };
 
   auto vol_rule = [](int, int, int ao) { return 2 * ao + geom_order - 1; };
 
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(vol_rule);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(vol_rule);
+  CHKERR pip->setDomainRhsIntegrationRule(vol_rule);
+  CHKERR pip->setDomainLhsIntegrationRule(vol_rule);
 
-  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_bc);
-  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_bc);
+  CHKERR pip->setBoundaryLhsIntegrationRule(integration_rule_bc);
+  CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule_bc);
 
   auto create_reaction_pipeline = [&](auto &pipeline) {
     MoFEMFunctionBegin;
@@ -706,7 +696,7 @@ MoFEMErrorCode Example::OPs() {
         pipeline.push_back(
             new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
         pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
-            "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr));
+            "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr, scale));
         pipeline.push_back(
             new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
@@ -743,11 +733,27 @@ MoFEMErrorCode Example::OPs() {
 //! [Push operators to pipeline]
 
 //! [Solve]
+struct SetUpSchur {
+  static boost::shared_ptr<SetUpSchur> createSetUpSchur(
+
+      MoFEM::Interface &m_field, SmartPetscObj<DM>, SmartPetscObj<IS>,
+      SmartPetscObj<AO>
+
+  );
+  virtual MoFEMErrorCode setUp(KSP solver) = 0;
+
+  virtual MoFEMErrorCode preProc() = 0;
+  virtual MoFEMErrorCode postProc() = 0;
+
+protected:
+  SetUpSchur() = default;
+};
+
 MoFEMErrorCode Example::tsSolve() {
   MoFEMFunctionBegin;
 
   Simple *simple = mField.getInterface<Simple>();
-  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  PipelineManager *pip = mField.getInterface<PipelineManager>();
   ISManager *is_manager = mField.getInterface<ISManager>();
 
   auto snes_ctx_ptr = smartGetDMSnesCtx(simple->getDM());
@@ -767,7 +773,7 @@ MoFEMErrorCode Example::tsSolve() {
     auto pp_fe = boost::make_shared<PostProcEle>(mField);
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-        CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pp_fe->getOpPtrVector(), {H1}, "GEOMETRY");
 
     auto x_ptr = boost::make_shared<MatrixDouble>();
@@ -799,8 +805,7 @@ MoFEMErrorCode Example::tsSolve() {
           new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
       pp_fe->getOpPtrVector().push_back(
           new OpCalculateHenckyPlasticStress<SPACE_DIM>(
-              "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr,
-              1 /*scale*/));
+              "U", commonHenckyDataPtr, commonPlasticDataPtr->mDPtr, scale));
       pp_fe->getOpPtrVector().push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
@@ -828,7 +833,7 @@ MoFEMErrorCode Example::tsSolve() {
           new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
                                             commonPlasticDataPtr->mStrainPtr));
       pp_fe->getOpPtrVector().push_back(new OpPlasticStress(
-          "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, 1 /*scale*/));
+          "U", commonPlasticDataPtr, commonPlasticDataPtr->mDPtr, scale));
 
       pp_fe->getOpPtrVector().push_back(
 
@@ -901,7 +906,9 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  auto set_fieldsplit_preconditioner = [&](auto solver) {
+  auto set_fieldsplit_preconditioner = [&](auto solver,
+                                           boost::shared_ptr<SetUpSchur>
+                                               &schur_ptr) {
     MoFEMFunctionBeginHot;
 
     SNES snes;
@@ -918,18 +925,139 @@ MoFEMErrorCode Example::tsSolve() {
 
       auto bc_mng = mField.getInterface<BcManager>();
       auto name_prb = simple->getProblemName();
-      auto is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_X", "U", 0, 0);
-      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Y", "U", 1, 1, is_all_bc);
-      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Z", "U", 2, 2, is_all_bc);
-      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_ALL", "U", 0, 2, is_all_bc);
 
-      int is_all_bc_size;
-      CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
-      MOFEM_LOG("EXAMPLE", Sev::inform)
-          << "Field split block size " << is_all_bc_size;
+      auto create_sub_bc_dm = [&](SmartPetscObj<DM> base_dm,
+                                  SmartPetscObj<DM> &dm_sub,
+                                  SmartPetscObj<IS> &is_sub,
+                                  SmartPetscObj<AO> &ao_sub) {
+        MoFEMFunctionBegin;
+
+        dm_sub = createSmartDM(mField.get_comm(), "DMMOFEM");
+        CHKERR DMMoFEMCreateSubDM(dm_sub, base_dm, "SUB_BC");
+        CHKERR DMMoFEMSetSquareProblem(dm_sub, PETSC_TRUE);
+        CHKERR DMMoFEMAddElement(dm_sub, simple->getDomainFEName());
+        CHKERR DMMoFEMAddElement(dm_sub, simple->getBoundaryFEName());
+        for (auto f : {"U", "EP", "TAU"}) {
+          CHKERR DMMoFEMAddSubFieldRow(dm_sub, f);
+          CHKERR DMMoFEMAddSubFieldCol(dm_sub, f);
+        }
+        CHKERR DMSetUp(dm_sub);
+
+        CHKERR bc_mng->removeBlockDOFsOnEntities("SUB_BC", "FIX_X", "U", 0, 0);
+        CHKERR bc_mng->removeBlockDOFsOnEntities("SUB_BC", "FIX_Y", "U", 1, 1);
+        CHKERR bc_mng->removeBlockDOFsOnEntities("SUB_BC", "FIX_Z", "U", 2, 2);
+        CHKERR bc_mng->removeBlockDOFsOnEntities("SUB_BC", "FIX_ALL", "U", 0,
+                                                 2);
+
+        auto *prb_ptr = getProblemPtr(dm_sub);
+        if (auto sub_data = prb_ptr->getSubData()) {
+          is_sub = sub_data->getSmartRowIs();
+          ao_sub = sub_data->getSmartRowMap();
+          int is_sub_size;
+          CHKERR ISGetSize(is_sub, &is_sub_size);
+          MOFEM_LOG("EXAMPLE", Sev::inform)
+              << "Field split second block size " << is_sub_size;
+
+        } else {
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "No sub data");
+        }
+
+        MoFEMFunctionReturn(0);
+      };
+
+      auto create_sub_u_dm = [&](SmartPetscObj<DM> base_dm,
+                                 SmartPetscObj<DM> &dm_sub,
+                                 SmartPetscObj<IS> &is_sub,
+                                 SmartPetscObj<AO> &ao_sub) {
+        MoFEMFunctionBegin;
+        dm_sub = createSmartDM(mField.get_comm(), "DMMOFEM");
+        CHKERR DMMoFEMCreateSubDM(dm_sub, base_dm, "SUB_U");
+        CHKERR DMMoFEMSetSquareProblem(dm_sub, PETSC_TRUE);
+        CHKERR DMMoFEMAddElement(dm_sub, simple->getDomainFEName());
+        CHKERR DMMoFEMAddElement(dm_sub, simple->getBoundaryFEName());
+        for (auto f : {"U"}) {
+          CHKERR DMMoFEMAddSubFieldRow(dm_sub, f);
+          CHKERR DMMoFEMAddSubFieldCol(dm_sub, f);
+        }
+        CHKERR DMSetUp(dm_sub);
+
+        auto *prb_ptr = getProblemPtr(dm_sub);
+        if (auto sub_data = prb_ptr->getSubData()) {
+          is_sub = sub_data->getSmartRowIs();
+          ao_sub = sub_data->getSmartRowMap();
+          // ISView(is_sub, PETSC_VIEWER_STDOUT_WORLD);
+          int is_sub_size;
+          CHKERR ISGetSize(is_sub, &is_sub_size);
+          MOFEM_LOG("EXAMPLE", Sev::inform)
+              << "Field split second block size " << is_sub_size;
+
+        } else {
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "No sub data");
+        }
+
+        CHKERR DMSetUp(dm_sub);
+        MoFEMFunctionReturn(0);
+      };
+
+      auto create_all_bc_is = [&](SmartPetscObj<IS> &is_all_bc) {
+        MoFEMFunctionBegin;
+        is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_X", "U", 0, 0);
+        is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Y", "U", 1, 1, is_all_bc);
+        is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Z", "U", 2, 2, is_all_bc);
+        is_all_bc =
+            bc_mng->getBlockIS(name_prb, "FIX_ALL", "U", 0, 2, is_all_bc);
+        int is_all_bc_size;
+        CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
+        MOFEM_LOG("EXAMPLE", Sev::inform)
+            << "Field split first block size " << is_all_bc_size;
+        MoFEMFunctionReturn(0);
+      };
+
+      SmartPetscObj<IS> is_all_bc;
+      SmartPetscObj<DM> dm_bc_sub;
+      SmartPetscObj<IS> is_bc_sub;
+      SmartPetscObj<AO> ao_bc_sub;
+
+      CHKERR create_all_bc_is(is_all_bc);
+      CHKERR create_sub_bc_dm(simple->getDM(), dm_bc_sub, is_bc_sub, ao_bc_sub);
+
+      SmartPetscObj<IS> is_prb;
+      CHKERR mField.getInterface<ISManager>()->isCreateProblem(
+          simple->getProblemName(), ROW, is_prb);
 
       CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
                                is_all_bc); // boundary block
+      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_bc_sub);
+
+      if constexpr (A == AssemblyType::SCHUR) {
+
+        SmartPetscObj<IS> is_epp;
+        CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+            "SUB_BC", ROW, "EP", 0, MAX_DOFS_ON_ENTITY, is_epp);
+        SmartPetscObj<IS> is_tau;
+        CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+            "SUB_BC", ROW, "TAU", 0, MAX_DOFS_ON_ENTITY, is_tau);
+        IS is_union_raw;
+        CHKERR ISExpand(is_epp, is_tau, &is_union_raw);
+        SmartPetscObj<IS> is_union(is_union_raw);
+
+        SmartPetscObj<DM> dm_u_sub;
+        SmartPetscObj<IS> is_u_sub;
+        SmartPetscObj<AO> ao_u_sub;
+        CHKERR create_sub_u_dm(dm_bc_sub, dm_u_sub, is_u_sub, ao_u_sub);
+
+        // Indices has to be map fro very to level, while assembling Schur
+        // complement.
+        auto is_up = is_u_sub;
+        CHKERR AOPetscToApplicationIS(ao_bc_sub, is_up);
+        auto ao_up = createAOMappingIS(is_u_sub, PETSC_NULL);
+        schur_ptr =
+            SetUpSchur::createSetUpSchur(mField, dm_u_sub, is_union, ao_up);
+        PetscInt n;
+        KSP *ksps;
+        CHKERR PCFieldSplitGetSubKSP(pc, &n, &ksps);
+        CHKERR schur_ptr->setUp(ksps[1]);
+      }
     }
 
     MoFEMFunctionReturnHot(0);
@@ -942,16 +1070,16 @@ MoFEMErrorCode Example::tsSolve() {
   if constexpr (SPACE_DIM == 3)
     uZScatter = scatter_create(D, 2);
 
-  auto solver = pipeline_mng->createTSIM();
+  auto solver = pip->createTSIM();
 
-  auto pre_rhs = [&]() {
+  auto active_pre_lhs = [&]() {
     MoFEMFunctionBegin;
     std::fill(commonPlasticDataPtr->activityData.begin(),
               commonPlasticDataPtr->activityData.end(), 0);
     MoFEMFunctionReturn(0);
   };
 
-  auto post_rhs = [&]() {
+  auto active_post_lhs = [&]() {
     MoFEMFunctionBegin;
     auto get_iter = [&]() {
       SNES snes;
@@ -990,7 +1118,7 @@ MoFEMErrorCode Example::tsSolve() {
 
         MOFEM_LOG_C(
             "EXAMPLE", Sev::inform,
-            "Iter %d nb pts %d nb avtive pts %d (%3.3f\%) nb active elemens %d "
+            "Iter %d nb pts %d nb avtive pts %d (%3.3f\%) nb active elements %d "
             "(%3.3f\%) nb full active elems %d (%3.3f\%)",
             iter, nb_points, active_points, proc_nb_points, avtive_elems,
             proc_nb_active, avtive_full_elems, proc_nb_full_active, iter);
@@ -1000,19 +1128,50 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  mField.getInterface<PipelineManager>()->getDomainLhsFE()->preProcessHook =
-      pre_rhs;
-  mField.getInterface<PipelineManager>()->getDomainLhsFE()->postProcessHook =
-      post_rhs;
-
   CHKERR TSSetSolution(solver, D);
   CHKERR set_section_monitor(solver);
   CHKERR set_time_monitor(dm, solver);
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
-  CHKERR set_fieldsplit_preconditioner(solver);
+
+  boost::shared_ptr<SetUpSchur> schur_ptr;
+  CHKERR set_fieldsplit_preconditioner(solver, schur_ptr);
+
+  mField.getInterface<PipelineManager>()->getDomainLhsFE()->preProcessHook =
+      [&]() {
+        MoFEMFunctionBegin;
+        if (schur_ptr)
+          CHKERR schur_ptr->preProc();
+        CHKERR active_pre_lhs();
+        MoFEMFunctionReturn(0);
+      };
+  mField.getInterface<PipelineManager>()->getDomainLhsFE()->postProcessHook =
+      [&]() {
+        MoFEMFunctionBegin;
+        // if (schur_ptr)
+        //   CHKERR schur_ptr->postProc();
+        CHKERR active_post_lhs();
+        MoFEMFunctionReturn(0);
+      };
+
+  mField.getInterface<PipelineManager>()->getBoundaryLhsFE()->postProcessHook =
+      [&]() {
+        MoFEMFunctionBegin;
+        if (schur_ptr)
+          CHKERR schur_ptr->postProc();
+        MoFEMFunctionReturn(0);
+      };
+
+  MOFEM_LOG_CHANNEL("TIMER");
+  MOFEM_LOG_TAG("TIMER", "timer");
+  if(set_timer)
+    BOOST_LOG_SCOPED_THREAD_ATTR("Timeline", attrs::timer());
+  MOFEM_LOG("TIMER", Sev::verbose) << "TSSetUp";
   CHKERR TSSetUp(solver);
+  MOFEM_LOG("TIMER", Sev::verbose) << "TSSetUp <= done";
+  MOFEM_LOG("TIMER", Sev::verbose) << "TSSolve";
   CHKERR TSSolve(solver, NULL);
+  MOFEM_LOG("TIMER", Sev::verbose) << "TSSolve <= done";
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -1034,7 +1193,10 @@ int main(int argc, char *argv[]) {
   auto core_log = logging::core::get();
   core_log->add_sink(
       LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "TIMER"));
   LogManager::setLog("EXAMPLE");
+
   MOFEM_LOG_TAG("EXAMPLE", "example");
 
   try {
@@ -1051,7 +1213,7 @@ int main(int argc, char *argv[]) {
 
     //! [Create MoFEM]
     MoFEM::Core core(moab);           ///< finite element database
-    MoFEM::Interface &m_field = core; ///< finite element database insterface
+    MoFEM::Interface &m_field = core; ///< finite element database interface
     //! [Create MoFEM]
 
     //! [Load mesh]
@@ -1068,4 +1230,127 @@ int main(int argc, char *argv[]) {
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
+}
+
+struct SetUpSchurImpl : public SetUpSchur {
+
+  SetUpSchurImpl(MoFEM::Interface &m_field, SmartPetscObj<DM> sub_dm,
+                 SmartPetscObj<IS> sub_is, SmartPetscObj<AO> sub_ao)
+      : SetUpSchur(), mField(m_field), subDM(sub_dm), subIS(sub_is),
+        subAO(sub_ao) {
+    if (S) {
+      CHK_THROW_MESSAGE(
+          MOFEM_DATA_INCONSISTENCY,
+          "Is expected that schur matrix is not allocated. This is "
+          "possible only is PC is set up twice");
+    }
+  }
+  virtual ~SetUpSchurImpl() { S.reset(); }
+
+  MoFEMErrorCode setUp(KSP solver);
+  MoFEMErrorCode preProc();
+  MoFEMErrorCode postProc();
+
+private:
+  MoFEMErrorCode setOperator();
+  MoFEMErrorCode setPC(PC pc);
+
+  SmartPetscObj<Mat> S;
+  SmartPetscObj<PC> smartPC;
+
+  MoFEM::Interface &mField;
+  SmartPetscObj<DM> subDM;
+  SmartPetscObj<IS> subIS;
+  SmartPetscObj<AO> subAO;
+};
+
+MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
+  MoFEMFunctionBegin;
+  auto pip = mField.getInterface<PipelineManager>();
+  PC pc;
+  CHKERR KSPSetFromOptions(solver);
+  CHKERR KSPGetPC(solver, &pc);
+  PetscBool is_pcfs = PETSC_FALSE;
+  PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+  if (is_pcfs) {
+    if (S) {
+      CHK_THROW_MESSAGE(
+          MOFEM_DATA_INCONSISTENCY,
+          "Is expected that schur matrix is not allocated. This is "
+          "possible only is PC is set up twice");
+    }
+    S = smartCreateDMMatrix(subDM);
+    CHKERR setOperator();
+    CHKERR setPC(pc);
+
+  } else {
+    pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
+    pip->getOpBoundaryLhsPipeline().push_back(
+        new OpSchurAssembleEnd({}, {}, {}, {}, {}));
+    pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
+    pip->getOpDomainLhsPipeline().push_back(
+        new OpSchurAssembleEnd({}, {}, {}, {}, {}));
+  }
+
+  subDM.reset();
+  subIS.reset();
+  subAO.reset();
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SetUpSchurImpl::setOperator() {
+  MoFEMFunctionBegin;
+  auto pip = mField.getInterface<PipelineManager>();
+  // Boundary
+  pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
+  pip->getOpBoundaryLhsPipeline().push_back(new OpSchurAssembleEnd(
+
+      {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), subAO},
+      {SmartPetscObj<Mat>(), S}, {false, false}
+
+      ));
+  // Domain
+  pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
+  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd(
+
+      {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), subAO},
+      {SmartPetscObj<Mat>(), S}, {false, false}
+
+      ));
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SetUpSchurImpl::setPC(PC pc) {
+  MoFEMFunctionBegin;
+  smartPC = SmartPetscObj<PC>(pc, true);
+  CHKERR PCFieldSplitSetIS(pc, NULL, subIS);
+  CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SetUpSchurImpl::preProc() {
+  MoFEMFunctionBegin;
+  if (SetUpSchurImpl::S) {
+    CHKERR MatZeroEntries(S);
+  }
+  MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble Begin";
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SetUpSchurImpl::postProc() {
+  MoFEMFunctionBegin;
+  MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble End";
+  if (S) {
+    CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
+  }
+  MoFEMFunctionReturn(0);
+}
+
+boost::shared_ptr<SetUpSchur>
+SetUpSchur::createSetUpSchur(MoFEM::Interface &m_field,
+                             SmartPetscObj<DM> sub_dm, SmartPetscObj<IS> is_sub,
+                             SmartPetscObj<AO> ao_sub) {
+  return boost::shared_ptr<SetUpSchur>(
+      new SetUpSchurImpl(m_field, sub_dm, is_sub, ao_sub));
 }

@@ -511,7 +511,7 @@ inline double constrain_abs(double x) {
 };
 
 inline double w(double eqiv, double dot_tau, double f, double sigma_y) {
-  return (f - sigma_y) / sigmaY + cn1 * (dot_tau * eqiv);
+  return (f - sigma_y) / sigmaY + cn1 * (dot_tau * std::sqrt(eqiv));
 };
 
 /**
@@ -526,19 +526,20 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 
  */
 inline double constraint(double eqiv, double dot_tau, double f, double sigma_y,
-                        double abs_w) {
-  return visH * dot_tau +
-         (sigmaY / 2) * ((cn0 * (dot_tau - eqiv) + cn1 * (eqiv * dot_tau) -
-                          (f - sigma_y) / sigmaY) -
-                         abs_w);
+                         double abs_w) {
+  return visH * dot_tau + (sigmaY / 2) * ((cn0 * (dot_tau - eqiv) +
+                                           cn1 * (std::sqrt(eqiv) * dot_tau) -
+                                           (f - sigma_y) / sigmaY) -
+                                          abs_w);
 };
 
 inline double diff_constrain_ddot_tau(double sign, double eqiv) {
-  return visH + (sigmaY / 2) * (cn0 + cn1 * eqiv * (1 - sign));
+  return visH + (sigmaY / 2) * (cn0 + cn1 * std::sqrt(eqiv) * (1 - sign));
 };
 
-inline double diff_constrain_equiv(double sign, double dot_tau) {
-  return (sigmaY / 2) * (-cn0 + cn1 * dot_tau * (1 - sign));
+inline double diff_constrain_eqiv(double sign, double eqiv, double dot_tau) {
+  return (sigmaY / 2) *
+         (-cn0 + cn1 * dot_tau * (0.5 / std::sqrt(eqiv)) * (1 - sign));
 };
 
 inline auto diff_constrain_df(double sign) { return (-1 - sign) / 2; };
