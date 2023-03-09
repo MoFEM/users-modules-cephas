@@ -336,8 +336,32 @@ MoFEMErrorCode Example::OPs() {
     pip_mng->getOpDomainLhsPipeline().push_back(
     pip.push_back(
     pip_mng->getOpDomainLhsPipeline().push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+            "U", commonDataPtr->mGradPtr));
+    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "U", commonDataPtr->mGradPtr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+            "U", commonDataPtr->mGradPtr));
+    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "U", commonDataPtr->mGradPtr));
+    pip.push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
+    pip.push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
     pip.push_back(
         new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+    pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip.push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
+    pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip.push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
     pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(
     pip_mng->getOpDomainLhsPipeline().push_back(
@@ -356,13 +380,31 @@ MoFEMErrorCode Example::OPs() {
     pip.push_back(
     pip_mng->getOpDomainLhsPipeline().push_back(
     pip.push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
+    pip.push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
+    pip.push_back(
         new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(
     pip_mng->getOpDomainLhsPipeline().push_back(
     pip.push_back(
     pip_mng->getOpDomainLhsPipeline().push_back(
     pip.push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
+    pip.push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
+    pip.push_back(
         new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+    pip.push_back(new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+    pip.push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
+    pip.push_back(new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+    pip.push_back(
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
     pip.push_back(new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(
     pip_mng->getOpDomainLhsPipeline().push_back(
@@ -391,6 +433,12 @@ MoFEMErrorCode Example::OPs() {
       pip_mng->getOpDomainLhsPipeline().push_back(
           new OpMass("U", "U", get_rho));
       pip.push_back(new OpMass("U", "U", get_rho));
+      pip_mng->getOpDomainLhsPipeline().push_back(
+          new OpMass("U", "U", get_rho));
+      pip.push_back(new OpMass("U", "U", get_rho));
+      pip_mng->getOpDomainLhsPipeline().push_back(
+          new OpMass("U", "U", get_rho));
+      pip.push_back(new OpMass("U", "U", get_rho));
     }
 
     auto unity = []() { return 1; };
@@ -410,7 +458,21 @@ MoFEMErrorCode Example::OPs() {
     pip.push_back(
     pip_mng->getOpDomainRhsPipeline().push_back(
     pip.push_back(
+    pip_mng->getOpDomainRhsPipeline().push_back(
+    pip.push_back(
+    pip_mng->getOpDomainRhsPipeline().push_back(
+    pip.push_back(
         new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+    pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip.push_back(
+    pip_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainRhsPipeline().push_back(
+    pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip.push_back(
+    pip_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainRhsPipeline().push_back(
     pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(
     pip_mng->getOpDomainRhsPipeline().push_back(
@@ -429,13 +491,25 @@ MoFEMErrorCode Example::OPs() {
     pip.push_back(
     pip_mng->getOpDomainRhsPipeline().push_back(
     pip.push_back(
+    pip_mng->getOpDomainRhsPipeline().push_back(
+    pip.push_back(
+    pip_mng->getOpDomainRhsPipeline().push_back(
+    pip.push_back(
         new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(
     pip_mng->getOpDomainRhsPipeline().push_back(
     pip.push_back(
     pip_mng->getOpDomainRhsPipeline().push_back(
     pip.push_back(
+    pip_mng->getOpDomainRhsPipeline().push_back(
+    pip.push_back(
+    pip_mng->getOpDomainRhsPipeline().push_back(
+    pip.push_back(
         new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+    pip.push_back(new OpInternalForcePiola(
+    pip_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
+    pip.push_back(new OpInternalForcePiola(
+    pip_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
     pip.push_back(new OpInternalForcePiola(
     pip_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
     pip.push_back(new OpInternalForcePiola(
@@ -463,6 +537,20 @@ MoFEMErrorCode Example::OPs() {
     // only in case of dynamics
     if (!is_quasi_static) {
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
+      pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
+          "U", mat_acceleration));
+      pip.push_back(new OpInertiaForce(
+      pip_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
+                                                            mat_acceleration));
+      pip_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
+      pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
+          "U", mat_acceleration));
+      pip.push_back(new OpInertiaForce(
+      pip_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
+                                                            mat_acceleration));
+      pip_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
       pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
           "U", mat_acceleration));
       pip.push_back(new OpInertiaForce(
