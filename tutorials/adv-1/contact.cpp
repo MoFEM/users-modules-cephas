@@ -23,14 +23,10 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> : PipelineManager::ElementsAndOpsByDim<2> {
   static constexpr FieldSpace CONTACT_SPACE = HCURL;
-  using OpSetPiolaTransformOnBoundary =
-      OpSetContravariantPiolaTransformOnEdge2D;
 };
 
 template <> struct ElementsAndOps<3> : PipelineManager::ElementsAndOpsByDim<3> {
   static constexpr FieldSpace CONTACT_SPACE = HDIV;
-  using OpSetPiolaTransformOnBoundary =
-      OpHOSetContravariantPiolaTransformOnFace3D;
 };
 
 constexpr FieldSpace ElementsAndOps<2>::CONTACT_SPACE;
@@ -50,8 +46,6 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
 using AssemblyBoundaryEleOp =
     FormsIntegrators<BoundaryEleOp>::Assembly<A>::OpBase;
-using OpSetPiolaTransformOnBoundary =
-    ElementsAndOps<SPACE_DIM>::OpSetPiolaTransformOnBoundary;
 constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
 
 //! [Operators used for contact]
@@ -326,25 +320,8 @@ MoFEMErrorCode Example::OPs() {
   auto time_scale = boost::make_shared<TimeScale>();
 
   auto add_domain_base_ops = [&](auto &pip) {
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-    pip.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    pip.push_back(new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    pip.push_back(new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
-    if (SPACE_DIM == 2) {
-      pip.push_back(new OpMakeHdivFromHcurl());
-      pip.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
-      pip.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
-      pip.push_back(new OpSetHOWeightsOnFace());
-    } else {
-      pip.push_back(
-          new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
-      pip.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
-      pip.push_back(new OpSetHOWeights(det_ptr));
-    }
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip,
+                                                          {H1, CONTACT_SPACE});
   };
 
   auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
@@ -448,9 +425,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_base_ops = [&](auto &pip) {
-    pip.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
-    if (SPACE_DIM == 3)
-      pip.push_back(new OpSetHOWeightsOnFace());
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV});
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
     pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(

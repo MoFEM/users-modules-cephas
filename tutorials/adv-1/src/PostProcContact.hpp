@@ -128,8 +128,8 @@ struct Monitor : public FEMethod {
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
     vertexPostProc = boost::make_shared<BoundaryEle>(*m_field_ptr);
 
-    vertexPostProc->getOpPtrVector().push_back(
-        new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+        vertexPostProc->getOpPtrVector(), {HDIV});
     vertexPostProc->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>(
             "U", commonDataPtr->contactDispPtr));
