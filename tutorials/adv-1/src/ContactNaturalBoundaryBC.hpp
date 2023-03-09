@@ -8,6 +8,8 @@
  * 
  */
 
+#include <ElasticSpring.hpp>
+
 template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
           typename OpBase>
 struct AddFluxToRhsPipelineImpl<
@@ -24,9 +26,9 @@ struct AddFluxToRhsPipelineImpl<
 
   using OpForce =
       typename T::template OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
-  // using OpSpringRhs =
-  //     typename T::template OpFlux<ElasticExample::SpringBcType<BLOCKSET>, 1,
-  //                                 SPACE_DIM>;
+  using OpSpringRhs =
+      typename T::template OpFlux<ElasticExample::SpringBcType<BLOCKSET>, 1,
+                                  SPACE_DIM>;
 
   static MoFEMErrorCode add(
 
@@ -38,11 +40,11 @@ struct AddFluxToRhsPipelineImpl<
     MoFEMFunctionBegin;
     CHKERR T::template AddFluxToPipeline<OpForce>::add(
         pipeline, m_field, field_name, smv, "FORCE", sev);
-    // auto u_ptr = boost::make_shared<MatrixDouble>();
-    // pipeline.push_back(
-    //     new OpCalculateVectorFieldValues<SPACE_DIM>(field_name, u_ptr));
-    // CHKERR T::template AddFluxToPipeline<OpSpringRhs>::add(
-    //     pipeline, m_field, field_name, u_ptr, scale, "SPRING", sev);
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    pipeline.push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>(field_name, u_ptr));
+    CHKERR T::template AddFluxToPipeline<OpSpringRhs>::add(
+        pipeline, m_field, field_name, u_ptr, 1, "SPRING", sev);
     MoFEMFunctionReturn(0);
   }
 };
@@ -61,9 +63,9 @@ struct AddFluxToLhsPipelineImpl<
   using T = typename NaturalBC<OpBase>::template Assembly<
       A>::template BiLinearForm<I>;
 
-  // using OpSpringLhs =
-  //     typename T::template OpFlux<ElasticExample::SpringBcType<BLOCKSET>,
-  //                                 BASE_DIM, FIELD_DIM>;
+  using OpSpringLhs =
+      typename T::template OpFlux<ElasticExample::SpringBcType<BLOCKSET>,
+                                  BASE_DIM, FIELD_DIM>;
 
   static MoFEMErrorCode add(
 
@@ -72,8 +74,8 @@ struct AddFluxToLhsPipelineImpl<
 
   ) {
     MoFEMFunctionBegin;
-    // CHKERR T::template AddFluxToPipeline<OpSpringLhs>::add(
-    //     pipeline, m_field, field_name, field_name, "SPRING", sev);
+    CHKERR T::template AddFluxToPipeline<OpSpringLhs>::add(
+        pipeline, m_field, field_name, field_name, "SPRING", sev);
     MoFEMFunctionReturn(0);
   }
 };
