@@ -21,14 +21,12 @@ template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> : PipelineManager::ElementsAndOpsByDim<2> {
   static constexpr FieldSpace CONTACT_SPACE = HCURL;
-  using PostProcEle = PostProcFaceOnRefinedMesh;
   using OpSetPiolaTransformOnBoundary =
       OpSetContravariantPiolaTransformOnEdge2D;
 };
 
 template <> struct ElementsAndOps<3> : PipelineManager::ElementsAndOpsByDim<3> {
   static constexpr FieldSpace CONTACT_SPACE = HDIV;
-  using PostProcEle = PostProcVolumeOnRefinedMesh;
   using OpSetPiolaTransformOnBoundary =
       OpHOSetContravariantPiolaTransformOnFace3D;
 };
