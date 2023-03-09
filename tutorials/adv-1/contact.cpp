@@ -294,33 +294,85 @@ MoFEMErrorCode Example::bC() {
 }
 //! [Boundary condition]
 
+//! [Push operators to pip]
 //! [Push operators to pipeline]
+//! [Push operators to pip]
+//! [Push operators to pipeline]
+//! [Push operators to pip]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
+  PipelineManager *pip_mng = mField.getInterface<PipelineManager>();
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  PipelineManager *pip_mng = mField.getInterface<PipelineManager>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  PipelineManager *pip_mng = mField.getInterface<PipelineManager>();
   auto bc_mng = mField.getInterface<BcManager>();
 
+  auto add_domain_base_ops = [&](auto &pip) {
   auto add_domain_base_ops = [&](auto &pipeline) {
+  auto add_domain_base_ops = [&](auto &pip) {
+  auto add_domain_base_ops = [&](auto &pipeline) {
+  auto add_domain_base_ops = [&](auto &pip) {
     auto det_ptr = boost::make_shared<VectorDouble>();
     auto jac_ptr = boost::make_shared<MatrixDouble>();
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
+    pip.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    pip.push_back(
     pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
     pipeline.push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pip.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    pip.push_back(
+    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
     pipeline.push_back(
+    pip.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+    pip.push_back(
+        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pip.push_back(
+    pipeline.push_back(
+    pip.push_back(
+    pipeline.push_back(
+    pip.push_back(
         new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
     if (SPACE_DIM == 2) {
+      pip.push_back(new OpMakeHdivFromHcurl());
+      pip.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
+      pip.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
+      pip.push_back(new OpSetHOWeightsOnFace());
       pipeline.push_back(new OpMakeHdivFromHcurl());
       pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
       pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
       pipeline.push_back(new OpSetHOWeightsOnFace());
+      pip.push_back(new OpMakeHdivFromHcurl());
+      pip.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
+      pip.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
+      pip.push_back(new OpSetHOWeightsOnFace());
+      pipeline.push_back(new OpMakeHdivFromHcurl());
+      pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
+      pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
+      pipeline.push_back(new OpSetHOWeightsOnFace());
+      pip.push_back(new OpMakeHdivFromHcurl());
+      pip.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
+      pip.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
+      pip.push_back(new OpSetHOWeightsOnFace());
     } else {
+      pip.push_back(
       pipeline.push_back(
+      pip.push_back(
+      pipeline.push_back(
+      pip.push_back(
           new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
+      pip.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
+      pip.push_back(new OpSetHOWeights(det_ptr));
       pipeline.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
       pipeline.push_back(new OpSetHOWeights(det_ptr));
+      pip.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
+      pip.push_back(new OpSetHOWeights(det_ptr));
+      pipeline.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
+      pipeline.push_back(new OpSetHOWeights(det_ptr));
+      pip.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
+      pip.push_back(new OpSetHOWeights(det_ptr));
     }
   };
 
@@ -328,53 +380,125 @@ MoFEMErrorCode Example::OPs() {
   henky_common_data_ptr->matGradPtr = commonDataPtr->mGradPtr;
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
+  auto add_domain_ops_lhs = [&](auto &pip) {
   auto add_domain_ops_lhs = [&](auto &pipeline) {
+  auto add_domain_ops_lhs = [&](auto &pip) {
+  auto add_domain_ops_lhs = [&](auto &pipeline) {
+  auto add_domain_ops_lhs = [&](auto &pip) {
 
     if (is_large_strains) {
+      pip_mng->getOpDomainLhsPipeline().push_back(
       pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
               "U", commonDataPtr->mGradPtr));
+      pip_mng->getOpDomainLhsPipeline().push_back(
       pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainLhsPipeline().push_back(
       pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainLhsPipeline().push_back(
       pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainLhsPipeline().push_back(
       pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainLhsPipeline().push_back(
       pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainLhsPipeline().push_back(
       pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
           new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainLhsPipeline().push_back(
       pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
           new OpKPiola("U", "U", henky_common_data_ptr->getMatTangent()));
     } else {
+      pip.push_back(new OpKCauchy("U", "U", commonDataPtr->mDPtr));
       pipeline.push_back(new OpKCauchy("U", "U", commonDataPtr->mDPtr));
+      pip.push_back(new OpKCauchy("U", "U", commonDataPtr->mDPtr));
+      pipeline.push_back(new OpKCauchy("U", "U", commonDataPtr->mDPtr));
+      pip.push_back(new OpKCauchy("U", "U", commonDataPtr->mDPtr));
     }
 
     if (!is_quasi_static) {
       // Get pointer to U_tt shift in domain element
       auto get_rho = [this](const double, const double, const double) {
+        auto *pip_mng = mField.getInterface<PipelineManager>();
+        auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
         auto *pipeline_mng = mField.getInterface<PipelineManager>();
         auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+        auto *pip_mng = mField.getInterface<PipelineManager>();
+        auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
+        auto *pipeline_mng = mField.getInterface<PipelineManager>();
+        auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+        auto *pip_mng = mField.getInterface<PipelineManager>();
+        auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
         return rho * fe_domain_lhs->ts_aa;
       };
+      pip_mng->getOpDomainLhsPipeline().push_back(
       pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+      pip_mng->getOpDomainLhsPipeline().push_back(
           new OpMass("U", "U", get_rho));
     }
 
     auto unity = []() { return 1; };
+    pip.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
+    pip.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
     pipeline.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
     pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
+    pip.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
+    pip.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
+    pipeline.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
+    pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
+    pip.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
+    pip.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
 
   };
 
+  auto add_domain_ops_rhs = [&](auto &pip) {
   auto add_domain_ops_rhs = [&](auto &pipeline) {
+  auto add_domain_ops_rhs = [&](auto &pip) {
+  auto add_domain_ops_rhs = [&](auto &pipeline) {
+  auto add_domain_ops_rhs = [&](auto &pip) {
     auto get_body_force = [this](const double, const double, const double) {
+      auto *pip_mng = mField.getInterface<PipelineManager>();
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      auto *pip_mng = mField.getInterface<PipelineManager>();
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      auto *pip_mng = mField.getInterface<PipelineManager>();
       FTensor::Index<'i', SPACE_DIM> i;
       FTensor::Tensor1<double, SPACE_DIM> t_source;
+      auto fe_domain_rhs = pip_mng->getDomainRhsFE();
       auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+      auto fe_domain_rhs = pip_mng->getDomainRhsFE();
+      auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+      auto fe_domain_rhs = pip_mng->getDomainRhsFE();
       const auto time = fe_domain_rhs->ts_t;
 
       // hardcoded gravity load
@@ -383,95 +507,219 @@ MoFEMErrorCode Example::OPs() {
       return t_source;
     };
 
+    pip.push_back(new OpBodyForce("U", get_body_force));
+    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
     pipeline.push_back(new OpBodyForce("U", get_body_force));
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+    pip.push_back(new OpBodyForce("U", get_body_force));
+    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+    pipeline.push_back(new OpBodyForce("U", get_body_force));
+    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+    pip.push_back(new OpBodyForce("U", get_body_force));
+    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mGradPtr));
 
     if (is_large_strains) {
+      pip_mng->getOpDomainRhsPipeline().push_back(
       pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainRhsPipeline().push_back(
       pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainRhsPipeline().push_back(
       pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainRhsPipeline().push_back(
       pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainRhsPipeline().push_back(
       pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
       pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
+      pip_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
+      pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
+      pip_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
           "U", henky_common_data_ptr->getMatFirstPiolaStress()));
     } else {
+      pip.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
       pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+      pip.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+      pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+      pip.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
           "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
+      pip.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
       pipeline.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+      pip.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+      pipeline.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+      pip.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
           commonDataPtr->mDPtr));
+      pip.push_back(
       pipeline.push_back(
+      pip.push_back(
+      pipeline.push_back(
+      pip.push_back(
           new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
     }
 
+    pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+    pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+    pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+    pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
 
+    pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
     pipeline.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+    pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+    pipeline.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+    pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
         "SIGMA", commonDataPtr->contactStressPtr));
+    pip.push_back(
     pipeline.push_back(
+    pip.push_back(
+    pipeline.push_back(
+    pip.push_back(
         new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
             "SIGMA", commonDataPtr->contactStressDivergencePtr));
 
+    pip.push_back(
     pipeline.push_back(
+    pip.push_back(
+    pipeline.push_back(
+    pip.push_back(
         new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr,
                          [](double, double, double) { return 1; }));
+    pip.push_back(
     pipeline.push_back(
+    pip.push_back(
+    pipeline.push_back(
+    pip.push_back(
         new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
 
+    pip.push_back(new OpMixUTimesDivLambdaRhs(
     pipeline.push_back(new OpMixUTimesDivLambdaRhs(
+    pip.push_back(new OpMixUTimesDivLambdaRhs(
+    pipeline.push_back(new OpMixUTimesDivLambdaRhs(
+    pip.push_back(new OpMixUTimesDivLambdaRhs(
         "U", commonDataPtr->contactStressDivergencePtr));
+    pip.push_back(
     pipeline.push_back(
+    pip.push_back(
+    pipeline.push_back(
+    pip.push_back(
         new OpMixUTimesLambdaRhs("U", commonDataPtr->contactStressPtr));
 
     // only in case of dynamics
     if (!is_quasi_static) {
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
+      pip_mng->getOpDomainRhsPipeline().push_back(
       pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+      pip_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
                                                             mat_acceleration));
+      pip_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
       pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
+      pip_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
+      pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
+      pip_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
           "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
 
   };
 
+  auto add_boundary_base_ops = [&](auto &pip) {
+    pip.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
   auto add_boundary_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
+  auto add_boundary_base_ops = [&](auto &pip) {
+    pip.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
+  auto add_boundary_base_ops = [&](auto &pipeline) {
+    pipeline.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
+  auto add_boundary_base_ops = [&](auto &pip) {
+    pip.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
     if (SPACE_DIM == 3)
+      pip.push_back(new OpSetHOWeightsOnFace());
+    pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
       pipeline.push_back(new OpSetHOWeightsOnFace());
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+      pip.push_back(new OpSetHOWeightsOnFace());
+    pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+      pipeline.push_back(new OpSetHOWeightsOnFace());
+    pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+      pip.push_back(new OpSetHOWeightsOnFace());
+    pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
+    pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
     pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+    pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+    pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+    pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
         "SIGMA", commonDataPtr->contactTractionPtr));
   };
 
+  auto add_boundary_ops_lhs = [&](auto &pip) {
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
+  auto add_boundary_ops_lhs = [&](auto &pip) {
+  auto add_boundary_ops_lhs = [&](auto &pipeline) {
+  auto add_boundary_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
     auto &bc_map = bc_mng->getBcMapByBlockName();
     for (auto bc : bc_map) {
       if (bc_mng->checkBlock(bc, "FIX_")) {
         MOFEM_LOG("EXAMPLE", Sev::inform)
             << "Set boundary matrix for " << bc.first;
+        pip.push_back(
         pipeline.push_back(
+        pip.push_back(
+        pipeline.push_back(
+        pip.push_back(
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
+        pip.push_back(new OpBoundaryMass(
         pipeline.push_back(new OpBoundaryMass(
+        pip.push_back(new OpBoundaryMass(
+        pipeline.push_back(new OpBoundaryMass(
+        pip.push_back(new OpBoundaryMass(
             "U", "U", [](double, double, double) { return 1.; },
             bc.second->getBcEntsPtr()));
       }
     }
 
+    pip.push_back(
     pipeline.push_back(
+    pip.push_back(
+    pipeline.push_back(
+    pip.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
+    pip.push_back(
     pipeline.push_back(
+    pip.push_back(
+    pipeline.push_back(
+    pip.push_back(
         new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
+    pip.push_back(new OpSpringLhs(
     pipeline.push_back(new OpSpringLhs(
+    pip.push_back(new OpSpringLhs(
+    pipeline.push_back(new OpSpringLhs(
+    pip.push_back(new OpSpringLhs(
         "U", "U",
 
         [this](double, double, double) { return spring_stiffness; }
@@ -482,18 +730,34 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto time_scaled = [&](double, double, double) {
+    auto *pip_mng = mField.getInterface<PipelineManager>();
+    auto &fe_domain_rhs = pip_mng->getDomainRhsFE();
     auto *pipeline_mng = mField.getInterface<PipelineManager>();
     auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+    auto *pip_mng = mField.getInterface<PipelineManager>();
+    auto &fe_domain_rhs = pip_mng->getDomainRhsFE();
+    auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+    auto *pip_mng = mField.getInterface<PipelineManager>();
+    auto &fe_domain_rhs = pip_mng->getDomainRhsFE();
     return -fe_domain_rhs->ts_t;
   };
 
+  auto add_boundary_ops_rhs = [&](auto &pip) {
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
+  auto add_boundary_ops_rhs = [&](auto &pip) {
+  auto add_boundary_ops_rhs = [&](auto &pipeline) {
+  auto add_boundary_ops_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
     for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
       if (bc_mng->checkBlock(bc, "FIX_")) {
         MOFEM_LOG("EXAMPLE", Sev::inform)
             << "Set boundary residual for " << bc.first;
+        pip.push_back(
         pipeline.push_back(
+        pip.push_back(
+        pipeline.push_back(
+        pip.push_back(
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
         attr_vec->clear();
@@ -506,9 +770,17 @@ MoFEMErrorCode Example::OPs() {
                   &bc.second->bcAttributes[SPACE_DIM],
                   attr_vec->data().begin());
 
+        pip.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
         pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
+        pip.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
+        pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
+        pip.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
                                              bc.second->getBcEntsPtr()));
+        pip.push_back(new OpBoundaryInternal(
         pipeline.push_back(new OpBoundaryInternal(
+        pip.push_back(new OpBoundaryInternal(
+        pipeline.push_back(new OpBoundaryInternal(
+        pip.push_back(new OpBoundaryInternal(
             "U", commonDataPtr->contactDispPtr,
             [](double, double, double) { return 1.; },
             bc.second->getBcEntsPtr()));
@@ -516,62 +788,142 @@ MoFEMErrorCode Example::OPs() {
       }
     }
 
+    pip.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    pip.push_back(new OpSpringRhs(
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs(
+    pip.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    pip.push_back(new OpSpringRhs(
+    pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpSpringRhs(
+    pip.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    pip.push_back(new OpSpringRhs(
         "U", commonDataPtr->contactDispPtr,
         [this](double, double, double) { return spring_stiffness; }));
     MoFEMFunctionReturn(0);
   };
 
+  add_domain_base_ops(pip_mng->getOpDomainLhsPipeline());
+  add_domain_base_ops(pip_mng->getOpDomainRhsPipeline());
+  add_domain_ops_lhs(pip_mng->getOpDomainLhsPipeline());
+  add_domain_ops_rhs(pip_mng->getOpDomainRhsPipeline());
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
   add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
   add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
   add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
+  add_domain_base_ops(pip_mng->getOpDomainLhsPipeline());
+  add_domain_base_ops(pip_mng->getOpDomainRhsPipeline());
+  add_domain_ops_lhs(pip_mng->getOpDomainLhsPipeline());
+  add_domain_ops_rhs(pip_mng->getOpDomainRhsPipeline());
+  add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
+  add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
+  add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
+  add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
+  add_domain_base_ops(pip_mng->getOpDomainLhsPipeline());
+  add_domain_base_ops(pip_mng->getOpDomainRhsPipeline());
+  add_domain_ops_lhs(pip_mng->getOpDomainLhsPipeline());
+  add_domain_ops_rhs(pip_mng->getOpDomainRhsPipeline());
 
+  add_boundary_base_ops(pip_mng->getOpBoundaryLhsPipeline());
+  add_boundary_base_ops(pip_mng->getOpBoundaryRhsPipeline());
+  CHKERR add_boundary_ops_lhs(pip_mng->getOpBoundaryLhsPipeline());
+  CHKERR add_boundary_ops_rhs(pip_mng->getOpBoundaryRhsPipeline());
   add_boundary_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
   add_boundary_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
   CHKERR add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
+  add_boundary_base_ops(pip_mng->getOpBoundaryLhsPipeline());
+  add_boundary_base_ops(pip_mng->getOpBoundaryRhsPipeline());
+  CHKERR add_boundary_ops_lhs(pip_mng->getOpBoundaryLhsPipeline());
+  CHKERR add_boundary_ops_rhs(pip_mng->getOpBoundaryRhsPipeline());
+  add_boundary_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
+  add_boundary_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
+  CHKERR add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
+  CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
+  add_boundary_base_ops(pip_mng->getOpBoundaryLhsPipeline());
+  add_boundary_base_ops(pip_mng->getOpBoundaryRhsPipeline());
+  CHKERR add_boundary_ops_lhs(pip_mng->getOpBoundaryLhsPipeline());
+  CHKERR add_boundary_ops_rhs(pip_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule_vol = [](int, int, int approx_order) {
     return 3 * order;
   };
+  CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule_vol);
+  CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule_vol);
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_vol);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_vol);
+  CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule_vol);
+  CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule_vol);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_vol);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_vol);
+  CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule_vol);
+  CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule_vol);
   auto integration_rule_boundary = [](int, int, int approx_order) {
     return 3 * order;
   };
+  CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
+  CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
+  CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
+  CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
+  CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
+  CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
 
   // Enforce non-homegonus boundary conditions
   auto get_bc_hook_rhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
+        mField, pip_mng->getDomainRhsFE(),
         mField, pipeline_mng->getDomainRhsFE(),
+        mField, pip_mng->getDomainRhsFE(),
+        mField, pipeline_mng->getDomainRhsFE(),
+        mField, pip_mng->getDomainRhsFE(),
         {boost::make_shared<TimeScale>()});
     return hook;
   };
 
   auto get_bc_hook_lhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
+        mField, pip_mng->getDomainLhsFE(),
         mField, pipeline_mng->getDomainLhsFE(),
+        mField, pip_mng->getDomainLhsFE(),
+        mField, pipeline_mng->getDomainLhsFE(),
+        mField, pip_mng->getDomainLhsFE(),
         {boost::make_shared<TimeScale>()});
     return hook;
   };
 
+  pip_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
+  pip_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
   pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
   pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
+  pip_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
+  pip_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
+  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
+  pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
+  pip_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
+  pip_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
 
   MoFEMFunctionReturn(0);
 }
+//! [Push operators to pip]
 //! [Push operators to pipeline]
+//! [Push operators to pip]
+//! [Push operators to pipeline]
+//! [Push operators to pip]
 
 //! [Solve]
 MoFEMErrorCode Example::tsSolve() {
   MoFEMFunctionBegin;
 
   Simple *simple = mField.getInterface<Simple>();
+  PipelineManager *pip_mng = mField.getInterface<PipelineManager>();
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  PipelineManager *pip_mng = mField.getInterface<PipelineManager>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  PipelineManager *pip_mng = mField.getInterface<PipelineManager>();
   ISManager *is_manager = mField.getInterface<ISManager>();
 
   auto set_section_monitor = [&](auto solver) {
@@ -620,7 +972,11 @@ MoFEMErrorCode Example::tsSolve() {
     uZScatter = scatter_create(D, 2);
 
   if (is_quasi_static) {
+    auto solver = pip_mng->createTSIM();
     auto solver = pipeline_mng->createTSIM();
+    auto solver = pip_mng->createTSIM();
+    auto solver = pipeline_mng->createTSIM();
+    auto solver = pip_mng->createTSIM();
     auto D = smartCreateDMVector(dm);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
@@ -629,7 +985,11 @@ MoFEMErrorCode Example::tsSolve() {
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
   } else {
+    auto solver = pip_mng->createTSIM2();
     auto solver = pipeline_mng->createTSIM2();
+    auto solver = pip_mng->createTSIM2();
+    auto solver = pipeline_mng->createTSIM2();
+    auto solver = pip_mng->createTSIM2();
     auto dm = simple->getDM();
     auto D = smartCreateDMVector(dm);
     auto DD = smartVectorDuplicate(D);
@@ -696,7 +1056,11 @@ int main(int argc, char *argv[]) {
 
     //! [Create MoFEM]
     MoFEM::Core core(moab);           ///< finite element database
+    MoFEM::Interface &m_field = core; ///< finite element database interface
     MoFEM::Interface &m_field = core; ///< finite element database insterface
+    MoFEM::Interface &m_field = core; ///< finite element database interface
+    MoFEM::Interface &m_field = core; ///< finite element database insterface
+    MoFEM::Interface &m_field = core; ///< finite element database interface
     //! [Create MoFEM]
 
     //! [Load mesh]
