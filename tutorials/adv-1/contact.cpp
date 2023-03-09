@@ -122,12 +122,13 @@ constexpr double spring_stiffness = 0.1;
 
 #include <ContactOps.hpp>
 #include <HenckyOps.hpp>
+using namespace HenckyOps;
 #include <PostProcContact.hpp>
 #include <ContactNaturalDomainBC.hpp>
 #include <ContactNaturalBoundaryBC.hpp>
 
 using namespace ContactOps;
-using namespace HenckyOps;
+
 
 struct Example {
 

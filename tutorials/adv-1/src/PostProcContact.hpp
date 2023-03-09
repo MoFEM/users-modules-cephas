@@ -124,6 +124,11 @@ struct Monitor : public FEMethod {
       : dM(dm), commonDataPtr(common_data_ptr), uXScatter(ux_scatter),
         uYScatter(uy_scatter), uZScatter(uz_scatter),
         moabVertex(mbVertexPostproc), sTEP(0) {
+
+    auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
+    henky_common_data_ptr->matGradPtr = commonDataPtr->mGradPtr;
+    henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
+
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
     vertexPostProc = boost::make_shared<BoundaryEle>(*m_field_ptr);
@@ -145,12 +150,29 @@ struct Monitor : public FEMethod {
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
             "U", commonDataPtr->mGradPtr));
-    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-            "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
-            commonDataPtr->mDPtr));
+
+    if (is_large_strains) {
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+    } else {
+      postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+          "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+              "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
+              commonDataPtr->mDPtr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
+    }
+
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
             "SIGMA", commonDataPtr->contactStressDivergencePtr));
@@ -164,25 +186,57 @@ struct Monitor : public FEMethod {
 
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-    postProcFe->getOpPtrVector().push_back(
+    if (is_large_strains) {
 
-        new OpPPMap(
+      postProcFe->getOpPtrVector().push_back(
 
-            postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
+          new OpPPMap(
 
-            {},
+              postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
 
-            {{"U", u_ptr}},
+              {},
 
-            {{"SIGMA", commonDataPtr->contactStressPtr}},
+              {{"U", u_ptr}},
 
-            {{"STRAIN", commonDataPtr->mStrainPtr},
-             {"STRESS", commonDataPtr->mStressPtr}}
+              {
 
-            )
+                  {"SIGMA", commonDataPtr->contactStressPtr},
 
-    );
+                  {"G", henky_common_data_ptr->matGradPtr},
 
+                  {"P2", henky_common_data_ptr->getMatFirstPiolaStress()},
+
+                  {"HS", henky_common_data_ptr->getMatHenckyStress()}
+
+              },
+
+              {}
+
+              )
+
+      );
+
+    } else {
+
+      postProcFe->getOpPtrVector().push_back(
+
+          new OpPPMap(
+
+              postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
+
+              {},
+
+              {{"U", u_ptr}},
+
+              {{"SIGMA", commonDataPtr->contactStressPtr}},
+
+              {{"STRAIN", commonDataPtr->mStrainPtr},
+               {"STRESS", commonDataPtr->mStressPtr}}
+
+              )
+
+      );
+    }
   }
 
   MoFEMErrorCode preProcess() { return 0; }
