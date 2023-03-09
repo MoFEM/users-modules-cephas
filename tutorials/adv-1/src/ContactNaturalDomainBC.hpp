@@ -1,0 +1,39 @@
+/**
+ * @file NaturalDomainBC.hpp
+ * @brief Boundary conditions in domain, i.e. body forces.
+ * @version 0.13.2
+ * @date 2022-09-22
+ * 
+ * @copyright Copyright (c) 2022
+ * 
+ */
+
+template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
+          typename OpBase>
+struct AddFluxToRhsPipelineImpl<
+
+    OpFluxRhsImpl<ContactOps::DomainBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>, A,
+    I, OpBase
+
+    > {
+
+  AddFluxToRhsPipelineImpl() = delete;
+
+  using T =
+      typename NaturalBC<OpBase>::template Assembly<A>::template LinearForm<I>;
+  using OpBodyForce = typename T::template OpFlux<NaturalMeshsetType<BLOCKSET>,
+                                                  BASE_DIM, FIELD_DIM>;
+
+  static MoFEMErrorCode add(
+
+      boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      MoFEM::Interface &m_field, std::string field_name,
+      std::vector<boost::shared_ptr<ScalingMethod>> smv, Sev sev
+
+  ) {
+    MoFEMFunctionBegin;
+    CHKERR T::template AddFluxToPipeline<OpBodyForce>::add(
+        pipeline, m_field, field_name, smv, "BODY_FORCE", sev);
+    MoFEMFunctionReturn(0);
+  }
+};

@@ -6,8 +6,6 @@
  *
  */
 
-
-
 #ifndef EXECUTABLE_DIMENSION
 #define EXECUTABLE_DIMENSION 3
 #endif
@@ -16,6 +14,10 @@
 #include <MatrixFunction.hpp>
 
 using namespace MoFEM;
+
+constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
+constexpr IntegrationType I =
+    IntegrationType::GAUSS; //< selected integration type
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -45,66 +47,74 @@ using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
-using AssemblyDomainEleOp =
-    FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
+using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
 using AssemblyBoundaryEleOp =
-    FormsIntegrators<BoundaryEleOp>::Assembly<PETSC>::OpBase;
+    FormsIntegrators<BoundaryEleOp>::Assembly<A>::OpBase;
 using OpSetPiolaTransformOnBoundary =
     ElementsAndOps<SPACE_DIM>::OpSetPiolaTransformOnBoundary;
 constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
 
 //! [Operators used for contact]
 using OpMixDivULhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpMixDivTimesVec<SPACE_DIM>;
+    PETSC>::BiLinearForm<I>::OpMixDivTimesVec<SPACE_DIM>;
 using OpLambdaGraULhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpMixTensorTimesGrad<SPACE_DIM>;
-using OpMixDivURhs = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    PETSC>::BiLinearForm<I>::OpMixTensorTimesGrad<SPACE_DIM>;
+using OpMixDivURhs = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
     GAUSS>::OpMixDivTimesU<3, SPACE_DIM, SPACE_DIM>;
 using OpMixLambdaGradURhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpMixTensorTimesGradU<SPACE_DIM>;
+    PETSC>::LinearForm<I>::OpMixTensorTimesGradU<SPACE_DIM>;
 using OpMixUTimesDivLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpMixVecTimesDivLambda<SPACE_DIM>;
+    PETSC>::LinearForm<I>::OpMixVecTimesDivLambda<SPACE_DIM>;
 using OpMixUTimesLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+    PETSC>::LinearForm<I>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 using OpSpringLhs = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpMass<1, SPACE_DIM>;
+    PETSC>::BiLinearForm<I>::OpMass<1, SPACE_DIM>;
 using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+    PETSC>::LinearForm<I>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Operators used for contact]
 
-//! [Body force]
-using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpSource<1, SPACE_DIM>;
-//! [Body force]
-
 //! [Only used with Hooke equation (linear material model)]
-using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
 using OpInternalForceCauchy = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+    PETSC>::LinearForm<I>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 //! [Only used with Hooke equation (linear material model)]
 
 //! [Only used for dynamics]
-using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+using OpMass = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
 using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+    PETSC>::LinearForm<I>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Only used for dynamics]
 
 //! [Essential boundary conditions]
 using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpMass<1, SPACE_DIM>;
+    PETSC>::BiLinearForm<I>::OpMass<1, SPACE_DIM>;
 using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
+    PETSC>::LinearForm<I>::OpBaseTimesVector<1, SPACE_DIM, 0>;
 using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+    PETSC>::LinearForm<I>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Essential boundary conditions]
 
 // Only used with Hencky/nonlinear material
-using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
     GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+    PETSC>::LinearForm<I>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+
+namespace ContactOps {
+
+struct DomainBCs {};
+struct BoundaryBCs {};
+
+using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<A>::LinearForm<I>;
+using OpDomainRhsBCs = DomainRhsBCs::OpFlux<DomainBCs, 1, SPACE_DIM>;
+using BoundaryRhsBCs = NaturalBC<BoundaryEleOp>::Assembly<A>::LinearForm<I>;
+using OpBoundaryRhsBCs = BoundaryRhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
+using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<I>;
+using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
+
+}; // namespace ContactOps
 
 constexpr bool is_quasi_static = true;
 constexpr bool is_large_strains = true;
@@ -119,6 +129,9 @@ constexpr double spring_stiffness = 0.1;
 #include <ContactOps.hpp>
 #include <HenckyOps.hpp>
 #include <PostProcContact.hpp>
+#include <ContactNaturalDomainBC.hpp>
+#include <ContactNaturalBoundaryBC.hpp>
+
 using namespace ContactOps;
 using namespace HenckyOps;
 
@@ -310,6 +323,7 @@ MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   PipelineManager *pip_mng = mField.getInterface<PipelineManager>();
   auto bc_mng = mField.getInterface<BcManager>();
+  auto time_scale = boost::make_shared<TimeScale>();
 
   auto add_domain_base_ops = [&](auto &pip) {
     auto det_ptr = boost::make_shared<VectorDouble>();
@@ -317,10 +331,8 @@ MoFEMErrorCode Example::OPs() {
     auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
     pip.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    pip.push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    pip.push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+    pip.push_back(new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+    pip.push_back(new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
 
     if (SPACE_DIM == 2) {
       pip.push_back(new OpMakeHdivFromHcurl());
@@ -340,7 +352,6 @@ MoFEMErrorCode Example::OPs() {
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
   auto add_domain_ops_lhs = [&](auto &pip) {
-
     if (is_large_strains) {
       pip_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -377,24 +388,12 @@ MoFEMErrorCode Example::OPs() {
     auto unity = []() { return 1; };
     pip.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
     pip.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
-
   };
 
   auto add_domain_ops_rhs = [&](auto &pip) {
-    auto get_body_force = [this](const double, const double, const double) {
-      auto *pip_mng = mField.getInterface<PipelineManager>();
-      FTensor::Index<'i', SPACE_DIM> i;
-      FTensor::Tensor1<double, SPACE_DIM> t_source;
-      auto fe_domain_rhs = pip_mng->getDomainRhsFE();
-      const auto time = fe_domain_rhs->ts_t;
+    CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
+        pip, mField, "U", {time_scale}, Sev::inform);
 
-      // hardcoded gravity load
-      t_source(i) = 0;
-      t_source(1) = 1.0 * time;
-      return t_source;
-    };
-
-    pip.push_back(new OpBodyForce("U", get_body_force));
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mGradPtr));
 
@@ -417,8 +416,7 @@ MoFEMErrorCode Example::OPs() {
       pip.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
           commonDataPtr->mDPtr));
-      pip.push_back(
-          new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
+      pip.push_back(new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
     }
 
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
@@ -426,15 +424,12 @@ MoFEMErrorCode Example::OPs() {
 
     pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
         "SIGMA", commonDataPtr->contactStressPtr));
-    pip.push_back(
-        new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-            "SIGMA", commonDataPtr->contactStressDivergencePtr));
+    pip.push_back(new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
+        "SIGMA", commonDataPtr->contactStressDivergencePtr));
 
-    pip.push_back(
-        new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr,
-                         [](double, double, double) { return 1; }));
-    pip.push_back(
-        new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
+    pip.push_back(new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr,
+                                   [](double, double, double) { return 1; }));
+    pip.push_back(new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
 
     pip.push_back(new OpMixUTimesDivLambdaRhs(
         "U", commonDataPtr->contactStressDivergencePtr));
@@ -450,7 +445,6 @@ MoFEMErrorCode Example::OPs() {
       pip_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
           "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
-
   };
 
   auto add_boundary_base_ops = [&](auto &pip) {
@@ -465,8 +459,9 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
-    pip.push_back(
-        new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
+    CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
+        pip, mField, "U", Sev::inform);
+    pip.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pip.push_back(
         new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
     pip.push_back(new OpSpringLhs(
@@ -478,14 +473,10 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  auto time_scaled = [&](double, double, double) {
-    auto *pip_mng = mField.getInterface<PipelineManager>();
-    auto &fe_domain_rhs = pip_mng->getDomainRhsFE();
-    return -fe_domain_rhs->ts_t;
-  };
-
   auto add_boundary_ops_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
+    CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
+        pip, mField, "U", {time_scale}, Sev::inform);
     pip.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pip.push_back(new OpSpringRhs(
         "U", commonDataPtr->contactDispPtr,
@@ -517,15 +508,13 @@ MoFEMErrorCode Example::OPs() {
   // Enforce non-homogenous boundary conditions
   auto get_bc_hook_rhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pip_mng->getDomainRhsFE(),
-        {boost::make_shared<TimeScale>()});
+        mField, pip_mng->getDomainRhsFE(), {boost::make_shared<TimeScale>()});
     return hook;
   };
 
   auto get_bc_hook_lhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pip_mng->getDomainLhsFE(),
-        {boost::make_shared<TimeScale>()});
+        mField, pip_mng->getDomainLhsFE(), {boost::make_shared<TimeScale>()});
     return hook;
   };
 
