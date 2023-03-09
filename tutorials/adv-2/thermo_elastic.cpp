@@ -66,7 +66,7 @@ using OpHdivT = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMixDivTimesScalar<SPACE_DIM>;
 
 /**
- * @brief Integrate Lhs base of temerature times (heat capacity) times base of
+ * @brief Integrate Lhs base of temperature times (heat capacity) times base of
  * temperature (T x T)
  *
  */
