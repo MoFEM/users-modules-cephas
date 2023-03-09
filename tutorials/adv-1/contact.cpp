@@ -19,21 +19,15 @@ using namespace MoFEM;
 
 template <int DIM> struct ElementsAndOps {};
 
-template <> struct ElementsAndOps<2> {
+template <> struct ElementsAndOps<2> : PipelineManager::ElementsAndOpsByDim<2> {
   static constexpr FieldSpace CONTACT_SPACE = HCURL;
-  using DomainEle = PipelineManager::FaceEle;
-  using BoundaryEle = PipelineManager::EdgeEle;
-  using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
   using OpSetPiolaTransformOnBoundary =
       OpSetContravariantPiolaTransformOnEdge2D;
 };
 
-template <> struct ElementsAndOps<3> {
+template <> struct ElementsAndOps<3> : PipelineManager::ElementsAndOpsByDim<3> {
   static constexpr FieldSpace CONTACT_SPACE = HDIV;
-  using DomainEle = VolumeElementForcesAndSourcesCore;
-  using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = FaceElementForcesAndSourcesCore;
   using PostProcEle = PostProcVolumeOnRefinedMesh;
   using OpSetPiolaTransformOnBoundary =
       OpHOSetContravariantPiolaTransformOnFace3D;
@@ -148,7 +142,6 @@ private:
   MoFEMErrorCode checkResults();
 
   boost::shared_ptr<ContactOps::CommonData> commonDataPtr;
-  boost::shared_ptr<PostProcEle> postProcFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
