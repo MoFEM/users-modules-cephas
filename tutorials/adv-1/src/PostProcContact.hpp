@@ -1,4 +1,9 @@
-
+/**
+ * \file PostProcContact.hpp
+ *
+ *
+ * @copyright Copyright (c) 2023
+ */
 
 namespace ContactOps {
 
@@ -148,10 +153,12 @@ struct Monitor : public FEMethod {
     postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         postProcFe->getOpPtrVector(), {H1, HDIV});
+    CHKERR ContactOps::addMatBlockOps(
+        *m_field_ptr, postProcFe->getOpPtrVector(), "U", "MAT_ELASTIC",
+        commonDataPtr->mDPtr, Sev::inform);
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
             "U", commonDataPtr->mGradPtr));
-
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
     postProcFe->getOpPtrVector().push_back(

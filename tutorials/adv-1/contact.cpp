@@ -4,6 +4,7 @@
  *
  * Example of contact problem
  *
+ * @copyright Copyright (c) 2023
  */
 
 #ifndef EXECUTABLE_DIMENSION
@@ -100,6 +101,12 @@ using OpBoundaryRhsBCs = BoundaryRhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<I>;
 using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 
+MoFEMErrorCode addMatBlockOps(
+    MoFEM::Interface &m_field,
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+    std::string field_name, std::string block_name,
+    boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev);
+
 }; // namespace ContactOps
 
 constexpr bool is_quasi_static = true;
@@ -119,7 +126,6 @@ using namespace HenckyOps;
 #include <ContactNaturalBoundaryBC.hpp>
 
 using namespace ContactOps;
-
 
 struct Example {
 
@@ -145,140 +151,7 @@ private:
 
   template <int DIM> Range getEntsOnMeshSkin();
 
-  MoFEMErrorCode addMatBlockOps(
-      boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
-      std::string field_name, std::string block_name,
-      boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev);
 };
-
-MoFEMErrorCode Example::addMatBlockOps(
-    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
-    std::string field_name, std::string block_name,
-    boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev) {
-  MoFEMFunctionBegin;
-
-  struct OpMatBlocks : public DomainEleOp {
-    OpMatBlocks(std::string field_name, boost::shared_ptr<MatrixDouble> m,
-                double bulk_modulus_K, double shear_modulus_G,
-                MoFEM::Interface &m_field, Sev sev,
-                std::vector<const CubitMeshSets *> meshset_vec_ptr)
-        : DomainEleOp(field_name, DomainEleOp::OPROW), matDPtr(m),
-          bulkModulusKDefault(bulk_modulus_K),
-          shearModulusGDefault(shear_modulus_G) {
-      std::fill(&(doEntities[MBEDGE]), &(doEntities[MBMAXTYPE]), false);
-      CHK_THROW_MESSAGE(extractBlockData(m_field, meshset_vec_ptr, sev),
-                        "Can not get data from block");
-    }
-
-    MoFEMErrorCode doWork(int side, EntityType type,
-                          EntitiesFieldData::EntData &data) {
-      MoFEMFunctionBegin;
-
-      for (auto &b : blockData) {
-
-        if (b.blockEnts.find(getFEEntityHandle()) != b.blockEnts.end()) {
-          CHKERR getMatDPtr(matDPtr, b.bulkModulusK, b.shearModulusG);
-          MoFEMFunctionReturnHot(0);
-        }
-      }
-
-      CHKERR getMatDPtr(matDPtr, bulkModulusKDefault, shearModulusGDefault);
-      MoFEMFunctionReturn(0);
-    }
-
-  private:
-    boost::shared_ptr<MatrixDouble> matDPtr;
-
-    struct BlockData {
-      double bulkModulusK;
-      double shearModulusG;
-      Range blockEnts;
-    };
-
-    double bulkModulusKDefault;
-    double shearModulusGDefault;
-    std::vector<BlockData> blockData;
-
-    MoFEMErrorCode
-    extractBlockData(MoFEM::Interface &m_field,
-                     std::vector<const CubitMeshSets *> meshset_vec_ptr,
-                     Sev sev) {
-      MoFEMFunctionBegin;
-
-      for (auto m : meshset_vec_ptr) {
-        MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock") << *m;
-        std::vector<double> block_data;
-        CHKERR m->getAttributes(block_data);
-        if (block_data.size() != 2) {
-          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                  "Expected that block has two attribute");
-        }
-        auto get_block_ents = [&]() {
-          Range ents;
-          CHKERR
-          m_field.get_moab().get_entities_by_handle(m->meshset, ents, true);
-          return ents;
-        };
-
-        double young_modulus = block_data[0];
-        double poisson_ratio = block_data[1];
-        double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
-        double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
-
-        MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock")
-            << "E = " << young_modulus << " nu = " << poisson_ratio;
-
-        blockData.push_back(
-            {bulk_modulus_K, shear_modulus_G, get_block_ents()});
-      }
-      MOFEM_LOG_CHANNEL("WORLD");
-      MoFEMFunctionReturn(0);
-    }
-
-    MoFEMErrorCode getMatDPtr(boost::shared_ptr<MatrixDouble> mat_D_ptr,
-                              double bulk_modulus_K, double shear_modulus_G) {
-      MoFEMFunctionBegin;
-      //! [Calculate elasticity tensor]
-      auto set_material_stiffness = [&]() {
-        FTensor::Index<'i', SPACE_DIM> i;
-        FTensor::Index<'j', SPACE_DIM> j;
-        FTensor::Index<'k', SPACE_DIM> k;
-        FTensor::Index<'l', SPACE_DIM> l;
-        constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-        double A = (SPACE_DIM == 2)
-                       ? 2 * shear_modulus_G /
-                             (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
-                       : 1;
-        auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
-        t_D(i, j, k, l) =
-            2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
-            A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) * t_kd(i, j) *
-                t_kd(k, l);
-      };
-      //! [Calculate elasticity tensor]
-      constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-      mat_D_ptr->resize(size_symm * size_symm, 1);
-      set_material_stiffness();
-      MoFEMFunctionReturn(0);
-    }
-  };
-
-  double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
-  double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
-  pipeline.push_back(new OpMatBlocks(
-      field_name, mat_D_Ptr, bulk_modulus_K, shear_modulus_G, mField, sev,
-
-      // Get blockset using regular expression
-      mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
-
-          (boost::format("%s(.*)") % block_name).str()
-
-              ))
-
-          ));
-
-  MoFEMFunctionReturn(0);
-}
 
 //! [Run problem]
 MoFEMErrorCode Example::runProblem() {
@@ -367,29 +240,6 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
-  auto set_matrial_stiffness = [&]() {
-    MoFEMFunctionBegin;
-    FTensor::Index<'i', SPACE_DIM> i;
-    FTensor::Index<'j', SPACE_DIM> j;
-    FTensor::Index<'k', SPACE_DIM> k;
-    FTensor::Index<'l', SPACE_DIM> l;
-    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-    constexpr double bulk_modulus_K =
-        young_modulus / (3 * (1 - 2 * poisson_ratio));
-    constexpr double shear_modulus_G =
-        young_modulus / (2 * (1 + poisson_ratio));
-    constexpr double A =
-        (SPACE_DIM == 2) ? 2 * shear_modulus_G /
-                               (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
-                         : 1;
-    auto t_D =
-        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
-    t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
-                      A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
-                          t_kd(i, j) * t_kd(k, l);
-    MoFEMFunctionReturn(0);
-  };
-
   commonDataPtr = boost::make_shared<ContactOps::CommonData>();
 
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
@@ -402,12 +252,8 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->contactDispPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->curlContactStressPtr = boost::make_shared<MatrixDouble>();
 
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-
   commonDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->mDPtr->resize(size_symm * size_symm, 1);
 
-  CHKERR set_matrial_stiffness();
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
@@ -454,6 +300,9 @@ MoFEMErrorCode Example::OPs() {
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
   auto add_domain_ops_lhs = [&](auto &pip) {
+    CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC", commonDataPtr->mDPtr,
+                          Sev::verbose);
+
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mGradPtr));
     pip.push_back(
@@ -461,8 +310,6 @@ MoFEMErrorCode Example::OPs() {
     pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(
         new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-    CHKERR addMatBlockOps(pip, "U", "MAT_ELASTIC",
-                          henky_common_data_ptr->matDPtr, Sev::verbose);
     pip.push_back(
         new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(
@@ -490,6 +337,8 @@ MoFEMErrorCode Example::OPs() {
     CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
 
+    CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC", commonDataPtr->mDPtr,
+                          Sev::inform);
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mGradPtr));
 
@@ -498,8 +347,6 @@ MoFEMErrorCode Example::OPs() {
     pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(
         new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-    CHKERR addMatBlockOps(pip, "U", "MAT_ELASTIC",
-                          henky_common_data_ptr->matDPtr, Sev::verbose);
     pip.push_back(
         new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(
@@ -757,4 +604,134 @@ int main(int argc, char *argv[]) {
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
+}
+
+MoFEMErrorCode ContactOps::addMatBlockOps(
+    MoFEM::Interface &m_field,
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+    std::string field_name, std::string block_name,
+    boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev) {
+  MoFEMFunctionBegin;
+
+  struct OpMatBlocks : public DomainEleOp {
+    OpMatBlocks(std::string field_name, boost::shared_ptr<MatrixDouble> m,
+                double bulk_modulus_K, double shear_modulus_G,
+                MoFEM::Interface &m_field, Sev sev,
+                std::vector<const CubitMeshSets *> meshset_vec_ptr)
+        : DomainEleOp(field_name, DomainEleOp::OPROW), matDPtr(m),
+          bulkModulusKDefault(bulk_modulus_K),
+          shearModulusGDefault(shear_modulus_G) {
+      std::fill(&(doEntities[MBEDGE]), &(doEntities[MBMAXTYPE]), false);
+      CHK_THROW_MESSAGE(extractBlockData(m_field, meshset_vec_ptr, sev),
+                        "Can not get data from block");
+    }
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          EntitiesFieldData::EntData &data) {
+      MoFEMFunctionBegin;
+
+      for (auto &b : blockData) {
+
+        if (b.blockEnts.find(getFEEntityHandle()) != b.blockEnts.end()) {
+          CHKERR getMatDPtr(matDPtr, b.bulkModulusK, b.shearModulusG);
+          MoFEMFunctionReturnHot(0);
+        }
+      }
+
+      CHKERR getMatDPtr(matDPtr, bulkModulusKDefault, shearModulusGDefault);
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    boost::shared_ptr<MatrixDouble> matDPtr;
+
+    struct BlockData {
+      double bulkModulusK;
+      double shearModulusG;
+      Range blockEnts;
+    };
+
+    double bulkModulusKDefault;
+    double shearModulusGDefault;
+    std::vector<BlockData> blockData;
+
+    MoFEMErrorCode
+    extractBlockData(MoFEM::Interface &m_field,
+                     std::vector<const CubitMeshSets *> meshset_vec_ptr,
+                     Sev sev) {
+      MoFEMFunctionBegin;
+
+      for (auto m : meshset_vec_ptr) {
+        MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock") << *m;
+        std::vector<double> block_data;
+        CHKERR m->getAttributes(block_data);
+        if (block_data.size() != 2) {
+          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                  "Expected that block has two attribute");
+        }
+        auto get_block_ents = [&]() {
+          Range ents;
+          CHKERR
+          m_field.get_moab().get_entities_by_handle(m->meshset, ents, true);
+          return ents;
+        };
+
+        double young_modulus = block_data[0];
+        double poisson_ratio = block_data[1];
+        double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
+        double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+
+        MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock")
+            << "E = " << young_modulus << " nu = " << poisson_ratio;
+
+        blockData.push_back(
+            {bulk_modulus_K, shear_modulus_G, get_block_ents()});
+      }
+      MOFEM_LOG_CHANNEL("WORLD");
+      MoFEMFunctionReturn(0);
+    }
+
+    MoFEMErrorCode getMatDPtr(boost::shared_ptr<MatrixDouble> mat_D_ptr,
+                              double bulk_modulus_K, double shear_modulus_G) {
+      MoFEMFunctionBegin;
+      //! [Calculate elasticity tensor]
+      auto set_material_stiffness = [&]() {
+        FTensor::Index<'i', SPACE_DIM> i;
+        FTensor::Index<'j', SPACE_DIM> j;
+        FTensor::Index<'k', SPACE_DIM> k;
+        FTensor::Index<'l', SPACE_DIM> l;
+        constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+        double A = (SPACE_DIM == 2)
+                       ? 2 * shear_modulus_G /
+                             (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
+                       : 1;
+        auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
+        t_D(i, j, k, l) =
+            2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
+            A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) * t_kd(i, j) *
+                t_kd(k, l);
+      };
+      //! [Calculate elasticity tensor]
+      constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+      mat_D_ptr->resize(size_symm * size_symm, 1);
+      set_material_stiffness();
+      MoFEMFunctionReturn(0);
+    }
+  };
+
+  double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
+  double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+  pipeline.push_back(new OpMatBlocks(
+      field_name, mat_D_Ptr, bulk_modulus_K, shear_modulus_G, m_field, sev,
+
+      // Get blockset using regular expression
+      m_field.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
+
+          (boost::format("%s(.*)") % block_name).str()
+
+              ))
+
+          ));
+
+  MoFEMFunctionReturn(0);
 }
