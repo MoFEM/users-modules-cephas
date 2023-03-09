@@ -151,27 +151,16 @@ struct Monitor : public FEMethod {
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
             "U", commonDataPtr->mGradPtr));
 
-    if (is_large_strains) {
-      postProcFe->getOpPtrVector().push_back(
-          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
-    } else {
-      postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-          "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-              "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
-              commonDataPtr->mDPtr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
-    }
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
 
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
@@ -186,57 +175,33 @@ struct Monitor : public FEMethod {
 
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-    if (is_large_strains) {
+    postProcFe->getOpPtrVector().push_back(
 
-      postProcFe->getOpPtrVector().push_back(
+        new OpPPMap(
 
-          new OpPPMap(
+            postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
 
-              postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
+            {},
 
-              {},
+            {{"U", u_ptr}},
 
-              {{"U", u_ptr}},
+            {
 
-              {
+                {"SIGMA", commonDataPtr->contactStressPtr},
 
-                  {"SIGMA", commonDataPtr->contactStressPtr},
+                {"G", henky_common_data_ptr->matGradPtr},
 
-                  {"G", henky_common_data_ptr->matGradPtr},
+                {"P2", henky_common_data_ptr->getMatFirstPiolaStress()},
 
-                  {"P2", henky_common_data_ptr->getMatFirstPiolaStress()},
+                {"HS", henky_common_data_ptr->getMatHenckyStress()}
 
-                  {"HS", henky_common_data_ptr->getMatHenckyStress()}
+            },
 
-              },
+            {}
 
-              {}
+            )
 
-              )
-
-      );
-
-    } else {
-
-      postProcFe->getOpPtrVector().push_back(
-
-          new OpPPMap(
-
-              postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
-
-              {},
-
-              {{"U", u_ptr}},
-
-              {{"SIGMA", commonDataPtr->contactStressPtr}},
-
-              {{"STRAIN", commonDataPtr->mStrainPtr},
-               {"STRESS", commonDataPtr->mStressPtr}}
-
-              )
-
-      );
-    }
+    );
   }
 
   MoFEMErrorCode preProcess() { return 0; }

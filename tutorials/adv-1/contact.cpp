@@ -67,13 +67,6 @@ using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<I>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Operators used for contact]
 
-//! [Only used with Hooke equation (linear material model)]
-using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
-    GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
-using OpInternalForceCauchy = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<I>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
-//! [Only used with Hooke equation (linear material model)]
-
 //! [Only used for dynamics]
 using OpMass = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
@@ -111,7 +104,6 @@ using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 }; // namespace ContactOps
 
 constexpr bool is_quasi_static = true;
-constexpr bool is_large_strains = true;
 
 constexpr int order = 2;
 constexpr double young_modulus = 100;
@@ -329,27 +321,23 @@ MoFEMErrorCode Example::OPs() {
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
   auto add_domain_ops_lhs = [&](auto &pip) {
-    if (is_large_strains) {
-      pip_mng->getOpDomainLhsPipeline().push_back(
-          new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-              "U", commonDataPtr->mGradPtr));
-      pip_mng->getOpDomainLhsPipeline().push_back(
-          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainLhsPipeline().push_back(
-          new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainLhsPipeline().push_back(
-          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainLhsPipeline().push_back(
-          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainLhsPipeline().push_back(
-          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainLhsPipeline().push_back(
-          new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainLhsPipeline().push_back(
-          new OpKPiola("U", "U", henky_common_data_ptr->getMatTangent()));
-    } else {
-      pip.push_back(new OpKCauchy("U", "U", commonDataPtr->mDPtr));
-    }
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+            "U", commonDataPtr->mGradPtr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainLhsPipeline().push_back(
+        new OpKPiola("U", "U", henky_common_data_ptr->getMatTangent()));
 
     if (!is_quasi_static) {
       // Get pointer to U_tt shift in domain element
@@ -374,27 +362,18 @@ MoFEMErrorCode Example::OPs() {
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mGradPtr));
 
-    if (is_large_strains) {
-      pip_mng->getOpDomainRhsPipeline().push_back(
-          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainRhsPipeline().push_back(
-          new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainRhsPipeline().push_back(
-          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainRhsPipeline().push_back(
-          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainRhsPipeline().push_back(
-          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
-      pip_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
-          "U", henky_common_data_ptr->getMatFirstPiolaStress()));
-    } else {
-      pip.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-          "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
-      pip.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
-          commonDataPtr->mDPtr));
-      pip.push_back(new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
-    }
+    pip_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+    pip_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
+        "U", henky_common_data_ptr->getMatFirstPiolaStress()));
 
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
