@@ -183,7 +183,7 @@ MoFEMErrorCode Example::setupProblem() {
   case DEMKOWICZ:
     base = DEMKOWICZ_JACOBI_BASE;
     MOFEM_LOG("EXAMPLE", Sev::inform)
-        << "Set DEMKOWICZ_JACOBI_BASE for displacents";
+        << "Set DEMKOWICZ_JACOBI_BASE for displacements";
     break;
   default:
     base = LASTBASE;
