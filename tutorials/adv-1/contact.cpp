@@ -285,14 +285,16 @@ MoFEMErrorCode Example::bC() {
   auto bc_mng = mField.getInterface<BcManager>();
   auto simple = mField.getInterface<Simple>();
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
-                                           "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Y",
-                                           "U", 1, 1);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Z",
-                                           "U", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "REMOVE_ALL", "U", 0, 3);
+  for (auto f : {"U", "SIGMA"}) {
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                             "REMOVE_X", f, 0, 0);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                             "REMOVE_Y", f, 1, 1);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                             "REMOVE_Z", f, 2, 2);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                             "REMOVE_ALL", f, 0, 3);
+  }
 
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "NO_CONTACT", "SIGMA", 0, 3);
@@ -463,19 +465,6 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
-    auto &bc_map = bc_mng->getBcMapByBlockName();
-    for (auto bc : bc_map) {
-      if (bc_mng->checkBlock(bc, "FIX_")) {
-        MOFEM_LOG("EXAMPLE", Sev::inform)
-            << "Set boundary matrix for " << bc.first;
-        pip.push_back(
-            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
-        pip.push_back(new OpBoundaryMass(
-            "U", "U", [](double, double, double) { return 1.; },
-            bc.second->getBcEntsPtr()));
-      }
-    }
-
     pip.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pip.push_back(
@@ -486,7 +475,6 @@ MoFEMErrorCode Example::OPs() {
         [this](double, double, double) { return spring_stiffness; }
 
         ));
-
     MoFEMFunctionReturn(0);
   };
 
@@ -498,33 +486,6 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
-    for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
-      if (bc_mng->checkBlock(bc, "FIX_")) {
-        MOFEM_LOG("EXAMPLE", Sev::inform)
-            << "Set boundary residual for " << bc.first;
-        pip.push_back(
-            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
-        auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
-        attr_vec->clear();
-        if (bc.second->bcAttributes.size() != SPACE_DIM)
-          SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                   "Wrong size of boundary attributes vector. Set right block "
-                   "size attributes. Size of attributes %d",
-                   bc.second->bcAttributes.size());
-        std::copy(&bc.second->bcAttributes[0],
-                  &bc.second->bcAttributes[SPACE_DIM],
-                  attr_vec->data().begin());
-
-        pip.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
-                                             bc.second->getBcEntsPtr()));
-        pip.push_back(new OpBoundaryInternal(
-            "U", commonDataPtr->contactDispPtr,
-            [](double, double, double) { return 1.; },
-            bc.second->getBcEntsPtr()));
-
-      }
-    }
-
     pip.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pip.push_back(new OpSpringRhs(
         "U", commonDataPtr->contactDispPtr,
@@ -553,7 +514,7 @@ MoFEMErrorCode Example::OPs() {
   CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
   CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
 
-  // Enforce non-homegonus boundary conditions
+  // Enforce non-homogenous boundary conditions
   auto get_bc_hook_rhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
         mField, pip_mng->getDomainRhsFE(),
