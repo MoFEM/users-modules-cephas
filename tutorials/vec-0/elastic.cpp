@@ -81,7 +81,6 @@ private:
       std::string field_name, std::string block_name,
       boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev);
 
-  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 };
 
 MoFEMErrorCode Example::addMatBlockOps(
