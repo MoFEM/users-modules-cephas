@@ -1,3 +1,10 @@
+/**
+ * \file HenkyOps.hpp
+ * \example HenkyOps.hpp
+ *
+ * @copyright Copyright (c) 2023
+ */
+
 namespace HenckyOps {
 
 constexpr double eps = std::numeric_limits<float>::epsilon();
