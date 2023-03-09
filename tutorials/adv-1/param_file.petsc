@@ -6,7 +6,7 @@
 -snes_rtol 1e-8
 -snes_max_linear_solve_fail -1
 #-snes_converged_reason
--snes_linesearch_type basic
+-snes_linesearch_type l2
 -snes_linesearch_monitor 
 -snes_max_it 20
 
