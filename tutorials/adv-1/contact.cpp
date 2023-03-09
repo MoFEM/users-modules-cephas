@@ -320,8 +320,7 @@ MoFEMErrorCode Example::OPs() {
   auto time_scale = boost::make_shared<TimeScale>();
 
   auto add_domain_base_ops = [&](auto &pip) {
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip,
-                                                          {H1, CONTACT_SPACE});
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV});
   };
 
   auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
