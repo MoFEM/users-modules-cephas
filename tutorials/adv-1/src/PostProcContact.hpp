@@ -22,9 +22,10 @@ OpPostProcVertex::OpPostProcVertex(
     : mField(m_field), BoundaryEleOp(field_name, BoundaryEleOp::OPROW),
       commonDataPtr(common_data_ptr), moabVertex(moab_vertex) {
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-  doEntities[boundary_ent] = true;
-  if (boundary_ent == MBTRI)
-    doEntities[MBQUAD] = true;
+  for (EntityType t = CN::TypeDimensionMap[SPACE_DIM - 1].first;
+       t <= CN::TypeDimensionMap[SPACE_DIM - 1].second; ++t) {
+    doEntities[t] = true;
+  }
   pComm = ParallelComm::get_pcomm(moabVertex, MYPCOMM_INDEX);
   if (pComm == NULL) {
     moabCommWrap = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
