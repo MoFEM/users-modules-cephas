@@ -285,6 +285,15 @@ MoFEMErrorCode Example::bC() {
   auto bc_mng = mField.getInterface<BcManager>();
   auto simple = mField.getInterface<Simple>();
 
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Y",
+                                           "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Z",
+                                           "U", 2, 2);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "REMOVE_ALL", "U", 0, 3);
+
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "NO_CONTACT", "SIGMA", 0, 3);
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
