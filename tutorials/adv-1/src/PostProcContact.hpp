@@ -199,9 +199,7 @@ struct Monitor : public FEMethod {
 
                 {"G", henky_common_data_ptr->matGradPtr},
 
-                {"P2", henky_common_data_ptr->getMatFirstPiolaStress()},
-
-                {"HS", henky_common_data_ptr->getMatHenckyStress()}
+                {"P2", henky_common_data_ptr->getMatFirstPiolaStress()}
 
             },
 
