@@ -82,19 +82,18 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto t_contact_normal = dsdf_dcoords(t_spatial_coords);
-    const double g = sdf(t_spatial_coords);
-    const double c = constrain(sdf(t_spatial_coords),
-                                normal_traction(t_traction, t_contact_normal));
+    auto t_grad_sdf = grad_surface_distance_function(t_coords);
+    const double g = surface_distance_function(t_spatial_coords);
+    const double t = normal_traction(t_traction, t_grad_sdf);
+    const double c = constrain(g, t);
     CHKERR moabVertex->tag_set_data(th_gap, &new_vertex, 1, &g);
     CHKERR moabVertex->tag_set_data(th_cons, &new_vertex, 1, &c);
 
-    FTensor::Tensor1<double, 3> norm(t_contact_normal(0), t_contact_normal(1),
-                                     0.);
+    FTensor::Tensor1<double, 3> norm(t_grad_sdf(0), t_grad_sdf(1), 0.);
 
     if (SPACE_DIM == 3) {
       trac(2) = t_traction(2);
-      norm(2) = t_contact_normal(2);
+      norm(2) = t_grad_sdf(2);
       disp(2) = t_disp(2);
     }
 

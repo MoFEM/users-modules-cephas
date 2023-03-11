@@ -61,13 +61,13 @@ private:
 };
 
 template <typename T>
-inline double sdf(FTensor::Tensor1<T, 3> &t_coords) {
-  return t_coords(1) - 0.5;
+inline double surface_distance_function(FTensor::Tensor1<T, 3> &t_coords) {
+  return (t_coords(1) + 0.5);
 };
 
 template <typename T>
 inline FTensor::Tensor1<double, SPACE_DIM>
-dsdf_dcoords(FTensor::Tensor1<T, 3> &t_coords) {
+grad_surface_distance_function(FTensor::Tensor1<T, 3> &t_coords) {
   FTensor::Tensor1<double, SPACE_DIM> t_grad;
    t_grad(i) = 0;
    t_grad(1) = 1.;
@@ -91,15 +91,15 @@ inline double sign(double x) {
 
 inline double w(const double sdf, const double t) { return sdf - cn * t; }
 
-inline double constrain(double &&sdf, double &&t) {
+inline double constrain(double sdf, double t) {
   return (w(sdf, t) + std::abs(w(sdf, t))) / 2;
 };
 
-inline double diff_constrains_dtraction(double &&sdf, double &&t) {
+inline double diff_constrains_dtraction(double sdf, double t) {
   return -cn * (1 + sign(w(sdf, t))) / 2;
 }
 
-inline double diff_constrains_dsdf(double &&sdf, double &&t) {
+inline double diff_constrains_dsdf(double sdf, double t) {
   return (1 + sign(w(sdf, t))) / 2;
 }
 
@@ -132,21 +132,23 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
     auto t_nf = getFTensor1FromPtr<SPACE_DIM>(&nf[0]);
     const double alpha = t_w * getMeasure();
 
-    FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
+    FTensor::Tensor1<double, 3> t_spatial_coords;
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto t_contact_normal = dsdf_dcoords(t_spatial_coords);
+    auto sdf0 = surface_distance_function(t_coords);
+    auto sdf = surface_distance_function(t_spatial_coords);
+    auto t_std_grad = grad_surface_distance_function(t_coords);
+
+    auto t = normal_traction(t_traction, t_std_grad);
+    auto c = constrain(sdf, t);
+
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
-    t_P(i, j) = t_contact_normal(i) * t_contact_normal(j);
+    t_P(i, j) = t_std_grad(i) * t_std_grad(j);
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
     t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
 
     FTensor::Tensor1<double, SPACE_DIM> t_rhs_constrains;
-
-    t_rhs_constrains(i) =
-        t_contact_normal(i) *
-        constrain(sdf(t_spatial_coords),
-                  normal_traction(t_traction, t_contact_normal));
+    t_rhs_constrains(i) = t_std_grad(i) * (c - sdf0);
 
     FTensor::Tensor1<double, SPACE_DIM> t_rhs_tangent_disp,
         t_rhs_tangent_traction;
@@ -212,15 +214,15 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::iNtegrate(
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto t_contact_normal = dsdf_dcoords(t_spatial_coords);
-    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
-    t_P(i, j) = t_contact_normal(i) * t_contact_normal(j);
+    auto sdf = surface_distance_function(t_spatial_coords);
+    auto t_grad_sdf = grad_surface_distance_function(t_coords);
+    auto t = normal_traction(t_traction, t_grad_sdf);
+    auto diff_constrain = diff_constrains_dsdf(sdf, t);
 
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
+    t_P(i, j) = t_grad_sdf(i) * t_grad_sdf(j);
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
     t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
-
-    auto diff_constrain = diff_constrains_dsdf(
-        sdf(t_spatial_coords), normal_traction(t_traction, t_contact_normal));
 
     size_t rr = 0;
     for (; rr != AssemblyBoundaryEleOp::nbRows / SPACE_DIM; ++rr) {
@@ -292,15 +294,15 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto t_contact_normal = dsdf_dcoords(t_spatial_coords);
-    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
-    t_P(i, j) = t_contact_normal(i) * t_contact_normal(j);
+    auto sdf = surface_distance_function(t_spatial_coords);
+    auto t_grad_sdf = grad_surface_distance_function(t_coords);
+    auto t = normal_traction(t_traction, t_grad_sdf);
+    const double dc_dt = diff_constrains_dtraction(sdf, t);
 
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
+    t_P(i, j) = t_grad_sdf(i) * t_grad_sdf(j);
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
     t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
-
-    const double diff_traction = diff_constrains_dtraction(
-        sdf(t_spatial_coords), normal_traction(t_traction, t_contact_normal));
 
     size_t rr = 0;
     for (; rr != AssemblyBoundaryEleOp::nbRows / SPACE_DIM; ++rr) {
@@ -315,7 +317,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
         const double col_base = t_col_base(i) * t_normal(i);
         const double beta = alpha * row_base * col_base;
 
-        t_mat(i, j) += (beta * diff_traction) * t_P(i, j);
+        t_mat(i, j) += (beta * dc_dt) * t_P(i, j);
         t_mat(i, j) += beta * cn * t_Q(i, j);
 
         ++t_col_base;
