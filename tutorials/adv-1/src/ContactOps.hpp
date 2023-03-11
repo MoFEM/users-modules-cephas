@@ -61,17 +61,24 @@ private:
 };
 
 template <typename T>
-inline double surface_distance_function(FTensor::Tensor1<T, 3> &t_coords) {
-  return (t_coords(1) + 0.5);
+inline auto surface_distance_function(FTensor::Tensor1<T, 3> &t_coords) {
+  return t_coords(1) + 0.5;
 };
+
+constexpr double cx_eps = 1e-12;
 
 template <typename T>
 inline FTensor::Tensor1<double, SPACE_DIM>
 grad_surface_distance_function(FTensor::Tensor1<T, 3> &t_coords) {
   FTensor::Tensor1<double, SPACE_DIM> t_grad;
-   t_grad(i) = 0;
-   t_grad(1) = 1.;
-   return t_grad;
+  FTensor::Tensor1<std::complex<double>, 3> t_cx_coords;
+  FTensor::Index<'I', 3> I;
+  for (auto d = 0; d != SPACE_DIM; ++d) {
+    t_cx_coords(I) = t_coords(I);
+    t_cx_coords(d) += 1i * cx_eps;
+    t_grad(d) = std::imag(surface_distance_function(t_cx_coords)) / cx_eps;
+  };
+  return t_grad;
 };
 
 template <typename T>
