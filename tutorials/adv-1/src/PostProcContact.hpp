@@ -79,15 +79,15 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
     FTensor::Tensor1<double, 3> trac(t_traction(0), t_traction(1), 0.);
     FTensor::Tensor1<double, 3> disp(t_disp(0), t_disp(1), 0.);
 
-    auto t_contact_normal = normal(t_coords, t_disp);
-    const double g0 = gap0(t_coords, t_contact_normal);
-    const double g = gap(t_disp, t_contact_normal);
-    const double gap_tot = g - g0;
-    const double constra = constrian(
-        gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
-        normal_traction(t_traction, t_contact_normal));
-    CHKERR moabVertex->tag_set_data(th_gap, &new_vertex, 1, &gap_tot);
-    CHKERR moabVertex->tag_set_data(th_cons, &new_vertex, 1, &constra);
+    FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
+    t_spatial_coords(i) = t_coords(i) + t_disp(i);
+
+    auto t_contact_normal = dsdf_dcoords(t_spatial_coords);
+    const double g = sdf(t_spatial_coords);
+    const double c = constrain(sdf(t_spatial_coords),
+                                normal_traction(t_traction, t_contact_normal));
+    CHKERR moabVertex->tag_set_data(th_gap, &new_vertex, 1, &g);
+    CHKERR moabVertex->tag_set_data(th_cons, &new_vertex, 1, &c);
 
     FTensor::Tensor1<double, 3> norm(t_contact_normal(0), t_contact_normal(1),
                                      0.);
@@ -199,9 +199,7 @@ struct Monitor : public FEMethod {
 
                 {"G", henky_common_data_ptr->matGradPtr},
 
-                {"P2", henky_common_data_ptr->getMatFirstPiolaStress()},
-
-                {"HS", henky_common_data_ptr->getMatHenckyStress()}
+                {"P2", henky_common_data_ptr->getMatFirstPiolaStress()}
 
             },
 
