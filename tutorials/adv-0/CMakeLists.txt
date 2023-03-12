@@ -34,13 +34,13 @@ tutorials_build_and_install(
   plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
 
 set_target_properties(
-  plastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
+  plastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1")
 
 tutorials_build_and_install(
   plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
   
 set_target_properties(
-  plastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+  plastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1")
 
 add_test(
   plastic_3d_necking

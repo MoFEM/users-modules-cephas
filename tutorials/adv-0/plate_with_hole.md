@@ -72,17 +72,17 @@ gmsh.model.setPhysicalName(1, 300, 'FIX_X1')
 gmsh.model.addPhysicalGroup(1, [7], 301)
 gmsh.model.setPhysicalName(1, 301, 'FIX_Y1')
 gmsh.model.addPhysicalGroup(1, [8], 302)
-#gmsh.model.setPhysicalName(1, 302, 'FIX_X2')
-gmsh.model.setPhysicalName(1, 302, 'FORCE')
-gmsh.model.addPhysicalGroup(1, [7], 303)
-gmsh.model.setPhysicalName(1, 303, 'REACTION')
+gmsh.model.setPhysicalName(1, 302, 'FIX_X2')
+#gmsh.model.setPhysicalName(1, 302, 'FORCE')
+# gmsh.model.addPhysicalGroup(1, [7], 303)
+# gmsh.model.setPhysicalName(1, 200, 'REACTION')
 ```
 
 # Meshing
 
 ```python
 # Mesh 
-mesh_size =20 # change to improve the mesh of the plate
+mesh_size=3 # change to improve the mesh of the plate
 gmsh.model.mesh.setSize(
     gmsh.model.getEntitiesInBoundingBox(0, 0, 0, L, H, 0), mesh_size)
 gmsh.model.mesh.setSize(
@@ -106,10 +106,10 @@ gmsh.finalize()
 ```
 
 ```python
-#config_file='bc_displacement_control.cfg'
-config_file='bc_force_control.cfg'
-out_file='plate_with_hole_force_control.h5m'
-!read_med -med_file plate_with_hole.med -output_file plate_with_hole_force_control.h5m -meshsets_config {config_file} -log_sl noisy
+config_file='bc_displacement_control.cfg'
+#config_file='bc_force_control.cfg'
+out_file='plate_with_hole.h5m'
+!read_med -med_file plate_with_hole.med -output_file {out_file} -meshsets_config {config_file} -log_sl inform
 ```
 
 ```python
@@ -122,7 +122,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
 mesh = pv.read('plate_with_hole.vtk')
-mesh.plot(show_grid=True, show_edges=True, cpos="xy", smooth_shading=False)  
+mesh = mesh.shrink(0.9)
+mesh.plot(show_grid=True, cpos="xy", smooth_shading=True, notebook=True, jupyter_backend='ipygany')  
 ```
 
 ```python

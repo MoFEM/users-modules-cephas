@@ -233,7 +233,7 @@ struct AddFluxToRhsPipelineImpl<
 
   static MoFEMErrorCode add(
 
-      boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
       MoFEM::Interface &m_field, std::string field_name,
       boost::shared_ptr<MatrixDouble> u_ptr, double scale,
       std::string block_name, Sev sev
@@ -290,7 +290,7 @@ struct AddFluxToLhsPipelineImpl<
 
   static MoFEMErrorCode add(
 
-      boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
       MoFEM::Interface &m_field, std::string row_field_name,
       std::string col_field_name, std::string block_name, Sev sev
 

@@ -25,7 +25,7 @@ struct AddFluxToRhsPipelineImpl<
 
   static MoFEMErrorCode add(
 
-      boost::ptr_vector<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
       MoFEM::Interface &m_field, std::string field_name, Sev sev
 
   ) {
