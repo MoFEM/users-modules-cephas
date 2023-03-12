@@ -1,4 +1,5 @@
 import cmath
 
-def sdf(x, y, z):
+
+def sdf(t, x, y, z):
 	return y+0.5

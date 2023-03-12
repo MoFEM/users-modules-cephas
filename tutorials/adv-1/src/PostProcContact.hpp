@@ -82,11 +82,12 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto g = std::real(surface_distance_function(t_spatial_coords));
-    auto t_grad_sdf = grad_surface_distance_function(t_coords);
+    auto g =
+        std::real(surface_distance_function(getTStime(), t_spatial_coords));
+    auto t_grad_sdf = grad_surface_distance_function(getTStime(), t_coords);
     auto t = normal_traction(t_traction, t_grad_sdf);
     auto c = constrain(g, t);
-    
+
     CHKERR moabVertex->tag_set_data(th_gap, &new_vertex, 1, &g);
     CHKERR moabVertex->tag_set_data(th_cons, &new_vertex, 1, &c);
 
