@@ -48,6 +48,9 @@ add_definitions(
   -DMoFEM_VERSION_MINOR=${MoFEM_VERSION_MINOR} 
   -DMoFEM_VERSION_BUILD=${MoFEM_VERSION_BUILD})
 
+message(STATUS "MoFEM_PETSC_DIR ${MoFEM_PETSC_DIR}")
+message(STATUS "MoFEM_BOOST_DIR ${MoFEM_BOOST_DIR}")  
+
 add_definitions(${MoFEM_DEFINE_RESTRICT})
 add_definitions("-D_LIBCPP_DISABLE_DEPRECATION_WARNINGS")
 
@@ -106,6 +109,7 @@ include_directories(${MoFEM_INSTALL_DIR}/third_party/cblas)
 if(MoFEM_BOOST_INCLUDE_DIR)
   include_directories(${MoFEM_BOOST_INCLUDE_DIR})
 endif(MoFEM_BOOST_INCLUDE_DIR)
+
 # cblas 
 if(MoFEM_CBLAS_INCLUDE_DIR) 
   include_directories(${MoFEM_CBLAS_INCLUDE_DIR})

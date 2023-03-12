@@ -24,16 +24,55 @@ tutorials_copy_and_install("*.h5m" "${permissions_default}")
 tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
+tutorials_copy_and_install("*.py" "${permissions_execute}")
 
-tutorials_build_and_install(
-  contact_2d ${CMAKE_CURRENT_SOURCE_DIR}/contact.cpp)
-tutorials_build_and_install(
-  contact_3d ${CMAKE_CURRENT_SOURCE_DIR}/contact.cpp)
+# Find python
+find_package(Python COMPONENTS Interpreter Development)
 
-set_target_properties(
-  contact_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
-set_target_properties(
-  contact_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")  
+find_library(
+  BOOST_PYTHON_LIBRARAY
+  NAMES boost_python3
+  PATHS 
+  ${MoFEM_BOOST_DIR}/lib
+)
+
+message(STATUS "BOOST_INCLUDE_PYTHON_DIR ${BOOST_INCLUDE_PYTHON_DIR}")
+message(STATUS "Boost_PYTHON_LIBRARY_RELEASE ${Boost_PYTHON_LIBRARY_RELEASE}")
+message(STATUS "Python_LIBRARY ${Python_LIBRARY}")
+
+if(Python_LIBRARY AND BOOST_INCLUDE_PYTHON_DIR AND Boost_PYTHON_LIBRARY_RELEASE) 
+
+  include_directories(${_Python_INCLUDE_DIR})
+
+  tutorials_build_and_install(
+    contact_2d ${CMAKE_CURRENT_SOURCE_DIR}/contact.cpp)
+  tutorials_build_and_install(
+    contact_3d ${CMAKE_CURRENT_SOURCE_DIR}/contact.cpp)
+
+  set_target_properties(
+    contact_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DPYTHON_SFD") 
+  set_target_properties(
+    contact_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DPYTHON_SFD") 
+
+  target_link_libraries(contact_2d 
+    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
+  target_link_libraries(contact_3d 
+    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
+
+
+else (Python_LIBRARY AND BOOST_INCLUDE_PYTHON_DIR AND Boost_PYTHON_LIBRARY_RELEASE)
+
+  tutorials_build_and_install(
+    contact_2d ${CMAKE_CURRENT_SOURCE_DIR}/contact.cpp)
+  tutorials_build_and_install(
+    contact_3d ${CMAKE_CURRENT_SOURCE_DIR}/contact.cpp)
+
+  set_target_properties(
+    contact_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
+  set_target_properties(
+    contact_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")  
+
+endif(Python_LIBRARY AND BOOST_INCLUDE_PYTHON_DIR AND Boost_PYTHON_LIBRARY_RELEASE)
 
 add_test(
   contact_2d

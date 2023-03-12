@@ -14,6 +14,12 @@
 #include <MoFEM.hpp>
 #include <MatrixFunction.hpp>
 
+#ifdef PYTHON_SFD
+#include <boost/python.hpp>
+#include <boost/python/def.hpp>
+namespace bp = boost::python;
+#endif
+
 using namespace MoFEM;
 
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
@@ -149,6 +155,10 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
+#ifdef PYTHON_SFD
+  boost::shared_ptr<SDFPython> sdfPythonPtr;
+#endif
+
   template <int DIM> Range getEntsOnMeshSkin();
 
 };
@@ -253,6 +263,13 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->curlContactStressPtr = boost::make_shared<MatrixDouble>();
 
   commonDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
+
+#ifdef PYTHON_SFD
+  sdfPythonPtr = boost::make_shared<SDFPython>();
+  CHKERR sdfPythonPtr->sdfInit("sdf.py");
+  sdfPythonWeakPtr = sdfPythonPtr;
+#endif
+
 
   MoFEMFunctionReturn(0);
 }
@@ -562,6 +579,10 @@ static char help[] = "...\n\n";
 
 int main(int argc, char *argv[]) {
 
+#ifdef PYTHON_SFD
+  Py_Initialize();
+#endif
+
   // Initialisation of MoFEM/PETSc and MOAB data structures
   const char param_file[] = "param_file.petsc";
   MoFEM::Core::Initialize(&argc, &argv, param_file, help);
@@ -603,7 +624,18 @@ int main(int argc, char *argv[]) {
   }
   CATCH_ERRORS;
 
-  CHKERR MoFEM::Core::Finalize();
+  CHKERR
+  MoFEM::Core::Finalize();
+
+#ifdef PYTHON_SFD
+  if (Py_FinalizeEx() < 0) {
+    exit(120);
+  }
+  // PyMem_RawFree(program);
+  // Py_FinalizeEx();
+  // printf("\nGood Bye...\n");
+#endif
+
 }
 
 MoFEMErrorCode ContactOps::addMatBlockOps(
