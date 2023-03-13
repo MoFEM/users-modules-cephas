@@ -122,7 +122,7 @@ constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.25;
 constexpr double rho = 0;
 constexpr double cn = 0.01;
-constexpr double spring_stiffness = 0.1;
+// constexpr double spring_stiffness = 0.1;
 
 #include <ContactOps.hpp>
 #include <HenckyOps.hpp>
@@ -291,11 +291,21 @@ MoFEMErrorCode Example::bC() {
     CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                              "REMOVE_ALL", f, 0, 3);
   }
+  
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "NO_CONTACT", "SIGMA", 0, 3);
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
+      
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
+                                           "SIGMA", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
+                                           "SIGMA", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
+                                           "SIGMA", 2, 2);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
+                                           "SIGMA", 0, 3);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "NO_CONTACT", "SIGMA", 0, 3);
 
   MoFEMFunctionReturn(0);
 }
@@ -413,12 +423,12 @@ MoFEMErrorCode Example::OPs() {
     pip.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pip.push_back(
         new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
-    pip.push_back(new OpSpringLhs(
-        "U", "U",
+    // pip.push_back(new OpSpringLhs(
+    //     "U", "U",
 
-        [this](double, double, double) { return spring_stiffness; }
+    //     [this](double, double, double) { return spring_stiffness; }
 
-        ));
+    //     ));
     MoFEMFunctionReturn(0);
   };
 
@@ -427,9 +437,9 @@ MoFEMErrorCode Example::OPs() {
     CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
     pip.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
-    pip.push_back(new OpSpringRhs(
-        "U", commonDataPtr->contactDispPtr,
-        [this](double, double, double) { return spring_stiffness; }));
+    // pip.push_back(new OpSpringRhs(
+    //     "U", commonDataPtr->contactDispPtr,
+    //     [this](double, double, double) { return spring_stiffness; }));
     MoFEMFunctionReturn(0);
   };
 
@@ -444,12 +454,12 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_rhs(pip_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule_vol = [](int, int, int approx_order) {
-    return 3 * order;
+    return 2 * order;
   };
   CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule_vol);
   CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule_vol);
   auto integration_rule_boundary = [](int, int, int approx_order) {
-    return 3 * order;
+    return 4 * order;
   };
   CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
   CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
@@ -457,13 +467,13 @@ MoFEMErrorCode Example::OPs() {
   // Enforce non-homogenous boundary conditions
   auto get_bc_hook_rhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pip_mng->getDomainRhsFE(), {boost::make_shared<TimeScale>()});
+        mField, pip_mng->getDomainRhsFE(), {time_scale});
     return hook;
   };
 
   auto get_bc_hook_lhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pip_mng->getDomainLhsFE(), {boost::make_shared<TimeScale>()});
+        mField, pip_mng->getDomainLhsFE(), {time_scale});
     return hook;
   };
 
