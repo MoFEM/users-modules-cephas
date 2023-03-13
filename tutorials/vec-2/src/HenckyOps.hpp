@@ -29,24 +29,21 @@ template <int DIM> inline auto get_uniq_nb(double *ptr) {
 template <int DIM>
 inline auto sort_eigen_vals(FTensor::Tensor1<double, DIM> &eig,
                             FTensor::Tensor2<double, DIM, DIM> &eigen_vec) {
-   std::array<std::pair<double, size_t>, DIM> tmp;
-  auto is_eq_pair = [](const auto &a, const auto &b) {
-    return a.first < b.first;
-  };
 
-  for (size_t i = 0; i != DIM; ++i)
-    tmp[i] = std::make_pair(eig(i), i);
-  std::sort(tmp.begin(), tmp.end(), is_eq_pair);
+  int i = 0, j = 1, k = 2;
 
-  int i, j, k;
-  if (is_eq_pair(tmp[0], tmp[1])) {
-    i = tmp[0].second;
-    j = tmp[2].second;
-    k = tmp[1].second;
-  } else {
-    i = tmp[0].second;
-    j = tmp[1].second;
-    k = tmp[2].second;
+  if (is_eq(eig(0), eig(1))) {
+    i = 0;
+    j = 2;
+    k = 1;
+  } else if (is_eq(eig(0), eig(2))) {
+    i = 0;
+    j = 1;
+    k = 2;
+  } else if (is_eq(eig(1), eig(2))) {
+    i = 1;
+    j = 0;
+    k = 2;
   }
 
   FTensor::Tensor2<double, 3, 3> eigen_vec_c{
@@ -144,8 +141,11 @@ template <int DIM> struct OpCalculateEigenVals : public DomainEleOp {
 
       // rare case when two eigen values are equal
       auto nb_uniq = get_uniq_nb<DIM>(&eig(0));
-      if (DIM == 3 && nb_uniq == 2)
-        sort_eigen_vals<DIM>(eig, eigen_vec);
+      if constexpr (DIM == 3) {
+        if (nb_uniq == 2) {
+          sort_eigen_vals<DIM>(eig, eigen_vec);
+        }
+      }
 
       t_eig_val(i) = eig(i);
       t_eig_vec(i, j) = eigen_vec(i, j);
@@ -419,7 +419,7 @@ template <int DIM> struct OpHenckyTangent : public DomainEleOp {
     std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
     if (mat_D_ptr)
       matDPtr = mat_D_ptr;
-    else 
+    else
       matDPtr = commonDataPtr->matDPtr;
   }
 
