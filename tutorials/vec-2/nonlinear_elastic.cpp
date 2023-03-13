@@ -166,28 +166,43 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
+  auto time_scale = boost::make_shared<TimeScale>();
+
+  auto integration_rule = [](int, int, int approx_order) {
+    return 2 * (approx_order - 1);
+  };
+
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
 
   CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
-      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U",
-      {boost::make_shared<TimeScale>()}, "FORCE", Sev::inform);
+      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {time_scale},
+      "FORCE", Sev::inform);
 
   //! [Define gravity vector]
   CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
-      pipeline_mng->getOpDomainRhsPipeline(), mField, "U",
-      {boost::make_shared<TimeScale>()}, "BODY_FORCE", Sev::inform);
+      pipeline_mng->getOpDomainRhsPipeline(), mField, "U", {time_scale},
+      "BODY_FORCE", Sev::inform);
 
   // Essential BC
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
 
-  auto get_bc_hook = [&]() {
+  auto get_bc_hook_rhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainRhsFE(),
-        {boost::make_shared<TimeScale>()});
+        mField, pipeline_mng->getDomainRhsFE(), {time_scale}, false);
     return hook;
   };
 
-  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook();
+  auto get_bc_hook_lhs = [&]() {
+    EssentialPreProc<DisplacementCubitBcData> hook(
+        mField, pipeline_mng->getDomainLhsFE(), {time_scale}, false);
+    return hook;
+  };
+
+  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
+  pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
 
   MoFEMFunctionReturn(0);
 }
@@ -231,7 +246,7 @@ MoFEMErrorCode Example::assembleSystem() {
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    // Calculate internal forece
+    // Calculate internal force
     pipeline.push_back(new OpInternalForce(
         "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
 
@@ -242,14 +257,6 @@ MoFEMErrorCode Example::assembleSystem() {
   CHKERR add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
-
-  auto integration_rule = [](int, int, int approx_order) {
-    return 2 * (approx_order - 1);
-  };
-
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
 
   MoFEMFunctionReturn(0);
 }
@@ -367,7 +374,7 @@ MoFEMErrorCode Example::solveSystem() {
 }
 //! [Solve]
 
-//! [Postprocess results]
+//! [Postprocessing results]
 MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
   PetscBool test_flg = PETSC_FALSE;
@@ -387,7 +394,7 @@ MoFEMErrorCode Example::outputResults() {
   }
   MoFEMFunctionReturn(0);
 }
-//! [Postprocess results]
+//! [Postprocessing results]
 
 //! [Check]
 MoFEMErrorCode Example::checkResults() {
