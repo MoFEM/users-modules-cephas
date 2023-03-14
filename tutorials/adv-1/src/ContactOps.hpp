@@ -39,6 +39,8 @@ struct SDFPython {
       bp::exec_file(py_file.c_str(), mainNamespace, mainNamespace);
       // create a reference to python function
       sdfFun = mainNamespace["sdf"];
+      sdfGradFun = mainNamespace["grad_sdf"];
+      sdfHessFun = mainNamespace["hess_sdf"];
 
     } catch (bp::error_already_set const &) {
       // print all other errors to stderr
@@ -48,17 +50,61 @@ struct SDFPython {
     MoFEMFunctionReturn(0);
   };
 
+  template <typename T>
+  inline std::vector<T>
+  py_list_to_std_vector(const boost::python::object &iterable) {
+    return std::vector<T>(boost::python::stl_input_iterator<T>(iterable),
+                          boost::python::stl_input_iterator<T>());
+  }
+
   MoFEMErrorCode evalSdf(
 
-      double t, std::complex<double> x, std::complex<double> y,
-      std::complex<double> z, std::complex<double> &sdf
+      double t, double x, double y, double z, double &sdf
 
   ) {
     MoFEMFunctionBegin;
     try {
 
       // call python function
-      sdf = bp::extract<std::complex<double>>(sdfFun(t, x, y, z));
+      sdf = bp::extract<double>(sdfFun(t, x, y, z));
+
+    } catch (bp::error_already_set const &) {
+      // print all other errors to stderr
+      PyErr_Print();
+      CHK_THROW_MESSAGE(MOFEM_OPERATION_UNSUCCESSFUL, "Python error");
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+  MoFEMErrorCode evalGradSdf(
+
+      double t, double x, double y, double z, std::vector<double> &grad_sdf
+
+  ) {
+    MoFEMFunctionBegin;
+    try {
+
+      // call python function
+      grad_sdf = py_list_to_std_vector<double>(sdfGradFun(t, x, y, z));
+
+    } catch (bp::error_already_set const &) {
+      // print all other errors to stderr
+      PyErr_Print();
+      CHK_THROW_MESSAGE(MOFEM_OPERATION_UNSUCCESSFUL, "Python error");
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+  MoFEMErrorCode evalHessSdf(
+
+      double t, double x, double y, double z, std::vector<double> &hess_sdf
+
+  ) {
+    MoFEMFunctionBegin;
+    try {
+
+      // call python function
+      hess_sdf = py_list_to_std_vector<double>(sdfHessFun(t, x, y, z));
 
     } catch (bp::error_already_set const &) {
       // print all other errors to stderr
@@ -71,6 +117,8 @@ struct SDFPython {
 private:
   bp::object mainNamespace;
   bp::object sdfFun;
+  bp::object sdfGradFun;
+  bp::object sdfHessFun;
 };
 
 static boost::weak_ptr<SDFPython> sdfPythonWeakPtr;
@@ -115,11 +163,11 @@ private:
 };
 
 template <typename T>
-inline std::complex<double>
-surface_distance_function(double t, FTensor::Tensor1<T, 3> &t_coords) {
+inline double surface_distance_function(double t,
+                                        FTensor::Tensor1<T, 3> &t_coords) {
 #ifdef PYTHON_SFD
   if (auto sdf_ptr = sdfPythonWeakPtr.lock()) {
-    std::complex<double> sdf;
+    double sdf;
     CHK_MOAB_THROW(
         sdf_ptr->evalSdf(t, t_coords(0), t_coords(1), t_coords(2), sdf),
         "Failed python call");
@@ -132,17 +180,35 @@ surface_distance_function(double t, FTensor::Tensor1<T, 3> &t_coords) {
 constexpr double cx_eps = 1e-12;
 
 template <typename T>
-inline FTensor::Tensor1<double, SPACE_DIM>
+inline FTensor::Tensor1<double, 3>
 grad_surface_distance_function(double t, FTensor::Tensor1<T, 3> &t_coords) {
-  FTensor::Tensor1<double, SPACE_DIM> t_grad;
-  FTensor::Tensor1<std::complex<double>, 3> t_cx_coords;
-  FTensor::Index<'I', 3> I;
-  for (auto d = 0; d != SPACE_DIM; ++d) {
-    t_cx_coords(I) = t_coords(I);
-    t_cx_coords(d) += 1i * cx_eps;
-    t_grad(d) = std::imag(surface_distance_function(t, t_cx_coords)) / cx_eps;
-  };
-  return t_grad;
+#ifdef PYTHON_SFD
+  if (auto sdf_ptr = sdfPythonWeakPtr.lock()) {
+    std::vector<double> grad_sdf;
+    CHK_MOAB_THROW(sdf_ptr->evalGradSdf(t, t_coords(0), t_coords(1),
+                                        t_coords(2), grad_sdf),
+                   "Failed python call");
+    return FTensor::Tensor1<double, 3>{grad_sdf[0], grad_sdf[1], grad_sdf[2]};
+  }
+#endif
+  return FTensor::Tensor1<double, 3>{0., 1., 0.};
+};
+
+template <typename T>
+inline FTensor::Tensor2_symmetric<double, 3>
+hess_surface_distance_function(double t, FTensor::Tensor1<T, 3> &t_coords) {
+#ifdef PYTHON_SFD
+  if (auto sdf_ptr = sdfPythonWeakPtr.lock()) {
+    std::vector<double> hess_sdf;
+    CHK_MOAB_THROW(sdf_ptr->evalHessSdf(t, t_coords(0), t_coords(1),
+                                        t_coords(2), hess_sdf),
+                   "Failed python call");
+    return FTensor::Tensor2_symmetric<double, 3>{hess_sdf[0], hess_sdf[1],
+                                                 hess_sdf[2], hess_sdf[3],
+                                                 hess_sdf[4], hess_sdf[5]};
+  }
+#endif
+  return FTensor::Tensor2_symmetric<double, 3>{0., 0., 0., 0., 0., 0.};
 };
 
 inline double sign(double x) {
@@ -156,16 +222,19 @@ inline double sign(double x) {
 
 inline double w(const double sdf, const double t) { return sdf - cn * t; }
 
-inline double constrain(double sdf, double sdf0, double t) {
-  return (w(sdf, t) + std::abs(w(sdf, t))) / 2 - sdf0;
-};
-
-inline double diff_constrains_traction(double sdf, double t) {
-  return -cn * (1 + sign(w(sdf, t))) / 2;
+inline double constrain(double sdf, double un, double tn) {
+  const auto s = sign(w(sdf, tn));
+  return (s + 1) * (un - cn * tn) / 2;
 }
 
-inline double diff_constrains_dsdf(double sdf, double t) {
-  return (1 + sign(w(sdf, t))) / 2;
+inline double diff_constrains_traction(double sdf, double tn) {
+  const auto s = sign(w(sdf, tn));
+  return -(s + 1) * cn / 2;
+}
+
+inline double diff_constrains_dun(double sdf, double tn) {
+  const auto s = sign(w(sdf, tn));
+  return (s + 1) / 2;
 }
 
 OpConstrainBoundaryRhs::OpConstrainBoundaryRhs(
@@ -200,21 +269,20 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
     FTensor::Tensor1<double, 3> t_spatial_coords;
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto sdf0 = std::real(surface_distance_function(getTStime(), t_coords));
-    auto t_grad_sdf0 = grad_surface_distance_function(getTStime(), t_coords);
-    auto sdf =
-        std::real(surface_distance_function(getTStime(), t_spatial_coords));
+    auto sdf = surface_distance_function(getTStime(), t_spatial_coords);
+    auto t_grad_sdf = grad_surface_distance_function(getTStime(), t_coords);
 
-    auto t = -t_traction(i) * t_grad_sdf0(i);
-    auto c = constrain(sdf, sdf0, t);
+    auto un = t_disp(i) * t_grad_sdf(i);
+    auto tn = -t_traction(i) * t_grad_sdf(i);
+    auto c = constrain(sdf, un, tn);
 
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
-    t_P(i, j) = t_grad_sdf0(i) * t_grad_sdf0(j);
+    t_P(i, j) = t_grad_sdf(i) * t_grad_sdf(j);
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
     t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
 
     FTensor::Tensor1<double, SPACE_DIM> t_rhs_constrains;
-    t_rhs_constrains(i) = t_grad_sdf0(i) * c;
+    t_rhs_constrains(i) = c * t_grad_sdf(i);
 
     FTensor::Tensor1<double, SPACE_DIM> t_rhs_tangent_disp,
         t_rhs_tangent_traction;
@@ -280,24 +348,43 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto sdf0 = std::real(surface_distance_function(getTStime(), t_coords));
-    auto t_grad_sdf0 = grad_surface_distance_function(getTStime(), t_coords);
-    auto sdf =
-        std::real(surface_distance_function(getTStime(), t_spatial_coords));
-    auto t_grad_sdf =
-        grad_surface_distance_function(getTStime(), t_spatial_coords);
+    auto sdf = surface_distance_function(getTStime(), t_spatial_coords);
+    auto t_grad_sdf = grad_surface_distance_function(getTStime(), t_coords);
+    // auto t_hess_sdf =
+    //     hess_surface_distance_function(getTStime(), t_spatial_coords);
 
-    auto t = -t_traction(i) * t_grad_sdf0(i);
-    auto diff_constrain = diff_constrains_dsdf(sdf, t);
+    auto un = t_disp(i) * t_grad_sdf(i);
+    auto tn = -t_traction(i) * t_grad_sdf(i);
+    auto c = constrain(sdf, un, tn);
+    auto diff_c = diff_constrains_dun(sdf, tn);
 
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
-    t_P(i, j) = t_grad_sdf0(i) * t_grad_sdf0(j);
+    t_P(i, j) = t_grad_sdf(i) * t_grad_sdf(j);
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
     t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
 
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_rhs_constrains_dU;
-    t_rhs_constrains_dU(i, j) =
-        (diff_constrain * t_grad_sdf0(i)) * t_grad_sdf(j);
+    t_rhs_constrains_dU(i, j) = diff_c * t_P(i, j);
+
+    // FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_rhs_constrains_hessian_dU;
+    // t_rhs_constrains_hessian_dU(i, j) = t_hess_sdf(i, j) * c;
+    // FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM>
+    //     t_rhs_tangent_disp_hessian_dU, t_rhs_tangent_traction_hessian_dU;
+    // t_rhs_tangent_disp_hessian_dU(i, j) = -(
+
+    //     t_hess_sdf(i, j) * (t_grad_sdf(k) * t_disp(k)) +
+
+    //     t_grad_sdf(i) * (t_hess_sdf(k, j) * t_disp(k))
+
+    // );
+    // t_rhs_tangent_traction_hessian_dU(i, j) =
+    //     -cn * (
+
+    //               t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
+
+    //               t_grad_sdf(i) * (t_hess_sdf(k, j) * t_traction(k))
+
+    //           );
 
     size_t rr = 0;
     for (; rr != AssemblyBoundaryEleOp::nbRows / SPACE_DIM; ++rr) {
@@ -314,6 +401,9 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
 
         t_mat(i, j) -= beta * t_rhs_constrains_dU(i, j);
         t_mat(i, j) -= beta * t_Q(i, j);
+        // t_mat(i, j) -= beta * t_rhs_constrains_hessian_dU(i, j);
+        // t_mat(i, j) -= beta * t_rhs_tangent_disp_hessian_dU(i, j);
+        // t_mat(i, j) += beta * t_rhs_tangent_traction_hessian_dU(i, j);
 
         ++t_col_base;
         ++t_mat;
@@ -369,15 +459,14 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto sdf0 = std::real(surface_distance_function(getTStime(), t_coords));
-    auto t_grad_sdf0 = grad_surface_distance_function(getTStime(), t_coords);
-    auto sdf =
-        std::real(surface_distance_function(getTStime(), t_spatial_coords));
-    auto t = -t_traction(i) * t_grad_sdf0(i);
-    const double dc_dt = -diff_constrains_traction(sdf, t);
+    auto sdf = surface_distance_function(getTStime(), t_spatial_coords);
+    auto t_grad_sdf = grad_surface_distance_function(getTStime(), t_coords);
+
+    auto tn = -t_traction(i) * t_grad_sdf(i);
+    const double dc_dt = -diff_constrains_traction(sdf, tn);
 
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
-    t_P(i, j) = t_grad_sdf0(i) * t_grad_sdf0(j);
+    t_P(i, j) = t_grad_sdf(i) * t_grad_sdf(j);
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
     t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
 

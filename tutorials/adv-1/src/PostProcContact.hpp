@@ -82,21 +82,21 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto sdf =
-        std::real(surface_distance_function(getTStime(), t_spatial_coords));
-    auto sdf0 = std::real(surface_distance_function(getTStime(), t_coords));
-    auto t_grad_sdf0 = grad_surface_distance_function(getTStime(), t_coords);
-    auto t = -t_traction(i) * t_grad_sdf0(i);
-    auto c = constrain(sdf, sdf0, t);
+    auto sdf = surface_distance_function(getTStime(), t_spatial_coords);
+    auto t_grad_sdf =
+        grad_surface_distance_function(getTStime(), t_spatial_coords);
+    auto un = t_disp(i) * t_grad_sdf(i);
+    auto tn = -t_traction(i) * t_grad_sdf(i);
+    auto c = constrain(sdf, un, tn);
 
     CHKERR moabVertex->tag_set_data(th_gap, &new_vertex, 1, &sdf);
     CHKERR moabVertex->tag_set_data(th_cons, &new_vertex, 1, &c);
 
-    FTensor::Tensor1<double, 3> norm(t_grad_sdf0(0), t_grad_sdf0(1), 0.);
+    FTensor::Tensor1<double, 3> norm(t_grad_sdf(0), t_grad_sdf(1), 0.);
 
     if (SPACE_DIM == 3) {
       trac(2) = t_traction(2);
-      norm(2) = t_grad_sdf0(2);
+      norm(2) = t_grad_sdf(2);
       disp(2) = t_disp(2);
     }
 
