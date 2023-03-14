@@ -87,7 +87,7 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
         grad_surface_distance_function(getTStime(), t_spatial_coords);
     auto un = t_disp(i) * t_grad_sdf(i);
     auto tn = -t_traction(i) * t_grad_sdf(i);
-    auto c = constrain(sdf, un, tn);
+    auto c = constrain(sdf, tn);
 
     CHKERR moabVertex->tag_set_data(th_gap, &new_vertex, 1, &sdf);
     CHKERR moabVertex->tag_set_data(th_cons, &new_vertex, 1, &c);
