@@ -122,7 +122,7 @@ constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.25;
 constexpr double rho = 0;
 constexpr double cn = 0.01;
-// constexpr double spring_stiffness = 0.1;
+constexpr double spring_stiffness = 0.1;
 
 #include <ContactOps.hpp>
 #include <HenckyOps.hpp>
@@ -423,12 +423,12 @@ MoFEMErrorCode Example::OPs() {
     pip.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pip.push_back(
         new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
-    // pip.push_back(new OpSpringLhs(
-    //     "U", "U",
+    pip.push_back(new OpSpringLhs(
+        "U", "U",
 
-    //     [this](double, double, double) { return spring_stiffness; }
+        [this](double, double, double) { return spring_stiffness; }
 
-    //     ));
+        ));
     MoFEMFunctionReturn(0);
   };
 
@@ -437,9 +437,9 @@ MoFEMErrorCode Example::OPs() {
     CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
     pip.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
-    // pip.push_back(new OpSpringRhs(
-    //     "U", commonDataPtr->contactDispPtr,
-    //     [this](double, double, double) { return spring_stiffness; }));
+    pip.push_back(new OpSpringRhs(
+        "U", commonDataPtr->contactDispPtr,
+        [this](double, double, double) { return spring_stiffness; }));
     MoFEMFunctionReturn(0);
   };
 
@@ -454,7 +454,7 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_rhs(pip_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule_vol = [](int, int, int approx_order) {
-    return 2 * order;
+    return 3 * order;
   };
   CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule_vol);
   CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule_vol);
