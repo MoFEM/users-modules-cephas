@@ -13,8 +13,6 @@ t \in(0, T). \end{aligned}
  \f]
  **/
 
-
-
 #include <stdlib.h>
 #include <cmath>
 #include <BasicFiniteElements.hpp>
@@ -386,12 +384,12 @@ MoFEMErrorCode HeatEquation::solveSystem() {
       \code
       DM ts_dm;
       CHKERR TSGetDM(solver, &ts_dm);
-      CHKERR DMTSSetIJacobian(dm, CalcJacobian::set, smartGetDMTsCtx(dm).get());
+      CHKERR DMTSSetIJacobian(
+        ts_dm, CalcJacobian::set, smartGetDMTsCtx(ts_dm).get());
       \endcode
   */
   auto set_user_ts_jacobian = [&](auto dm) {
     MoFEMFunctionBegin;
-
     CHKERR DMTSSetIJacobian(dm, CalcJacobian::set, smartGetDMTsCtx(dm).get());
     MoFEMFunctionReturn(0);
   };
@@ -409,8 +407,7 @@ MoFEMErrorCode HeatEquation::solveSystem() {
   CHKERR TSSetFromOptions(solver);
   CHKERR set_fieldsplit_preconditioner(solver);
   CHKERR TSSetUp(solver);
-  
-  
+
   CHKERR TSSolve(solver, D);
 
   MoFEMFunctionReturn(0);
