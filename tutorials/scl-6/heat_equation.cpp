@@ -207,17 +207,8 @@ MoFEMErrorCode HeatEquation::boundaryCondition() {
 MoFEMErrorCode HeatEquation::assembleSystem() {
   MoFEMFunctionBegin;
 
-  auto add_domain_base_ops = [&](auto &pipeline) {
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpCalculateHOJac<2>(jac_ptr));
-    pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOWeightsOnFace());
-  };
-
   auto add_domain_lhs_ops = [&](auto &pipeline) {
+    AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1});
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(new OpDomainGradGrad(
         "U", "U", [](double, double, double) -> double { return k; }));
@@ -231,6 +222,7 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
   };
 
   auto add_domain_rhs_ops = [&](auto &pipeline) {
+    AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1});
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     auto grad_u_at_gauss_pts = boost::make_shared<MatrixDouble>();
     auto dot_u_at_gauss_pts = boost::make_shared<VectorDouble>();
@@ -246,7 +238,7 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
         [](const double, const double, const double) { return c; }));
     auto source_term = [&](const double x, const double y, const double z) {
       auto pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+      auto &fe_domain_lhs = pipeline_mng->getDomainRhsFE();
       const auto t = fe_domain_lhs->ts_t;
       return 1e1 * pow(M_E, -M_PI * M_PI * t) * sin(1. * M_PI * x) *
              sin(2. * M_PI * y);
@@ -255,15 +247,13 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
     pipeline.push_back(new OpUnSetBc("U"));
   };
 
-  auto add_boundary_base_ops = [&](auto &pipeline) {};
-
-  auto add_lhs_base_ops = [&](auto &pipeline) {
+  auto add_boundary_lhs_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetBc("U", false, boundaryMarker));
     pipeline.push_back(new OpBoundaryMass(
         "U", "U", [](const double, const double, const double) { return c; }));
     pipeline.push_back(new OpUnSetBc("U"));
   };
-  auto add_rhs_base_ops = [&](auto &pipeline) {
+  auto add_boundary_rhs_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetBc("U", false, boundaryMarker));
     auto u_at_gauss_pts = boost::make_shared<VectorDouble>();
     auto boundary_function = [&](const double x, const double y,
@@ -284,18 +274,30 @@ MoFEMErrorCode HeatEquation::assembleSystem() {
   };
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
-  add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
-  add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
   add_domain_lhs_ops(pipeline_mng->getOpDomainLhsPipeline());
   add_domain_rhs_ops(pipeline_mng->getOpDomainRhsPipeline());
-
-  add_boundary_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
-  add_boundary_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
-  add_lhs_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
-  add_rhs_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
+  add_boundary_lhs_ops(pipeline_mng->getOpBoundaryLhsPipeline());
+  add_boundary_rhs_ops(pipeline_mng->getOpBoundaryRhsPipeline());
 
   MoFEMFunctionReturn(0);
 }
+
+struct CalcJacobian {
+  static PetscErrorCode set(TS ts, PetscReal t, Vec u, Vec u_t, PetscReal a,
+                            Mat A, Mat B, void *ctx) {
+    MoFEMFunctionBegin;
+    if (a != lastA) {
+      lastA = a;
+      CHKERR TsSetIJacobian(ts, t, u, u_t, a, A, B, ctx);
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  static double lastA;
+};
+
+double CalcJacobian::lastA = 0;
 
 MoFEMErrorCode HeatEquation::solveSystem() {
   MoFEMFunctionBegin;
@@ -371,22 +373,45 @@ MoFEMErrorCode HeatEquation::solveSystem() {
     MoFEMFunctionReturnHot(0);
   };
 
+  /**
+   *  That to work, you have to create solver, as follows,
+      \code
+      auto solver = // pipeline_mng->createTSIM( simple->getDM());
+      \endcode
+      That is explicitly use use Simple DM to create solver for DM. Pipeline
+      menage by default creat copy of DM, in case several solvers are used the
+      same DM.
+
+      Alternatively you can get dm directly from the solver, i.e.
+      \code
+      DM ts_dm;
+      CHKERR TSGetDM(solver, &ts_dm);
+      CHKERR DMTSSetIJacobian(dm, CalcJacobian::set, smartGetDMTsCtx(dm).get());
+      \endcode
+  */
+  auto set_user_ts_jacobian = [&](auto dm) {
+    MoFEMFunctionBegin;
+
+    CHKERR DMTSSetIJacobian(dm, CalcJacobian::set, smartGetDMTsCtx(dm).get());
+    MoFEMFunctionReturn(0);
+  };
+
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
 
-  auto solver = pipeline_mng->createTSIM();
-  CHKERR TSSetSolution(solver, D);
+  auto solver = pipeline_mng->createTSIM(
+      simple->getDM()); // Note DM is set as argument. If DM is not, internal
+                        // copy of pipeline DM is created.
+  CHKERR set_user_ts_jacobian(dm);
   CHKERR set_time_monitor(dm, solver);
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
   CHKERR set_fieldsplit_preconditioner(solver);
   CHKERR TSSetUp(solver);
-  CHKERR TSSolve(solver, NULL);
-
-  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+  
+  
+  CHKERR TSSolve(solver, D);
 
   MoFEMFunctionReturn(0);
 }
