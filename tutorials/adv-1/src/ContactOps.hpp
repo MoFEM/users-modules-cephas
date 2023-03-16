@@ -114,6 +114,11 @@ struct SDFPython {
       PyErr_Print();
       CHK_THROW_MESSAGE(MOFEM_OPERATION_UNSUCCESSFUL, "Python error");
     }
+
+    if (grad_sdf.size() != 3) {
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Expected size 3");
+    }
+
     MoFEMFunctionReturn(0);
   }
 
@@ -133,6 +138,11 @@ struct SDFPython {
       PyErr_Print();
       CHK_THROW_MESSAGE(MOFEM_OPERATION_UNSUCCESSFUL, "Python error");
     }
+
+    if (hess_sdf.size() != 6) {
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Expected size 6");
+    }
+
     MoFEMFunctionReturn(0);
   }
 
@@ -208,9 +218,6 @@ grad_surface_distance_function(double t, FTensor::Tensor1<T, 3> &t_coords) {
     CHK_MOAB_THROW(sdf_ptr->evalGradSdf(t, t_coords(0), t_coords(1),
                                         t_coords(2), grad_sdf),
                    "Failed python call");
-    if (grad_sdf.size() != 3) {
-      CHK_THROW_MESSAGE(MOFEM_DATA_INCONSISTENCY, "Expected size 6");
-    }
     return FTensor::Tensor1<double, 3>{grad_sdf[0], grad_sdf[1], grad_sdf[2]};
   }
 #endif
@@ -226,9 +233,6 @@ hess_surface_distance_function(double t, FTensor::Tensor1<T, 3> &t_coords) {
     CHK_MOAB_THROW(sdf_ptr->evalHessSdf(t, t_coords(0), t_coords(1),
                                         t_coords(2), hess_sdf),
                    "Failed python call");
-    if (hess_sdf.size() != 6) {
-      CHK_THROW_MESSAGE(MOFEM_DATA_INCONSISTENCY, "Expected size 6");
-    }
     return FTensor::Tensor2_symmetric<double, 3>{hess_sdf[0], hess_sdf[1],
                                                  hess_sdf[2], hess_sdf[3],
                                                  hess_sdf[4], hess_sdf[5]};
