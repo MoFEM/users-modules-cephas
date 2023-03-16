@@ -121,7 +121,7 @@ constexpr int order = 2;
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.25;
 constexpr double rho = 0;
-constexpr double cn = 0.01;
+constexpr double cn = 0.1;
 constexpr double spring_stiffness = 0.1;
 
 #include <ContactOps.hpp>
@@ -454,12 +454,12 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_rhs(pip_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule_vol = [](int, int, int approx_order) {
-    return 3 * order;
+    return 4 * approx_order;
   };
   CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule_vol);
   CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule_vol);
   auto integration_rule_boundary = [](int, int, int approx_order) {
-    return 4 * order;
+    return 4 * approx_order;
   };
   CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
   CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);

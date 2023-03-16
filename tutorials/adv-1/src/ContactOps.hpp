@@ -281,7 +281,7 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
 
         +
 
-        t_cP(i, j) * t_disp(j) -
+        t_cP(i, j) * t_disp(j) +
         c * (sdf * t_grad_sdf(i)); // add gap0 displacements
 
     size_t bb = 0;
@@ -357,15 +357,15 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
     t_cQ(i, j) = kronecker_delta(i, j) - t_cP(i, j);
 
     FTensor::Tensor2<double, 3, 3> t_res_dU;
-    t_res_dU(i, j) = t_cQ(i, j)
+    t_res_dU(i, j) =
+        kronecker_delta(i, j) + t_cP(i, j)
 
-                     +
+        +
 
-                     c * (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
-                          t_grad_sdf(i) * t_hess_sdf(k, j) * t_traction(k))
+        (c * cn) * (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
+                    t_grad_sdf(i) * t_hess_sdf(k, j) * t_traction(k)) +
+        c * sdf * t_hess_sdf(i, j);
 
-                     - c * t_hess_sdf(i, j);
-                     
     size_t rr = 0;
     for (; rr != AssemblyBoundaryEleOp::nbRows / SPACE_DIM; ++rr) {
 
