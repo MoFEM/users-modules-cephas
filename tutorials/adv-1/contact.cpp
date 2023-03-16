@@ -1,8 +1,8 @@
 /**
  * \file contact.cpp
- * \example contact.cpp
+ * \CONTACT contact.cpp
  *
- * Example of contact problem
+ * CONTACT of contact problem
  *
  * @copyright Copyright (c) 2023
  */
@@ -117,12 +117,12 @@ MoFEMErrorCode addMatBlockOps(
 
 constexpr bool is_quasi_static = true;
 
-constexpr int order = 2;
-constexpr double young_modulus = 100;
-constexpr double poisson_ratio = 0.25;
-constexpr double rho = 0;
-constexpr double cn = 0.1;
-constexpr double spring_stiffness = 0.1;
+int order = 2;
+double young_modulus = 100;
+double poisson_ratio = 0.25;
+double rho = 0;
+double cn = 0.1;
+double spring_stiffness = 0.1;
 
 #include <ContactOps.hpp>
 #include <HenckyOps.hpp>
@@ -133,9 +133,9 @@ using namespace HenckyOps;
 
 using namespace ContactOps;
 
-struct Example {
+struct CONTACT {
 
-  Example(MoFEM::Interface &m_field) : mField(m_field) {}
+  CONTACT(MoFEM::Interface &m_field) : mField(m_field) {}
 
   MoFEMErrorCode runProblem();
 
@@ -164,7 +164,7 @@ private:
 };
 
 //! [Run problem]
-MoFEMErrorCode Example::runProblem() {
+MoFEMErrorCode CONTACT::runProblem() {
   MoFEMFunctionBegin;
   CHKERR setupProblem();
   CHKERR createCommonData();
@@ -178,7 +178,7 @@ MoFEMErrorCode Example::runProblem() {
 //! [Run problem]
 
 //! [Set up problem]
-MoFEMErrorCode Example::setupProblem() {
+MoFEMErrorCode CONTACT::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
 
@@ -193,12 +193,12 @@ MoFEMErrorCode Example::setupProblem() {
   switch (choice_base_value) {
   case AINSWORTH:
     base = AINSWORTH_LEGENDRE_BASE;
-    MOFEM_LOG("EXAMPLE", Sev::inform)
+    MOFEM_LOG("CONTACT", Sev::inform)
         << "Set AINSWORTH_LEGENDRE_BASE for displacements";
     break;
   case DEMKOWICZ:
     base = DEMKOWICZ_JACOBI_BASE;
-    MOFEM_LOG("EXAMPLE", Sev::inform)
+    MOFEM_LOG("CONTACT", Sev::inform)
         << "Set DEMKOWICZ_JACOBI_BASE for displacements";
     break;
   default:
@@ -247,8 +247,31 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Set up problem]
 
 //! [Create common data]
-MoFEMErrorCode Example::createCommonData() {
+MoFEMErrorCode CONTACT::createCommonData() {
   MoFEMFunctionBegin;
+
+  auto get_options = [&]() {
+    MoFEMFunctionBegin;
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-young_modulus",
+                                 &young_modulus, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-poisson_ratio",
+                                 &poisson_ratio, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-rho", &rho, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-spring_stiffness",
+                                 &spring_stiffness, PETSC_NULL);
+
+    MOFEM_LOG("CONTACT", Sev::inform) << "Young modulus " << young_modulus;
+    MOFEM_LOG("CONTACT", Sev::inform) << "Poisson_ratio " << poisson_ratio;
+    MOFEM_LOG("CONTACT", Sev::inform) << "Density " << rho;
+    MOFEM_LOG("CONTACT", Sev::inform) << "cn " << cn;
+    MOFEM_LOG("CONTACT", Sev::inform)
+        << "spring_stiffness " << spring_stiffness;
+
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR get_options();
 
   commonDataPtr = boost::make_shared<ContactOps::CommonData>();
 
@@ -270,13 +293,12 @@ MoFEMErrorCode Example::createCommonData() {
   sdfPythonWeakPtr = sdfPythonPtr;
 #endif
 
-
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
 
 //! [Boundary condition]
-MoFEMErrorCode Example::bC() {
+MoFEMErrorCode CONTACT::bC() {
   MoFEMFunctionBegin;
   auto bc_mng = mField.getInterface<BcManager>();
   auto simple = mField.getInterface<Simple>();
@@ -312,7 +334,7 @@ MoFEMErrorCode Example::bC() {
 //! [Boundary condition]
 
 //! [Push operators to pip]
-MoFEMErrorCode Example::OPs() {
+MoFEMErrorCode CONTACT::OPs() {
   MoFEMFunctionBegin;
   PipelineManager *pip_mng = mField.getInterface<PipelineManager>();
   auto bc_mng = mField.getInterface<BcManager>();
@@ -485,7 +507,7 @@ MoFEMErrorCode Example::OPs() {
 //! [Push operators to pip]
 
 //! [Solve]
-MoFEMErrorCode Example::tsSolve() {
+MoFEMErrorCode CONTACT::tsSolve() {
   MoFEMFunctionBegin;
 
   Simple *simple = mField.getInterface<Simple>();
@@ -568,14 +590,14 @@ MoFEMErrorCode Example::tsSolve() {
 //! [Solve]
 
 //! [Postprocess results]
-MoFEMErrorCode Example::postProcess() { return 0; }
+MoFEMErrorCode CONTACT::postProcess() { return 0; }
 //! [Postprocess results]
 
 //! [Check]
-MoFEMErrorCode Example::checkResults() { return 0; }
+MoFEMErrorCode CONTACT::checkResults() { return 0; }
 //! [Check]
 
-template <int DIM> Range Example::getEntsOnMeshSkin() {
+template <int DIM> Range CONTACT::getEntsOnMeshSkin() {
   Range body_ents;
   CHKERR mField.get_moab().get_entities_by_dimension(0, DIM, body_ents);
   Skinner skin(&mField.get_moab());
@@ -597,12 +619,12 @@ int main(int argc, char *argv[]) {
   const char param_file[] = "param_file.petsc";
   MoFEM::Core::Initialize(&argc, &argv, param_file, help);
 
-  // Add logging channel for example
+  // Add logging channel for CONTACT
   auto core_log = logging::core::get();
   core_log->add_sink(
-      LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
-  LogManager::setLog("EXAMPLE");
-  MOFEM_LOG_TAG("EXAMPLE", "example");
+      LogManager::createSink(LogManager::getStrmWorld(), "CONTACT"));
+  LogManager::setLog("CONTACT");
+  MOFEM_LOG_TAG("CONTACT", "indent");
 
   try {
 
@@ -627,10 +649,10 @@ int main(int argc, char *argv[]) {
     CHKERR simple->loadFile("");
     //! [Load mesh]
 
-    //! [Example]
-    Example ex(m_field);
+    //! [CONTACT]
+    CONTACT ex(m_field);
     CHKERR ex.runProblem();
-    //! [Example]
+    //! [CONTACT]
   }
   CATCH_ERRORS;
 

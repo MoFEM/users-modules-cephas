@@ -249,12 +249,12 @@ struct Monitor : public FEMethod {
       double max, min;
       CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
       CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
-      MOFEM_LOG_C("EXAMPLE", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
+      MOFEM_LOG_C("CONTACT", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
                   msg.c_str(), ts_t, min, max);
       MoFEMFunctionReturn(0);
     };
 
-    MOFEM_LOG("EXAMPLE", Sev::inform)
+    MOFEM_LOG("CONTACT", Sev::inform)
         << "Write file at time " << ts_t << " write step " << sTEP;
 
     ++sTEP;
