@@ -59,12 +59,12 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
   auto t_traction =
       getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
 
-  auto th_gap = get_tag("GAP", 1);
   auto th_cons = get_tag("CONSTRAINT", 1);
   auto th_traction = get_tag("TRACTION", 3);
   auto th_normal = get_tag("NORMAL", 3);
   auto th_cont_normal = get_tag("CONTACT_NORMAL", 3);
   auto th_disp = get_tag("DISPLACEMENT", 3);
+  auto th_gap = get_tag("GAP", 3);
 
   EntityHandle ent = getFEEntityHandle();
 
@@ -89,7 +89,9 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
     auto tn = -t_traction(i) * t_grad_sdf(i);
     auto c = constrain(sdf, tn);
 
-    CHKERR moabVertex->tag_set_data(th_gap, &new_vertex, 1, &sdf);
+    FTensor::Tensor1<double, 3> t_gap{0., 0., 0.};
+    t_gap(i) = t_disp(i) - sdf * t_grad_sdf(i);
+
     CHKERR moabVertex->tag_set_data(th_cons, &new_vertex, 1, &c);
 
     FTensor::Tensor1<double, 3> norm(t_grad_sdf(0), t_grad_sdf(1), 0.);
@@ -105,6 +107,7 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
     CHKERR moabVertex->tag_set_data(th_disp, &new_vertex, 1, &disp(0));
     auto t_normal = getFTensor1Normal();
     CHKERR moabVertex->tag_set_data(th_normal, &new_vertex, 1, &t_normal(0));
+    CHKERR moabVertex->tag_set_data(th_gap, &new_vertex, 1, &t_gap(0));
 
     auto set_part = [&](const auto vert) {
       MoFEMFunctionBegin;

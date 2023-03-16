@@ -269,13 +269,20 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
     auto tn = -t_traction(i) * t_grad_sdf(i);
     auto c = constrain(sdf, tn);
 
-    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
-    t_P(i, j) = t_grad_sdf(i) * t_grad_sdf(j);
-    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cPQ;
-    t_cPQ(i, j) = kronecker_delta(i, j) - c * t_P(i, j);
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cP;
+    t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cQ;
+    t_cQ(i, j) = kronecker_delta(i, j) - t_cP(i, j);
 
     FTensor::Tensor1<double, SPACE_DIM> t_rhs;
-    t_rhs(i) = t_cPQ(i, j) * (t_disp(j) - cn * t_traction(j));
+    t_rhs(i) =
+
+        t_cQ(i, j) * (t_disp(j) - cn * t_traction(j))
+
+        +
+
+        t_cP(i, j) * t_disp(j) -
+        c * (sdf * t_grad_sdf(i)); // add gap0 displacements
 
     size_t bb = 0;
     for (; bb != AssemblyBoundaryEleOp::nbRows / SPACE_DIM; ++bb) {
@@ -326,6 +333,8 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
   auto t_row_base = row_data.getFTensor1N<3>();
   size_t nb_face_functions = row_data.getN().size2() / 3;
 
+  constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
     const double alpha = t_w * getMeasure();
@@ -342,23 +351,21 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
     auto tn = -t_traction(i) * t_grad_sdf(i);
     auto c = constrain(sdf, tn);
 
-    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
-    t_P(i, j) = t_grad_sdf(i) * t_grad_sdf(j);
-    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cPQ;
-    t_cPQ(i, j) = kronecker_delta(i, j) - c * t_P(i, j);
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cP;
+    t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cQ;
+    t_cQ(i, j) = kronecker_delta(i, j) - t_cP(i, j);
 
-    FTensor::Tensor1<double, 3> t_disp_and_traction;
-    t_disp_and_traction(i) = t_disp(i) - cn * t_traction(i);
-    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_rhs_hessian_dU;
-    t_rhs_hessian_dU(i, j) =
-        -c * (
+    FTensor::Tensor2<double, 3, 3> t_res_dU;
+    t_res_dU(i, j) = t_cQ(i, j)
 
-                 t_hess_sdf(i, j) * (t_grad_sdf(k) * t_disp_and_traction(k)) +
+                     +
 
-                 t_grad_sdf(i) * (t_hess_sdf(k, j) * t_disp_and_traction(k))
+                     c * (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
+                          t_grad_sdf(i) * t_hess_sdf(k, j) * t_traction(k))
 
-             );
-
+                     - c * t_hess_sdf(i, j);
+                     
     size_t rr = 0;
     for (; rr != AssemblyBoundaryEleOp::nbRows / SPACE_DIM; ++rr) {
 
@@ -372,8 +379,7 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
            ++cc) {
         const double beta = alpha * row_base * t_col_base;
 
-        t_mat(i, j) -= beta * t_cPQ(i, j);
-        t_mat(i, j) -= beta * t_rhs_hessian_dU(i, j);
+        t_mat(i, j) -= beta * t_res_dU(i, j);
 
         ++t_col_base;
         ++t_mat;
@@ -435,10 +441,13 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
     auto tn = -t_traction(i) * t_grad_sdf(i);
     auto c = constrain(sdf, tn);
 
-    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
-    t_P(i, j) = t_grad_sdf(i) * t_grad_sdf(j);
-    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cPQ;
-    t_cPQ(i, j) = kronecker_delta(i, j) - c * t_P(i, j);
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cP;
+    t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cQ;
+    t_cQ(i, j) = kronecker_delta(i, j) - t_cP(i, j);
+
+    FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_res_dt;
+    t_res_dt(i, j) = -cn * t_cQ(i, j);
 
     size_t rr = 0;
     for (; rr != AssemblyBoundaryEleOp::nbRows / SPACE_DIM; ++rr) {
@@ -453,7 +462,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
         const double col_base = t_col_base(i) * t_normal(i);
         const double beta = alpha * row_base * col_base;
 
-        t_mat(i, j) += (beta * cn) * t_cPQ(i, j);
+        t_mat(i, j) -= beta * t_res_dt(i, j);
 
         ++t_col_base;
         ++t_mat;
