@@ -142,77 +142,88 @@ struct Monitor : public FEMethod {
 
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
-    vertexPostProc = boost::make_shared<BoundaryEle>(*m_field_ptr);
 
-    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-        vertexPostProc->getOpPtrVector(), {HDIV});
-    vertexPostProc->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<SPACE_DIM>(
-            "U", commonDataPtr->contactDispPtr()));
-    vertexPostProc->getOpPtrVector().push_back(
-        new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
-            "SIGMA", commonDataPtr->contactTractionPtr()));
-    vertexPostProc->getOpPtrVector().push_back(
-        new OpPostProcVertex(*m_field_ptr, "U", commonDataPtr, &moabVertex));
+    auto get_vertex_post_proc = [&]() {
+      auto vertex_post_proc = boost::make_shared<BoundaryEle>(*m_field_ptr);
+      CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+          vertex_post_proc->getOpPtrVector(), {HDIV});
+      vertex_post_proc->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<SPACE_DIM>(
+              "U", commonDataPtr->contactDispPtr()));
+      vertex_post_proc->getOpPtrVector().push_back(
+          new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+              "SIGMA", commonDataPtr->contactTractionPtr()));
+      vertex_post_proc->getOpPtrVector().push_back(
+          new OpPostProcVertex(*m_field_ptr, "U", commonDataPtr, &moabVertex));
+      return vertex_post_proc;
+    };
 
-    postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-        postProcFe->getOpPtrVector(), {H1, HDIV});
-    CHKERR ContactOps::addMatBlockOps(
-        *m_field_ptr, postProcFe->getOpPtrVector(), "U", "MAT_ELASTIC",
-        commonDataPtr->mDPtr(), Sev::inform);
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-            "U", commonDataPtr->mGradPtr()));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+    auto get_post_proc_fe = [&]() {
+      auto post_proc_fe = boost::make_shared<PostProcEle>(*m_field_ptr);
+      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+          post_proc_fe->getOpPtrVector(), {H1, HDIV});
+      CHKERR ContactOps::addMatBlockOps(
+          *m_field_ptr, post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC",
+          commonDataPtr->mDPtr(), Sev::inform);
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+              "U", commonDataPtr->mGradPtr()));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
 
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-            "SIGMA", commonDataPtr->contactStressDivergencePtr()));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-            "SIGMA", commonDataPtr->contactStressPtr()));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
+              "SIGMA", commonDataPtr->contactStressDivergencePtr()));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+              "SIGMA", commonDataPtr->contactStressPtr()));
 
-    auto u_ptr = boost::make_shared<MatrixDouble>();
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+      auto u_ptr = boost::make_shared<MatrixDouble>();
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
-    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+      using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-    postProcFe->getOpPtrVector().push_back(
+      post_proc_fe->getOpPtrVector().push_back(
 
-        new OpPPMap(
+          new OpPPMap(
 
-            postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
+              post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-            {},
+              {},
 
-            {{"U", u_ptr}},
+              {{"U", u_ptr}},
 
-            {
+              {
 
-                {"SIGMA", commonDataPtr->contactStressPtr()},
+                  {"SIGMA", commonDataPtr->contactStressPtr()},
 
-                {"G", commonDataPtr->mGradPtr()},
+                  {"G", commonDataPtr->mGradPtr()},
 
-                {"P2", henky_common_data_ptr->getMatFirstPiolaStress()}
+                  {"P2", henky_common_data_ptr->getMatFirstPiolaStress()}
 
-            },
+              },
 
-            {}
+              {}
 
-            )
+              )
 
-    );
+      );
+
+      return post_proc_fe;
+    };
+
+    vertexPostProc = get_vertex_post_proc();
+    postProcFe = get_post_proc_fe();
+
   }
 
   MoFEMErrorCode preProcess() { return 0; }
@@ -278,6 +289,8 @@ private:
 
   boost::shared_ptr<PostProcEle> postProcFe;
   boost::shared_ptr<BoundaryEle> vertexPostProc;
+  boost::shared_ptr<BoundaryEle> integrateTraction;
+
   moab::Core mbVertexPostproc;
   moab::Interface &moabVertex;
 
