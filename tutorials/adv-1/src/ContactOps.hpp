@@ -345,8 +345,6 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
     auto sdf = surface_distance_function(getTStime(), t_spatial_coords);
     auto t_grad_sdf =
         grad_surface_distance_function(getTStime(), t_spatial_coords);
-    auto t_hess_sdf =
-        hess_surface_distance_function(getTStime(), t_spatial_coords);
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
     auto c = constrain(sdf, tn);
@@ -358,13 +356,16 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
 
     FTensor::Tensor2<double, 3, 3> t_res_dU;
     t_res_dU(i, j) =
-        kronecker_delta(i, j) + t_cP(i, j)
+        kronecker_delta(i, j) + t_cP(i, j);
 
-        +
-
-        (c * cn) * (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
-                    t_grad_sdf(i) * t_hess_sdf(k, j) * t_traction(k)) +
-        c * sdf * t_hess_sdf(i, j);
+    if(c>0) {
+      auto t_hess_sdf =
+          hess_surface_distance_function(getTStime(), t_spatial_coords);
+      t_res_dU(i, j) +=
+          (c * cn) * (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
+                      t_grad_sdf(i) * t_hess_sdf(k, j) * t_traction(k)) +
+          c * sdf * t_hess_sdf(i, j);
+    }
 
     size_t rr = 0;
     for (; rr != AssemblyBoundaryEleOp::nbRows / SPACE_DIM; ++rr) {
