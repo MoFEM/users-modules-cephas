@@ -528,9 +528,8 @@ MoFEMErrorCode CONTACT::tsSolve() {
 
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
-    auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
     boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, common_data_ptr, uXScatter, uYScatter, uZScatter));
+        new Monitor(dm, uXScatter, uYScatter, uZScatter));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);

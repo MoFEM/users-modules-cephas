@@ -16,7 +16,7 @@ struct OpPostProcVertex : public BoundaryEleOp {
 private:
   MoFEM::Interface &mField;
   moab::Interface *moabVertex;
-  boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<CommonData> common_data_ptr;
   boost::shared_ptr<WrapMPIComm> moabCommWrap;
   ParallelComm *pComm;
 };
@@ -25,7 +25,7 @@ OpPostProcVertex::OpPostProcVertex(
     MoFEM::Interface &m_field, const std::string field_name,
     boost::shared_ptr<CommonData> common_data_ptr, moab::Interface *moab_vertex)
     : mField(m_field), BoundaryEleOp(field_name, BoundaryEleOp::OPROW),
-      commonDataPtr(common_data_ptr), moabVertex(moab_vertex) {
+      common_data_ptr(common_data_ptr), moabVertex(moab_vertex) {
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
   for (EntityType t = CN::TypeDimensionMap[SPACE_DIM - 1].first;
        t <= CN::TypeDimensionMap[SPACE_DIM - 1].second; ++t) {
@@ -55,9 +55,9 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
   };
 
   auto t_coords = getFTensor1CoordsAtGaussPts();
-  auto t_disp = getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactDisp);
+  auto t_disp = getFTensor1FromMat<SPACE_DIM>(common_data_ptr->contactDisp);
   auto t_traction =
-      getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactTraction);
+      getFTensor1FromMat<SPACE_DIM>(common_data_ptr->contactTraction);
 
   auto th_cons = get_tag("CONSTRAINT", 1);
   auto th_traction = get_tag("TRACTION", 3);
@@ -128,17 +128,17 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
 
 struct Monitor : public FEMethod {
 
-  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<CommonData> common_data_ptr,
+  Monitor(SmartPetscObj<DM> &dm,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
-      : dM(dm), commonDataPtr(common_data_ptr), uXScatter(ux_scatter),
-        uYScatter(uy_scatter), uZScatter(uz_scatter),
-        moabVertex(mbVertexPostproc), sTEP(0) {
+      : dM(dm), uXScatter(ux_scatter), uYScatter(uy_scatter),
+        uZScatter(uz_scatter), moabVertex(mbVertexPostproc), sTEP(0) {
 
+    auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
     auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
-    henky_common_data_ptr->matGradPtr = commonDataPtr->mGradPtr();
-    henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr();
+    henky_common_data_ptr->matGradPtr = common_data_ptr->mGradPtr();
+    henky_common_data_ptr->matDPtr = common_data_ptr->mDPtr();
 
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
@@ -149,12 +149,12 @@ struct Monitor : public FEMethod {
           vertex_post_proc->getOpPtrVector(), {HDIV});
       vertex_post_proc->getOpPtrVector().push_back(
           new OpCalculateVectorFieldValues<SPACE_DIM>(
-              "U", commonDataPtr->contactDispPtr()));
+              "U", common_data_ptr->contactDispPtr()));
       vertex_post_proc->getOpPtrVector().push_back(
           new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
-              "SIGMA", commonDataPtr->contactTractionPtr()));
-      vertex_post_proc->getOpPtrVector().push_back(
-          new OpPostProcVertex(*m_field_ptr, "U", commonDataPtr, &moabVertex));
+              "SIGMA", common_data_ptr->contactTractionPtr()));
+      vertex_post_proc->getOpPtrVector().push_back(new OpPostProcVertex(
+          *m_field_ptr, "U", common_data_ptr, &moabVertex));
       return vertex_post_proc;
     };
 
@@ -164,10 +164,10 @@ struct Monitor : public FEMethod {
           post_proc_fe->getOpPtrVector(), {H1, HDIV});
       CHKERR ContactOps::addMatBlockOps(
           *m_field_ptr, post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC",
-          commonDataPtr->mDPtr(), Sev::inform);
+          common_data_ptr->mDPtr(), Sev::inform);
       post_proc_fe->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-              "U", commonDataPtr->mGradPtr()));
+              "U", common_data_ptr->mGradPtr()));
       post_proc_fe->getOpPtrVector().push_back(
           new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
       post_proc_fe->getOpPtrVector().push_back(
@@ -181,10 +181,10 @@ struct Monitor : public FEMethod {
 
       post_proc_fe->getOpPtrVector().push_back(
           new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-              "SIGMA", commonDataPtr->contactStressDivergencePtr()));
+              "SIGMA", common_data_ptr->contactStressDivergencePtr()));
       post_proc_fe->getOpPtrVector().push_back(
           new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-              "SIGMA", commonDataPtr->contactStressPtr()));
+              "SIGMA", common_data_ptr->contactStressPtr()));
 
       auto u_ptr = boost::make_shared<MatrixDouble>();
       post_proc_fe->getOpPtrVector().push_back(
@@ -204,9 +204,9 @@ struct Monitor : public FEMethod {
 
               {
 
-                  {"SIGMA", commonDataPtr->contactStressPtr()},
+                  {"SIGMA", common_data_ptr->contactStressPtr()},
 
-                  {"G", commonDataPtr->mGradPtr()},
+                  {"G", common_data_ptr->mGradPtr()},
 
                   {"P2", henky_common_data_ptr->getMatFirstPiolaStress()}
 
@@ -221,9 +221,26 @@ struct Monitor : public FEMethod {
       return post_proc_fe;
     };
 
+    auto get_integrate_traction = [&]() {
+      auto integrate_traction = boost::make_shared<BoundaryEle>(*m_field_ptr);
+      CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+          integrate_traction->getOpPtrVector(), {HDIV});
+      integrate_traction->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<SPACE_DIM>(
+              "U", common_data_ptr->contactDispPtr()));
+      integrate_traction->getOpPtrVector().push_back(
+          new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+              "SIGMA", common_data_ptr->contactTractionPtr()));
+
+      integrate_traction->getRuleHook = [](int, int, int approx_order) {
+        return 2 * approx_order;
+      };
+
+      return integrate_traction;
+    };
+
     vertexPostProc = get_vertex_post_proc();
     postProcFe = get_post_proc_fe();
-
   }
 
   MoFEMErrorCode preProcess() { return 0; }
@@ -282,7 +299,6 @@ struct Monitor : public FEMethod {
 
 private:
   SmartPetscObj<DM> dM;
-  boost::shared_ptr<CommonData> commonDataPtr;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
