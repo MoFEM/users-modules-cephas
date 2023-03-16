@@ -150,7 +150,6 @@ private:
   MoFEMErrorCode postProcess();
   MoFEMErrorCode checkResults();
 
-  boost::shared_ptr<ContactOps::CommonData> commonDataPtr;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
@@ -272,8 +271,6 @@ MoFEMErrorCode CONTACT::createCommonData() {
 
   CHKERR get_options();
 
-  commonDataPtr = boost::make_shared<ContactOps::CommonData>();
-
 #ifdef PYTHON_SFD
   sdfPythonPtr = boost::make_shared<SDFPython>();
   CHKERR sdfPythonPtr->sdfInit("sdf.py");
@@ -330,16 +327,17 @@ MoFEMErrorCode CONTACT::OPs() {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV});
   };
 
+  auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
   auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
-  henky_common_data_ptr->matGradPtr = commonDataPtr->mGradPtr();
-  henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr();
+  henky_common_data_ptr->matGradPtr = common_data_ptr->mGradPtr();
+  henky_common_data_ptr->matDPtr = common_data_ptr->mDPtr();
 
   auto add_domain_ops_lhs = [&](auto &pip) {
     CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC",
-                          commonDataPtr->mDPtr(), Sev::verbose);
+                          common_data_ptr->mDPtr(), Sev::verbose);
 
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonDataPtr->mGradPtr()));
+        "U", common_data_ptr->mGradPtr()));
     pip.push_back(
         new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
@@ -373,9 +371,9 @@ MoFEMErrorCode CONTACT::OPs() {
         pip, mField, "U", {time_scale}, Sev::inform);
 
     CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC",
-                          commonDataPtr->mDPtr(), Sev::inform);
+                          common_data_ptr->mDPtr(), Sev::inform);
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonDataPtr->mGradPtr()));
+        "U", common_data_ptr->mGradPtr()));
 
     pip.push_back(
         new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
@@ -390,21 +388,21 @@ MoFEMErrorCode CONTACT::OPs() {
         "U", henky_common_data_ptr->getMatFirstPiolaStress()));
 
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
-        "U", commonDataPtr->contactDispPtr()));
+        "U", common_data_ptr->contactDispPtr()));
 
     pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-        "SIGMA", commonDataPtr->contactStressPtr()));
+        "SIGMA", common_data_ptr->contactStressPtr()));
     pip.push_back(new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-        "SIGMA", commonDataPtr->contactStressDivergencePtr()));
+        "SIGMA", common_data_ptr->contactStressDivergencePtr()));
 
-    pip.push_back(new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr(),
+    pip.push_back(new OpMixDivURhs("SIGMA", common_data_ptr->contactDispPtr(),
                                    [](double, double, double) { return 1; }));
-    pip.push_back(new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr()));
+    pip.push_back(new OpMixLambdaGradURhs("SIGMA", common_data_ptr->mGradPtr()));
 
     pip.push_back(new OpMixUTimesDivLambdaRhs(
-        "U", commonDataPtr->contactStressDivergencePtr()));
+        "U", common_data_ptr->contactStressDivergencePtr()));
     pip.push_back(
-        new OpMixUTimesLambdaRhs("U", commonDataPtr->contactStressPtr()));
+        new OpMixUTimesLambdaRhs("U", common_data_ptr->contactStressPtr()));
 
     // only in case of dynamics
     if (!is_quasi_static) {
@@ -419,18 +417,18 @@ MoFEMErrorCode CONTACT::OPs() {
   auto add_boundary_base_ops = [&](auto &pip) {
     CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV});
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
-        "U", commonDataPtr->contactDispPtr()));
+        "U", common_data_ptr->contactDispPtr()));
     pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
-        "SIGMA", commonDataPtr->contactTractionPtr()));
+        "SIGMA", common_data_ptr->contactTractionPtr()));
   };
 
   auto add_boundary_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
     CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
         pip, mField, "U", Sev::inform);
-    pip.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
+    pip.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", common_data_ptr));
     pip.push_back(
-        new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
+        new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", common_data_ptr));
     pip.push_back(new OpSpringLhs(
         "U", "U",
 
@@ -444,9 +442,9 @@ MoFEMErrorCode CONTACT::OPs() {
     MoFEMFunctionBegin;
     CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
-    pip.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    pip.push_back(new OpConstrainBoundaryRhs("SIGMA", common_data_ptr));
     pip.push_back(new OpSpringRhs(
-        "U", commonDataPtr->contactDispPtr(),
+        "U", common_data_ptr->contactDispPtr(),
         [this](double, double, double) { return spring_stiffness; }));
     MoFEMFunctionReturn(0);
   };
@@ -530,8 +528,9 @@ MoFEMErrorCode CONTACT::tsSolve() {
 
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
+    auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
     boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, commonDataPtr, uXScatter, uYScatter, uZScatter));
+        new Monitor(dm, common_data_ptr, uXScatter, uYScatter, uZScatter));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
