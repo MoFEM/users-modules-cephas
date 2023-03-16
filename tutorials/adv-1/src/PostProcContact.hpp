@@ -55,9 +55,9 @@ MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
   };
 
   auto t_coords = getFTensor1CoordsAtGaussPts();
-  auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
+  auto t_disp = getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactDisp);
   auto t_traction =
-      getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
+      getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactTraction);
 
   auto th_cons = get_tag("CONSTRAINT", 1);
   auto th_traction = get_tag("TRACTION", 3);
@@ -137,8 +137,8 @@ struct Monitor : public FEMethod {
         moabVertex(mbVertexPostproc), sTEP(0) {
 
     auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
-    henky_common_data_ptr->matGradPtr = commonDataPtr->mGradPtr;
-    henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
+    henky_common_data_ptr->matGradPtr = commonDataPtr->mGradPtr();
+    henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr();
 
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
@@ -148,10 +148,10 @@ struct Monitor : public FEMethod {
         vertexPostProc->getOpPtrVector(), {HDIV});
     vertexPostProc->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>(
-            "U", commonDataPtr->contactDispPtr));
+            "U", commonDataPtr->contactDispPtr()));
     vertexPostProc->getOpPtrVector().push_back(
         new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
-            "SIGMA", commonDataPtr->contactTractionPtr));
+            "SIGMA", commonDataPtr->contactTractionPtr()));
     vertexPostProc->getOpPtrVector().push_back(
         new OpPostProcVertex(*m_field_ptr, "U", commonDataPtr, &moabVertex));
 
@@ -160,10 +160,10 @@ struct Monitor : public FEMethod {
         postProcFe->getOpPtrVector(), {H1, HDIV});
     CHKERR ContactOps::addMatBlockOps(
         *m_field_ptr, postProcFe->getOpPtrVector(), "U", "MAT_ELASTIC",
-        commonDataPtr->mDPtr, Sev::inform);
+        commonDataPtr->mDPtr(), Sev::inform);
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-            "U", commonDataPtr->mGradPtr));
+            "U", commonDataPtr->mGradPtr()));
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
     postProcFe->getOpPtrVector().push_back(
@@ -177,10 +177,10 @@ struct Monitor : public FEMethod {
 
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-            "SIGMA", commonDataPtr->contactStressDivergencePtr));
+            "SIGMA", commonDataPtr->contactStressDivergencePtr()));
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-            "SIGMA", commonDataPtr->contactStressPtr));
+            "SIGMA", commonDataPtr->contactStressPtr()));
 
     auto u_ptr = boost::make_shared<MatrixDouble>();
     postProcFe->getOpPtrVector().push_back(
@@ -200,9 +200,9 @@ struct Monitor : public FEMethod {
 
             {
 
-                {"SIGMA", commonDataPtr->contactStressPtr},
+                {"SIGMA", commonDataPtr->contactStressPtr()},
 
-                {"G", henky_common_data_ptr->matGradPtr},
+                {"G", commonDataPtr->mGradPtr()},
 
                 {"P2", henky_common_data_ptr->getMatFirstPiolaStress()}
 

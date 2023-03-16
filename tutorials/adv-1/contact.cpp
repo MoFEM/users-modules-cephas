@@ -160,7 +160,6 @@ private:
 #endif
 
   template <int DIM> Range getEntsOnMeshSkin();
-
 };
 
 //! [Run problem]
@@ -275,18 +274,6 @@ MoFEMErrorCode CONTACT::createCommonData() {
 
   commonDataPtr = boost::make_shared<ContactOps::CommonData>();
 
-  commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->contactStressPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->contactStressDivergencePtr =
-      boost::make_shared<MatrixDouble>();
-  commonDataPtr->contactTractionPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->contactDispPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->curlContactStressPtr = boost::make_shared<MatrixDouble>();
-
-  commonDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
-
 #ifdef PYTHON_SFD
   sdfPythonPtr = boost::make_shared<SDFPython>();
   CHKERR sdfPythonPtr->sdfInit("sdf.py");
@@ -313,11 +300,10 @@ MoFEMErrorCode CONTACT::bC() {
     CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                              "REMOVE_ALL", f, 0, 3);
   }
-  
 
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
-      
+
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
                                            "SIGMA", 0, 0);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
@@ -345,15 +331,15 @@ MoFEMErrorCode CONTACT::OPs() {
   };
 
   auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
-  henky_common_data_ptr->matGradPtr = commonDataPtr->mGradPtr;
-  henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
+  henky_common_data_ptr->matGradPtr = commonDataPtr->mGradPtr();
+  henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr();
 
   auto add_domain_ops_lhs = [&](auto &pip) {
-    CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC", commonDataPtr->mDPtr,
-                          Sev::verbose);
+    CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC",
+                          commonDataPtr->mDPtr(), Sev::verbose);
 
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonDataPtr->mGradPtr));
+        "U", commonDataPtr->mGradPtr()));
     pip.push_back(
         new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
@@ -386,10 +372,10 @@ MoFEMErrorCode CONTACT::OPs() {
     CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
 
-    CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC", commonDataPtr->mDPtr,
-                          Sev::inform);
+    CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC",
+                          commonDataPtr->mDPtr(), Sev::inform);
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonDataPtr->mGradPtr));
+        "U", commonDataPtr->mGradPtr()));
 
     pip.push_back(
         new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
@@ -404,21 +390,21 @@ MoFEMErrorCode CONTACT::OPs() {
         "U", henky_common_data_ptr->getMatFirstPiolaStress()));
 
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
-        "U", commonDataPtr->contactDispPtr));
+        "U", commonDataPtr->contactDispPtr()));
 
     pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-        "SIGMA", commonDataPtr->contactStressPtr));
+        "SIGMA", commonDataPtr->contactStressPtr()));
     pip.push_back(new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-        "SIGMA", commonDataPtr->contactStressDivergencePtr));
+        "SIGMA", commonDataPtr->contactStressDivergencePtr()));
 
-    pip.push_back(new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr,
+    pip.push_back(new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr(),
                                    [](double, double, double) { return 1; }));
-    pip.push_back(new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
+    pip.push_back(new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr()));
 
     pip.push_back(new OpMixUTimesDivLambdaRhs(
-        "U", commonDataPtr->contactStressDivergencePtr));
+        "U", commonDataPtr->contactStressDivergencePtr()));
     pip.push_back(
-        new OpMixUTimesLambdaRhs("U", commonDataPtr->contactStressPtr));
+        new OpMixUTimesLambdaRhs("U", commonDataPtr->contactStressPtr()));
 
     // only in case of dynamics
     if (!is_quasi_static) {
@@ -433,9 +419,9 @@ MoFEMErrorCode CONTACT::OPs() {
   auto add_boundary_base_ops = [&](auto &pip) {
     CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV});
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
-        "U", commonDataPtr->contactDispPtr));
+        "U", commonDataPtr->contactDispPtr()));
     pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
-        "SIGMA", commonDataPtr->contactTractionPtr));
+        "SIGMA", commonDataPtr->contactTractionPtr()));
   };
 
   auto add_boundary_ops_lhs = [&](auto &pip) {
@@ -460,7 +446,7 @@ MoFEMErrorCode CONTACT::OPs() {
         pip, mField, "U", {time_scale}, Sev::inform);
     pip.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pip.push_back(new OpSpringRhs(
-        "U", commonDataPtr->contactDispPtr,
+        "U", commonDataPtr->contactDispPtr(),
         [this](double, double, double) { return spring_stiffness; }));
     MoFEMFunctionReturn(0);
   };
@@ -667,7 +653,6 @@ int main(int argc, char *argv[]) {
   // Py_FinalizeEx();
   // printf("\nGood Bye...\n");
 #endif
-
 }
 
 MoFEMErrorCode ContactOps::addMatBlockOps(

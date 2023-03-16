@@ -8,18 +8,40 @@
 namespace ContactOps {
 
 //! [Common data]
-struct CommonData {
-  boost::shared_ptr<MatrixDouble> mDPtr;
-  boost::shared_ptr<MatrixDouble> mGradPtr;
-  boost::shared_ptr<MatrixDouble> mStrainPtr;
-  boost::shared_ptr<MatrixDouble> mStressPtr;
+struct CommonData : public boost::enable_shared_from_this<CommonData> {
+  MatrixDouble mD;
+  MatrixDouble mGrad;
 
-  boost::shared_ptr<MatrixDouble> contactStressPtr;
-  boost::shared_ptr<MatrixDouble> contactStressDivergencePtr;
-  boost::shared_ptr<MatrixDouble> contactTractionPtr;
-  boost::shared_ptr<MatrixDouble> contactDispPtr;
+  MatrixDouble contactStress;
+  MatrixDouble contactStressDivergence;
+  MatrixDouble contactTraction;
+  MatrixDouble contactDisp;
 
-  boost::shared_ptr<MatrixDouble> curlContactStressPtr;
+  inline auto mDPtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &mD);
+  }
+
+  inline auto mGradPtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &mGrad);
+  }
+
+  inline auto contactStressPtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &contactStress);
+  }
+
+  inline auto contactStressDivergencePtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(),
+                                           &contactStressDivergence);
+  }
+
+  inline auto contactTractionPtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(),
+                                           &contactTraction);
+  }
+
+  inline auto contactDispPtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &contactDisp);
+  }
 };
 //! [Common data]
 
@@ -248,9 +270,9 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
 
   auto t_w = getFTensor0IntegrationWeight();
-  auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
+  auto t_disp = getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactDisp);
   auto t_traction =
-      getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
+      getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactTraction);
   auto t_coords = getFTensor1CoordsAtGaussPts();
 
   size_t nb_base_functions = data.getN().size2() / 3;
@@ -324,9 +346,9 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
   auto t_normal = getFTensor1Normal();
   t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
 
-  auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
+  auto t_disp = getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactDisp);
   auto t_traction =
-      getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
+      getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactTraction);
   auto t_coords = getFTensor1CoordsAtGaussPts();
 
   auto t_w = getFTensor0IntegrationWeight();
@@ -420,9 +442,9 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
   auto t_normal = getFTensor1Normal();
   t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
 
-  auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
+  auto t_disp = getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactDisp);
   auto t_traction =
-      getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
+      getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactTraction);
   auto t_coords = getFTensor1CoordsAtGaussPts();
 
   auto t_w = getFTensor0IntegrationWeight();
