@@ -7,6 +7,21 @@
 
 namespace ContactOps {
 
+template<int DIM>
+struct PostProcEleByDim;
+
+template <> struct PostProcEleByDim<2> {
+  using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+  using SideEle = PipelineManager::ElementsAndOpsByDim<3>;
+};
+
+template <> struct PostProcEleByDim<3> {
+  using PostProcEle = PostProcBrokenMeshInMoab<BoundaryEle>;
+  using SideEle = PipelineManager::ElementsAndOpsByDim<3>;
+};
+
+using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+
 struct OpPostProcVertex : public BoundaryEleOp {
   OpPostProcVertex(MoFEM::Interface &m_field, const std::string field_name,
                    boost::shared_ptr<CommonData> common_data_ptr,
@@ -201,37 +216,39 @@ struct Monitor : public FEMethod {
       return vertex_post_proc;
     };
 
-    auto get_post_proc_fe = [&]() {
-      auto post_proc_fe = boost::make_shared<PostProcEle>(*m_field_ptr);
-      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-          post_proc_fe->getOpPtrVector(), {H1, HDIV});
-      CHKERR ContactOps::addMatBlockOps(
-          *m_field_ptr, post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC",
-          common_data_ptr->mDPtr(), Sev::inform);
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-              "U", common_data_ptr->mGradPtr()));
-      post_proc_fe->getOpPtrVector().push_back(
+    auto get_post_proc_push_ops = [&](auto &pip) {
+      MoFEMFunctionBegin;
+
+      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV});
+      CHKERR ContactOps::addMatBlockOps(*m_field_ptr, pip, "U", "MAT_ELASTIC",
+                                        common_data_ptr->mDPtr(), Sev::inform);
+      pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+          "U", common_data_ptr->mGradPtr()));
+      pip.push_back(
           new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
-      post_proc_fe->getOpPtrVector().push_back(
+      pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
           new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-      post_proc_fe->getOpPtrVector().push_back(
+      pip.push_back(
           new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
-      post_proc_fe->getOpPtrVector().push_back(
+      pip.push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
 
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-              "SIGMA", common_data_ptr->contactStressDivergencePtr()));
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-              "SIGMA", common_data_ptr->contactStressPtr()));
+      pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+          "SIGMA", common_data_ptr->contactStressPtr()));
+
+      MoFEMFunctionReturn(0);
+    };
+    
+
+    auto get_post_proc_fe = [&]() {
+      auto post_proc_fe = boost::make_shared<PostProcEle>(*m_field_ptr);
 
       auto u_ptr = boost::make_shared<MatrixDouble>();
       post_proc_fe->getOpPtrVector().push_back(
           new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+
+      CHKERR get_post_proc_push_ops(post_proc_fe->getOpPtrVector());
 
       using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
@@ -372,6 +389,7 @@ private:
   SmartPetscObj<Vec> totalTraction;
 
   boost::shared_ptr<PostProcEle> postProcFe;
+  boost::shared_ptr<PostProcEleByDim<SPACE_DIM>::SideEle> postProcSideFe;
   boost::shared_ptr<BoundaryEle> vertexPostProc;
   boost::shared_ptr<BoundaryEle> integrateTraction;
 
