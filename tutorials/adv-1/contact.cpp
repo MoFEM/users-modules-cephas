@@ -647,9 +647,6 @@ int main(int argc, char *argv[]) {
   if (Py_FinalizeEx() < 0) {
     exit(120);
   }
-  // PyMem_RawFree(program);
-  // Py_FinalizeEx();
-  // printf("\nGood Bye...\n");
 #endif
 }
 
