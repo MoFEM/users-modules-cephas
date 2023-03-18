@@ -80,12 +80,10 @@ using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
 //! [Only used for dynamics]
 
 //! [Essential boundary conditions]
-using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::BiLinearForm<I>::OpMass<1, SPACE_DIM>;
-using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<I>::OpBaseTimesVector<1, SPACE_DIM, 0>;
-using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<I>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+using OpEssentialLhs = EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<
+    GAUSS>::OpEssentialLhs<DisplacementCubitBcData, 1, SPACE_DIM>;
+using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<
+    GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
 //! [Essential boundary conditions]
 
 // Only used with Hencky/nonlinear material
@@ -155,6 +153,7 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
 #ifdef PYTHON_SFD
   boost::shared_ptr<SDFPython> sdfPythonPtr;
@@ -310,8 +309,9 @@ MoFEMErrorCode CONTACT::bC() {
                                              "REMOVE_ALL", f, 0, 3);
   }
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+  CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
+  boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_"});
 
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
                                            "SIGMA", 0, 0);
@@ -331,7 +331,8 @@ MoFEMErrorCode CONTACT::bC() {
 //! [Push operators to pip]
 MoFEMErrorCode CONTACT::OPs() {
   MoFEMFunctionBegin;
-  PipelineManager *pip_mng = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>();
+  auto *pip_mng = mField.getInterface<PipelineManager>();
   auto bc_mng = mField.getInterface<BcManager>();
   auto time_scale = boost::make_shared<TimeScale>();
 
@@ -346,6 +347,8 @@ MoFEMErrorCode CONTACT::OPs() {
   henky_common_data_ptr->matDPtr = common_data_ptr->mDPtr();
 
   auto add_domain_ops_lhs = [&](auto &pip) {
+    pip.push_back(new OpSetBc("U", true, boundaryMarker));
+
     CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC",
                           common_data_ptr->mDPtr(), Sev::verbose);
 
@@ -377,9 +380,13 @@ MoFEMErrorCode CONTACT::OPs() {
     auto unity = []() { return 1; };
     pip.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
     pip.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
+
+    pip.push_back(new OpUnSetBc("U"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pip) {
+    pip.push_back(new OpSetBc("U", true, boundaryMarker));
+
     CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
 
@@ -425,6 +432,7 @@ MoFEMErrorCode CONTACT::OPs() {
       pip.push_back(new OpInertiaForce(
           "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
+    pip.push_back(new OpUnSetBc("U"));
   };
 
   auto add_boundary_base_ops = [&](auto &pip) {
@@ -438,6 +446,10 @@ MoFEMErrorCode CONTACT::OPs() {
 
   auto add_boundary_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
+    CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<GAUSS>::
+        AddEssentialToPipeline<OpEssentialLhs>::add(
+            mField, pip, simple->getProblemName(), "U");
+    pip.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
         pip, mField, "U", Sev::inform);
     pip.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", common_data_ptr));
@@ -449,17 +461,30 @@ MoFEMErrorCode CONTACT::OPs() {
         [this](double, double, double) { return spring_stiffness; }
 
         ));
+
+    pip.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
   auto add_boundary_ops_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
+
+    auto u_mat_ptr = boost::make_shared<MatrixDouble>();
+    pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
+    CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<GAUSS>::
+        AddEssentialToPipeline<OpEssentialRhs>::add(
+            mField, pip, simple->getProblemName(), "U", u_mat_ptr,
+            {boost::make_shared<TimeScale>()}); // note displacements have no
+                                                // scaling
+
+    pip.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
     pip.push_back(new OpConstrainBoundaryRhs("SIGMA", common_data_ptr));
     pip.push_back(new OpSpringRhs(
         "U", common_data_ptr->contactDispPtr(),
         [this](double, double, double) { return spring_stiffness; }));
+    pip.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
@@ -483,22 +508,6 @@ MoFEMErrorCode CONTACT::OPs() {
   };
   CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
   CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
-
-  // Enforce non-homogenous boundary conditions
-  auto get_bc_hook_rhs = [&]() {
-    EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pip_mng->getDomainRhsFE(), {time_scale});
-    return hook;
-  };
-
-  auto get_bc_hook_lhs = [&]() {
-    EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pip_mng->getDomainLhsFE(), {time_scale});
-    return hook;
-  };
-
-  pip_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
-  pip_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
 
   MoFEMFunctionReturn(0);
 }
@@ -550,6 +559,37 @@ MoFEMErrorCode CONTACT::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
+  auto set_fieldsplit_preconditioner = [&](auto solver) {
+    MoFEMFunctionBegin;
+
+    SNES snes;
+    CHKERR TSGetSNES(solver, &snes);
+    KSP ksp;
+    CHKERR SNESGetKSP(snes, &ksp);
+    PC pc;
+    CHKERR KSPGetPC(ksp, &pc);
+    PetscBool is_pcfs = PETSC_FALSE;
+    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+
+    // Setup fieldsplit (block) solver - optional: yes/no
+    if (is_pcfs == PETSC_TRUE) {
+      auto bc_mng = mField.getInterface<BcManager>();
+      auto name_prb = simple->getProblemName();
+      auto is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_X", "U", 0, 0);
+      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Y", "U", 1, 1, is_all_bc);
+      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Z", "U", 2, 2, is_all_bc);
+      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_ALL", "U", 0, 2, is_all_bc);
+      int is_all_bc_size;
+      CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
+      MOFEM_LOG("CONTACT", Sev::inform)
+          << "Field split block size " << is_all_bc_size;
+      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
+                               is_all_bc); // boundary block
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
   uXScatter = scatter_create(D, 0);
@@ -564,6 +604,7 @@ MoFEMErrorCode CONTACT::tsSolve() {
     CHKERR set_time_monitor(dm, solver);
     CHKERR TSSetSolution(solver, D);
     CHKERR TSSetFromOptions(solver);
+    CHKERR set_fieldsplit_preconditioner(solver);
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
   } else {
@@ -575,6 +616,7 @@ MoFEMErrorCode CONTACT::tsSolve() {
     CHKERR set_time_monitor(dm, solver);
     CHKERR TS2SetSolution(solver, D, DD);
     CHKERR TSSetFromOptions(solver);
+    CHKERR set_fieldsplit_preconditioner(solver);
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
   }
