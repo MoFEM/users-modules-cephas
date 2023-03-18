@@ -117,7 +117,9 @@ MoFEMErrorCode addMatBlockOps(
 constexpr bool is_quasi_static = true;
 
 int order = 2;
-int geom_order = 2;
+constexpr int geom_order =
+    1; ///< Currently calculation of normals at integration points is missing on
+       ///< edges (i.e. 2d case). We have to restrict to linear geometry in 2d.
 double young_modulus = 100;
 double poisson_ratio = 0.25;
 double rho = 0;
@@ -181,8 +183,8 @@ MoFEMErrorCode CONTACT::setupProblem() {
   Simple *simple = mField.getInterface<Simple>();
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-geom_order", &geom_order,
-                            PETSC_NULL);
+  // CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-geom_order", &geom_order,
+  //                           PETSC_NULL);
   MOFEM_LOG("CONTACT", Sev::inform) << "Order " << order;
   MOFEM_LOG("CONTACT", Sev::inform) << "Geom order " << geom_order;
 
@@ -220,11 +222,11 @@ MoFEMErrorCode CONTACT::setupProblem() {
   CHKERR simple->addBoundaryField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
                                   SPACE_DIM);
 
-  CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
+  // CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
 
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
-  CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
+  // CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
 
   auto skin_edges = getEntsOnMeshSkin<SPACE_DIM>();
 
@@ -241,20 +243,14 @@ MoFEMErrorCode CONTACT::setupProblem() {
                                PSTATUS_NOT, -1, &boundary_ents);
 
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
-  // Range adj_edges;
-  // CHKERR mField.get_moab().get_adjacencies(boundary_ents, 1, false,
-  // adj_edges,
-  //                                          moab::Interface::UNION);
-  // adj_edges.merge(boundary_ents);
-  // CHKERR simple->setFieldOrder("U", order, &adj_edges);
 
   CHKERR simple->setUp();
 
-  auto project_ho_geometry = [&]() {
-    Projection10NodeCoordsOnField ent_method(mField, "GEOMETRY");
-    return mField.loop_dofs("GEOMETRY", ent_method);
-  };
-  CHKERR project_ho_geometry();
+  // auto project_ho_geometry = [&]() {
+  //   Projection10NodeCoordsOnField ent_method(mField, "GEOMETRY");
+  //   return mField.loop_dofs("GEOMETRY", ent_method);
+  // };
+  // CHKERR project_ho_geometry();
 
   MoFEMFunctionReturn(0);
 }
@@ -340,8 +336,8 @@ MoFEMErrorCode CONTACT::OPs() {
   auto time_scale = boost::make_shared<TimeScale>();
 
   auto add_domain_base_ops = [&](auto &pip) {
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
-                                                          "GEOMETRY");
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV}/*,
+                                                          "GEOMETRY"*/);
   };
 
   auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
@@ -432,8 +428,8 @@ MoFEMErrorCode CONTACT::OPs() {
   };
 
   auto add_boundary_base_ops = [&](auto &pip) {
-    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV},
-                                                              "GEOMETRY");
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV}/*,
+                                                              "GEOMETRY"*/);
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", common_data_ptr->contactDispPtr()));
     pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
@@ -478,12 +474,12 @@ MoFEMErrorCode CONTACT::OPs() {
   CHKERR add_boundary_ops_rhs(pip_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule_vol = [](int, int, int approx_order) {
-    return 2 * approx_order;
+    return 2 * approx_order + geom_order - 1;
   };
   CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule_vol);
   CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule_vol);
   auto integration_rule_boundary = [](int, int, int approx_order) {
-    return 2 * approx_order;
+    return 2 * approx_order + geom_order - 1;
   };
   CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
   CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
