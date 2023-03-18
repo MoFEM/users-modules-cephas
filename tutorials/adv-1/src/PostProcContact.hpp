@@ -22,6 +22,7 @@ template <> struct PostProcEleByDim<3> {
 };
 
 using PostProcEleDomain = PostProcEleByDim<SPACE_DIM>::PostProcEleDomain;
+using SideEle = PostProcEleByDim<SPACE_DIM>::SideEle;
 using PostProcEleBdy = PostProcEleByDim<SPACE_DIM>::PostProcEleBdy;
 
 struct OpAssembleTraction : public BoundaryEleOp {
@@ -62,9 +63,9 @@ struct Monitor : public FEMethod {
       henky_common_data_ptr->matDPtr = common_data_ptr->mDPtr();
 
       auto push_domain_ops = [&](auto &pip) {
-        CHK_THROW_MESSAGE(
-            (AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV})),
-            "Apply base transform");
+        CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+                              pip, {H1, HDIV}, "GEOMETRY")),
+                          "Apply base transform");
         CHK_THROW_MESSAGE(
             ContactOps::addMatBlockOps(*m_field_ptr, pip, "U", "MAT_ELASTIC",
                                        common_data_ptr->mDPtr(), Sev::inform),
@@ -87,10 +88,12 @@ struct Monitor : public FEMethod {
 
       // Evaluate domain on side element
       if constexpr (SPACE_DIM == 3) {
+        CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+                              pip, {HDIV}, "GEOMETRY")),
+                          "Apply transform");
         // create OP which run element on side
         auto op_loop_side =
-            new OpLoopSide<FaceElementForcesAndSourcesCoreOnSide>(
-                *m_field_ptr, "dFE", SPACE_DIM);
+            new OpLoopSide<SideEle>(*m_field_ptr, "dFE", SPACE_DIM);
         // push ops to side element, through op_loop_side operator
         push_domain_ops(op_loop_side->getOpPtrVector());
         pip.push_back(op_loop_side);
@@ -145,9 +148,9 @@ struct Monitor : public FEMethod {
 
       auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
 
-      CHK_THROW_MESSAGE(
-          (AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV})),
-          "Apply transform");
+      CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+                            pip, {HDIV}, "GEOMETRY")),
+                        "Apply transform");
       pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
           "U", common_data_ptr->contactDispPtr()));
       pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
@@ -178,8 +181,10 @@ struct Monitor : public FEMethod {
     auto get_integrate_traction = [&]() {
       auto integrate_traction = boost::make_shared<BoundaryEle>(*m_field_ptr);
       auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
-      CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-          integrate_traction->getOpPtrVector(), {HDIV});
+      CHK_THROW_MESSAGE(
+          (AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+              integrate_traction->getOpPtrVector(), {HDIV}, "GEOMETRY")),
+          "Apply transfrom");
       integrate_traction->getOpPtrVector().push_back(
           new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
               "SIGMA", common_data_ptr->contactTractionPtr()));
@@ -293,7 +298,6 @@ private:
 
   boost::shared_ptr<PostProcEleDomain> postProcDomainFe;
   boost::shared_ptr<PostProcEleBdy> postProcBdyFe;
-  boost::shared_ptr<PostProcEleByDim<SPACE_DIM>::SideEle> postProcSideFe;
 
   boost::shared_ptr<BoundaryEle> integrateTraction;
 
