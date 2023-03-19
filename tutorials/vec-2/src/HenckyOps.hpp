@@ -15,20 +15,33 @@ auto dd_f = [](double v) {
   return -0.5 / (static_cast<long double>(v) * static_cast<long double>(v));
 };
 
+struct isEq {
+  static inline auto check(const double &a, const double &b) {
+    return std::abs(a - b) < (eps * absMax);
+  }
+  static double absMax;
+};
+
+double isEq::absMax = 1;
+
 inline auto is_eq(const double &a, const double &b) {
-  return std::abs(a - b) < eps;
+  return isEq::check(a, b);
 };
 
 template <int DIM> inline auto get_uniq_nb(double *ptr) {
   std::array<double, DIM> tmp;
   std::copy(ptr, &ptr[DIM], tmp.begin());
   std::sort(tmp.begin(), tmp.end());
+  isEq::absMax = std::max(std::abs(tmp[0]), std::abs(tmp[DIM - 1]));
   return std::distance(tmp.begin(), std::unique(tmp.begin(), tmp.end(), is_eq));
 };
 
 template <int DIM>
 inline auto sort_eigen_vals(FTensor::Tensor1<double, DIM> &eig,
                             FTensor::Tensor2<double, DIM, DIM> &eigen_vec) {
+
+  isEq::absMax =
+      std::max(std::max(std::abs(eig(0)), std::abs(eig(1))), std::abs(eig(2)));
 
   int i = 0, j = 1, k = 2;
 
