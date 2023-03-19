@@ -683,9 +683,9 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
 MoFEMErrorCode SetUpSchurImpl::setEntities() {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
-  CHKERR mField.get_moab().get_entities_by_dimension(simple->getMeshSet(),
+  CHKERR mField.get_moab().get_entities_by_dimension(simple->getMeshset(),
                                                      SPACE_DIM, volEnts);
-  CHKERR mField.get_moab().get_entities_by_handle(simple->getMeshSet(),
+  CHKERR mField.get_moab().get_entities_by_handle(simple->getMeshset(),
                                                   subEnts);
   subEnts = subtract(subEnts, volEnts);
   MoFEMFunctionReturn(0);
