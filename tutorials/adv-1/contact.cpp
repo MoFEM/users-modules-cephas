@@ -133,9 +133,9 @@ using namespace HenckyOps;
 
 using namespace ContactOps;
 
-struct CONTACT {
+struct Contact {
 
-  CONTACT(MoFEM::Interface &m_field) : mField(m_field) {}
+  Contact(MoFEM::Interface &m_field) : mField(m_field) {}
 
   MoFEMErrorCode runProblem();
 
@@ -159,11 +159,10 @@ private:
   boost::shared_ptr<SDFPython> sdfPythonPtr;
 #endif
 
-  template <int DIM> Range getEntsOnMeshSkin();
 };
 
 //! [Run problem]
-MoFEMErrorCode CONTACT::runProblem() {
+MoFEMErrorCode Contact::runProblem() {
   MoFEMFunctionBegin;
   CHKERR setupProblem();
   CHKERR createCommonData();
@@ -177,7 +176,7 @@ MoFEMErrorCode CONTACT::runProblem() {
 //! [Run problem]
 
 //! [Set up problem]
-MoFEMErrorCode CONTACT::setupProblem() {
+MoFEMErrorCode Contact::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
 
@@ -227,20 +226,51 @@ MoFEMErrorCode CONTACT::setupProblem() {
   CHKERR simple->setFieldOrder("SIGMA", 0);
   // CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
 
-  auto skin_edges = getEntsOnMeshSkin<SPACE_DIM>();
+  auto get_skin = [&]() {
+    Range body_ents;
+    CHKERR mField.get_moab().get_entities_by_dimension(0, SPACE_DIM, body_ents);
+    Skinner skin(&mField.get_moab());
+    Range skin_ents;
+    CHKERR skin.find_skin(0, body_ents, false, skin_ents);
+    return skin_ents;
+  };
 
-  // filter not owned entities, those are not on boundary
-  Range boundary_ents;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-  if (pcomm == NULL) {
-    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-            "Communicator not created");
-  }
+  auto filter_blocks = [&](auto skin) {
+    Range contact_range;
+    for (auto m :
+         mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
 
-  CHKERR pcomm->filter_pstatus(skin_edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                               PSTATUS_NOT, -1, &boundary_ents);
+             (boost::format("%s(.*)") % "CONTACT").str()
 
+                 ))
+
+    ) {
+      MOFEM_LOG("CONTACT", Sev::inform)
+          << "Find contact block set:  " << m->getName();
+      auto meshset = m->getMeshset();
+      CHKERR mField.get_moab().get_entities_by_dimension(meshset, SPACE_DIM - 1,
+                                                         contact_range, true);
+    }
+    MOFEM_LOG("SYNC", Sev::inform)
+        << "Nb entities in contact surface: " << contact_range.size();
+    MOFEM_LOG_SYNCHRONISE(mField.get_comm());
+    if (!contact_range.empty())
+      skin = intersect(skin, contact_range);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+        contact_range);
+    return skin;
+  };
+
+  auto filter_true_skin = [&](auto skin) {
+    Range boundary_ents;
+    ParallelComm *pcomm =
+        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+    CHKERR pcomm->filter_pstatus(skin, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                 PSTATUS_NOT, -1, &boundary_ents);
+    return boundary_ents;
+  };
+
+  auto boundary_ents = filter_true_skin(filter_blocks(get_skin()));
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
 
   CHKERR simple->setUp();
@@ -256,7 +286,7 @@ MoFEMErrorCode CONTACT::setupProblem() {
 //! [Set up problem]
 
 //! [Create common data]
-MoFEMErrorCode CONTACT::createCommonData() {
+MoFEMErrorCode Contact::createCommonData() {
   MoFEMFunctionBegin;
 
   auto get_options = [&]() {
@@ -293,7 +323,7 @@ MoFEMErrorCode CONTACT::createCommonData() {
 //! [Create common data]
 
 //! [Boundary condition]
-MoFEMErrorCode CONTACT::bC() {
+MoFEMErrorCode Contact::bC() {
   MoFEMFunctionBegin;
   auto bc_mng = mField.getInterface<BcManager>();
   auto simple = mField.getInterface<Simple>();
@@ -329,7 +359,7 @@ MoFEMErrorCode CONTACT::bC() {
 //! [Boundary condition]
 
 //! [Push operators to pip]
-MoFEMErrorCode CONTACT::OPs() {
+MoFEMErrorCode Contact::OPs() {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
   auto *pip_mng = mField.getInterface<PipelineManager>();
@@ -514,7 +544,7 @@ MoFEMErrorCode CONTACT::OPs() {
 //! [Push operators to pip]
 
 //! [Solve]
-MoFEMErrorCode CONTACT::tsSolve() {
+MoFEMErrorCode Contact::tsSolve() {
   MoFEMFunctionBegin;
 
   Simple *simple = mField.getInterface<Simple>();
@@ -630,22 +660,12 @@ MoFEMErrorCode CONTACT::tsSolve() {
 //! [Solve]
 
 //! [Postprocess results]
-MoFEMErrorCode CONTACT::postProcess() { return 0; }
+MoFEMErrorCode Contact::postProcess() { return 0; }
 //! [Postprocess results]
 
 //! [Check]
-MoFEMErrorCode CONTACT::checkResults() { return 0; }
+MoFEMErrorCode Contact::checkResults() { return 0; }
 //! [Check]
-
-template <int DIM> Range CONTACT::getEntsOnMeshSkin() {
-  Range body_ents;
-  CHKERR mField.get_moab().get_entities_by_dimension(0, DIM, body_ents);
-  Skinner skin(&mField.get_moab());
-  Range skin_ents;
-  CHKERR skin.find_skin(0, body_ents, false, skin_ents);
-
-  return skin_ents;
-};
 
 static char help[] = "...\n\n";
 
@@ -690,7 +710,7 @@ int main(int argc, char *argv[]) {
     //! [Load mesh]
 
     //! [CONTACT]
-    CONTACT ex(m_field);
+    Contact ex(m_field);
     CHKERR ex.runProblem();
     //! [CONTACT]
   }
