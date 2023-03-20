@@ -273,7 +273,6 @@ struct Monitor : public FEMethod {
     MOFEM_LOG("CONTACT", Sev::inform)
         << "Write file at time " << ts_t << " write step " << sTEP;
 
-    ++sTEP;
     CHKERR post_proc();
     CHKERR calculate_traction();
 
@@ -282,6 +281,8 @@ struct Monitor : public FEMethod {
     if (SPACE_DIM == 3)
       CHKERR print_max_min(uZScatter, "Uz");
     CHKERR print_traction("Force");
+
+    ++sTEP;
 
     MoFEMFunctionReturn(0);
   }
