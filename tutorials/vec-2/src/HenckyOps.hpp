@@ -9,15 +9,13 @@ namespace HenckyOps {
 
 constexpr double eps = std::numeric_limits<float>::epsilon();
 
-auto f = [](double v) { return 0.5 * std::log(static_cast<long double>(v)); };
-auto d_f = [](double v) { return 0.5 / static_cast<long double>(v); };
-auto dd_f = [](double v) {
-  return -0.5 / (static_cast<long double>(v) * static_cast<long double>(v));
-};
+auto f = [](double v) { return 0.5 * std::log(v); };
+auto d_f = [](double v) { return 0.5 / v; };
+auto dd_f = [](double v) { return -0.5 / (v * v); };
 
 struct isEq {
   static inline auto check(const double &a, const double &b) {
-    return std::abs(a - b) < (eps * absMax);
+    return std::abs(a - b) / absMax < eps;
   }
   static double absMax;
 };
@@ -151,6 +149,8 @@ template <int DIM> struct OpCalculateEigenVals : public DomainEleOp {
           eigen_vec(ii, jj) = C(ii, jj);
 
       CHKERR computeEigenValuesSymmetric<DIM>(eigen_vec, eig);
+      for(auto ii = 0;ii!=DIM;++ii)
+        eig(ii) = std::max(std::numeric_limits<double>::epsilon(), eig(ii));
 
       // rare case when two eigen values are equal
       auto nb_uniq = get_uniq_nb<DIM>(&eig(0));
