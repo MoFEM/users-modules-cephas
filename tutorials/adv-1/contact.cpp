@@ -274,11 +274,7 @@ MoFEMErrorCode Contact::setupProblem() {
   CHKERR simple->setFieldOrder("SIGMA", 0);
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
 
-
   CHKERR simple->setUp();
-
-  Vec g;
-  CHKERR DMCreateGlobalVector(simple->getDM(), &g);
 
   // auto project_ho_geometry = [&]() {
   //   Projection10NodeCoordsOnField ent_method(mField, "GEOMETRY");
