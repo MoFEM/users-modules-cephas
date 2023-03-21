@@ -17,6 +17,10 @@
 -ts_error_if_step_fails false
 -ts_adapt_type none
 
+-ts_type theta
+-ts_theta_initial_guess_extrapolate 1
+-ts_theta_theta 1
+
 -ts_monitor
 -ts_adapt_monitor
 

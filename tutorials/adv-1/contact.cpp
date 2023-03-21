@@ -120,9 +120,11 @@ constexpr int geom_order =
        ///< edges (i.e. 2d case). We have to restrict to linear geometry in 2d.
 double young_modulus = 100;
 double poisson_ratio = 0.25;
-double rho = 0;
+double rho = 0.0;
 double cn = 0.1;
 double spring_stiffness = 0.1;
+
+double alpha_dumping = 0;
 
 #include <ContactOps.hpp>
 #include <HenckyOps.hpp>
@@ -158,7 +160,6 @@ private:
 #ifdef PYTHON_SFD
   boost::shared_ptr<SDFPython> sdfPythonPtr;
 #endif
-
 };
 
 //! [Run problem]
@@ -250,14 +251,14 @@ MoFEMErrorCode Contact::setupProblem() {
       auto meshset = m->getMeshset();
       CHKERR mField.get_moab().get_entities_by_dimension(meshset, SPACE_DIM - 1,
                                                          contact_range, true);
-    }
-    MOFEM_LOG("SYNC", Sev::inform)
-        << "Nb entities in contact surface: " << contact_range.size();
-    MOFEM_LOG_SYNCHRONISE(mField.get_comm());
-    if (!contact_range.empty())
+
+      MOFEM_LOG("SYNC", Sev::inform)
+          << "Nb entities in contact surface: " << contact_range.size();
+      MOFEM_LOG_SYNCHRONISE(mField.get_comm());
+      CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+          contact_range);
       skin = intersect(skin, contact_range);
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
-        contact_range);
+    }
     return skin;
   };
 
@@ -299,6 +300,8 @@ MoFEMErrorCode Contact::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-spring_stiffness",
                                  &spring_stiffness, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-alpha_dumping",
+                                 &alpha_dumping, PETSC_NULL);
 
     MOFEM_LOG("CONTACT", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("CONTACT", Sev::inform) << "Poisson_ratio " << poisson_ratio;
@@ -306,6 +309,7 @@ MoFEMErrorCode Contact::createCommonData() {
     MOFEM_LOG("CONTACT", Sev::inform) << "cn " << cn;
     MOFEM_LOG("CONTACT", Sev::inform)
         << "spring_stiffness " << spring_stiffness;
+    MOFEM_LOG("CONTACT", Sev::inform) << "alpha_dumping " << alpha_dumping;
 
     MoFEMFunctionReturn(0);
   };
@@ -339,20 +343,22 @@ MoFEMErrorCode Contact::bC() {
                                              "REMOVE_ALL", f, 0, 3);
   }
 
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
+                                           "SIGMA", 0, 0, false, true);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
+                                           "SIGMA", 1, 1, false, true);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
+                                           "SIGMA", 2, 2, false, true);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
+                                           "SIGMA", 0, 3, false, true);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(
+      simple->getProblemName(), "NO_CONTACT", "SIGMA", 0, 3, false, true);
+
+  // Note remove has to be always before push. Then node marking will be
+  // corrupted.
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
   boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_"});
-
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
-                                           "SIGMA", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
-                                           "SIGMA", 1, 1);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
-                                           "SIGMA", 2, 2);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
-                                           "SIGMA", 0, 3);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                           "NO_CONTACT", "SIGMA", 0, 3);
 
   MoFEMFunctionReturn(0);
 }
@@ -398,13 +404,21 @@ MoFEMErrorCode Contact::OPs() {
         new OpKPiola("U", "U", henky_common_data_ptr->getMatTangent()));
 
     if (!is_quasi_static) {
-      // Get pointer to U_tt shift in domain element
-      auto get_rho = [this](const double, const double, const double) {
+      auto get_inertia_and_mass_dumping = [this](const double, const double,
+                                                 const double) {
         auto *pip_mng = mField.getInterface<PipelineManager>();
         auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
-        return rho * fe_domain_lhs->ts_aa;
+        return rho * fe_domain_lhs->ts_aa + alpha_dumping * fe_domain_lhs->ts_a;
       };
-      pip.push_back(new OpMass("U", "U", get_rho));
+      pip.push_back(new OpMass("U", "U", get_inertia_and_mass_dumping));
+    } else if (alpha_dumping > 0) {
+      auto get_mass_dumping = [this](const double, const double,
+                                      const double) {
+        auto *pip_mng = mField.getInterface<PipelineManager>();
+        auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
+        return alpha_dumping * fe_domain_lhs->ts_a;
+      };
+      pip.push_back(new OpMass("U", "U", get_mass_dumping));
     }
 
     auto unity = []() { return 1; };
@@ -447,7 +461,8 @@ MoFEMErrorCode Contact::OPs() {
 
     pip.push_back(new OpMixDivURhs("SIGMA", common_data_ptr->contactDispPtr(),
                                    [](double, double, double) { return 1; }));
-    pip.push_back(new OpMixLambdaGradURhs("SIGMA", common_data_ptr->mGradPtr()));
+    pip.push_back(
+        new OpMixLambdaGradURhs("SIGMA", common_data_ptr->mGradPtr()));
 
     pip.push_back(new OpMixUTimesDivLambdaRhs(
         "U", common_data_ptr->contactStressDivergencePtr()));
@@ -461,6 +476,15 @@ MoFEMErrorCode Contact::OPs() {
           "U", mat_acceleration));
       pip.push_back(new OpInertiaForce(
           "U", mat_acceleration, [](double, double, double) { return rho; }));
+    }
+    if (alpha_dumping > 0) {
+      auto mat_velocity = boost::make_shared<MatrixDouble>();
+      pip.push_back(
+          new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
+      pip.push_back(
+          new OpInertiaForce("U", mat_velocity, [](double, double, double) {
+            return alpha_dumping;
+          }));
     }
     pip.push_back(new OpUnSetBc("U"));
   };
@@ -483,14 +507,16 @@ MoFEMErrorCode Contact::OPs() {
     CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
         pip, mField, "U", Sev::inform);
     pip.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", common_data_ptr));
-    pip.push_back(
-        new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", common_data_ptr));
-    pip.push_back(new OpSpringLhs(
-        "U", "U",
+    pip.push_back(new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA",
+                                                       common_data_ptr));
 
-        [this](double, double, double) { return spring_stiffness; }
+    if (spring_stiffness > 0)
+      pip.push_back(new OpSpringLhs(
+          "U", "U",
 
-        ));
+          [this](double, double, double) { return spring_stiffness; }
+
+          ));
 
     pip.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -511,9 +537,10 @@ MoFEMErrorCode Contact::OPs() {
     CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
     pip.push_back(new OpConstrainBoundaryRhs("SIGMA", common_data_ptr));
-    pip.push_back(new OpSpringRhs(
-        "U", common_data_ptr->contactDispPtr(),
-        [this](double, double, double) { return spring_stiffness; }));
+    if (spring_stiffness > 0)
+      pip.push_back(new OpSpringRhs(
+          "U", common_data_ptr->contactDispPtr(),
+          [this](double, double, double) { return spring_stiffness; }));
     pip.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
