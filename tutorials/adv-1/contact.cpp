@@ -213,19 +213,14 @@ MoFEMErrorCode Contact::setupProblem() {
 
   // Note: For tets we have only H1 Ainsworth base, for Hex we have only H1
   // Demkowicz base. We need to implement Demkowicz H1 base on tet.
-  CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
-  CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
-
   CHKERR simple->addDomainField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
                                 SPACE_DIM);
   CHKERR simple->addBoundaryField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
                                   SPACE_DIM);
+  CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
+  CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
 
   // CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
-
-  CHKERR simple->setFieldOrder("U", order);
-  CHKERR simple->setFieldOrder("SIGMA", 0);
-  // CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
 
   auto get_skin = [&]() {
     Range body_ents;
@@ -272,7 +267,13 @@ MoFEMErrorCode Contact::setupProblem() {
   };
 
   auto boundary_ents = filter_true_skin(filter_blocks(get_skin()));
+  CHKERR simple->setFieldOrder("SIGMA", 0);
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
+
+  CHKERR simple->setFieldOrder("U", order);
+  // CHKERR simple->setFieldOrder("SIGMA", 0);
+  // CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
+
 
   CHKERR simple->setUp();
 
@@ -733,6 +734,7 @@ int main(int argc, char *argv[]) {
     //! [Load mesh]
     Simple *simple = m_field.getInterface<Simple>();
     CHKERR simple->getOptions();
+    simple->getAddBoundaryFE() = true;
     CHKERR simple->loadFile("");
     //! [Load mesh]
 
@@ -743,8 +745,7 @@ int main(int argc, char *argv[]) {
   }
   CATCH_ERRORS;
 
-  CHKERR
-  MoFEM::Core::Finalize();
+  CHKERR MoFEM::Core::Finalize();
 
 #ifdef PYTHON_SFD
   if (Py_FinalizeEx() < 0) {
