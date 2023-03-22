@@ -520,7 +520,7 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   // MoAB interface allowing for creating nodes and elements in the bulk
   ReadUtilIface *iface;
-  CHKERR postProcMesh.query_interface(iface);
+  CHKERR getPostProcMesh().query_interface(iface);
 
   std::vector<double *> arrays; /// pointers to memory allocated by MoAB for
                                 /// storing X, Y, and Z coordinates
@@ -535,9 +535,9 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   Tag th;
   int def_in_the_loop = -1;
-  CHKERR postProcMesh.tag_get_handle("NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER, th,
-                                     MB_TAG_CREAT | MB_TAG_SPARSE,
-                                     &def_in_the_loop);
+  CHKERR getPostProcMesh().tag_get_handle("NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER,
+                                          th, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                          &def_in_the_loop);
 
   // Create physical elements
 
@@ -570,7 +570,7 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   CHKERR iface->update_adjacencies(starte, num_el, num_nodes_on_ele, conn);
 
   auto physical_elements = Range(starte, starte + num_el - 1);
-  CHKERR postProcMesh.tag_clear_data(th, physical_elements, &(nInTheLoop));
+  CHKERR getPostProcMesh().tag_clear_data(th, physical_elements, &(nInTheLoop));
 
   EntityHandle fe_ent = numeredEntFiniteElementPtr->getEnt();
   int fe_num_nodes;
@@ -611,9 +611,8 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
 MoFEMErrorCode MyPostProc::preProcess() {
   MoFEMFunctionBegin;
-  moab::Interface &moab = coreMesh;
   ParallelComm *pcomm_post_proc_mesh =
-      ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+      ParallelComm::get_pcomm(coreMeshPtr.get(), MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh != NULL)
     delete pcomm_post_proc_mesh;
   MoFEMFunctionReturn(0);
@@ -626,12 +625,12 @@ MoFEMErrorCode MyPostProc::postProcess() {
     MoFEMFunctionBegin;
 
     ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&(postProcMesh), MYPCOMM_INDEX);
+        ParallelComm::get_pcomm(&(getPostProcMesh()), MYPCOMM_INDEX);
     if (pcomm_post_proc_mesh == NULL) {
       // wrapRefMeshComm =
       // boost::make_shared<WrapMPIComm>(T::mField.get_comm(), false);
       pcomm_post_proc_mesh = new ParallelComm(
-          &(postProcMesh),
+          &(getPostProcMesh()),
           PETSC_COMM_WORLD /*(T::wrapRefMeshComm)->get_comm()*/);
     }
 
