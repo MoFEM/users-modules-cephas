@@ -1286,10 +1286,10 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
   } else {
     pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
     pip->getOpBoundaryLhsPipeline().push_back(
-        new OpSchurAssembleEnd({}, {}, {}, {}, {}));
+        new OpSchurAssembleEnd<SCHUR_DGESV>({}, {}, {}, {}, {}));
     pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
     pip->getOpDomainLhsPipeline().push_back(
-        new OpSchurAssembleEnd({}, {}, {}, {}, {}));
+        new OpSchurAssembleEnd<SCHUR_DGESV>({}, {}, {}, {}, {}));
   }
 
   subDM.reset();
@@ -1303,7 +1303,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
   auto pip = mField.getInterface<PipelineManager>();
   // Boundary
   pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
-  pip->getOpBoundaryLhsPipeline().push_back(new OpSchurAssembleEnd(
+  pip->getOpBoundaryLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DGESV>(
 
       {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), subAO},
       {SmartPetscObj<Mat>(), S}, {false, false}
@@ -1311,7 +1311,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
       ));
   // Domain
   pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
-  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd(
+  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DGESV>(
 
       {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), subAO},
       {SmartPetscObj<Mat>(), S}, {false, false}

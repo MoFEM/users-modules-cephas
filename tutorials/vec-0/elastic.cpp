@@ -672,10 +672,10 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
   } else {
     pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
     pip->getOpBoundaryLhsPipeline().push_back(
-        new OpSchurAssembleEnd({}, {}, {}, {}, {}));
+        new OpSchurAssembleEnd<SCHUR_DSYSV>({}, {}, {}, {}, {}));
     pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
     pip->getOpDomainLhsPipeline().push_back(
-        new OpSchurAssembleEnd({}, {}, {}, {}, {}));
+        new OpSchurAssembleEnd<SCHUR_DSYSV>({}, {}, {}, {}, {}));
   }
   MoFEMFunctionReturn(0);
 }
@@ -710,12 +710,12 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
   auto pip = mField.getInterface<PipelineManager>();
   // Boundary
   pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
-  pip->getOpBoundaryLhsPipeline().push_back(new OpSchurAssembleEnd(
+  pip->getOpBoundaryLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DSYSV>(
       {"U"}, {boost::make_shared<Range>(volEnts)},
       {getDMSubData(subDM)->getSmartRowMap()}, {S}, {true}));
   // Domain
   pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
-  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd(
+  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DSYSV>(
       {"U"}, {boost::make_shared<Range>(volEnts)},
       {getDMSubData(subDM)->getSmartRowMap()}, {S}, {true}));
   MoFEMFunctionReturn(0);
