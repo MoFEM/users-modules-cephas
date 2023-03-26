@@ -28,8 +28,6 @@ else(EXTERNAL_MODULES_BUILD)
   get_git_version(
     ${GIT_VERSION} UM_VERSION_MAJOR UM_VERSION_MINOR UM_VERSION_BUILD)
 
-  # Build basic finite element library
-  include(${PROJECT_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
   # Find modules in a users modules source directory. If file
   # InstalledAddModule.cmake is found in the directory, it is recognised that
   # directory is module and name of directory become module name.
