@@ -25,6 +25,9 @@ using namespace MoFEM;
 
 #endif // __GROUND_SURFACE_TEMPERATURE_HPP
 
+using PostProcFaceEle =
+    PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
+
 static char help[] =
   "-my_file mesh file\n"
   "-order set approx. order to all blocks\n"
@@ -44,22 +47,24 @@ struct BlockOptionData {
     initTemp(0) {}
 };
 
-struct MonitorPostProc: public FEMethod {
+struct MonitorPostProc : public FEMethod {
 
   MoFEM::Interface &mField;
   PostProcVolumeOnRefinedMesh postProc;
+  PostProcFaceOnRefinedMesh skinPostProc;
 
   bool iNit;
   int pRT;
 
-  MonitorPostProc(MoFEM::Interface &m_field):
-    FEMethod(),mField(m_field),postProc(m_field),iNit(false) {
-    
+  MonitorPostProc(MoFEM::Interface &m_field)
+      : FEMethod(), mField(m_field), postProc(m_field), skinPostProc(m_field),
+        iNit(false) {
+
     PetscBool flg = PETSC_TRUE;
     CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-my_output_prt", &pRT,
                               &flg);
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
-    if(flg!=PETSC_TRUE) {
+    if (flg != PETSC_TRUE) {
       pRT = 1;
     }
   }
@@ -77,30 +82,38 @@ struct MonitorPostProc: public FEMethod {
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
 
-    if(!iNit) {
+    if (!iNit) {
       CHKERR addHOOpsVol("MESH_NODE_POSITIONS", postProc, true, false, false,
-                      false);
-      CHKERR postProc.generateReferenceElementMesh(); 
-      CHKERR postProc.addFieldValuesPostProc("TEMP"); 
-      CHKERR postProc.addFieldValuesPostProc("TEMP_RATE"); 
-      CHKERR postProc.addFieldValuesGradientPostProc("TEMP"); 
-      CHKERR postProc.addFieldValuesPostProc("MESH_NODE_POSITIONS"); 
+                         false);
+      CHKERR postProc.generateReferenceElementMesh();
+      CHKERR postProc.addFieldValuesPostProc("TEMP");
+      CHKERR postProc.addFieldValuesPostProc("TEMP_RATE");
+      CHKERR postProc.addFieldValuesGradientPostProc("TEMP");
+      CHKERR postProc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
+
+      CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", skinPostProc, false, false);
+      CHKERR skinPostProc.generateReferenceElementMesh();
+      CHKERR skinPostProc.addFieldValuesPostProc("TEMP");
+
       iNit = true;
     }
     int step;
-    CHKERR TSGetTimeStepNumber(ts,&step); 
-    
-    if(pRT && (step)%pRT==0) {
-      CHKERR mField.loop_finite_elements("DMTHERMAL","THERMAL_FE",postProc); 
+    CHKERR TSGetTimeStepNumber(ts, &step);
+
+    if (pRT && (step) % pRT == 0) {
+      // CHKERR mField.loop_finite_elements("DMTHERMAL","THERMAL_FE",postProc);
+      // std::ostringstream sss;
+      // sss << "out_thermal_" << step << ".h5m";
+      // CHKERR postProc.writeFile(sss.str().c_str());
+      CHKERR mField.loop_finite_elements("DMTHERMAL", "POST_PROC_SKIN",
+                                         skinPostProc);
       std::ostringstream sss;
-      sss << "out_thermal_" << step << ".h5m";
-      CHKERR postProc.writeFile(sss.str().c_str()); 
+      sss << "out_skin_" << step << ".h5m";
+      CHKERR skinPostProc.writeFile(sss.str().c_str());
     }
     MoFEMFunctionReturn(0);
   }
-
 };
-
 
 int main(int argc, char *argv[]) {
 
@@ -392,6 +405,20 @@ int main(int argc, char *argv[]) {
   }
 
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+    if (std::regex_match(it->getName(), std::regex("INT_THERMAL(.*)"))) {
+      std::vector<double> data;
+      CHKERR it->getAttributes(data);
+      if (data.size() != 1)
+        SETERRQ(PETSC_COMM_SELF, 1, "Data inconsistency");
+      Range block_ents, block_verts;
+      CHKERR moab.get_entities_by_handle(it->getMeshset(), block_ents, true);
+      CHKERR moab.get_connectivity(block_ents, block_verts, true);
+      CHKERR m_field.getInterface<FieldBlas>()->setField(data[0], MBVERTEX,
+                                                         block_verts, "TEMP");
+    }
+  }
+
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
     if (block_data[it->getMeshsetId()].initTemp != 0) {
       Range block_ents;
       CHKERR moab.get_entities_by_handle(it->meshset, block_ents, true);
@@ -401,6 +428,39 @@ int main(int argc, char *argv[]) {
           block_data[it->getMeshsetId()].initTemp, MBVERTEX, vertices, "TEMP");
     }
   }
+
+  MPI_Comm moab_comm_world;
+  MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
+  ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+  if (pcomm == NULL)
+    pcomm = new ParallelComm(&moab, moab_comm_world);
+
+  PetscBool is_partitioned = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-dm_is_partitioned",
+                             &is_partitioned, PETSC_NULL);
+
+  Range thermal_element_ents;
+  CHKERR m_field.get_finite_element_entities_by_dimension("THERMAL_FE", 3,
+                                                         thermal_element_ents);
+  Skinner skin(&m_field.get_moab());
+  Range skin_faces; // skin faces from 3d ents
+  CHKERR skin.find_skin(0, thermal_element_ents, false, skin_faces);
+  Range proc_skin;
+  if (is_partitioned) {
+    CHKERR pcomm->filter_pstatus(skin_faces,
+                                 PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                 PSTATUS_NOT, -1, &proc_skin);
+  } else {
+    proc_skin = skin_faces;
+  }
+  CHKERR m_field.add_finite_element("POST_PROC_SKIN");
+  CHKERR m_field.modify_finite_element_add_field_row("POST_PROC_SKIN", "TEMP");
+  CHKERR m_field.modify_finite_element_add_field_col("POST_PROC_SKIN", "TEMP");
+  CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN", "TEMP");
+  CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN",
+                                                     "MESH_NODE_POSITIONS");
+  CHKERR m_field.add_ents_to_finite_element_by_dim(proc_skin, 2,
+                                                  "POST_PROC_SKIN");
 
   // build finite elemnts
   CHKERR m_field.build_finite_elements();
@@ -418,11 +478,23 @@ int main(int argc, char *argv[]) {
     CHKERR recorder_ptr->delete_recorder_series("THEMP_SERIES");
   }
 
-  std::array<double, 3> eval_coords({0, 0, 0});
-  int dim = 3;
-  PetscBool eval_coord_flg = PETSC_FALSE;
-  CHKERR PetscOptionsGetRealArray(NULL, NULL, "-my_eval_coords",
-                                  eval_coords.data(), &dim, &eval_coord_flg);
+  std::vector<std::array<double, 3>> eval_points;
+  eval_points.resize(0);
+  PetscBool eval_points_flg = PETSC_FALSE;
+  char eval_points_file[255];
+  CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL, "-my_eval_points_file",
+                               eval_points_file, 255, &eval_points_flg);
+  if (eval_points_flg) {
+    std::ifstream in_file(eval_points_file, std::ios::in);
+    if (!in_file.is_open()) {
+      SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Cannot open file %s",
+               eval_points_file);
+    }
+    double x, y, z;
+    while (in_file >> x >> y >> z) {
+      eval_points.push_back({x, y, z});
+    }
+  }
 
   // set dm data structure which created mofem data structures
   CHKERR DMMoFEMCreateMoFEM(dm, &m_field, dm_name, bit_level0);
@@ -432,6 +504,7 @@ int main(int argc, char *argv[]) {
   CHKERR DMMoFEMAddElement(dm, "THERMAL_FLUX_FE");
   CHKERR DMMoFEMAddElement(dm, "THERMAL_CONVECTION_FE");
   CHKERR DMMoFEMAddElement(dm, "THERMAL_RADIATION_FE");
+  CHKERR DMMoFEMAddElement(dm, "POST_PROC_SKIN");
 #ifdef __GROUND_SURFACE_TEMPERATURE_HPP
   if (ground_temperature_analysis) {
     CHKERR DMMoFEMAddElement(dm, "GROUND_SURFACE_FE");
@@ -451,7 +524,7 @@ int main(int argc, char *argv[]) {
   ThermalElement::UpdateAndControl update_velocities(m_field, "TEMP",
                                                      "TEMP_RATE");
   ThermalElement::TimeSeriesMonitor monitor(m_field, "THEMP_SERIES", "TEMP",
-                                            eval_coord_flg, eval_coords);
+                                            eval_points);
   MonitorPostProc post_proc(m_field);
 
   // Initialize data with values save of on the field
@@ -566,9 +639,7 @@ int main(int argc, char *argv[]) {
   PetscBool save_solution = PETSC_TRUE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-my_save_solution",
                              &save_solution, PETSC_NULL);
-  PetscBool is_partitioned = PETSC_FALSE;
-  CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-dm_is_partitioned",
-                             &is_partitioned, PETSC_NULL);
+
   if (save_solution) {                        
     if (is_partitioned) {
       CHKERR moab.write_file("solution.h5m");

@@ -466,19 +466,21 @@ MoFEMErrorCode ThermalElement::TimeSeriesMonitor::postProcess() {
                                     mask);
   CHKERR recorder_ptr->record_end(seriesName, ts_t);
 
-  auto post_proc_at_points = [&](std::array<double, 3> point) {
+  auto post_proc_at_points = [&](std::array<double, 3> point, int num) {
     MoFEMFunctionBegin;
 
     dataFieldEval->setEvalPoints(point.data(), point.size() / 3);
 
     struct OpPrint : public VolOp {
 
-      std::array<double, 3> point;
+      std::array<double, 3> pointCoords;
+      int pointNum;
       boost::shared_ptr<VectorDouble> tempPtr;
 
       OpPrint(boost::shared_ptr<VectorDouble> temp_ptr,
-              std::array<double, 3> &point)
-          : VolOp("TEMP", VolOp::OPROW), tempPtr(temp_ptr), point(point) {}
+              std::array<double, 3> &point_coords, int point_num)
+          : VolOp("TEMP", VolOp::OPROW), tempPtr(temp_ptr),
+            pointCoords(point_coords), pointNum(point_num) {}
 
       MoFEMErrorCode doWork(int side, EntityType type,
                             DataForcesAndSourcesCore::EntData &data) {
@@ -489,8 +491,9 @@ MoFEMErrorCode ThermalElement::TimeSeriesMonitor::postProcess() {
             auto t_p = getFTensor0FromVec(*tempPtr);
 
             MOFEM_LOG("THERMALSYNC", Sev::inform)
-                << "Coordinates: " << getVectorAdaptor(point.data(), 3)
-                << " Temperature: " << t_p;
+                << "Pnt: " << std::to_string(pointNum)
+                << " Crd: " << getVectorAdaptor(pointCoords.data(), 3)
+                << " Tmp: " << t_p;
           }
         }
         MoFEMFunctionReturn(0);
@@ -498,8 +501,7 @@ MoFEMErrorCode ThermalElement::TimeSeriesMonitor::postProcess() {
     };
 
     if (auto fe_ptr = dataFieldEval->feMethodPtr.lock()) {
-
-      fe_ptr->getOpPtrVector().push_back(new OpPrint(tempPtr, point));
+      fe_ptr->getOpPtrVector().push_back(new OpPrint(tempPtr, point, num));
       CHKERR mField.getInterface<FieldEvaluatorInterface>()->evalFEAtThePoint3D(
           point.data(), 1e-12, "DMTHERMAL", "THERMAL_FE", dataFieldEval,
           mField.get_comm_rank(), mField.get_comm_rank(), nullptr, MF_EXIST,
@@ -510,9 +512,12 @@ MoFEMErrorCode ThermalElement::TimeSeriesMonitor::postProcess() {
     MoFEMFunctionReturn(0);
   };
 
-  if (evalCoordFlg) {
-    CHKERR post_proc_at_points(evalCoords);
+  if (!evalPoints.empty()) {
+    int num = 0;
+    for (auto p : evalPoints)
+      CHKERR post_proc_at_points(p, num++);
   }
+
   MOFEM_LOG_SYNCHRONISE(mField.get_comm());
 
   MoFEMFunctionReturn(0);
