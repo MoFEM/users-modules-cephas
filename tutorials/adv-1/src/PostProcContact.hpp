@@ -25,16 +25,6 @@ using PostProcEleDomain = PostProcEleByDim<SPACE_DIM>::PostProcEleDomain;
 using SideEle = PostProcEleByDim<SPACE_DIM>::SideEle;
 using PostProcEleBdy = PostProcEleByDim<SPACE_DIM>::PostProcEleBdy;
 
-struct OpAssembleTraction : public BoundaryEleOp {
-  OpAssembleTraction(boost::shared_ptr<CommonData> common_data_ptr,
-                     SmartPetscObj<Vec> total_traction);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-  SmartPetscObj<Vec> totalTraction;
-};
-
 struct Monitor : public FEMethod {
 
   Monitor(SmartPetscObj<DM> &dm,
@@ -46,45 +36,41 @@ struct Monitor : public FEMethod {
 
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
-    totalTraction =
-        createSmartVectorMPI(m_field_ptr->get_comm(),
-                             (m_field_ptr->get_comm_rank() == 0) ? 3 : 0, 3);
 
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+
+    auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
+    auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
+    henky_common_data_ptr->matGradPtr = common_data_ptr->mGradPtr();
+    henky_common_data_ptr->matDPtr = common_data_ptr->mDPtr();
+
+    auto push_domain_ops = [&](auto &pip) {
+      CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+                            pip, {H1, HDIV} /*, "GEOMETRY"*/)),
+                        "Apply base transform");
+      CHK_THROW_MESSAGE(
+          ContactOps::addMatBlockOps(*m_field_ptr, pip, "U", "MAT_ELASTIC",
+                                     common_data_ptr->mDPtr(), Sev::inform),
+          "Set block data");
+      pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+          "U", common_data_ptr->mGradPtr()));
+      pip.push_back(
+          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+          "SIGMA", common_data_ptr->contactStressPtr()));
+    };
 
     auto get_post_proc_domain_fe = [&]() {
       auto post_proc_fe =
           boost::make_shared<PostProcEleDomain>(*m_field_ptr, postProcMesh);
       auto &pip = post_proc_fe->getOpPtrVector();
-
-      auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
-      auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
-      henky_common_data_ptr->matGradPtr = common_data_ptr->mGradPtr();
-      henky_common_data_ptr->matDPtr = common_data_ptr->mDPtr();
-
-      auto push_domain_ops = [&](auto &pip) {
-        CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-                              pip, {H1, HDIV} /*, "GEOMETRY"*/)),
-                          "Apply base transform");
-        CHK_THROW_MESSAGE(
-            ContactOps::addMatBlockOps(*m_field_ptr, pip, "U", "MAT_ELASTIC",
-                                       common_data_ptr->mDPtr(), Sev::inform),
-            "Set block data");
-        pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-            "U", common_data_ptr->mGradPtr()));
-        pip.push_back(
-            new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
-        pip.push_back(
-            new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
-        pip.push_back(
-            new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-        pip.push_back(
-            new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
-        pip.push_back(
-            new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
-        pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-            "SIGMA", common_data_ptr->contactStressPtr()));
-      };
 
       // Evaluate domain on side element
       if constexpr (SPACE_DIM == 3) {
@@ -97,6 +83,8 @@ struct Monitor : public FEMethod {
         // push ops to side element, through op_loop_side operator
         push_domain_ops(op_loop_side->getOpPtrVector());
         pip.push_back(op_loop_side);
+        pip.push_back(new OpCalculateStressTraction(common_data_ptr,
+                                                    henky_common_data_ptr));
         // evaluate traction
         pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
             "SIGMA", common_data_ptr->contactTractionPtr()));
@@ -115,12 +103,21 @@ struct Monitor : public FEMethod {
 
               {},
 
-              {{"U", u_ptr},
+              {
 
-               // Note: post-process tractions in 3d, i.e. when mesh is
-               // post-process on skin
-               {"t", (SPACE_DIM == 3) ? common_data_ptr->contactTractionPtr()
-                                      : nullptr}},
+                  {"U", u_ptr},
+
+                  // Note: post-process tractions in 3d, i.e. when mesh is
+                  // post-process on skin
+                  {"t_contact", (SPACE_DIM == 3)
+                                    ? common_data_ptr->contactTractionPtr()
+                                    : nullptr},
+
+                  {"t_stress", (SPACE_DIM == 3)
+                                   ? common_data_ptr->stressTractionPtr()
+                                   : nullptr}
+
+              },
 
               {
 
@@ -151,6 +148,16 @@ struct Monitor : public FEMethod {
       CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
                             pip, {HDIV} /*, "GEOMETRY"*/)),
                         "Apply transform");
+
+      // create OP which run element on side
+      auto op_loop_side =
+          new OpLoopSide<SideEle>(*m_field_ptr, "dFE", SPACE_DIM);
+      // push ops to side element, through op_loop_side operator
+      push_domain_ops(op_loop_side->getOpPtrVector());
+      pip.push_back(op_loop_side);
+      pip.push_back(new OpCalculateStressTraction(common_data_ptr,
+                                                  henky_common_data_ptr));
+
       pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
           "U", common_data_ptr->contactDispPtr()));
       pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
@@ -165,7 +172,8 @@ struct Monitor : public FEMethod {
               {},
 
               {{"U", common_data_ptr->contactDispPtr()},
-               {"t", common_data_ptr->contactTractionPtr()}},
+               {"t_contact", common_data_ptr->contactTractionPtr()},
+               {"t_stress", common_data_ptr->stressTractionPtr()}},
 
               {},
 
@@ -189,7 +197,7 @@ struct Monitor : public FEMethod {
           new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
               "SIGMA", common_data_ptr->contactTractionPtr()));
       integrate_traction->getOpPtrVector().push_back(
-          new OpAssembleTraction(common_data_ptr, totalTraction));
+          new OpAssembleTotalContactTraction(common_data_ptr));
       integrate_traction->getRuleHook = [](int, int, int approx_order) {
         return 2 * approx_order;
       };
@@ -235,10 +243,10 @@ struct Monitor : public FEMethod {
 
     auto calculate_traction = [&] {
       MoFEMFunctionBegin;
-      CHKERR VecZeroEntries(totalTraction);
+      CHKERR VecZeroEntries(CommonData::totalTraction);
       CHKERR DMoFEMLoopFiniteElements(dM, "bFE", integrateTraction);
-      CHKERR VecAssemblyBegin(totalTraction);
-      CHKERR VecAssemblyEnd(totalTraction);
+      CHKERR VecAssemblyBegin(CommonData::totalTraction);
+      CHKERR VecAssemblyEnd(CommonData::totalTraction);
       MoFEMFunctionReturn(0);
     };
 
@@ -262,10 +270,10 @@ struct Monitor : public FEMethod {
       CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
       if (!m_field_ptr->get_comm_rank()) {
         const double *t_ptr;
-        CHKERR VecGetArrayRead(totalTraction, &t_ptr);
+        CHKERR VecGetArrayRead(CommonData::totalTraction, &t_ptr);
         MOFEM_LOG_C("CONTACT", Sev::inform, "%s time %3.4e %3.4e %3.4e %3.4e",
                     msg.c_str(), ts_t, t_ptr[0], t_ptr[1], t_ptr[2]);
-        CHKERR VecRestoreArrayRead(totalTraction, &t_ptr);
+        CHKERR VecRestoreArrayRead(CommonData::totalTraction, &t_ptr);
       }
       MoFEMFunctionReturn(0);
     };
@@ -293,8 +301,6 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
-  SmartPetscObj<Vec> totalTraction;
-
   boost::shared_ptr<moab::Core> postProcMesh = boost::make_shared<moab::Core>();
 
   boost::shared_ptr<PostProcEleDomain> postProcDomainFe;
@@ -309,35 +315,5 @@ private:
   double deltaTime;
   int sTEP;
 };
-
-OpAssembleTraction::OpAssembleTraction(
-    boost::shared_ptr<CommonData> common_data_ptr,
-    SmartPetscObj<Vec> total_traction)
-    : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE),
-      commonDataPtr(common_data_ptr), totalTraction(total_traction) {}
-
-MoFEMErrorCode OpAssembleTraction::doWork(int side, EntityType type,
-                                          EntData &data) {
-  MoFEMFunctionBegin;
-
-  FTensor::Tensor1<double, 3> t_sum_t{0., 0., 0.};
-
-  auto t_w = getFTensor0IntegrationWeight();
-  auto t_traction =
-      getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactTraction);
-
-  const auto nb_gauss_pts = getGaussPts().size2();
-  for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
-    const double alpha = t_w * getMeasure();
-    t_sum_t(i) += alpha * t_traction(i);
-    ++t_w;
-    ++t_traction;
-  }
-
-  constexpr int ind[] = {0, 1, 2};
-  CHKERR VecSetValues(totalTraction, 3, ind, &t_sum_t(0), ADD_VALUES);
-
-  MoFEMFunctionReturn(0);
-}
 
 } // namespace ContactOps

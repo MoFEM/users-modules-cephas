@@ -126,9 +126,9 @@ double spring_stiffness = 0.1;
 
 double alpha_dumping = 0;
 
-#include <ContactOps.hpp>
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
+#include <ContactOps.hpp>
 #include <PostProcContact.hpp>
 #include <ContactNaturalDomainBC.hpp>
 #include <ContactNaturalBoundaryBC.hpp>
@@ -649,6 +649,10 @@ MoFEMErrorCode Contact::tsSolve() {
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
+  ContactOps::CommonData::totalTraction = createSmartVectorMPI(
+      mField.get_comm(), (mField.get_comm_rank() == 0) ? 3 : 0, 3);
+
+
   uXScatter = scatter_create(D, 0);
   uYScatter = scatter_create(D, 1);
   if (SPACE_DIM == 3)
@@ -677,6 +681,8 @@ MoFEMErrorCode Contact::tsSolve() {
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
   }
+
+  ContactOps::CommonData::totalTraction.reset();
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
