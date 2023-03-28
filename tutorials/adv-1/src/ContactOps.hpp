@@ -20,6 +20,17 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
 
   static SmartPetscObj<Vec> totalTraction;
 
+  static auto createTotalTraction(MoFEM::Interface &m_field) {
+    constexpr int ghosts[] = {0, 1, 2};
+    totalTraction =
+        createSmartGhostVector(m_field.get_comm(),
+
+                               (m_field.get_comm_rank() == 0) ? 3 : 0, 3,
+
+                               (m_field.get_comm_rank() == 0) ? 0 : 3, ghosts);
+    return totalTraction;
+  }
+
   static auto getFTensor1TotalTraction() {
     const double *t_ptr;
     CHK_THROW_MESSAGE(VecGetArrayRead(CommonData::totalTraction, &t_ptr),

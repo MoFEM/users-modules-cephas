@@ -649,9 +649,8 @@ MoFEMErrorCode Contact::tsSolve() {
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
-  ContactOps::CommonData::totalTraction = createSmartVectorMPI(
-      mField.get_comm(), (mField.get_comm_rank() == 0) ? 3 : 0, 3);
 
+  ContactOps::CommonData::createTotalTraction(mField);
 
   uXScatter = scatter_create(D, 0);
   uYScatter = scatter_create(D, 1);
