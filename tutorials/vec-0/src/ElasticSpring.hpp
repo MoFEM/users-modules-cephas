@@ -34,10 +34,20 @@ template <CubitBC> struct GetSpringStiffness {
     normal_stiffness = block_data[0];
     tangent_stiffness = block_data[1];
 
+    MOFEM_LOG_CHANNEL("WORLD");
+    MOFEM_TAG_AND_LOG("WORLD", Sev::inform, "SpringBc")
+        << "Normal stiffness " << normal_stiffness;
+    MOFEM_TAG_AND_LOG("WORLD", Sev::inform, "SpringBc")
+        << "Tangent stiffness " << tangent_stiffness;
+
     ents = boost::make_shared<Range>();
     CHKERR
     m_field.get_moab().get_entities_by_handle(cubit_meshset_ptr->meshset,
                                               *(ents), true);
+
+    MOFEM_LOG_CHANNEL("SYNC");
+    MOFEM_TAG_AND_LOG("SYNC", Sev::noisy, "SpringBc") << *ents;
+    MOFEM_LOG_SEVERITY_SYNC(m_field.get_comm(), Sev::noisy);
 
     MoFEMFunctionReturn(0);
   }
@@ -107,25 +117,27 @@ MoFEM::OpFluxRhsImpl<ElasticExample::SpringBcType<BLOCKSET>, 1, FIELD_DIM, A,
   auto t_row_base = row_data.getFTensor0N();
 
   // get coordinate at integration points
-  auto t_normal = OpBase::getFTensor1Normal();
-  auto l2_norm = t_normal(i) * t_normal(i);
-  // normal projection matrix
-  FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_P;
-  t_P(i, j) = t_normal(i) * t_normal(j) / l2_norm;
-  constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
-  // tangential projection matrix
-  FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_Q;
-  t_Q(i, j) = t_kd(i, j) - t_P(i, j);
-  // spring stiffness
-  FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_D;
-  t_D(i, j) = normalStiffness * t_P(i, j) + tangentStiffness * t_Q(i, j);
+  auto t_normal = OpBase::getFTensor1NormalsAtGaussPts();
 
   // get displacements
   auto t_u = getFTensor1FromMat<FIELD_DIM>(*uPtr);
   // loop over integration points
-  for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
+  for (int gg = 0; gg != OpBase::nbIntegrationPts; ++gg) {
     // take into account Jacobian
     const double alpha = t_w * vol * rhsScale;
+
+    auto l2_norm = t_normal(i) * t_normal(i);
+
+    // normal projection matrix
+    FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_P;
+    t_P(i, j) = t_normal(i) * t_normal(j) / l2_norm;
+    constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
+    // tangential projection matrix
+    FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_Q;
+    t_Q(i, j) = t_kd(i, j) - t_P(i, j);
+    // spring stiffness
+    FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_D;
+    t_D(i, j) = normalStiffness * t_P(i, j) + tangentStiffness * t_Q(i, j);
 
     // calculate spring resistance
     FTensor::Tensor1<double, FIELD_DIM> t_reaction;
@@ -142,8 +154,10 @@ MoFEM::OpFluxRhsImpl<ElasticExample::SpringBcType<BLOCKSET>, 1, FIELD_DIM, A,
 
     for (; rr < OpBase::nbRowBaseFunctions; ++rr)
       ++t_row_base;
+
     ++t_w;
     ++t_u;
+    ++t_normal;
   }
   MoFEMFunctionReturn(0);
 }
@@ -179,23 +193,26 @@ MoFEM::OpFluxLhsImpl<ElasticExample::SpringBcType<BLOCKSET>, 1, FIELD_DIM, A,
   auto t_row_base = row_data.getFTensor0N();
 
   // get coordinate at integration points
-  auto t_normal = OpBase::getFTensor1Normal();
-  auto l2_norm = t_normal(i) * t_normal(i);
-  // normal projection matrix
-  FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_P;
-  t_P(i, j) = t_normal(i) * t_normal(j) / l2_norm;
-  constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
-  // tangential projection matrix
-  FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_Q;
-  t_Q(i, j) = t_kd(i, j) - t_P(i, j);
-  // spring stiffness
-  FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_D;
-  t_D(i, j) = normalStiffness * t_P(i, j) + tangentStiffness * t_Q(i, j);
+  auto t_normal = OpBase::getFTensor1NormalsAtGaussPts();
 
   // loop over integration points
-  for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
+  for (int gg = 0; gg != OpBase::nbIntegrationPts; ++gg) {
     // take into account Jacobian
     const double alpha = t_w * vol;
+
+    auto l2_norm = t_normal(i) * t_normal(i);
+
+    // normal projection matrix
+    FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_P;
+    t_P(i, j) = t_normal(i) * t_normal(j) / l2_norm;
+    constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
+    // tangential projection matrix
+    FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_Q;
+    t_Q(i, j) = t_kd(i, j) - t_P(i, j);
+    // spring stiffness
+    FTensor::Tensor2<double, FIELD_DIM, FIELD_DIM> t_D;
+    t_D(i, j) = normalStiffness * t_P(i, j) + tangentStiffness * t_Q(i, j);
+
     // loop over rows base functions
     int rr = 0;
     for (; rr != OpBase::nbRows / FIELD_DIM; rr++) {
@@ -214,6 +231,8 @@ MoFEM::OpFluxLhsImpl<ElasticExample::SpringBcType<BLOCKSET>, 1, FIELD_DIM, A,
     }
     for (; rr < OpBase::nbRowBaseFunctions; ++rr)
       ++t_row_base;
+
+    ++t_normal;
     ++t_w; // move to another integration weight
   }
   MoFEMFunctionReturn(0);
@@ -302,7 +321,7 @@ struct AddFluxToLhsPipelineImpl<
 
     auto add_op = [&](auto &&meshset_vec_ptr) {
       for (auto m : meshset_vec_ptr) {
-        MOFEM_TAG_AND_LOG("WORLD", sev, "OpSprngLhs") << "Add " << *m;
+        MOFEM_TAG_AND_LOG("WORLD", sev, "OpSpringLhs") << "Add " << *m;
         pipeline.push_back(
             new OP(m_field, m->getMeshsetId(), row_field_name, col_field_name));
       }
