@@ -28,7 +28,6 @@ using BoundaryEle =
     PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
-using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
     I>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
@@ -50,7 +49,27 @@ using OpEssentialLhs = EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<
 using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<
     GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
 
+template <int DIM> struct PostProcEleByDim;
+
+template <> struct PostProcEleByDim<2> {
+  using PostProcEleDomain = PostProcBrokenMeshInMoabBaseCont<DomainEle>;
+  using PostProcEleBdy = PostProcBrokenMeshInMoabBaseCont<BoundaryEle>;
+  using SideEle = PipelineManager::ElementsAndOpsByDim<2>::FaceSideEle;
+};
+
+template <> struct PostProcEleByDim<3> {
+  using PostProcEleDomain = PostProcBrokenMeshInMoabBaseCont<BoundaryEle>;
+  using PostProcEleBdy = PostProcBrokenMeshInMoabBaseCont<BoundaryEle>;
+  using SideEle = PipelineManager::ElementsAndOpsByDim<3>::FaceSideEle;
+};
+
+using PostProcEleDomain = PostProcEleByDim<SPACE_DIM>::PostProcEleDomain;
+using SideEle = PostProcEleByDim<SPACE_DIM>::SideEle;
+using PostProcEleBdy = PostProcEleByDim<SPACE_DIM>::PostProcEleBdy;
+
+
 #include <ElasticSpring.hpp>
+#include <CalculateTraction.hpp>
 #include <NaturalDomainBC.hpp>
 #include <NaturalBoundaryBC.hpp>
 
@@ -276,21 +295,55 @@ MoFEMErrorCode Example::boundaryCondition() {
                                            "U", 2, 2);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "REMOVE_ALL", "U", 0, 3);
-
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      pip->getOpDomainRhsPipeline(), {H1}, "GEOMETRY");
-  CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-      pip->getOpBoundaryRhsPipeline(), {NOSPACE}, "GEOMETRY");
-
-  // Essential boundary condition.
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
+
+  auto integration_rule = [](int, int, int approx_order) {
+    return 2 * approx_order + 1;
+  };
+
+  auto integration_rule_bc = [](int, int, int approx_order) {
+    return 2 * approx_order + 1;
+  };
+
+  CHKERR pip->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pip->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule_bc);
+  CHKERR pip->setBoundaryLhsIntegrationRule(integration_rule_bc);
+
+  // Essential boundary condition.
   auto get_pre_proc_hook = [&]() {
     return EssentialPreProc<DisplacementCubitBcData>(mField,
                                                      pip->getDomainRhsFE(), {});
   };
   pip->getDomainRhsFE()->preProcessHook = get_pre_proc_hook();
-  pip->getBoundaryRhsFE()->preProcessHook = get_pre_proc_hook();
+
+    MoFEMFunctionReturn(0);
+}
+//! [Boundary condition]
+
+//! [Push operators to pipeline]
+MoFEMErrorCode Example::assembleSystem() {
+  MoFEMFunctionBegin;
+  auto pip = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>();
+  auto bc_mng = mField.getInterface<BcManager>();
+
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      pip->getOpDomainLhsPipeline(), {H1}, "GEOMETRY");
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      pip->getOpDomainRhsPipeline(), {H1}, "GEOMETRY");
+  CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+      pip->getOpBoundaryRhsPipeline(), {NOSPACE}, "GEOMETRY");
+  CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+      pip->getOpBoundaryLhsPipeline(), {NOSPACE}, "GEOMETRY");
+
+  auto mat_D_ptr = boost::make_shared<MatrixDouble>();
+
+  // Assemble domain stiffness matrix
+  CHKERR addMatBlockOps(pip->getOpDomainLhsPipeline(), "U", "MAT_ELASTIC",
+                        mat_D_ptr, Sev::verbose);
+  pip->getOpDomainLhsPipeline().push_back(new OpK("U", "U", mat_D_ptr));
 
   // Infernal forces
   auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
@@ -301,59 +354,26 @@ MoFEMErrorCode Example::boundaryCondition() {
                                                                mat_grad_ptr));
   pip->getOpDomainRhsPipeline().push_back(
       new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
-  auto mat_D_ptr = boost::make_shared<MatrixDouble>();
   CHKERR addMatBlockOps(pip->getOpDomainRhsPipeline(), "U", "MAT_ELASTIC",
                         mat_D_ptr, Sev::inform);
   pip->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
+  // Internal forces
   pip->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", mat_stress_ptr,
-
                           [](double, double, double) constexpr { return -1; }));
 
   // Body forces
   CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
       pip->getOpDomainRhsPipeline(), mField, "U", Sev::inform);
+
   // Add force boundary condition
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
       pip->getOpBoundaryRhsPipeline(), mField, "U", -1, Sev::inform);
   // Add case for mix type of BCs 
   CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
       pip->getOpBoundaryLhsPipeline(), mField, "U", Sev::verbose);
-
-  MoFEMFunctionReturn(0);
-}
-//! [Boundary condition]
-
-//! [Push operators to pipeline]
-MoFEMErrorCode Example::assembleSystem() {
-  MoFEMFunctionBegin;
-  auto pip = mField.getInterface<PipelineManager>();
-  auto simple = mField.getInterface<Simple>();
-
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      pip->getOpDomainLhsPipeline(), {H1}, "GEOMETRY");
-
-  auto mat_D_ptr = boost::make_shared<MatrixDouble>();
-  CHKERR addMatBlockOps(pip->getOpDomainLhsPipeline(), "U", "MAT_ELASTIC",
-                        mat_D_ptr, Sev::verbose);
-
-  pip->getOpDomainLhsPipeline().push_back(new OpK("U", "U", mat_D_ptr));
-  pip->getOpDomainLhsPipeline().push_back(new OpUnSetBc("U"));
-
-  auto integration_rule = [](int, int, int approx_order) {
-    return 2 * (approx_order - 1);
-  };
-
-  auto integration_rule_bc = [](int, int, int approx_order) {
-    return 2 * approx_order;
-  };
-
-  CHKERR pip->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR pip->setDomainLhsIntegrationRule(integration_rule);
-  CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule_bc);
-  CHKERR pip->setBoundaryLhsIntegrationRule(integration_rule_bc);
 
   MoFEMFunctionReturn(0);
 }
@@ -429,6 +449,7 @@ MoFEMErrorCode Example::solveSystem() {
 //! [Postprocess results]
 MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
+  auto simple = mField.getInterface<Simple>();
   auto pip = mField.getInterface<PipelineManager>();
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -438,59 +459,119 @@ MoFEMErrorCode Example::outputResults() {
   pip->getBoundaryRhsFE().reset();
   pip->getBoundaryLhsFE().reset();
 
-  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+  boost::shared_ptr<moab::Core> post_proc_mesh =
+      boost::make_shared<moab::Core>();
+  auto post_proc_begin = boost::make_shared<PostProcBrokenMeshInMoabBaseBegin>(
+      mField, post_proc_mesh);
+  auto post_proc_end = boost::make_shared<PostProcBrokenMeshInMoabBaseEnd>(
+      mField, post_proc_mesh);
 
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      post_proc_fe->getOpPtrVector(), {H1}, "GEOMETRY");
+  auto calculate_stress_ops = [&](auto &pip) {
+    AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1}, "GEOMETRY");
+    auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
+    auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
+    auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
+    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "U", mat_grad_ptr));
+    pip.push_back(
+        new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
 
-  auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
-  auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
-  auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
+    auto mat_D_ptr = boost::make_shared<MatrixDouble>();
+    CHKERR addMatBlockOps(pip, "U", "MAT_ELASTIC", mat_D_ptr, Sev::verbose);
+    pip.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+        "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+    auto x_ptr = boost::make_shared<MatrixDouble>();
+    pip.push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", x_ptr));
+    return boost::make_tuple(u_ptr, x_ptr, mat_strain_ptr, mat_stress_ptr);
+  };
 
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                               mat_grad_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpSymmetrizeTensor<SPACE_DIM>("U", mat_grad_ptr, mat_strain_ptr));
+  auto post_proc_domain = [&](auto post_proc_mesh) {
+    auto post_proc_fe =
+        boost::make_shared<PostProcEleDomain>(mField, post_proc_mesh);
+    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-  auto mat_D_ptr = boost::make_shared<MatrixDouble>();
-  CHKERR addMatBlockOps(post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC",
-                        mat_D_ptr, Sev::verbose);
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
+    auto [u_ptr, x_ptr, mat_strain_ptr, mat_stress_ptr] =
+        calculate_stress_ops(post_proc_fe->getOpPtrVector());
 
-  auto u_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
-  auto x_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", x_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
 
-  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+        new OpPPMap(
 
-  post_proc_fe->getOpPtrVector().push_back(
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-      new OpPPMap(
+            {},
 
-          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+            {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
 
-          {},
+            {},
 
-          {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
+            {{"STRAIN", mat_strain_ptr}, {"STRESS", mat_stress_ptr}}
 
-          {},
+            )
 
-          {{"STRAIN", mat_strain_ptr}, {"STRESS", mat_stress_ptr}}
+    );
+    return post_proc_fe;
+  };
 
-          )
+  auto post_proc_boundary = [&](auto post_proc_mesh) {
+    auto post_proc_fe =
+        boost::make_shared<PostProcEleBdy>(mField, post_proc_mesh);
+    AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+        post_proc_fe->getOpPtrVector(), {}, "GEOMETRY");
+    auto op_loop_side =
+        new OpLoopSide<SideEle>(mField, simple->getDomainFEName(), SPACE_DIM);
+    // push ops to side element, through op_loop_side operator
+    auto [u_ptr, x_ptr, mat_strain_ptr, mat_stress_ptr] =
+        calculate_stress_ops(op_loop_side->getOpPtrVector());
+    post_proc_fe->getOpPtrVector().push_back(op_loop_side);
+    auto mat_traction_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new ElasticExample::OpCalculateTraction(mat_stress_ptr,
+                                                mat_traction_ptr));
 
-  );
+    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-  pip->getBoundaryRhsFE().reset();
-  pip->getDomainRhsFE() = post_proc_fe;
+    post_proc_fe->getOpPtrVector().push_back(
+
+        new OpPPMap(
+
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+            {},
+
+            {{"U", u_ptr}, {"GEOMETRY", x_ptr}, {"T", mat_traction_ptr}},
+
+            {},
+
+            {{"STRAIN", mat_strain_ptr}, {"STRESS", mat_stress_ptr}}
+
+            )
+
+    );
+    return post_proc_fe;
+  };
+
+  PetscBool post_proc_skin_only = PETSC_FALSE;
+  if (SPACE_DIM == 3) {
+    post_proc_skin_only = PETSC_TRUE;
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-post_proc_skin_only",
+                               &post_proc_skin_only, PETSC_NULL);
+  }
+  if (post_proc_skin_only == PETSC_FALSE) {
+    pip->getDomainRhsFE() = post_proc_domain(post_proc_mesh);
+  }
+  pip->getBoundaryRhsFE() = post_proc_boundary(post_proc_mesh);
+
+  CHKERR DMoFEMPreProcessFiniteElements(simple->getDM(),
+                                        post_proc_begin->getFEMethod());
   CHKERR pip->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_elastic.h5m");
+  CHKERR DMoFEMPostProcessFiniteElements(simple->getDM(),
+                                         post_proc_end->getFEMethod());
+
+  CHKERR post_proc_end->writeFile("out_elastic.h5m");
   MoFEMFunctionReturn(0);
 }
 //! [Postprocessing results]
@@ -506,14 +587,14 @@ MoFEMErrorCode Example::checkResults() {
   pip->getBoundaryRhsFE().reset();
   pip->getBoundaryLhsFE().reset();
 
-  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
+  auto integration_rule = [](int, int, int p_data) { return 2 * p_data + 1; };
   CHKERR pip->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule);
 
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       pip->getOpDomainRhsPipeline(), {H1}, "GEOMETRY");
   CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-      pip->getOpBoundaryRhsPipeline(), {NOSPACE}, "GEOMETRY");
+      pip->getOpBoundaryRhsPipeline(), {}, "GEOMETRY");
 
   auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
   auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
@@ -567,6 +648,37 @@ MoFEMErrorCode Example::checkResults() {
   PetscBool test = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test, PETSC_NULL);
   if (test == PETSC_TRUE) {
+
+    auto post_proc_residual = [&](auto dm, auto f_res, auto out_name) {
+      MoFEMFunctionBegin;
+      auto post_proc_fe =
+          boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(mField);
+      using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+      auto u_vec = boost::make_shared<MatrixDouble>();
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_vec, f_res));
+      post_proc_fe->getOpPtrVector().push_back(
+
+          new OpPPMap(
+
+              post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+              {},
+
+              {{"RES", u_vec}},
+
+              {}, {})
+
+      );
+
+      CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(),
+                                      post_proc_fe);
+      post_proc_fe->writeFile(out_name);
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR post_proc_residual(simple->getDM(), res, "res.h5m");
+
     constexpr double eps = 1e-8;
     if (nrm2 > eps)
       SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
