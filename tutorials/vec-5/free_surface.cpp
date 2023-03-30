@@ -22,27 +22,16 @@ constexpr CoordinateTypes coord_type =
     EXECUTABLE_COORD_TYPE; ///< select coordinate system <CARTESIAN,
                            ///< CYLINDRICAL>;
 
-template <int DIM> struct ElementsAndOps {};
-
-template <> struct ElementsAndOps<2> {
-  using DomainEle = PipelineManager::FaceEle;
-  using DomianParentEle = FaceElementForcesAndSourcesCoreOnChildParent;
-  using BoundaryEle = PipelineManager::EdgeEle;
-  using BoundaryParentEle = EdgeElementForcesAndSourcesCoreOnChildParent;
-  // using PostProcEle = PostProcFaceOnRefinedMesh;
-  using SideEle = FaceElementForcesAndSourcesCoreOnSide;
-  using SideOp = SideEle::UserDataOperator;
-  using PostProcEdgeEle = PostProcEdgeOnRefinedMesh;
-};
+template <int DIM>
+using ElementsAndOps = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>;
 
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomianParentEle = ElementsAndOps<SPACE_DIM>::DomianParentEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
-using SideEle = ElementsAndOps<SPACE_DIM>::SideEle;
-using EntData = DataForcesAndSourcesCore::EntData;
-using BoundaryParentEle = ElementsAndOps<SPACE_DIM>::BoundaryParentEle;
+using SideEle = ElementsAndOps<SPACE_DIM>::FaceSideEle;
+using SideOp = SideEle::UserDataOperator;
 
 using EntData = EntitiesFieldData::EntData;
 
