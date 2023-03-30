@@ -29,7 +29,7 @@ template <> struct ElementsAndOps<2> {
   using DomianParentEle = FaceElementForcesAndSourcesCoreOnChildParent;
   using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryParentEle = EdgeElementForcesAndSourcesCoreOnChildParent;
-  //using PostProcEle = PostProcFaceOnRefinedMesh;
+  // using PostProcEle = PostProcFaceOnRefinedMesh;
   using SideEle = FaceElementForcesAndSourcesCoreOnSide;
   using SideOp = SideEle::UserDataOperator;
   using PostProcEdgeEle = PostProcEdgeOnRefinedMesh;
@@ -81,7 +81,7 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 // mesh refinement
 constexpr int order = 3; ///< approximation order
 
-// Physical parameters 
+// Physical parameters
 constexpr double a0 = 980;
 constexpr double rho_m = 0.998;
 constexpr double mu_m = 1.0101;
@@ -245,7 +245,9 @@ auto get_dofs_ents = [](auto dm) {
   return r;
 };
 
-template <typename PARENT> struct ExtractParentType { using Prent = PARENT; };
+template <typename PARENT> struct ExtractParentType {
+  using Prent = PARENT;
+};
 
 #include <FreeSurfaceOps.hpp>
 using namespace FreeSurfaceOps;
@@ -339,7 +341,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   MoFEMFunctionBegin;
 
   auto simple = mField.getInterface<Simple>();
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  auto pip_mng = mField.getInterface<PipelineManager>();
   auto bc_mng = mField.getInterface<BcManager>();
   auto dm = simple->getDM();
 
@@ -348,15 +350,15 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   auto g_ptr = boost::make_shared<VectorDouble>();
   auto grad_g_ptr = boost::make_shared<MatrixDouble>();
 
-  auto set_generic = [&](auto &pipeline, auto &fe) {
+  auto set_generic = [&](auto &pip, auto &fe) {
     MoFEMFunctionBegin;
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1});
-    pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
-    pipeline.push_back(
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1});
+    pip.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
+    pip.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
 
-    pipeline.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
-    pipeline.push_back(
+    pip.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
+    pip.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
     MoFEMFunctionReturn(0);
   };
@@ -370,18 +372,18 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
     post_proc_fe->getOpPtrVector().push_back(
 
-        new OpPPMap(
-            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+        new OpPPMap(post_proc_fe->getPostProcMesh(),
+                    post_proc_fe->getMapGaussPts(),
 
-            {{"H", h_ptr}, {"G", g_ptr}},
+                    {{"H", h_ptr}, {"G", g_ptr}},
 
-            {{"GRAD_H", grad_h_ptr}, {"GRAD_G", grad_g_ptr}},
+                    {{"GRAD_H", grad_h_ptr}, {"GRAD_G", grad_g_ptr}},
 
-            {},
+                    {},
 
-            {}
+                    {}
 
-            )
+                    )
 
     );
 
@@ -394,19 +396,19 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   auto solve_init = [&]() {
     MoFEMFunctionBegin;
 
-    auto set_domain_rhs = [&](auto &pipeline, auto &fe) {
-      set_generic(pipeline, fe);
-      pipeline.push_back(new OpRhsH<true>("H", nullptr, nullptr, h_ptr,
-                                          grad_h_ptr, grad_g_ptr));
-      pipeline.push_back(new OpRhsG<true>("G", h_ptr, grad_h_ptr, g_ptr));
+    auto set_domain_rhs = [&](auto &pip, auto &fe) {
+      set_generic(pip, fe);
+      pip.push_back(new OpRhsH<true>("H", nullptr, nullptr, h_ptr, grad_h_ptr,
+                                     grad_g_ptr));
+      pip.push_back(new OpRhsG<true>("G", h_ptr, grad_h_ptr, g_ptr));
     };
 
-    auto set_domain_lhs = [&](auto &pipeline, auto &fe) {
-      set_generic(pipeline, fe);
-      pipeline.push_back(new OpLhsH_dH<true>("H", nullptr, h_ptr, grad_g_ptr));
-      pipeline.push_back(new OpLhsH_dG<true>("H", "G", h_ptr));
-      pipeline.push_back(new OpLhsG_dG("G"));
-      pipeline.push_back(new OpLhsG_dH<true>("G", "H", h_ptr));
+    auto set_domain_lhs = [&](auto &pip, auto &fe) {
+      set_generic(pip, fe);
+      pip.push_back(new OpLhsH_dH<true>("H", nullptr, h_ptr, grad_g_ptr));
+      pip.push_back(new OpLhsH_dG<true>("H", "G", h_ptr));
+      pip.push_back(new OpLhsG_dG("G"));
+      pip.push_back(new OpLhsG_dH<true>("G", "H", h_ptr));
     };
 
     auto create_subdm = [&]() {
@@ -429,18 +431,18 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
     auto prb_ents = get_dofs_ents(subdm);
 
-    pipeline_mng->getDomainRhsFE().reset();
-    pipeline_mng->getDomainLhsFE().reset();
-    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
-    CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+    pip_mng->getDomainRhsFE().reset();
+    pip_mng->getDomainLhsFE().reset();
+    CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule);
 
-    set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline(),
-                   pipeline_mng->getDomainRhsFE());
-    set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline(),
-                   pipeline_mng->getDomainLhsFE());
+    set_domain_rhs(pip_mng->getOpDomainRhsPipeline(),
+                   pip_mng->getDomainRhsFE());
+    set_domain_lhs(pip_mng->getOpDomainLhsPipeline(),
+                   pip_mng->getDomainLhsFE());
 
     auto D = smartCreateDMVector(subdm);
-    auto snes = pipeline_mng->createSNES(subdm);
+    auto snes = pip_mng->createSNES(subdm);
     auto snes_ctx_ptr = smartGetDMSnesCtx(subdm);
 
     auto set_section_monitor = [&](auto solver) {
@@ -497,14 +499,14 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
                                            "L", 0, 0);
 
   // Clear pipelines
-  pipeline_mng->getOpDomainRhsPipeline().clear();
-  pipeline_mng->getOpDomainLhsPipeline().clear();
+  pip_mng->getOpDomainRhsPipeline().clear();
+  pip_mng->getOpDomainLhsPipeline().clear();
 
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
 
-//! [Push operators to pipeline]
+//! [Push operators to pip]
 MoFEMErrorCode FreeSurface::assembleSystem() {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
@@ -523,88 +525,84 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
 
   // Push element from reference configuration to current configuration in 3d
   // space
-  auto set_domain_general = [&](auto &pipeline, auto &fe) {
+  auto set_domain_general = [&](auto &pip, auto &fe) {
     MoFEMFunctionBegin;
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1});
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1});
 
-    pipeline.push_back(
+    pip.push_back(
         new OpCalculateVectorFieldValuesDot<U_FIELD_DIM>("U", dot_u_ptr));
-    pipeline.push_back(
-        new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
-    pipeline.push_back(
-        new OpCalculateVectorFieldGradient<U_FIELD_DIM, SPACE_DIM>("U",
-                                                                   grad_u_ptr));
-    pipeline.push_back(
+    pip.push_back(new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
+    pip.push_back(new OpCalculateVectorFieldGradient<U_FIELD_DIM, SPACE_DIM>(
+        "U", grad_u_ptr));
+    pip.push_back(
         new OpCalculateDivergenceVectorFieldValues<SPACE_DIM, coord_type>(
             "U", div_u_ptr));
 
-    pipeline.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
-    pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
-    pipeline.push_back(
+    pip.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
+    pip.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
+    pip.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
 
-    pipeline.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
-    pipeline.push_back(
+    pip.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
+    pip.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
 
-    pipeline.push_back(new OpCalculateScalarFieldValues("P", p_ptr));
+    pip.push_back(new OpCalculateScalarFieldValues("P", p_ptr));
     MoFEMFunctionReturn(0);
   };
 
-  auto set_domain_rhs = [&](auto &pipeline, auto &fe) {
+  auto set_domain_rhs = [&](auto &pip, auto &fe) {
     MoFEMFunctionBegin;
-    CHKERR set_domain_general(pipeline, fe);
-    pipeline.push_back(new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr,
-                                  grad_h_ptr, g_ptr, p_ptr));
-    pipeline.push_back(new OpRhsH<false>("H", u_ptr, dot_h_ptr, h_ptr,
-                                         grad_h_ptr, grad_g_ptr));
-    pipeline.push_back(new OpRhsG<false>("G", h_ptr, grad_h_ptr, g_ptr));
-    pipeline.push_back(new OpBaseTimesScalar(
+    CHKERR set_domain_general(pip, fe);
+    pip.push_back(new OpRhsU("U", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr,
+                             grad_h_ptr, g_ptr, p_ptr));
+    pip.push_back(new OpRhsH<false>("H", u_ptr, dot_h_ptr, h_ptr, grad_h_ptr,
+                                    grad_g_ptr));
+    pip.push_back(new OpRhsG<false>("G", h_ptr, grad_h_ptr, g_ptr));
+    pip.push_back(new OpBaseTimesScalar(
         "P", div_u_ptr, [](const double r, const double, const double) {
           return cylindrical(r);
         }));
-    pipeline.push_back(new OpBaseTimesScalar(
+    pip.push_back(new OpBaseTimesScalar(
         "P", p_ptr, [](const double r, const double, const double) {
           return eps * cylindrical(r);
         }));
     MoFEMFunctionReturn(0);
   };
 
-  auto set_domain_lhs = [&](auto &pipeline, auto &fe) {
+  auto set_domain_lhs = [&](auto &pip, auto &fe) {
     MoFEMFunctionBegin;
-    CHKERR set_domain_general(pipeline, fe);
-    pipeline.push_back(new OpLhsU_dU("U", u_ptr, grad_u_ptr, h_ptr));
-    pipeline.push_back(
+    CHKERR set_domain_general(pip, fe);
+    pip.push_back(new OpLhsU_dU("U", u_ptr, grad_u_ptr, h_ptr));
+    pip.push_back(
         new OpLhsU_dH("U", "H", dot_u_ptr, u_ptr, grad_u_ptr, h_ptr, g_ptr));
-    pipeline.push_back(new OpLhsU_dG("U", "G", grad_h_ptr));
+    pip.push_back(new OpLhsU_dG("U", "G", grad_h_ptr));
 
-    pipeline.push_back(new OpLhsH_dU("H", "U", grad_h_ptr));
-    pipeline.push_back(new OpLhsH_dH<false>("H", u_ptr, h_ptr, grad_g_ptr));
-    pipeline.push_back(new OpLhsH_dG<false>("H", "G", h_ptr));
+    pip.push_back(new OpLhsH_dU("H", "U", grad_h_ptr));
+    pip.push_back(new OpLhsH_dH<false>("H", u_ptr, h_ptr, grad_g_ptr));
+    pip.push_back(new OpLhsH_dG<false>("H", "G", h_ptr));
 
-    pipeline.push_back(new OpLhsG_dH<false>("G", "H", h_ptr));
-    pipeline.push_back(new OpLhsG_dG("G"));
+    pip.push_back(new OpLhsG_dH<false>("G", "H", h_ptr));
+    pip.push_back(new OpLhsG_dG("G"));
 
-    pipeline.push_back(new OpMixScalarTimesDiv(
+    pip.push_back(new OpMixScalarTimesDiv(
         "P", "U",
         [](const double r, const double, const double) {
           return cylindrical(r);
         },
         true, false));
-    pipeline.push_back(
-        new OpDomainMassP("P", "P", [](double r, double, double) {
-          return eps * cylindrical(r);
-        }));
+    pip.push_back(new OpDomainMassP("P", "P", [](double r, double, double) {
+      return eps * cylindrical(r);
+    }));
     MoFEMFunctionReturn(0);
   };
 
-  auto set_boundary_rhs = [&](auto &pipeline, auto &fe) {
+  auto set_boundary_rhs = [&](auto &pip, auto &fe) {
     MoFEMFunctionBegin;
-    pipeline.push_back(
-        new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
-    pipeline.push_back(new OpCalculateScalarFieldValues("L", lambda_ptr));
-    pipeline.push_back(new OpNormalConstrainRhs("L", u_ptr));
-    pipeline.push_back(new OpNormalForceRhs("U", lambda_ptr));
+    pip.push_back(new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
+    pip.push_back(new OpCalculateScalarFieldValues("L", lambda_ptr));
+    pip.push_back(new OpNormalConstrainRhs("L", u_ptr));
+    pip.push_back(new OpNormalForceRhs("U", lambda_ptr));
 
     // push operators to the side element which is called from op_bdy_side
     auto op_bdy_side =
@@ -614,7 +612,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     op_bdy_side->getOpPtrVector().push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
     // push bdy side op
-    pipeline.push_back(op_bdy_side);
+    pip.push_back(op_bdy_side);
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string block_name = "WETTING_ANGLE";
@@ -628,7 +626,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
           SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
                   "Should be one attribute");
         // need to find the attributes and pass to operator
-        pipeline.push_back(new OpWettingAngleRhs(
+        pip.push_back(new OpWettingAngleRhs(
             "G", grad_h_ptr, boost::make_shared<Range>(force_edges),
             attr_vec.front()));
       }
@@ -636,9 +634,9 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  auto set_boundary_lhs = [&](auto &pipeline, auto &fe) {
+  auto set_boundary_lhs = [&](auto &pip, auto &fe) {
     MoFEMFunctionBegin;
-    pipeline.push_back(new OpNormalConstrainLhs("L", "U"));
+    pip.push_back(new OpNormalConstrainLhs("L", "U"));
 
     auto col_ind_ptr = boost::make_shared<std::vector<VectorInt>>();
     auto col_diff_base_ptr = boost::make_shared<std::vector<MatrixDouble>>();
@@ -654,7 +652,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
         new OpLoopSideGetDataForSideEle("H", col_ind_ptr, col_diff_base_ptr));
 
     // push bdy side op
-    pipeline.push_back(op_bdy_side);
+    pip.push_back(op_bdy_side);
 
     // push operators for lhs wetting angle
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
@@ -669,7 +667,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
                   "Should be one attribute");
         MOFEM_LOG("FS", Sev::inform)
             << "wetting angle edges size " << force_edges.size();
-        pipeline.push_back(new OpWettingAngleLhs(
+        pip.push_back(new OpWettingAngleLhs(
             "G", grad_h_ptr, col_ind_ptr, col_diff_base_ptr,
             boost::make_shared<Range>(force_edges), attr_vec.front()));
       }
@@ -677,29 +675,27 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto *pip_mng = mField.getInterface<PipelineManager>();
 
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule);
 
-  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
+  CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule);
+  CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule);
 
-  set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline(),
-                 pipeline_mng->getDomainRhsFE());
-  set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline(),
-                 pipeline_mng->getDomainLhsFE());
+  set_domain_rhs(pip_mng->getOpDomainRhsPipeline(), pip_mng->getDomainRhsFE());
+  set_domain_lhs(pip_mng->getOpDomainLhsPipeline(), pip_mng->getDomainLhsFE());
 
-  CHKERR set_boundary_rhs(pipeline_mng->getOpBoundaryRhsPipeline(),
-                          pipeline_mng->getBoundaryRhsFE());
-  CHKERR set_boundary_lhs(pipeline_mng->getOpBoundaryLhsPipeline(),
-                          pipeline_mng->getBoundaryLhsFE());
+  CHKERR set_boundary_rhs(pip_mng->getOpBoundaryRhsPipeline(),
+                          pip_mng->getBoundaryRhsFE());
+  CHKERR set_boundary_lhs(pip_mng->getOpBoundaryLhsPipeline(),
+                          pip_mng->getBoundaryLhsFE());
 
-  domianLhsFEPtr = pipeline_mng->getDomainLhsFE();
+  domianLhsFEPtr = pip_mng->getDomainLhsFE();
 
   MoFEMFunctionReturn(0);
 }
-//! [Push operators to pipeline]
+//! [Push operators to pip]
 
 /**
  * @brief Monitor solution
@@ -727,7 +723,8 @@ struct Monitor : public FEMethod {
       // CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcEdge,
       //                                 this->getCacheWeakPtr());
       // CHKERR postProcEdge->writeFile(
-      //     "out_step_bdy_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      //     "out_step_bdy_" + boost::lexical_cast<std::string>(ts_step) +
+      //     ".h5m");
     }
 
     liftVec->resize(SPACE_DIM, false);
@@ -755,7 +752,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   MoFEMFunctionBegin;
 
   auto *simple = mField.getInterface<Simple>();
-  auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto *pip_mng = mField.getInterface<PipelineManager>();
   auto dm = simple->getDM();
   auto snes_ctx_ptr = smartGetDMSnesCtx(dm);
 
@@ -897,7 +894,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  auto ts = pipeline_mng->createTSIM();
+  auto ts = pip_mng->createTSIM();
   CHKERR TSSetType(ts, TSALPHA);
 
   auto set_post_proc_monitor = [&](auto dm) {
