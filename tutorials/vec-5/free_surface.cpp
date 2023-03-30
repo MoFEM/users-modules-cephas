@@ -452,10 +452,17 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
     auto set_section_monitor = [&](auto solver) {
       MoFEMFunctionBegin;
-      CHKERR SNESMonitorSet(snes,
+      CHKERR SNESMonitorSet(solver,
                             (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
                                                void *))MoFEMSNESMonitorFields,
                             (void *)(snes_ctx_ptr.get()), nullptr);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto print_section_field = [&]() {
+      MoFEMFunctionBegin;
+
       auto section = mField.getInterface<ISManager>()->sectionCreate("SUB");
       PetscInt num_fields;
       CHKERR PetscSectionGetNumFields(section, &num_fields);
@@ -465,10 +472,12 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
         MOFEM_LOG("FS", Sev::inform)
             << "Field " << f << " " << std::string(field_name);
       }
+
       MoFEMFunctionReturn(0);
     };
 
     CHKERR set_section_monitor(snes);
+    CHKERR print_section_field();
 
     CHKERR SNESSetFromOptions(snes);
     CHKERR SNESSolve(snes, PETSC_NULL, D);
@@ -779,6 +788,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto *simple = mField.getInterface<Simple>();
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto dm = simple->getDM();
+  auto snes_ctx_ptr = smartGetDMSnesCtx(dm);
 
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
@@ -914,6 +924,18 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
+  auto set_section_monitor = [&](auto solver) {
+    MoFEMFunctionBegin;
+    SNES snes;
+    CHKERR TSGetSNES(solver, &snes);
+    CHKERR SNESMonitorSet(snes,
+                          (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
+                                             void *))MoFEMSNESMonitorFields,
+                          (void *)(snes_ctx_ptr.get()), nullptr);
+
+    MoFEMFunctionReturn(0);
+  };
+
   auto ts = pipeline_mng->createTSIM();
   CHKERR TSSetType(ts, TSALPHA);
 
@@ -939,6 +961,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   CHKERR TSSetSolution(ts, T);
   CHKERR TSSetFromOptions(ts);
   CHKERR set_ts(ts);
+  CHKERR set_section_monitor(ts);
   CHKERR TSSetUp(ts);
 
   auto print_fields_in_section = [&]() {
