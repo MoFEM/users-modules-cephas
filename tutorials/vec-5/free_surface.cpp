@@ -349,15 +349,8 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   auto grad_g_ptr = boost::make_shared<MatrixDouble>();
 
   auto set_generic = [&](auto &pipeline, auto &fe) {
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    pipeline.push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
+    MoFEMFunctionBegin;
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1});
     pipeline.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
     pipeline.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
@@ -365,13 +358,13 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     pipeline.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
     pipeline.push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("G", grad_g_ptr));
+    MoFEMFunctionReturn(0);
   };
 
   auto post_proc = [&]() {
     MoFEMFunctionBegin;
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-
-    set_generic(post_proc_fe->getOpPtrVector(), post_proc_fe);
+    CHKERR set_generic(post_proc_fe->getOpPtrVector(), post_proc_fe);
 
     using OpPPMap = OpPostProcMapInMoab<2, 2>;
 
@@ -532,15 +525,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
   // space
   auto set_domain_general = [&](auto &pipeline, auto &fe) {
     MoFEMFunctionBegin;
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    pipeline.push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOWeightsOnFace());
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1});
 
     pipeline.push_back(
         new OpCalculateVectorFieldValuesDot<U_FIELD_DIM>("U", dot_u_ptr));
@@ -621,19 +606,11 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pipeline.push_back(new OpNormalConstrainRhs("L", u_ptr));
     pipeline.push_back(new OpNormalForceRhs("U", lambda_ptr));
 
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
     // push operators to the side element which is called from op_bdy_side
     auto op_bdy_side =
         new OpLoopSide<SideEle>(mField, simple->getDomainFEName(), SPACE_DIM);
-    op_bdy_side->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
-    op_bdy_side->getOpPtrVector().push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    op_bdy_side->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        op_bdy_side->getOpPtrVector(), {H1});
     op_bdy_side->getOpPtrVector().push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
     // push bdy side op
@@ -666,19 +643,11 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     auto col_ind_ptr = boost::make_shared<std::vector<VectorInt>>();
     auto col_diff_base_ptr = boost::make_shared<std::vector<MatrixDouble>>();
 
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
     // push operators to the side element which is called from op_bdy_side
     auto op_bdy_side =
         new OpLoopSide<SideEle>(mField, simple->getDomainFEName(), SPACE_DIM);
-    op_bdy_side->getOpPtrVector().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
-    op_bdy_side->getOpPtrVector().push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    op_bdy_side->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(inv_jac_ptr));
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        op_bdy_side->getOpPtrVector(), {H1});
     op_bdy_side->getOpPtrVector().push_back(
         new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
     op_bdy_side->getOpPtrVector().push_back(
@@ -793,10 +762,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto get_fe_post_proc = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
 
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
     auto u_ptr = boost::make_shared<MatrixDouble>();
     auto grad_u_ptr = boost::make_shared<MatrixDouble>();
     auto h_ptr = boost::make_shared<VectorDouble>();
@@ -805,12 +770,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     auto g_ptr = boost::make_shared<VectorDouble>();
     auto grad_g_ptr = boost::make_shared<MatrixDouble>();
 
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        post_proc_fe->getOpPtrVector(), {H1});
 
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
