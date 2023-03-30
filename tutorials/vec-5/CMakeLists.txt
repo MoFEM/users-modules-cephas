@@ -23,3 +23,5 @@ tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
 tutorials_build_and_install(
   free_surface ${CMAKE_CURRENT_SOURCE_DIR}/free_surface.cpp)
+set_target_properties(
+  free_surface PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_COORD_TYPE=CARTESIAN")  
