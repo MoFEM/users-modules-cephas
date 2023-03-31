@@ -586,6 +586,15 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     MoFEMFunctionReturn(0);
   };
 
+  auto get_block_name = [](auto name) {
+    return boost::format("%s(.*)") % "WETTING_ANGLE";
+  };
+
+  auto get_blocks = [&](auto &&name) {
+    return mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
+        std::regex(name.str()));
+  };
+
   auto set_boundary_rhs = [&](auto &pip, auto &fe) {
     MoFEMFunctionBegin;
     pip.push_back(new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
@@ -603,23 +612,21 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     // push bdy side op
     pip.push_back(op_bdy_side);
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string block_name = "WETTING_ANGLE";
-      if (it->getName().compare(0, block_name.length(), block_name) == 0) {
-        Range force_edges;
-        std::vector<double> attr_vec;
-        CHKERR it->getMeshsetIdEntitiesByDimension(
-            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
-        it->getAttributes(attr_vec);
-        if (attr_vec.size() != 1)
-          SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
-                  "Should be one attribute");
-        // need to find the attributes and pass to operator
-        pip.push_back(new OpWettingAngleRhs(
-            "G", grad_h_ptr, boost::make_shared<Range>(force_edges),
-            attr_vec.front()));
-      }
+    // push operators for rhs wetting angle
+    for (auto &b : get_blocks(get_block_name("WETTING_ANGLE"))) {
+      Range force_edges;
+      std::vector<double> attr_vec;
+      CHKERR b->getMeshsetIdEntitiesByDimension(
+          mField.get_moab(), SPACE_DIM - 1, force_edges, true);
+      b->getAttributes(attr_vec);
+      if (attr_vec.size() != 1)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA, "Should be one attribute");
+      // need to find the attributes and pass to operator
+      pip.push_back(new OpWettingAngleRhs(
+          "G", grad_h_ptr, boost::make_shared<Range>(force_edges),
+          attr_vec.front()));
     }
+
     MoFEMFunctionReturn(0);
   };
 
@@ -644,23 +651,21 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pip.push_back(op_bdy_side);
 
     // push operators for lhs wetting angle
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, 13, "WETTING_ANGLE") == 0) {
-        Range force_edges;
-        std::vector<double> attr_vec;
-        CHKERR it->getMeshsetIdEntitiesByDimension(
-            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
-        it->getAttributes(attr_vec);
-        if (attr_vec.size() != 1)
-          SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
-                  "Should be one attribute");
-        MOFEM_LOG("FS", Sev::inform)
-            << "wetting angle edges size " << force_edges.size();
-        pip.push_back(new OpWettingAngleLhs(
-            "G", grad_h_ptr, col_ind_ptr, col_diff_base_ptr,
-            boost::make_shared<Range>(force_edges), attr_vec.front()));
-      }
+    for (auto &b : get_blocks(get_block_name("WETTING_ANGLE"))) {
+      Range force_edges;
+      std::vector<double> attr_vec;
+      CHKERR b->getMeshsetIdEntitiesByDimension(
+          mField.get_moab(), SPACE_DIM - 1, force_edges, true);
+      b->getAttributes(attr_vec);
+      if (attr_vec.size() != 1)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA, "Should be one attribute");
+      MOFEM_LOG("FS", Sev::inform)
+          << "wetting angle edges size " << force_edges.size();
+      pip.push_back(new OpWettingAngleLhs(
+          "G", grad_h_ptr, col_ind_ptr, col_diff_base_ptr,
+          boost::make_shared<Range>(force_edges), attr_vec.front()));
     }
+
     MoFEMFunctionReturn(0);
   };
 
