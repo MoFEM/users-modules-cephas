@@ -226,7 +226,7 @@ private:
   };
 
   /**
-   * @brief Used to execute inital mesh approximation while mesh refinment
+   * @brief Used to execute inital mesh approximation while mesh refinement
    * 
    */
   struct WrapperClassInitalSolution : public WrapperClass {
