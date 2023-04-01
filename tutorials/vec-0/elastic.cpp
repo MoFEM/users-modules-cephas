@@ -459,8 +459,7 @@ MoFEMErrorCode Example::outputResults() {
   pip->getBoundaryRhsFE().reset();
   pip->getBoundaryLhsFE().reset();
 
-  boost::shared_ptr<moab::Core> post_proc_mesh =
-      boost::make_shared<moab::Core>();
+  auto post_proc_mesh = boost::make_shared<moab::Core>();
   auto post_proc_begin = boost::make_shared<PostProcBrokenMeshInMoabBaseBegin>(
       mField, post_proc_mesh);
   auto post_proc_end = boost::make_shared<PostProcBrokenMeshInMoabBaseEnd>(
