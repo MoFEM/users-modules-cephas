@@ -33,10 +33,11 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using SideEle = ElementsAndOps<SPACE_DIM>::FaceSideEle;
 using SideOp = SideEle::UserDataOperator;
 
-using EntData = EntitiesFieldData::EntData;
+using PostProcEleDomain = PostProcBrokenMeshInMoab<DomainEle>;
+using PostProcEleDomainCont = PostProcBrokenMeshInMoabBaseCont<DomainEle>;
+using PostProcEleBdyCont = PostProcBrokenMeshInMoabBaseCont<BoundaryEle>;
 
-using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
-using PostProcEdgeEle = PostProcBrokenMeshInMoab<BoundaryEle>;
+using EntData = EntitiesFieldData::EntData;
 
 using AssemblyDomainEleOp =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
@@ -354,7 +355,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
   auto post_proc = [&]() {
     MoFEMFunctionBegin;
-    auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+    auto post_proc_fe = boost::make_shared<PostProcEleDomain>(mField);
     CHKERR set_generic(post_proc_fe->getOpPtrVector(), post_proc_fe);
 
     using OpPPMap = OpPostProcMapInMoab<2, 2>;
@@ -699,26 +700,32 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
  */
 struct Monitor : public FEMethod {
   Monitor(
-      SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc,
-      boost::shared_ptr<PostProcEdgeEle> post_proc_edge,
+      SmartPetscObj<DM> dm, boost::shared_ptr<moab::Core> post_proc_mesh,
+      boost::shared_ptr<PostProcEleDomainCont> post_proc,
+      boost::shared_ptr<PostProcEleBdyCont> post_proc_edge,
       std::pair<boost::shared_ptr<BoundaryEle>, boost::shared_ptr<VectorDouble>>
           p)
-      : dM(dm), postProc(post_proc), postProcEdge(post_proc_edge),
-        liftFE(p.first), liftVec(p.second) {}
+      : dM(dm), postProcMesh(post_proc_mesh), postProc(post_proc),
+        postProcEdge(post_proc_edge), liftFE(p.first), liftVec(p.second) {}
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
+      MoFEM::Interface *m_field_ptr;
+      CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
+      auto post_proc_begin =
+          boost::make_shared<PostProcBrokenMeshInMoabBaseBegin>(*m_field_ptr,
+                                                                postProcMesh);
+      auto post_proc_end = boost::make_shared<PostProcBrokenMeshInMoabBaseEnd>(
+          *m_field_ptr, postProcMesh);
+      CHKERR DMoFEMPreProcessFiniteElements(dM, post_proc_begin->getFEMethod());
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc,
                                       this->getCacheWeakPtr());
-      CHKERR postProc->writeFile(
+      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcEdge,
+                                      this->getCacheWeakPtr());
+      CHKERR DMoFEMPostProcessFiniteElements(dM, post_proc_end->getFEMethod());
+      CHKERR post_proc_end->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
-
-      // CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcEdge,
-      //                                 this->getCacheWeakPtr());
-      // CHKERR postProcEdge->writeFile(
-      //     "out_step_bdy_" + boost::lexical_cast<std::string>(ts_step) +
-      //     ".h5m");
     }
 
     liftVec->resize(SPACE_DIM, false);
@@ -735,8 +742,9 @@ struct Monitor : public FEMethod {
 
 private:
   SmartPetscObj<DM> dM;
-  boost::shared_ptr<PostProcEle> postProc;
-  boost::shared_ptr<PostProcEdgeEle> postProcEdge;
+  boost::shared_ptr<moab::Core> postProcMesh;
+  boost::shared_ptr<PostProcEleDomainCont> postProc;
+  boost::shared_ptr<PostProcEleBdyCont> postProcEdge;
   boost::shared_ptr<BoundaryEle> liftFE;
   boost::shared_ptr<VectorDouble> liftVec;
 };
@@ -750,8 +758,9 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto dm = simple->getDM();
   auto snes_ctx_ptr = smartGetDMSnesCtx(dm);
 
-  auto get_fe_post_proc = [&]() {
-    auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+  auto get_fe_post_proc = [&](auto post_proc_mesh) {
+    auto post_proc_fe =
+        boost::make_shared<PostProcEleDomainCont>(mField, post_proc_mesh);
 
     auto u_ptr = boost::make_shared<MatrixDouble>();
     auto grad_u_ptr = boost::make_shared<MatrixDouble>();
@@ -761,7 +770,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     auto g_ptr = boost::make_shared<VectorDouble>();
     auto grad_g_ptr = boost::make_shared<MatrixDouble>();
 
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+    AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         post_proc_fe->getOpPtrVector(), {H1});
 
     post_proc_fe->getOpPtrVector().push_back(
@@ -804,8 +813,9 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     return post_proc_fe;
   };
 
-  auto get_bdy_post_proc_fe = [&]() {
-    auto post_proc_fe = boost::make_shared<PostProcEdgeEle>(mField);
+  auto get_bdy_post_proc_fe = [&](auto post_proc_mesh) {
+    auto post_proc_fe =
+        boost::make_shared<PostProcEleBdyCont>(mField, post_proc_mesh);
 
     auto u_ptr = boost::make_shared<MatrixDouble>();
     auto p_ptr = boost::make_shared<VectorDouble>();
@@ -894,8 +904,10 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto set_post_proc_monitor = [&](auto dm) {
     MoFEMFunctionBegin;
     boost::shared_ptr<FEMethod> null_fe;
+    auto post_proc_mesh = boost::make_shared<moab::Core>();
     auto monitor_ptr = boost::make_shared<Monitor>(
-        dm, get_fe_post_proc(), get_bdy_post_proc_fe(), get_lift_fe());
+        dm, post_proc_mesh, get_fe_post_proc(post_proc_mesh),
+        get_bdy_post_proc_fe(post_proc_mesh), get_lift_fe());
     CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                                null_fe, monitor_ptr);
     MoFEMFunctionReturn(0);
