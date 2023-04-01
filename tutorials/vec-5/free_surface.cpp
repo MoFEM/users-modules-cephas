@@ -235,10 +235,6 @@ auto get_dofs_ents = [](auto dm) {
   return r;
 };
 
-template <typename PARENT> struct ExtractParentType {
-  using Prent = PARENT;
-};
-
 #include <FreeSurfaceOps.hpp>
 using namespace FreeSurfaceOps;
 
