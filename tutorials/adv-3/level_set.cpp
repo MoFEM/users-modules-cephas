@@ -38,15 +38,20 @@ constexpr FieldSpace potential_velocity_space = SPACE_DIM == 2 ? H1 : HCURL;
 constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
 
 constexpr bool debug = false;
-constexpr int nb_levels = 3;
+constexpr int nb_levels = 3; //< number of refinement levels
 
-constexpr int start_bit = nb_levels + 1;
+constexpr int start_bit =
+    nb_levels + 1; //< first refinement level for computational mesh
 
-constexpr int current_bit = 2 * start_bit + 1;
-constexpr int skeleton_bit = 2 * start_bit + 2;
-constexpr int aggregate_bit = 2 * start_bit + 3;
-constexpr int projection_bit = 2 * start_bit + 4;
-constexpr int aggregate_projection_bit = 2 * start_bit + 5;
+constexpr int current_bit =
+    2 * start_bit + 1; ///< dofs bit used to do calculations
+constexpr int skeleton_bit = 2 * start_bit + 2; ///< skeleton elemets bit
+constexpr int aggregate_bit =
+    2 * start_bit + 3; ///< all bits for advection problem
+constexpr int projection_bit =
+    2 * start_bit + 4; //< bit from which data are projected
+constexpr int aggregate_projection_bit =
+    2 * start_bit + 5; ///< all bits for projection problem
 
 struct LevelSet {
 
@@ -483,6 +488,7 @@ MoFEMErrorCode LevelSet::readMesh() {
   simple->getBitRefLevel() = BitRefLevel();
   CHKERR simple->loadFile();
 
+  // Initialise bit ref levels
   auto set_problem_bit = [&]() {
     MoFEMFunctionBegin;
     auto bit0 = BitRefLevel().set(start_bit);
@@ -500,6 +506,8 @@ MoFEMErrorCode LevelSet::readMesh() {
     CHKERR bit_mng->setNthBitRefLevel(level0, aggregate_bit, true);
     CHKERR bit_mng->setNthBitRefLevel(level0, skeleton_bit, true);
 
+    // Set bits to build adjacencies between parents and children. That is used
+    // by simple interface.
     simple->getBitAdjEnt() = BitRefLevel().set();
     simple->getBitAdjParent() = BitRefLevel().set();
     simple->getBitRefLevel() = BitRefLevel().set(current_bit);
