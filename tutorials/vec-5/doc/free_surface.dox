@@ -1,5 +1,7 @@
 /*! \page phase_field_doc VEC-5: Phase field model and Navier-Stokes
 
+Implentaton of Navier-Stokes-Cahn-Hilliard model is based on \cite Lovric2019-qn. 
+
 \note Prerequisites of this tutorial include \ref tutorial_elastic_problem
 
 <br>
