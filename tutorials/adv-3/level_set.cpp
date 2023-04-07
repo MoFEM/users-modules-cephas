@@ -1995,7 +1995,7 @@ MoFEMErrorCode LevelSet::solveAdvection() {
   CHKERR TSSetFromOptions(ts);
 
   auto B = smartCreateDMMatrix(sub_dm);
-  CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, ts_ctx);
+  CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, nullptr);
   level_set_raw_ptr = this;
 
   CHKERR TSSetUp(ts);
@@ -2070,7 +2070,7 @@ MoFEMErrorCode LevelSet::solveAdvection() {
       CHKERR set_solution(ts);
 
       auto B = smartCreateDMMatrix(dm);
-      CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, ts_ctx);
+      CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, nullptr);
 
       MoFEMFunctionReturn(0);
     };
