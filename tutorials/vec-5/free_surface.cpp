@@ -72,10 +72,10 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // mesh refinement
-constexpr int order = 4; ///< approximation order
+constexpr int order = 3; ///< approximation order
 
 constexpr bool debug = true;
-constexpr int nb_levels = 3; //< number of refinement levels
+constexpr int nb_levels = 4; //< number of refinement levels
 constexpr int start_bit =
     nb_levels + 1; //< first refinement level for computational mesh
 constexpr int current_bit =
@@ -99,7 +99,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.025 / nb_levels; // mesh size
+constexpr double h = 0.025 / (nb_levels); // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -231,13 +231,23 @@ auto save_range = [](moab::Interface &moab, const std::string name,
   MoFEMFunctionReturn(0);
 };
 
-auto get_dofs_ents = [](auto dm) {
+auto get_dofs_ents = [](auto dm, auto field_name) {
   auto prb_ptr = getProblemPtr(dm);
   std::vector<EntityHandle> ents_vec;
-  ents_vec.reserve(prb_ptr->numeredRowDofsPtr->size());
-  for (auto dof : *prb_ptr->numeredRowDofsPtr) {
-    ents_vec.push_back(dof->getEnt());
+
+  MoFEM::Interface *m_field_ptr;
+  CHKERR DMoFEMGetInterfacePtr(dm, &m_field_ptr);
+
+  auto bit_number = m_field_ptr->get_field_bit_number(field_name);
+  auto dofs = prb_ptr->numeredRowDofsPtr;
+  auto lo_it = dofs->lower_bound(FieldEntity::getLoBitNumberUId(bit_number));
+  auto hi_it = dofs->upper_bound(FieldEntity::getHiBitNumberUId(bit_number));
+  ents_vec.reserve(std::distance(lo_it, hi_it));
+
+  for(; lo_it!=hi_it;++lo_it) {
+    ents_vec.push_back((*lo_it)->getEnt());
   }
+
   std::sort(ents_vec.begin(), ents_vec.end());
   auto it = std::unique(ents_vec.begin(), ents_vec.end());
   Range r;
@@ -382,11 +392,22 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR simple->setFieldOrder("G", order, &ents);
   CHKERR simple->setFieldOrder("L", order, &ents);
 
-  // CHKERR simple->setFieldOrder("U", order);
-  // CHKERR simple->setFieldOrder("P", order - 1);
-  // CHKERR simple->setFieldOrder("H", order);
-  // CHKERR simple->setFieldOrder("G", order);
-  // CHKERR simple->setFieldOrder("L", order);
+  // Range level0;
+  // CHKERR bit_mng->getEntitiesByRefLevel(bit(0), BitRefLevel().set(), level0);
+  // CHKERR simple->setFieldOrder("U", order, &level0);
+  // CHKERR simple->setFieldOrder("P", order - 1, &level0);
+  // CHKERR simple->setFieldOrder("H", order, &level0);
+  // CHKERR simple->setFieldOrder("G", order, &level0);
+  // CHKERR simple->setFieldOrder("L", order, &level0);
+
+  // Range levelN;
+  // CHKERR bit_mng->getEntitiesByTypeAndRefLevel(BitRefLevel().set(),
+  //                                              bit(0).flip(), MBVERTEX, levelN);
+  // CHKERR simple->setFieldOrder("U", 1, &levelN);
+  // CHKERR simple->setFieldOrder("P", 1, &levelN);
+  // CHKERR simple->setFieldOrder("H", 1, &levelN);
+  // CHKERR simple->setFieldOrder("G", 1, &levelN);
+  // CHKERR simple->setFieldOrder("L", 1, &levelN);
 
   // Initialise bit ref levels
   auto set_problem_bit = [&]() {
@@ -581,8 +602,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     };
 
     auto subdm = create_subdm();
-
-    auto prb_ents = get_dofs_ents(subdm);
 
     pip_mng->getDomainRhsFE().reset();
     pip_mng->getDomainLhsFE().reset();
@@ -1552,15 +1571,17 @@ std::vector<Range> FreeSurface::findChildren(std::vector<Range> vec_levels) {
 
   // remove same dimension children
   for (auto l = nb_levels - 1; l > 0; --l) {
-    Range children;
+
     for (auto d = 1; d <= SPACE_DIM; ++d) {
-      bit_mng->getEntitiesByDimAndRefLevel(bit(l), BitRefLevel().set(), d,
-                                           vec_children[l]);
+      // Range r;
+      // bit_mng->getEntitiesByDimAndRefLevel(bit(l), BitRefLevel().set(), d, r);
+      // vec_children[l].merge(r);
       Range c;
       CHK_THROW_MESSAGE(bit_mng->updateRangeByChildren(
                             vec_levels[l - 1].subset_by_dimension(d), c),
                         "get children");
       vec_children[l].merge(c.subset_by_dimension(d));
+      // vec_children[l] = subtract(r, c.subset_by_dimension(d));
     }
   }
 
@@ -1597,18 +1618,39 @@ MoFEMErrorCode FreeSurface::refineMesh() {
   CHKERR bit_mng->setNthBitRefLevel(level0, current_bit, true);
   CHKERR bit_mng->setNthBitRefLevel(level0, start_bit, true);
 
+  auto get_adj = [&](auto ents) {
+    Range conn;
+    CHK_MOAB_THROW(mField.get_moab().get_connectivity(ents, conn, true),
+                   "get conn");
+    for (auto d = 1; d != SPACE_DIM; ++d) {
+      CHK_MOAB_THROW(mField.get_moab().get_adjacencies(
+                         ents.subset_by_dimension(SPACE_DIM), d, false, ents,
+                         moab::Interface::UNION),
+                     "get adj");
+    }
+    ents.merge(conn);        
+    return ents;
+  };
+
   for (auto l = 1; l != nb_levels; ++l) {
     Range level_prev;
-    CHKERR bit_mng->getEntitiesByRefLevel(bit(start_bit + l - 1),
-                                          BitRefLevel().set(), level_prev);
+    CHKERR bit_mng->getEntitiesByDimAndRefLevel(
+        bit(start_bit + l - 1), BitRefLevel().set(), SPACE_DIM, level_prev);
     Range parents;
     CHKERR bit_mng->updateRangeByParent(vec_levels[l], parents);
     level_prev = subtract(level_prev, parents);
     level_prev.merge(vec_levels[l]);
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
-        level_prev);
-    CHKERR bit_mng->setNthBitRefLevel(level_prev, current_bit, true);
     CHKERR bit_mng->setNthBitRefLevel(level_prev, start_bit + l, true);
+  }
+
+  for (auto l = 1; l != nb_levels; ++l) {
+    Range level;
+    CHKERR bit_mng->getEntitiesByRefLevel(bit(start_bit + l),
+                                          BitRefLevel().set(), level);
+    level = get_adj(level);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(level);
+    CHKERR bit_mng->setNthBitRefLevel(level, start_bit + l, true);
+    CHKERR bit_mng->setNthBitRefLevel(level, current_bit, true);
   }
 
   if constexpr (debug) {
@@ -1665,7 +1707,7 @@ MoFEMErrorCode FreeSurface::setParentDofs(
 
                         BitRefLevel().set(), BitRefLevel().set(),
 
-                        BitRefLevel().set(), bit(0).flip(),
+                        BitRefLevel().set(), BitRefLevel().set(),
 
                         verbosity, sev));
 
@@ -1680,7 +1722,7 @@ MoFEMErrorCode FreeSurface::setParentDofs(
 
                         BitRefLevel().set(), BitRefLevel().set(),
 
-                        bit(current_bit), BitRefLevel().set(),
+                        BitRefLevel().set(), BitRefLevel().set(),
 
                         verbosity, sev));
               }
@@ -1782,26 +1824,42 @@ MoFEMErrorCode FreeSurface::rebuildProblem() {
         (boost::format("skin_%d.vtk") % mField.get_comm_rank()).str(), skin);
   }
 
-  for (auto f : {"U", "P", "H", "G" /*, "L"*/}) {
+  for (auto f : {"U", "P", "H", "G", "L"}) {
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), f, skin);
   }
 
-  std::vector<Range> vec_levels_all;
-  for (auto l = 0; l != nb_levels; ++l) {
-    vec_levels_all.push_back(Range());
-    CHKERR bit_mng->getEntitiesByRefLevel(bit(l), BitRefLevel().set(),
-                                          vec_levels_all.back());
-  }
-  auto vec_children = findChildren(vec_levels_all);
-  Range children_to_remove;
-  for(auto &v : vec_children) {
-    children_to_remove.merge(v);
-  }
-  for (auto f : {"U", "P", "H", "G" , "L"}) {
-    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), f,
-                                         children_to_remove);
-  }
+  // std::vector<Range> vec_levels_all;
+  // for (auto l = 0; l != nb_levels; ++l) {
+  //   vec_levels_all.push_back(Range());
+  //   CHKERR bit_mng->getEntitiesByRefLevel(bit(l), BitRefLevel().set(),
+  //                                         vec_levels_all.back());
+  // }
+  // auto vec_children = findChildren(vec_levels_all);
+  // Range children_to_remove;
+  // for(auto &v : vec_children) {
+  //   children_to_remove.merge(v);
+  // }
+  // for (auto f : {"U", "P", "H", "G" , "L"}) {
+  //   CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), f,
+  //                                        children_to_remove);
+  // }
 
+  // Range last_level;
+  // CHKERR bit_mng->getEntitiesByRefLevel(bit(start_bit + nb_levels - 1),
+  //                                       BitRefLevel().set(), last_level);
+  // Range prev_level;
+  // CHKERR bit_mng->getEntitiesByRefLevel(bit(start_bit + nb_levels - 2),
+  //                                       BitRefLevel().set(), prev_level);
+  // CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "P",
+  //                                      subtract(last_level, prev_level));
+
+  auto r_p = get_dofs_ents(simple->getDM(), "P");
+  auto r_u = get_dofs_ents(simple->getDM(), "U");
+
+  if (mField.get_comm_rank() == 0) {
+    CHKERR save_range(mField.get_moab(), "ents_p.vtk", r_p);
+    CHKERR save_range(mField.get_moab(), "ents_u.vtk", r_u);
+  }
 
   MoFEMFunctionReturn(0);
 }
