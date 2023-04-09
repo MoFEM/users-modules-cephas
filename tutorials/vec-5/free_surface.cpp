@@ -382,15 +382,26 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   }
   auto vec_children = findChildren(vec_levels);
 
-  Range ents;
-  for (auto l = 0; l != nb_levels; ++l) {
-    ents.merge(subtract(vec_levels[l], vec_children[l]));
+  for(auto l = nb_levels-1; l>=0; --l) {
+    auto ents = subtract(vec_levels[l], vec_children[l]);
+    auto o = std::max(1, order - l);
+    auto o_p = std::max(1, order - l - 1);
+    CHKERR simple->setFieldOrder("U", o, &ents);
+    CHKERR simple->setFieldOrder("P", o_p, &ents);
+    CHKERR simple->setFieldOrder("H", o, &ents);
+    CHKERR simple->setFieldOrder("G", o, &ents);
+    CHKERR simple->setFieldOrder("L", o, &ents);
   }
-  CHKERR simple->setFieldOrder("U", order, &ents);
-  CHKERR simple->setFieldOrder("P", order - 1, &ents);
-  CHKERR simple->setFieldOrder("H", order, &ents);
-  CHKERR simple->setFieldOrder("G", order, &ents);
-  CHKERR simple->setFieldOrder("L", order, &ents);
+
+  // Range ents;
+  // for (auto l = 0; l != nb_levels; ++l) {
+  //   ents.merge(subtract(vec_levels[l], vec_children[l]));
+  // }
+  // CHKERR simple->setFieldOrder("U", order, &ents);
+  // CHKERR simple->setFieldOrder("P", order - 1, &ents);
+  // CHKERR simple->setFieldOrder("H", order, &ents);
+  // CHKERR simple->setFieldOrder("G", order, &ents);
+  // CHKERR simple->setFieldOrder("L", order, &ents);
 
   // Range level0;
   // CHKERR bit_mng->getEntitiesByRefLevel(bit(0), BitRefLevel().set(), level0);
@@ -1844,14 +1855,16 @@ MoFEMErrorCode FreeSurface::rebuildProblem() {
   //                                        children_to_remove);
   // }
 
-  // Range last_level;
-  // CHKERR bit_mng->getEntitiesByRefLevel(bit(start_bit + nb_levels - 1),
-  //                                       BitRefLevel().set(), last_level);
-  // Range prev_level;
-  // CHKERR bit_mng->getEntitiesByRefLevel(bit(start_bit + nb_levels - 2),
-  //                                       BitRefLevel().set(), prev_level);
-  // CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "P",
-  //                                      subtract(last_level, prev_level));
+  if (std::max(1, order - nb_levels - 1) == 1) {
+    Range last_level;
+    CHKERR bit_mng->getEntitiesByRefLevel(bit(start_bit + nb_levels - 1),
+                                          BitRefLevel().set(), last_level);
+    Range prev_level;
+    CHKERR bit_mng->getEntitiesByRefLevel(bit(start_bit + nb_levels - 2),
+                                          BitRefLevel().set(), prev_level);
+    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "P",
+                                         subtract(last_level, prev_level));
+  }
 
   auto r_p = get_dofs_ents(simple->getDM(), "P");
   auto r_u = get_dofs_ents(simple->getDM(), "U");
