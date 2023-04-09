@@ -2196,22 +2196,24 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
 
     auto fix_neighbour_level = [&](auto ll) {
       MoFEMFunctionBegin;
+      // filter entities on level ll
       auto level_ll = level_ents;
       CHKERR bit_mng->filterEntitiesByRefLevel(set_bit(ll), BitRefLevel().set(),
                                                level_ll);
+      // find skin of ll level
       Range skin_edges;
       CHKERR skin.find_skin(0, level_ll, false, skin_edges);
+      // get parents of skin of level ll
       Range skin_parents;
       for (auto lll = 0; lll <= ll; ++lll) {
         CHKERR bit_mng->updateRangeByParent(skin_edges, skin_parents);
-        skin_edges = skin_parents;
       }
+      // filter parents on level ll - 1
       BitRefLevel bad_bit;
       for (auto lll = 0; lll <= ll - 2; ++lll) {
         bad_bit[lll] = true;
       }
-      CHKERR bit_mng->filterEntitiesByRefLevel(bad_bit, BitRefLevel().set(),
-                                               skin_edges);
+      // get adjacents to parents
       Range skin_adj_ents;
       CHKERR mField.get_moab().get_adjacencies(skin_parents, SPACE_DIM, false,
                                                skin_adj_ents,
