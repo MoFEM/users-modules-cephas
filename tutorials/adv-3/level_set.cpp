@@ -2415,11 +2415,16 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
 
   auto l_vec = boost::make_shared<VectorDouble>();
 
+  // This assumes that projection mesh is refined, current mesh is coarsened.
   auto set_prj_from_child = [&](auto rhs_fe_prj) {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-        rhs_fe_prj->getOpPtrVector(), {potential_velocity_space, L2});
+        rhs_fe_prj->getOpPtrVector(), {potential_velocity_space, L2}); 
+
+    // Evaluate field value on projection mesh      
     rhs_fe_prj->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("L", l_vec));
+
+    // This element is used to assemble    
     auto get_parent_this = [&]() {
       auto fe_parent_this = boost::make_shared<DomianParentEle>(mField);
       fe_parent_this->getOpPtrVector().push_back(
@@ -2427,6 +2432,8 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
       return fe_parent_this;
     };
 
+    // Create levels of parent elements, until current element is reached, and
+    // then assemble.
     auto get_parents_fe_ptr = [&](auto this_fe_ptr) {
       std::vector<boost::shared_ptr<DomianParentEle>> parents_elems_ptr_vec;
       for (int l = 0; l <= nb_levels; ++l)
@@ -2450,7 +2457,10 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
                         BitRefLevel().set(current_bit), BitRefLevel().set()));
   };
 
+  // This assumed that current mesh is refined, and projection mesh is coarser
   auto set_prj_from_parent = [&](auto rhs_fe_current) {
+
+    // Evaluate field on coarser element
     auto get_parent_this = [&]() {
       auto fe_parent_this = boost::make_shared<DomianParentEle>(mField);
       fe_parent_this->getOpPtrVector().push_back(
@@ -2458,6 +2468,7 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
       return fe_parent_this;
     };
 
+    // Create stack of evaluation on parent elements
     auto get_parents_fe_ptr = [&](auto this_fe_ptr) {
       std::vector<boost::shared_ptr<DomianParentEle>> parents_elems_ptr_vec;
       for (int l = 0; l <= nb_levels; ++l)
@@ -2489,6 +2500,8 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
         new OpRunParent(parent_fe_ptr, BitRefLevel().set(),
                         BitRefLevel().set(projection_bit).flip(), this_fe_ptr,
                         BitRefLevel(), BitRefLevel()));
+
+    // At the end assemble of current finite element
     rhs_fe_current->getOpPtrVector().push_back(new OpScalarFieldL("L", l_vec));
   };
 
