@@ -81,7 +81,7 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // mesh refinement
-constexpr int order = 3; ///< approximation order
+constexpr int order = 2; ///< approximation order
 
 constexpr bool debug = true;
 constexpr int nb_levels = 3; //< number of refinement levels
@@ -319,17 +319,16 @@ private:
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode boundaryCondition();
-  MoFEMErrorCode dataProjection();
+  MoFEMErrorCode projectData();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
 
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
-  /// @brief
-  /// @param level
-  /// @param mask
+  /// @brief Find entities on refinement levels
+  /// @param overlap level of overlap
   /// @return
-  std::vector<Range> findEntitiesCrossedByPhaseInterface();
+  std::vector<Range> findEntitiesCrossedByPhaseInterface(size_t overlap);
 
   /// @brief
   /// @param ents
@@ -339,8 +338,9 @@ private:
   Range findParentsToRefine(Range ents, BitRefLevel level, BitRefLevel mask);
 
   /// @brief
+  /// @param overlap
   /// @return
-  MoFEMErrorCode refineMesh();
+  MoFEMErrorCode refineMesh(size_t overlap);
 
   /// @brief
   /// @param fe_top
@@ -607,10 +607,10 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
       if constexpr (debug) {
         auto dm_ents = get_dofs_ents_all(SmartPetscObj<DM>(subdm, true));
-        CHKERR save_range(mField.get_moab(), "sub_dm_ents_verts.h5m",
+        CHKERR save_range(mField.get_moab(), "sub_dm_init_ents_verts.h5m",
                           dm_ents.subset_by_type(MBVERTEX));
         dm_ents = subtract(dm_ents, dm_ents.subset_by_type(MBVERTEX));
-        CHKERR save_range(mField.get_moab(), "sub_dm_ents.h5m", dm_ents);
+        CHKERR save_range(mField.get_moab(), "sub_dm_init_ents.h5m", dm_ents);
       }
 
       return SmartPetscObj<DM>(subdm);
@@ -681,7 +681,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
       [](FEMethod *fe_ptr) { return get_fe_bit(fe_ptr).test(0); });
   CHKERR post_proc([](FEMethod *fe_ptr) { return get_fe_bit(fe_ptr).test(0); });
 
-  CHKERR refineMesh();
+  CHKERR refineMesh(1);
 
   for (auto f : {"U", "P", "H", "G", "L"}) {
     CHKERR mField.getInterface<FieldBlas>()->setField(0, f);
@@ -698,9 +698,8 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   pip_mng->getOpDomainRhsPipeline().clear();
   pip_mng->getOpDomainLhsPipeline().clear();
 
-
-  CHKERR refineMesh();
-  CHKERR dataProjection();
+  CHKERR refineMesh(3);
+  CHKERR projectData();
 
   pip_mng->getOpDomainRhsPipeline().clear();
   pip_mng->getOpDomainLhsPipeline().clear();
@@ -722,14 +721,13 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 //! [Boundary condition]
 
 //! [Data projection]
-MoFEMErrorCode FreeSurface::dataProjection() {
+MoFEMErrorCode FreeSurface::projectData() {
   MoFEMFunctionBegin;
 
   auto simple = mField.getInterface<Simple>();
   auto pip_mng = mField.getInterface<PipelineManager>();
   auto bc_mng = mField.getInterface<BcManager>();
   auto bit_mng = mField.getInterface<BitRefManager>();
-  auto dm = simple->getDM();
 
   using UDO = ForcesAndSourcesCore::UserDataOperator;
 
@@ -827,18 +825,18 @@ MoFEMErrorCode FreeSurface::dataProjection() {
             },
 
             QUIET, Sev::noisy);
-        // CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "U",
-        //                         bit(skin_parent_bit));
-        // pip.push_back(new OpDomainAssembleVector("U", u_ptr));
-        // CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "P",
-        //                         bit(skin_parent_bit));
-        // pip.push_back(new OpDomainAssembleScalar("P", p_ptr));
+        CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "U",
+                                bit(skin_parent_bit));
+        pip.push_back(new OpDomainAssembleVector("U", u_ptr));
+        CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "P",
+                                bit(skin_parent_bit));
+        pip.push_back(new OpDomainAssembleScalar("P", p_ptr));
         CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "H",
                                 bit(skin_parent_bit));
         pip.push_back(new OpDomainAssembleScalar("H", h_ptr));
-        // CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "G",
-        //                         bit(skin_parent_bit));
-        // pip.push_back(new OpDomainAssembleScalar("G", g_ptr));
+        CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "G",
+                                bit(skin_parent_bit));
+        pip.push_back(new OpDomainAssembleScalar("G", g_ptr));
       }
       auto parent_assemble_fe_ptr = get_parents_vel_fe_ptr(
           assemble_fe_ptr, bit(start_bit + nb_levels - 1));
@@ -884,57 +882,161 @@ MoFEMErrorCode FreeSurface::dataProjection() {
       MoFEMFunctionReturn(0);
     };
 
-    auto create_subdm = [&]() {
+    auto create_subdm = [&]() -> SmartPetscObj<DM> {
       auto level_ents_ptr = boost::make_shared<Range>();
       CHKERR mField.getInterface<BitRefManager>()->getEntitiesByRefLevel(
           bit(current_bit), BitRefLevel().set(), *level_ents_ptr);
+      
+      auto get_prj_ents = [&]() {
 
-      DM subdm;
-      CHKERR DMCreate(mField.get_comm(), &subdm);
-      CHKERR DMSetType(subdm, "DMMOFEM");
-      CHKERR DMMoFEMCreateSubDM(subdm, dm, "SUB_PRJ");
-      CHKERR DMMoFEMAddElement(subdm, simple->getDomainFEName());
-      CHKERR DMMoFEMSetSquareProblem(subdm, PETSC_TRUE);
-      CHKERR DMMoFEMSetDestroyProblem(subdm, PETSC_TRUE);
+        Range prj_mesh;
+        CHKERR bit_mng->getEntitiesByDimAndRefLevel(
+            bit(projection_bit), BitRefLevel().set(), SPACE_DIM, prj_mesh);
+        prj_mesh =
+            subtract(prj_mesh, *level_ents_ptr).subset_by_dimension(SPACE_DIM);
 
-      for (auto f : {"U", "P", "H", "G"}) {
-        CHKERR DMMoFEMAddSubFieldRow(subdm, f, level_ents_ptr);
-        CHKERR DMMoFEMAddSubFieldCol(subdm, f, level_ents_ptr);
+        for (auto l = 1; l != nb_levels; ++l) {
+          Range c;
+          CHKERR bit_mng->updateRangeByChildren(prj_mesh, c);
+          prj_mesh.merge(c.subset_by_dimension(SPACE_DIM));
+          CHKERR bit_mng->filterEntitiesByRefLevel(BitRefLevel().set(),
+                                                   bit(l - 1).flip(), prj_mesh);
+        }
+        for (auto l = 0; l != nb_levels; ++l) {
+          Range p;
+          CHKERR bit_mng->updateRangeByParent(prj_mesh, p);
+          prj_mesh.merge(p.subset_by_dimension(SPACE_DIM));
+        }
+
+        Range conn;
+        CHKERR mField.get_moab().get_connectivity(prj_mesh, conn, true);
+        CHKERR mField.get_moab().get_adjacencies(prj_mesh, 1, false, conn,
+                                                 moab::Interface::UNION);
+        prj_mesh.merge(conn);
+        CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+            prj_mesh);
+
+        return prj_mesh;
+      };
+
+      auto prj_ents = get_prj_ents();
+
+      if (prj_ents.size()) {
+
+        MOFEM_LOG("FS", Sev::inform) << "Create projection problem";
+
+        *level_ents_ptr = intersect(*level_ents_ptr, prj_ents);         
+        if constexpr (debug) {
+          CHKERR save_range(mField.get_moab(), "prj_mesh.h5m", *level_ents_ptr);
+        }
+
+
+        auto dm = simple->getDM();
+        DM subdm;
+        CHKERR DMCreate(mField.get_comm(), &subdm);
+        CHKERR DMSetType(subdm, "DMMOFEM");
+        CHKERR DMMoFEMCreateSubDM(subdm, dm, "SUB_PRJ");
+        CHKERR DMMoFEMAddElement(subdm, simple->getDomainFEName());
+        CHKERR DMMoFEMSetSquareProblem(subdm, PETSC_TRUE);
+        CHKERR DMMoFEMSetDestroyProblem(subdm, PETSC_TRUE);
+
+        for (auto f : {"U", "P", "H", "G"}) {
+          CHKERR DMMoFEMAddSubFieldRow(subdm, f, level_ents_ptr);
+          CHKERR DMMoFEMAddSubFieldCol(subdm, f, level_ents_ptr);
+        }
+        CHKERR DMSetUp(subdm);
+
+        auto remove_elements_not_required_for_prj = [&]() {
+          MoFEMFunctionBegin;
+
+          Range all;
+          CHKERR mField.get_moab().get_entities_by_dimension(0, SPACE_DIM, all,
+                                                             true);
+          all = subtract(all, prj_ents);
+          CHKERR getProblemPtr(subdm)->eraseElements(all);
+
+          MOFEM_LOG("FS", Sev::inform)
+              << "Number of domain FS in projection problem: "
+              << getProblemPtr(subdm)->getNumeredFiniteElementsPtr()->size()
+              << " (before "
+              << getProblemPtr(dm)->getNumeredFiniteElementsPtr()->size()
+              << ")";
+
+          MoFEMFunctionReturn(0);
+        };
+
+        CHKERR remove_elements_not_required_for_prj();
+
+        if constexpr (debug) {
+          auto dm_ents = get_dofs_ents_all(SmartPetscObj<DM>(subdm, true));
+          CHKERR save_range(mField.get_moab(), "sub_dm_prj_ents_verts.h5m",
+                            dm_ents.subset_by_type(MBVERTEX));
+          dm_ents = subtract(dm_ents, dm_ents.subset_by_type(MBVERTEX));
+          CHKERR save_range(mField.get_moab(), "sub_dm_prj_ents.h5m", dm_ents);
+        }
+
+        return SmartPetscObj<DM>(subdm);
       }
-      CHKERR DMSetUp(subdm);
 
-      return SmartPetscObj<DM>(subdm);
+      MOFEM_LOG("FS", Sev::inform) << "Nothing to project";
+
+      return SmartPetscObj<DM>();
     };
 
     auto subdm = create_subdm();
+    if (subdm) {
 
-    pip_mng->getDomainRhsFE().reset();
-    pip_mng->getDomainLhsFE().reset();
-    CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule);
-    CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule);
-    pip_mng->getDomainLhsFE()->exeTestHook = exe_test;
-    pip_mng->getDomainRhsFE()->exeTestHook = [](FEMethod *fe_ptr) {
-      return get_fe_bit(fe_ptr).test(nb_levels - 1);
-    };
+      pip_mng->getDomainRhsFE().reset();
+      pip_mng->getDomainLhsFE().reset();
+      CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule);
+      CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule);
+      pip_mng->getDomainLhsFE()->exeTestHook = exe_test;
+      pip_mng->getDomainRhsFE()->exeTestHook = [](FEMethod *fe_ptr) {
+        return get_fe_bit(fe_ptr).test(nb_levels - 1);
+      };
 
-    CHKERR set_domain_rhs(pip_mng->getCastDomainRhsFE());
-    CHKERR set_domain_lhs(pip_mng->getCastDomainLhsFE());
+      CHKERR set_domain_rhs(pip_mng->getCastDomainRhsFE());
+      CHKERR set_domain_lhs(pip_mng->getCastDomainLhsFE());
 
-    auto D = smartCreateDMVector(subdm);
-    auto F = smartVectorDuplicate(D);
-    auto ksp = pip_mng->createKSP(subdm);
+      auto D = smartCreateDMVector(subdm);
+      auto F = smartVectorDuplicate(D);
+      auto ksp = pip_mng->createKSP(subdm);
 
-    CHKERR KSPSetFromOptions(ksp);
-    CHKERR KSPSetUp(ksp);
-    CHKERR KSPSolve(ksp, F, D);
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR KSPSetFromOptions(ksp);
+      CHKERR KSPSetUp(ksp);
+      CHKERR KSPSolve(ksp, F, D);
 
-    for (auto f : {"U", "P", "H", "G", "L"}) {
-      CHKERR mField.getInterface<FieldBlas>()->setField(0, f);
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+
+      CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+      // Dofs which are not part of the problem are set to zero
+      auto zero_no_problem_dofs = [&]() {
+        MoFEMFunctionBegin;
+
+        auto field_blas = mField.getInterface<FieldBlas>();
+
+        Range other_ents;
+        CHKERR bit_mng->getEntitiesByRefLevel(
+            BitRefLevel().set(), bit(current_bit).flip(), other_ents);
+
+        auto zero = [&](boost::shared_ptr<FieldEntity> ent_ptr) {
+          MoFEMFunctionBeginHot;
+          std::fill(ent_ptr->getEntFieldData().begin(),
+                    ent_ptr->getEntFieldData().end(), 0.);
+          MoFEMFunctionReturnHot(0);
+        };
+
+        for (auto f : {"U", "P", "H", "G", "L"}) {
+           CHKERR field_blas->fieldLambdaOnEntities(zero, f, &other_ents);
+        }
+
+        MoFEMFunctionReturn(0);
+      };
+
+      CHKERR zero_no_problem_dofs();
     }
-
-    CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
 
     MoFEMFunctionReturn(0);
   };
@@ -997,6 +1099,7 @@ MoFEMErrorCode FreeSurface::dataProjection() {
 
     );
 
+    auto dm = simple->getDM();
     CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
     CHKERR post_proc_fe->writeFile("out_projection.h5m");
 
@@ -1784,7 +1887,8 @@ int main(int argc, char *argv[]) {
   CHKERR MoFEM::Core::Finalize();
 }
 
-std::vector<Range> FreeSurface::findEntitiesCrossedByPhaseInterface() {
+std::vector<Range>
+FreeSurface::findEntitiesCrossedByPhaseInterface(size_t overlap) {
 
   auto &moab = mField.get_moab();
   auto bit_mng = mField.getInterface<BitRefManager>();
@@ -1889,7 +1993,7 @@ std::vector<Range> FreeSurface::findEntitiesCrossedByPhaseInterface() {
 
   std::vector<Range> vec_levels(nb_levels);
   for (auto l = nb_levels - 1; l >= 0; --l) {
-    vec_levels[l] = get_level(ele_plus[l], ele_minus[l], 2 * 3, bit(l),
+    vec_levels[l] = get_level(ele_plus[l], ele_minus[l], 2 * overlap, bit(l),
                               BitRefLevel().set());
   }
 
@@ -1904,7 +2008,7 @@ std::vector<Range> FreeSurface::findEntitiesCrossedByPhaseInterface() {
   return vec_levels;
 }
 
-MoFEMErrorCode FreeSurface::refineMesh() {
+MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
   MoFEMFunctionBegin;
 
   auto simple = mField.getInterface<Simple>();
@@ -1931,10 +2035,12 @@ MoFEMErrorCode FreeSurface::refineMesh() {
   auto set_levels = [&](auto &&vec_levels) {
     MoFEMFunctionBegin;
 
+    // start with zero level, which is the coarsest mesh
     Range level0;
     CHKERR bit_mng->getEntitiesByRefLevel(bit(0), BitRefLevel().set(), level0);
     CHKERR bit_mng->setNthBitRefLevel(level0, start_bit, true);
 
+    // get lower dimension entities
     auto get_adj = [&](auto ents) {
       Range conn;
       CHK_MOAB_THROW(mField.get_moab().get_connectivity(ents, conn, true),
@@ -1949,6 +2055,7 @@ MoFEMErrorCode FreeSurface::refineMesh() {
       return ents;
     };
 
+    // set bit levels
     for (auto l = 1; l != nb_levels; ++l) {
       Range level_prev;
       CHKERR bit_mng->getEntitiesByDimAndRefLevel(
@@ -1960,6 +2067,7 @@ MoFEMErrorCode FreeSurface::refineMesh() {
       CHKERR bit_mng->setNthBitRefLevel(level_prev, start_bit + l, true);
     }
 
+    // set bit levels to lower dimension entities
     for (auto l = 1; l != nb_levels; ++l) {
       Range level;
       CHKERR bit_mng->getEntitiesByDimAndRefLevel(
@@ -2078,35 +2186,9 @@ MoFEMErrorCode FreeSurface::refineMesh() {
     MoFEMFunctionReturn(0);
   };
 
-  // auto set_projection = [&]() {
-  //   MoFEMFunctionBegin;
-  //   for (auto l = 0; l != nb_levels; ++l) {
-  //     Range level;
-  //     CHKERR bit_mng->getEntitiesByDimAndRefLevel(
-  //         bit(start_bit + nb_levels - l), BitRefLevel().set(), SPACE_DIM,
-  //         level);
-  //     prev_level = subtract(prev_level, level);
-  //   }
-  //   Range last_level;
-  //   CHKERR bit_mng->getEntitiesByDimAndRefLevel(bit(start_bit + nb_levels - 1),
-  //                                               BitRefLevel().set(), SPACE_DIM,
-  //                                               last_level);
-  //   Range current = prev_level;
-  //   for (auto l = 0; l != nb_levels; ++l) {
-  //     Range parent;
-  //     CHKERR bit_mng->updateRangeByParent(current, parent);
-  //     last_level = subtract(last_level, parent);
-  //     current.swap(parent);
-  //   }
-  //   prev_level.merge(last_level);
-  //   CHKERR bit_mng->setNthBitRefLevel(prev_level, projection_bit, true);
-  //   MoFEMFunctionReturn(0);
-  // };
-
-  CHKERR set_levels(findEntitiesCrossedByPhaseInterface());
+  CHKERR set_levels(findEntitiesCrossedByPhaseInterface(overlap));
   CHKERR set_skins();
   CHKERR set_current();
-  // CHKERR set_projection();
 
   if constexpr (debug) {
     for (auto l = 0; l != nb_levels; ++l) {
@@ -2250,7 +2332,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     MoFEMFunctionBegin;
     MOFEM_LOG("FS", Sev::inform) << "Refine problem";
 
-    CHKERR fsRawPtr->refineMesh();
+    CHKERR fsRawPtr->refineMesh(3);
 
     MoFEMFunctionReturn(0);
   };
