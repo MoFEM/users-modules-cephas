@@ -81,7 +81,7 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // mesh refinement
-constexpr int order = 2; ///< approximation order
+constexpr int order = 3; ///< approximation order
 
 constexpr bool debug = true;
 constexpr int nb_levels = 3; //< number of refinement levels
@@ -237,10 +237,16 @@ auto get_fe_bit = [](FEMethod *fe_ptr) {
   return fe_ptr->numeredEntFiniteElementPtr->getBitRefLevel();
 };
 
+auto get_global_size = [](int l_size) {
+  int g_size;
+  MPI_Allreduce(&l_size, &g_size, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  return g_size;
+};
+
 auto save_range = [](moab::Interface &moab, const std::string name,
                      const Range r) {
   MoFEMFunctionBegin;
-  if (r.size()) {
+  if (get_global_size(r.size())) {
     auto out_meshset = get_temp_meshset_ptr(moab);
     CHKERR moab.add_entities(*out_meshset, r);
     CHKERR moab.write_file(name.c_str(), "MOAB", "PARALLEL=WRITE_PART",
@@ -606,11 +612,13 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
       CHKERR DMSetUp(subdm);
 
       if constexpr (debug) {
-        auto dm_ents = get_dofs_ents_all(SmartPetscObj<DM>(subdm, true));
-        CHKERR save_range(mField.get_moab(), "sub_dm_init_ents_verts.h5m",
-                          dm_ents.subset_by_type(MBVERTEX));
-        dm_ents = subtract(dm_ents, dm_ents.subset_by_type(MBVERTEX));
-        CHKERR save_range(mField.get_moab(), "sub_dm_init_ents.h5m", dm_ents);
+        if (mField.get_comm_size() == 0) {
+          auto dm_ents = get_dofs_ents_all(SmartPetscObj<DM>(subdm, true));
+          CHKERR save_range(mField.get_moab(), "sub_dm_init_ents_verts.h5m",
+                            dm_ents.subset_by_type(MBVERTEX));
+          dm_ents = subtract(dm_ents, dm_ents.subset_by_type(MBVERTEX));
+          CHKERR save_range(mField.get_moab(), "sub_dm_init_ents.h5m", dm_ents);
+        }
       }
 
       return SmartPetscObj<DM>(subdm);
@@ -921,13 +929,16 @@ MoFEMErrorCode FreeSurface::projectData() {
 
       auto prj_ents = get_prj_ents();
 
-      if (prj_ents.size()) {
+      if (get_global_size(prj_ents.size())) {
 
         MOFEM_LOG("FS", Sev::inform) << "Create projection problem";
 
         *level_ents_ptr = intersect(*level_ents_ptr, prj_ents);         
         if constexpr (debug) {
-          CHKERR save_range(mField.get_moab(), "prj_mesh.h5m", *level_ents_ptr);
+          if (mField.get_comm_size() == 0) {
+            CHKERR save_range(mField.get_moab(), "prj_mesh.h5m",
+                              *level_ents_ptr);
+          }
         }
 
 
@@ -968,11 +979,14 @@ MoFEMErrorCode FreeSurface::projectData() {
         CHKERR remove_elements_not_required_for_prj();
 
         if constexpr (debug) {
-          auto dm_ents = get_dofs_ents_all(SmartPetscObj<DM>(subdm, true));
-          CHKERR save_range(mField.get_moab(), "sub_dm_prj_ents_verts.h5m",
-                            dm_ents.subset_by_type(MBVERTEX));
-          dm_ents = subtract(dm_ents, dm_ents.subset_by_type(MBVERTEX));
-          CHKERR save_range(mField.get_moab(), "sub_dm_prj_ents.h5m", dm_ents);
+          if (mField.get_comm_size() == 0) {
+            auto dm_ents = get_dofs_ents_all(SmartPetscObj<DM>(subdm, true));
+            CHKERR save_range(mField.get_moab(), "sub_dm_prj_ents_verts.h5m",
+                              dm_ents.subset_by_type(MBVERTEX));
+            dm_ents = subtract(dm_ents, dm_ents.subset_by_type(MBVERTEX));
+            CHKERR save_range(mField.get_moab(), "sub_dm_prj_ents.h5m",
+                              dm_ents);
+          }
         }
 
         return SmartPetscObj<DM>(subdm);
@@ -1998,10 +2012,12 @@ FreeSurface::findEntitiesCrossedByPhaseInterface(size_t overlap) {
   }
 
   if constexpr (debug) {
-    for (auto l = 0; l != nb_levels; ++l) {
-      std::string name = (boost::format("out_r%d.h5m") % l).str();
-      CHK_THROW_MESSAGE(save_range(mField.get_moab(), name, vec_levels[l]),
-                        "save mesh");
+    if (mField.get_comm_size() == 0) {
+      for (auto l = 0; l != nb_levels; ++l) {
+        std::string name = (boost::format("out_r%d.h5m") % l).str();
+        CHK_THROW_MESSAGE(save_range(mField.get_moab(), name, vec_levels[l]),
+                          "save mesh");
+      }
     }
   }
 
@@ -2191,24 +2207,27 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
   CHKERR set_current();
 
   if constexpr (debug) {
-    for (auto l = 0; l != nb_levels; ++l) {
-      std::string name = (boost::format("out_level%d.h5m") % l).str();
-      CHKERR bit_mng->writeBitLevel(BitRefLevel().set(start_bit + l),
-                                    BitRefLevel().set(), name.c_str(), "MOAB",
-                                    "PARALLEL=WRITE_PART");
+    if (mField.get_comm_size() == 0) {
+      for (auto l = 0; l != nb_levels; ++l) {
+        std::string name = (boost::format("out_level%d.h5m") % l).str();
+        CHKERR bit_mng->writeBitLevel(BitRefLevel().set(start_bit + l),
+                                      BitRefLevel().set(), name.c_str(), "MOAB",
+                                      "PARALLEL=WRITE_PART");
+      }
+      CHKERR bit_mng->writeBitLevel(BitRefLevel().set(current_bit),
+                                    BitRefLevel().set(), "current_bit.h5m",
+                                    "MOAB", "PARALLEL=WRITE_PART");
+      CHKERR bit_mng->writeBitLevel(BitRefLevel().set(projection_bit),
+                                    BitRefLevel().set(), "projection_bit.h5m",
+                                    "MOAB", "PARALLEL=WRITE_PART");
+
+      CHKERR bit_mng->writeBitLevel(BitRefLevel().set(skin_child_bit),
+                                    BitRefLevel().set(), "skin_child_bit.h5m",
+                                    "MOAB", "PARALLEL=WRITE_PART");
+      CHKERR bit_mng->writeBitLevel(BitRefLevel().set(skin_parent_bit),
+                                    BitRefLevel().set(), "skin_parent_bit.h5m",
+                                    "MOAB", "PARALLEL=WRITE_PART");
     }
-    CHKERR bit_mng->writeBitLevel(BitRefLevel().set(current_bit),
-                                  BitRefLevel().set(), "current_bit.h5m",
-                                  "MOAB", "PARALLEL=WRITE_PART");
-    CHKERR bit_mng->writeBitLevel(BitRefLevel().set(skin_child_bit),
-                                  BitRefLevel().set(), "skin_child_bit.h5m",
-                                  "MOAB", "PARALLEL=WRITE_PART");
-    CHKERR bit_mng->writeBitLevel(BitRefLevel().set(skin_parent_bit),
-                                  BitRefLevel().set(), "skin_parent_bit.h5m",
-                                  "MOAB", "PARALLEL=WRITE_PART");
-    CHKERR bit_mng->writeBitLevel(BitRefLevel().set(projection_bit),
-                                  BitRefLevel().set(), "projection_bit.h5m",
-                                  "MOAB", "PARALLEL=WRITE_PART");
   }
 
   MoFEMFunctionReturn(0);
