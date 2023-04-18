@@ -2144,8 +2144,8 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
 
     Range ents;
     ents.insert_list(fe_to_refine.begin(), fe_to_refine.end());
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(ents,
-                                                                     NOISY);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+        ents, nullptr, NOISY);
 
     auto get_neighbours_by_bridge_vertices = [&](auto &&ents) {
       Range verts;

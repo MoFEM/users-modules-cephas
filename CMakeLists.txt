@@ -116,6 +116,19 @@ if(MoFEM_CBLAS_INCLUDE_DIR)
 endif(MoFEM_CBLAS_INCLUDE_DIR)
 add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
 
+# python
+find_package(Python COMPONENTS Interpreter Development)
+
+find_library(
+  BOOST_PYTHON_LIBRARAY
+  NAMES boost_python3
+  PATHS 
+  ${MoFEM_BOOST_DIR}/lib
+)
+
+message(STATUS "Boost_PYTHON_LIBRARY_RELEASE ${Boost_PYTHON_LIBRARY_RELEASE}")
+message(STATUS "Python_LIBRARY ${Python_LIBRARY}")
+
 link_directories(${MoFEM_INSTALL_DIR}/lib)
 
 if(MOFEM_UM_BUILD_TESTS)
