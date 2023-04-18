@@ -12,14 +12,14 @@
 
 constexpr auto field_name = "U";
 
-#include <BasicFiniteElements.hpp>
+constexpr int SPACE_DIM = 2;
+
 #include <poisson_2d_homogeneous.hpp>
 
 using namespace MoFEM;
 using namespace Poisson2DHomogeneousOperators;
 
-using PostProcFaceEle =
-    PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
+using PostProcFaceEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 static char help[] = "...\n\n";
 
@@ -203,8 +203,6 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-  constexpr auto SPACE_DIM = 2; // dimension of problem
 
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateHOJac<SPACE_DIM>(jac_ptr));

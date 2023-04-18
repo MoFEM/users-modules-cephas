@@ -16,9 +16,16 @@
 
 // Use of alias for some specific functions
 // We are solving Poisson's equation in 2D so Face element is used
-using FaceEle = MoFEM::FaceElementForcesAndSourcesCore;
-using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
 using EntData = EntitiesFieldData::EntData;
+
+template <int DIM>
+using ElementsAndOps = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>;
+using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+using DomianParentEle = ElementsAndOps<SPACE_DIM>::DomianParentEle;
+using DomainEleOp = DomainEle::UserDataOperator;
+
+using AssemblyDomainEleOp =
+    FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase;
 
 // Namespace that contains necessary UDOs, will be included in the main program
 namespace Poisson2DHomogeneousOperators {
@@ -29,130 +36,102 @@ FTensor::Index<'i', 2> i;
 // For simplicity, source term f will be constant throughout the domain
 const double body_source = 5.;
 
-struct OpDomainLhsMatrixK : public OpFaceEle {
+struct OpDomainLhsMatrixK : public AssemblyDomainEleOp {
 public:
   OpDomainLhsMatrixK(std::string row_field_name, std::string col_field_name)
-      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL) {
-    sYmm = true;
-  }
+      : AssemblyDomainEleOp(row_field_name, col_field_name,
+                            DomainEleOp::OPROWCOL) {}
 
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
 
     const int nb_row_dofs = row_data.getIndices().size();
     const int nb_col_dofs = col_data.getIndices().size();
 
-    if (nb_row_dofs && nb_col_dofs) {
+    this->locMat.resize(nb_row_dofs, nb_col_dofs, false);
+    this->locMat.clear();
 
-      locLhs.resize(nb_row_dofs, nb_col_dofs, false);
-      locLhs.clear();
+    // get element area
+    const double area = getMeasure();
 
-      // get element area
-      const double area = getMeasure();
+    // get number of integration points
+    const int nb_integration_points = getGaussPts().size2();
+    // get integration weights
+    auto t_w = getFTensor0IntegrationWeight();
 
-      // get number of integration points
-      const int nb_integration_points = getGaussPts().size2();
-      // get integration weights
-      auto t_w = getFTensor0IntegrationWeight();
+    // get derivatives of base functions on row
+    auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
 
-      // get derivatives of base functions on row
-      auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
+    // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
+    for (int gg = 0; gg != nb_integration_points; gg++) {
+      const double a = t_w * area;
 
-      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
-      for (int gg = 0; gg != nb_integration_points; gg++) {
-        const double a = t_w * area;
+      for (int rr = 0; rr != nb_row_dofs; ++rr) {
+        // get derivatives of base functions on column
+        auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
 
-        for (int rr = 0; rr != nb_row_dofs; ++rr) {
-          // get derivatives of base functions on column
-          auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
+        for (int cc = 0; cc != nb_col_dofs; cc++) {
+          this->locMat(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
 
-          for (int cc = 0; cc != nb_col_dofs; cc++) {
-            locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
-
-            // move to the derivatives of the next base functions on column
-            ++t_col_diff_base;
-          }
-
-          // move to the derivatives of the next base functions on row
-          ++t_row_diff_base;
+          // move to the derivatives of the next base functions on column
+          ++t_col_diff_base;
         }
 
-        // move to the weight of the next integration point
-        ++t_w;
+        // move to the derivatives of the next base functions on row
+        ++t_row_diff_base;
       }
 
-      // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
-      CHKERR MatSetValues(getKSPB(), row_data, col_data, &locLhs(0, 0),
-                          ADD_VALUES);
-      if (row_side != col_side || row_type != col_type) {
-        transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
-        noalias(transLocLhs) = trans(locLhs);
-        CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
-                            ADD_VALUES);
-      }
+      // move to the weight of the next integration point
+      ++t_w;
     }
 
     MoFEMFunctionReturn(0);
   }
-
-private:
-  MatrixDouble locLhs, transLocLhs;
 };
 
-struct OpDomainRhsVectorF : public OpFaceEle {
+struct OpDomainRhsVectorF : public AssemblyDomainEleOp {
 public:
   OpDomainRhsVectorF(std::string field_name)
-      : OpFaceEle(field_name, OpFaceEle::OPROW) {}
+      : AssemblyDomainEleOp(field_name, field_name, DomainEleOp::OPROW) {}
 
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data) {
     MoFEMFunctionBegin;
 
     const int nb_dofs = data.getIndices().size();
 
-    if (nb_dofs) {
-      locRhs.resize(nb_dofs, false);
-      locRhs.clear();
+    this->locF.resize(nb_dofs, false);
+    this->locF.clear();
 
-      // get element area
-      const double area = getMeasure();
+    // get element area
+    const double area = getMeasure();
 
-      // get number of integration points
-      const int nb_integration_points = getGaussPts().size2();
-      // get integration weights
-      auto t_w = getFTensor0IntegrationWeight();
+    // get number of integration points
+    const int nb_integration_points = getGaussPts().size2();
+    // get integration weights
+    auto t_w = getFTensor0IntegrationWeight();
 
-      // get base function
-      auto t_base = data.getFTensor0N();
+    // get base function
+    auto t_base = data.getFTensor0N();
 
-      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL VECTOR
-      for (int gg = 0; gg != nb_integration_points; gg++) {
-        const double a = t_w * area;
+    // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL VECTOR
+    for (int gg = 0; gg != nb_integration_points; gg++) {
+      const double a = t_w * area;
 
-        for (int rr = 0; rr != nb_dofs; rr++) {
-          locRhs[rr] += t_base * body_source * a;
+      for (int rr = 0; rr != nb_dofs; rr++) {
+        this->locF[rr] += t_base * body_source * a;
 
-          // move to the next base function
-          ++t_base;
-        }
-
-        // move to the weight of the next integration point
-        ++t_w;
+        // move to the next base function
+        ++t_base;
       }
 
-      // FILL VALUES OF LOCAL VECTOR ENTRIES TO THE GLOBAL VECTOR
-
-      // Ignoring DOFs on boundary (index -1)
-      CHKERR VecSetOption(getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-      CHKERR VecSetValues(getKSPf(), data, &locRhs(0), ADD_VALUES);
+      // move to the weight of the next integration point
+      ++t_w;
     }
 
     MoFEMFunctionReturn(0);
   }
 
-private:
-  VectorDouble locRhs;
 };
 
 }; // namespace Poisson2DHomogeneousOperators
