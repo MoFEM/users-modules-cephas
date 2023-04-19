@@ -12,7 +12,8 @@
 
 constexpr auto field_name = "U";
 
-constexpr int SPACE_DIM = 2;
+constexpr int SPACE_DIM =
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 #include <poisson_2d_homogeneous.hpp>
 
@@ -86,9 +87,10 @@ MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
 
   auto bc_mng = mField.getInterface<BcManager>();
 
-  // Remove BCs from blockset name "BOUNDARY_CONDITION";
+  // Remove BCs from blockset name "BOUNDARY_CONDITION" or SETU, note that you
+  // can use regular expression to put list of blocksets;
   CHKERR bc_mng->removeBlockDOFsOnEntities<BcScalarMeshsetType<BLOCKSET>>(
-      simpleInterface->getProblemName(), "BOUNDARY_CONDITION",
+      simpleInterface->getProblemName(), "(BOUNDARY_CONDITION|SETU)",
       std::string(field_name), true);
 
   MoFEMFunctionReturn(0);
@@ -101,10 +103,8 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
-  constexpr int space_dim = 2;
-
   { // Push operators to the Pipeline that is responsible for calculating LHS
-    CHKERR AddHOOps<space_dim, space_dim, space_dim>::add(
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(field_name, field_name));
@@ -122,21 +122,21 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
 
     auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
       using DomainEle =
-          PipelineManager::ElementsAndOpsByDim<space_dim>::DomainEle;
+          PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
       using DomainEleOp = DomainEle::UserDataOperator;
       using OpInternal = FormsIntegrators<DomainEleOp>::Assembly<
-          PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, space_dim>;
+          PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, SPACE_DIM>;
 
       auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpCalculateScalarFieldGradient<space_dim>(field_name,
+          new OpCalculateScalarFieldGradient<SPACE_DIM>(field_name,
                                                         grad_u_vals_ptr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpInternal(field_name, grad_u_vals_ptr,
                          [](double, double, double) constexpr { return -1; }));
     };
 
-    CHKERR AddHOOps<space_dim, space_dim, space_dim>::add(
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {H1});
     set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
     calculate_residual_from_set_values_on_bc(
@@ -199,18 +199,8 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   pipeline_mng->getDomainLhsFE().reset();
 
   auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
-
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+    post_proc_fe->getOpPtrVector(), {H1});
 
   auto u_ptr = boost::make_shared<VectorDouble>();
   auto grad_u_ptr = boost::make_shared<MatrixDouble>();

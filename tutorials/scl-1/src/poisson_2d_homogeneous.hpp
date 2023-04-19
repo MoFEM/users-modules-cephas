@@ -21,7 +21,6 @@ using EntData = EntitiesFieldData::EntData;
 template <int DIM>
 using ElementsAndOps = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using DomianParentEle = ElementsAndOps<SPACE_DIM>::DomianParentEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 
 using AssemblyDomainEleOp =
@@ -31,7 +30,7 @@ using AssemblyDomainEleOp =
 namespace Poisson2DHomogeneousOperators {
 
 // Declare FTensor index for 2D problem
-FTensor::Index<'i', 2> i;
+FTensor::Index<'i', SPACE_DIM> i;
 
 // For simplicity, source term f will be constant throughout the domain
 const double body_source = 5.;
@@ -61,7 +60,7 @@ public:
     auto t_w = getFTensor0IntegrationWeight();
 
     // get derivatives of base functions on row
-    auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
+    auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
 
     // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
     for (int gg = 0; gg != nb_integration_points; gg++) {
@@ -69,7 +68,7 @@ public:
 
       for (int rr = 0; rr != nb_row_dofs; ++rr) {
         // get derivatives of base functions on column
-        auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
+        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
         for (int cc = 0; cc != nb_col_dofs; cc++) {
           this->locMat(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;

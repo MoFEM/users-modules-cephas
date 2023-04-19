@@ -1243,7 +1243,15 @@ to solve 3D problem with few changes as follows
   - Using variable `volume` instead of `area`
 
 You can find the complete code to solve 3D version of the Poisson problem with
-homogeneous boundary condition in poisson_3d_homogeneous.hpp and poisson_3d_homogeneous.cpp located in the same path with the source codes for 2D problem `mofem_install/um_view/tutorials/scl-1/`.
+homogeneous boundary condition, using the same source code by setting variable 
+EXECUTABLE_DIMENSION=3, see CMakeList.txt file in `mofem_install/um_view/tutorials/scl-1/`
+\code
+tutorials_build_and_install(
+  poisson_3d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_homogeneous.cpp)
+set_target_properties(
+  poisson_3d_homogeneous PROPERTIES COMPILE_FLAGS 
+  "-DEXECUTABLE_DIMENSION=3")
+\endcode
 
 To run the analysis, you will follow very similar procedure as for the 2D case
 using the same `param_file.petsc` file with slight changes in the command lines
@@ -1251,7 +1259,6 @@ using the same `param_file.petsc` file with slight changes in the command lines
   mofem_part -my_file cube.h5m -output_file cube_2parts.h5m -my_nparts 2 -dim 3 -adj_dim 1
   mpirun -np 2 ./poisson_3d_homogeneous -file_name cube_2parts.h5m -order 4 -log_quiet
 \endcode
-
 
 \section basic_tutorials_poisson_homogeneous_plain_program Plain program 
 

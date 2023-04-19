@@ -19,5 +19,12 @@ tutorials_copy_and_install("*.md" "${permissions_default}")
 
 tutorials_build_and_install(
   poisson_2d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_homogeneous.cpp)
+set_target_properties(
+  poisson_2d_homogeneous PROPERTIES COMPILE_FLAGS 
+  "-DEXECUTABLE_DIMENSION=2")
+
 tutorials_build_and_install(
-  poisson_3d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/poisson_3d_homogeneous.cpp)
+  poisson_3d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_homogeneous.cpp)
+set_target_properties(
+  poisson_3d_homogeneous PROPERTIES COMPILE_FLAGS 
+  "-DEXECUTABLE_DIMENSION=3")
