@@ -20,8 +20,27 @@ tutorials_copy_and_install("*.h5m" "${permissions_default}")
 tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
+tutorials_copy_and_install("*.py" "${permissions_default}")
 
-tutorials_build_and_install(
-  free_surface ${CMAKE_CURRENT_SOURCE_DIR}/free_surface.cpp)
-set_target_properties(
-  free_surface PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_COORD_TYPE=CARTESIAN")  
+if(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE) 
+
+  include_directories(${_Python_INCLUDE_DIR})
+
+  tutorials_build_and_install(
+    free_surface ${CMAKE_CURRENT_SOURCE_DIR}/free_surface.cpp)
+  set_target_properties(
+    free_surface PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_COORD_TYPE=CARTESIAN -DPYTHON_INIT_SURFACE")  
+
+  target_link_libraries(free_surface 
+    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
+
+else (Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
+
+  tutorials_build_and_install(
+    free_surface ${CMAKE_CURRENT_SOURCE_DIR}/free_surface.cpp)
+  set_target_properties(
+    free_surface PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_COORD_TYPE=CARTESIAN")  
+
+endif(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)

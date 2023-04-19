@@ -15,7 +15,61 @@ using namespace MoFEM;
 
 static char help[] = "...\n\n";
 
-#include <BasicFiniteElements.hpp>
+#ifdef PYTHON_INIT_SURFACE
+#include <boost/python.hpp>
+#include <boost/python/def.hpp>
+namespace bp = boost::python;
+
+struct SurfacePython {
+  SurfacePython() = default;
+  virtual ~SurfacePython() = default;
+
+  MoFEMErrorCode surfaceInit(const std::string py_file) {
+    MoFEMFunctionBegin;
+    try {
+
+      // create main module
+      auto main_module = bp::import("__main__");
+      mainNamespace = main_module.attr("__dict__");
+      bp::exec_file(py_file.c_str(), mainNamespace, mainNamespace);
+      // create a reference to python function
+      surfaceFun = mainNamespace["surface"];
+
+    } catch (bp::error_already_set const &) {
+      // print all other errors to stderr
+      PyErr_Print();
+      CHK_THROW_MESSAGE(MOFEM_OPERATION_UNSUCCESSFUL, "Python error");
+    }
+    MoFEMFunctionReturn(0);
+  };
+
+  MoFEMErrorCode evalSurface(
+
+      double x, double y, double z, double eta, double &s
+
+  ) {
+    MoFEMFunctionBegin;
+    try {
+
+      // call python function
+      s = bp::extract<double>(surfaceFun(x, y, z, eta));
+
+    } catch (bp::error_already_set const &) {
+      // print all other errors to stderr
+      PyErr_Print();
+      CHK_THROW_MESSAGE(MOFEM_OPERATION_UNSUCCESSFUL, "Python error");
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  bp::object mainNamespace;
+  bp::object surfaceFun;
+};
+
+static boost::weak_ptr<SurfacePython> surfacePythonWeakPtr;
+
+#endif
 
 constexpr int BASE_DIM = 1;
 constexpr int SPACE_DIM = 2;
@@ -227,8 +281,17 @@ auto capillary_tube = [](double x, double y, double z) {
 };
 
 auto init_h = [](double r, double y, double theta) {
+#ifdef PYTHON_INIT_SURFACE
+  double s = 1;
+  if (auto ptr = surfacePythonWeakPtr.lock()) {
+    CHK_THROW_MESSAGE(ptr->evalSurface(r, y, theta, eta, s),
+                      "error eval python");
+  }
+  return s;
+#else
   return capillary_tube(r, y, theta);
   // return kernel_eye(r, y, theta);
+#endif
 };
 
 auto wetting_angle = [](double water_level) { return water_level; };
@@ -459,6 +522,16 @@ MoFEMErrorCode FreeSurface::setupProblem() {
 //! [Boundary condition]
 MoFEMErrorCode FreeSurface::boundaryCondition() {
   MoFEMFunctionBegin;
+
+#ifdef PYTHON_INIT_SURFACE
+  auto get_py_surface_init = []() {
+    auto py_surf_init = boost::make_shared<SurfacePython>();
+    CHKERR py_surf_init->surfaceInit("surface.py");
+    surfacePythonWeakPtr = py_surf_init;
+    return py_surf_init;
+  };
+  auto py_surf_init = get_py_surface_init();
+#endif
 
   auto simple = mField.getInterface<Simple>();
   auto pip_mng = mField.getInterface<PipelineManager>();
@@ -1881,6 +1954,10 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
 int main(int argc, char *argv[]) {
 
+#ifdef PYTHON_INIT_SURFACE
+  Py_Initialize();
+#endif
+
   // Initialisation of MoFEM/PETSc and MOAB data structures
   const char param_file[] = "param_file.petsc";
   MoFEM::Core::Initialize(&argc, &argv, param_file, help);
@@ -1916,6 +1993,13 @@ int main(int argc, char *argv[]) {
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
+
+#ifdef PYTHON_INIT_SURFACE
+  if (Py_FinalizeEx() < 0) {
+    exit(120);
+  }
+#endif
+
 }
 
 std::vector<Range>
