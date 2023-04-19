@@ -6,8 +6,6 @@
  * to manage complex variable fields.
  */
 
-
-
 #include <MoFEM.hpp>
 
 using namespace MoFEM;
@@ -32,8 +30,6 @@ using OpBoundaryMass = FormsIntegrators<EdgeEleOp>::Assembly<
 using OpBoundarySource = FormsIntegrators<EdgeEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
-
-
 struct Example {
 
   Example(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -52,7 +48,6 @@ private:
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
-
 };
 
 //! [run problem]
@@ -166,17 +161,8 @@ MoFEMErrorCode Example::assembleSystem() {
 
   auto set_domain = [&]() {
     MoFEMFunctionBegin;
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateHOJac<2>(jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetHOInvJacToScalarBases<2>(H1, inv_jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetHOWeightsOnFace());
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        pipeline_mng->getOpDomainLhsPipeline(), {H1});
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetBc("P_REAL", true, boundaryMarker));
@@ -199,6 +185,9 @@ MoFEMErrorCode Example::assembleSystem() {
 
   auto set_boundary = [&]() {
     MoFEMFunctionBegin;
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+        pipeline_mng->getOpBoundaryLhsPipeline(), {});
+
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpSetBc("P_REAL", true, boundaryMarker));
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
