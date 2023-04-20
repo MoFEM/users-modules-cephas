@@ -116,16 +116,16 @@ using OpDomainAssembleVector = FormsIntegrators<DomainEleOp>::Assembly<
 using OpDomainAssembleScalar = FormsIntegrators<DomainEleOp>::Assembly<
     A>::LinearForm<I>::OpBaseTimesScalar<BASE_DIM>;
 
-using OpDomainSourceU = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
-    I>::OpSource<BASE_DIM, U_FIELD_DIM>;
-using OpDomainSourceH = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
-    I>::OpSource<BASE_DIM, 1>;
-
 using OpBaseTimesScalar = FormsIntegrators<DomainEleOp>::Assembly<
     A>::LinearForm<I>::OpBaseTimesScalar<1, 1>;
 
 using OpMixScalarTimesDiv = FormsIntegrators<DomainEleOp>::Assembly<
     A>::BiLinearForm<I>::OpMixScalarTimesDiv<SPACE_DIM, coord_type>;
+
+// Flux is applied by Lagrange Multiplie
+using BoundaryNaturalBC = NaturalBC<BoundaryEleOp>::Assembly<A>::LinearForm<I>;
+using OpFluidFlux =
+    BoundaryNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, 1>;
 
 FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'j', SPACE_DIM> j;
@@ -135,7 +135,7 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // mesh refinement
-int order = 3; ///< approximation order
+int order = 3;     ///< approximation order
 int nb_levels = 4; //< number of refinement levels
 
 constexpr bool debug = true;
@@ -152,14 +152,13 @@ auto get_projection_bit = []() { return 2 * get_start_bit() + 4; };
 auto get_skin_projection_bit = []() { return 2 * get_start_bit() + 5; };
 
 // Physical parameters
-constexpr double a0 = 980;
+constexpr double a0 = 0;//980;
 constexpr double rho_m = 0.998;
 constexpr double mu_m = 0.010101;
 constexpr double rho_p = 0.0012;
 constexpr double mu_p = 0.000182;
 constexpr double lambda = 73;
 constexpr double W = 0.25;
-constexpr double cos_alpha = 70; // wetting angle
 
 template <int T> constexpr int powof2() {
   if constexpr (T == 0)
@@ -169,7 +168,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.025 / 6; // mesh size
+constexpr double h = 0.0015 / 4; // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -193,6 +192,11 @@ auto cylindrical = [](const double r) {
     return 2 * M_PI * r;
   else
     return 1.;
+};
+
+auto wetting_angle_sub_stepping = [](auto ts_step) {
+  constexpr int sub_stepping = 16;
+  return  std::min(1., static_cast<double>(ts_step) / sub_stepping);
 };
 
 auto my_max = [](const double x) { return (x - 1 + std::abs(x + 1)) / 2; };
@@ -793,10 +797,14 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   pip_mng->getOpDomainLhsPipeline().clear();
 
   // Remove DOFs where boundary conditions are set
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMMETRY",
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_X",
                                            "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYMMETRY",
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_X",
                                            "L", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_Y",
+                                           "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_Y",
+                                           "L", 1, 1);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "U",
                                            0, SPACE_DIM);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
@@ -1404,6 +1412,9 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pip.push_back(new OpCalculateScalarFieldValues("L", lambda_ptr));
     pip.push_back(new OpNormalConstrainRhs("L", u_ptr));
 
+    CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpFluidFlux>::add(
+        pip, mField, "L", {}, "INFLUX", Sev::inform);
+
     CHKERR add_parent_field_bdy(fe, UDO::OPROW, "U");
     pip.push_back(new OpNormalForceRhs("U", lambda_ptr));
 
@@ -1445,6 +1456,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
       b->getAttributes(attr_vec);
       if (attr_vec.size() != 1)
         SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA, "Should be one attribute");
+      MOFEM_LOG("FS", Sev::inform) << "Wetting angle: " << attr_vec.front();
       // need to find the attributes and pass to operator
       CHKERR add_parent_field_bdy(fe, UDO::OPROW, "G");
       pip.push_back(new OpWettingAngleRhs(
@@ -1999,7 +2011,6 @@ int main(int argc, char *argv[]) {
     exit(120);
   }
 #endif
-
 }
 
 std::vector<Range>

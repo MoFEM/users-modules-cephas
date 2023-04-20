@@ -156,6 +156,8 @@ struct OpWettingAngleRhs : public AssemblyBoundaryEleOp {
     auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
+    auto s = wetting_angle_sub_stepping(getFEMethod()->ts_step);
+
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
       const double r = t_coords(0);
@@ -163,8 +165,7 @@ struct OpWettingAngleRhs : public AssemblyBoundaryEleOp {
       const double h_grad_norm = sqrt(t_grad_h(i) * t_grad_h(i) +
                                       std::numeric_limits<double>::epsilon());
       const double cos_angle = std::cos(M_PI * wettingAngle / 180);
-      const double rhs_wetting =
-          eta2 * h_grad_norm * cos_angle;
+      const double rhs_wetting = s * eta2 * h_grad_norm * cos_angle;
 
       // cerr << "pass "
       //      << h_grad_norm <<"\n";
@@ -189,7 +190,7 @@ private:
   boost::shared_ptr<MatrixDouble> gradHPtr;
   boost::shared_ptr<Range> entsPtr;
   double wettingAngle;
-  };
+};
 
 struct OpNormalConstrainLhs : public AssemblyBoundaryEleOp {
 
@@ -285,6 +286,8 @@ struct OpWettingAngleLhs : public BoundaryEleOp {
       auto t_row_base = data.getFTensor0N();
       int  nb_row_base_functions = data.getN().size2();
 
+      auto s = wetting_angle_sub_stepping(getFEMethod()->ts_step);
+
       for (int gg = 0; gg != nb_gp; ++gg) {
 
         const double r = t_coords(0);
@@ -292,7 +295,7 @@ struct OpWettingAngleLhs : public BoundaryEleOp {
         const double h_grad_norm = sqrt(t_grad_h(i) * t_grad_h(i) +
                                         std::numeric_limits<double>::epsilon());
         const double one_over_h_grad_norm = 1. / h_grad_norm;
-        const double beta = alpha * eta2 * one_over_h_grad_norm *
+        const double beta = s * alpha * eta2 * one_over_h_grad_norm *
                             std::cos(M_PI * wettingAngle / 180);
 
         int rr = 0;
@@ -304,8 +307,7 @@ struct OpWettingAngleLhs : public BoundaryEleOp {
 
           for (int cc = 0; cc != col_size; ++cc) {
              locMat(rr, cc) += delta * t_col_diff_base(i) * t_grad_h(i);
-            //  cerr << "locMat(rr, cc) " << locMat(rr, cc) <<"\n"; 
-             ++ t_col_diff_base;
+             ++t_col_diff_base;
           }
           ++t_row_base;
         }
