@@ -1638,7 +1638,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   auto *simple = mField.getInterface<Simple>();
   auto *pip_mng = mField.getInterface<PipelineManager>();
 
-  auto create_solver_rm = [&](auto dm) -> SmartPetscObj<DM> {
+  auto create_solver_dm = [&](auto dm) -> SmartPetscObj<DM> {
     DM subdm;
 
     auto setup_subdm = [&](auto dm) {
@@ -1669,7 +1669,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     return SmartPetscObj<DM>(subdm);
   };
 
-  auto sub_dm = create_solver_rm(simple->getDM());
+  auto sub_dm = create_solver_dm(simple->getDM());
   auto snes_ctx_ptr = smartGetDMSnesCtx(sub_dm);
 
   auto get_fe_post_proc = [&](auto post_proc_mesh) {
