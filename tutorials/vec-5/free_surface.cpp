@@ -1959,7 +1959,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   CHKERR TSSetPostStep(ts, TSPrePostProc::tsPostProc);
 
   CHKERR TSSolve(ts, NULL);
-  CHKERR TSGetTime(ts, &ftime);
 
   MoFEMFunctionReturn(0);
 }
