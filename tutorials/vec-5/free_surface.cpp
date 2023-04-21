@@ -2331,17 +2331,17 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
       }
       CHKERR bit_mng->writeBitLevel(
           BitRefLevel().set(get_current_bit()), BitRefLevel().set(),
-          "get_current_bit().h5m", "MOAB", "PARALLEL=WRITE_PART");
+          "current_bit.h5m", "MOAB", "PARALLEL=WRITE_PART");
       CHKERR bit_mng->writeBitLevel(
           BitRefLevel().set(get_projection_bit()), BitRefLevel().set(),
-          "get_projection_bit().h5m", "MOAB", "PARALLEL=WRITE_PART");
+          "projection_bit.h5m", "MOAB", "PARALLEL=WRITE_PART");
 
       CHKERR bit_mng->writeBitLevel(
           BitRefLevel().set(get_skin_child_bit()), BitRefLevel().set(),
-          "get_skin_child_bit().h5m", "MOAB", "PARALLEL=WRITE_PART");
+          "skin_child_bit.h5m", "MOAB", "PARALLEL=WRITE_PART");
       CHKERR bit_mng->writeBitLevel(
           BitRefLevel().set(get_skin_parent_bit()), BitRefLevel().set(),
-          "get_skin_parent_bit().h5m", "MOAB", "PARALLEL=WRITE_PART");
+          "skin_parent_bit.h5m", "MOAB", "PARALLEL=WRITE_PART");
     }
   }
 
