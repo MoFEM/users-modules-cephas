@@ -120,9 +120,6 @@ using OpDomainAssembleScalar = FormsIntegrators<DomainEleOp>::Assembly<
 using OpBoundaryAssembleScalar = FormsIntegrators<BoundaryEleOp>::Assembly<
     A>::LinearForm<I>::OpBaseTimesScalar<BASE_DIM>;
 
-using OpBaseTimesScalar = FormsIntegrators<DomainEleOp>::Assembly<
-    A>::LinearForm<I>::OpBaseTimesScalar<1, 1>;
-
 using OpMixScalarTimesDiv = FormsIntegrators<DomainEleOp>::Assembly<
     A>::BiLinearForm<I>::OpMixScalarTimesDiv<SPACE_DIM, coord_type>;
 
@@ -994,17 +991,25 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
 
       // That can be done much smarter, by block, field by field. For simplicity
       // is like that.
-      CHKERR add_parent_field_domain(fe, UDO::OPROW, "U", bit(get_skin_parent_bit()));
-      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "U", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPROW, "U",
+                                     bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "U",
+                                     bit(get_skin_parent_bit()));
       pip.push_back(new OpDomainMassU("U", "U"));
-      CHKERR add_parent_field_domain(fe, UDO::OPROW, "P", bit(get_skin_parent_bit()));
-      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "P", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPROW, "P",
+                                     bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "P",
+                                     bit(get_skin_parent_bit()));
       pip.push_back(new OpDomainMassP("P", "P"));
-      CHKERR add_parent_field_domain(fe, UDO::OPROW, "H", bit(get_skin_parent_bit()));
-      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "H", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPROW, "H",
+                                     bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "H",
+                                     bit(get_skin_parent_bit()));
       pip.push_back(new OpDomainMassH("H", "H"));
-      CHKERR add_parent_field_domain(fe, UDO::OPROW, "G", bit(get_skin_parent_bit()));
-      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "G", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPROW, "G",
+                                     bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "G",
+                                     bit(get_skin_parent_bit()));
       pip.push_back(new OpDomainMassG("G", "G"));
 
       MoFEMFunctionReturn(0);
@@ -1083,12 +1088,14 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
 
       // That can be done much smarter, by block, field by field. For simplicity
       // is like that.
-      CHKERR add_parent_field_bdy(fe, UDO::OPROW, "L", bit(get_skin_parent_bit()));
-      CHKERR add_parent_field_bdy(fe, UDO::OPCOL, "L", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_bdy(fe, UDO::OPROW, "L",
+                                  bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_bdy(fe, UDO::OPCOL, "L",
+                                  bit(get_skin_parent_bit()));
       pip.push_back(new OpBoundaryMassL("L", "L"));
 
       MoFEMFunctionReturn(0);
-    };    
+    };
 
     auto create_subdm = [&]() -> SmartPetscObj<DM> {
       auto level_ents_ptr = boost::make_shared<Range>();
@@ -1166,18 +1173,21 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
 
       auto D = smartCreateDMVector(subdm);
       auto F = smartVectorDuplicate(D);
+
       auto ksp = pip_mng->createKSP(subdm);
       CHKERR KSPSetFromOptions(ksp);
       CHKERR KSPSetUp(ksp);
 
       auto solve = [&](auto S) {
         MoFEMFunctionBegin;
+        CHKERR VecZeroEntries(S);
         CHKERR KSPSolve(ksp, F, S);
         CHKERR VecGhostUpdateBegin(S, INSERT_VALUES, SCATTER_FORWARD);
         CHKERR VecGhostUpdateEnd(S, INSERT_VALUES, SCATTER_FORWARD);
         MoFEMFunctionReturn(0);
       };
 
+      MOFEM_LOG("FS", Sev::inform) << "Solve projection";
       CHKERR solve(D);
 
       if (vecs.size()) {
@@ -1185,6 +1195,7 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
         auto sub_v = smartVectorDuplicate(D);
 
         for (auto v : vecs) {
+          MOFEM_LOG("FS", Sev::inform) << "Solve projection vector";
 
           CHKERR DMoFEMMeshToLocalVector(simple->getDM(), v, INSERT_VALUES,
                                          SCATTER_REVERSE);
@@ -1224,15 +1235,17 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
         CHKERR bit_mng->getEntitiesByRefLevel(
             BitRefLevel().set(), bit(get_current_bit()).flip(), other_ents);
 
-        auto zero = [&](boost::shared_ptr<FieldEntity> ent_ptr) {
-          MoFEMFunctionBeginHot;
-          std::fill(ent_ptr->getEntFieldData().begin(),
-                    ent_ptr->getEntFieldData().end(), 0.);
-          MoFEMFunctionReturnHot(0);
+        auto zero = [](boost::shared_ptr<FieldEntity> ent_ptr) {
+          MoFEMFunctionBegin;
+          for (auto &v : ent_ptr->getEntFieldData()) {
+            v = 0;
+          }
+          MoFEMFunctionReturn(0);
         };
 
         auto field_blas = mField.getInterface<FieldBlas>();
         for (auto f : {"U", "P", "H", "G", "L"}) {
+          MOFEM_LOG("WORLD", Sev::verbose) << "Zero field " << f;
           CHKERR field_blas->fieldLambdaOnEntities(zero, f, &other_ents);
         }
 
@@ -1248,11 +1261,11 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
                                                      MBVERTEX, current_verts);
 
         auto cut_off_verts = [&](boost::shared_ptr<FieldEntity> ent_ptr) {
-          MoFEMFunctionBeginHot;
+          MoFEMFunctionBegin;
           for (auto &h : ent_ptr->getEntFieldData()) {
             h = cut_off(h);
           }
-          MoFEMFunctionReturnHot(0);
+          MoFEMFunctionReturn(0);
         };
 
         auto field_blas = mField.getInterface<FieldBlas>();
@@ -1467,11 +1480,11 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pip.push_back(new OpRhsG<false>("G", h_ptr, grad_h_ptr, g_ptr));
 
     CHKERR add_parent_field_domain(fe, UDO::OPROW, "P");
-    pip.push_back(new OpBaseTimesScalar(
+    pip.push_back(new OpDomainAssembleScalar(
         "P", div_u_ptr, [](const double r, const double, const double) {
           return cylindrical(r);
         }));
-    pip.push_back(new OpBaseTimesScalar(
+    pip.push_back(new OpDomainAssembleScalar(
         "P", p_ptr, [](const double r, const double, const double) {
           return eps * cylindrical(r);
         }));
@@ -2699,6 +2712,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     auto x = smartCreateDMVector(simple->getDM());
     auto y = smartCreateDMVector(fsRawPtr->solverSubDM);
     auto s = get_scatter(x, y, F);
+
     CHKERR DMSubDomainRestrict(simple->getDM(), s, PETSC_NULL,
                                fsRawPtr->solverSubDM);
 
@@ -2707,6 +2721,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
 
   auto set_solution = [&]() {
     MoFEMFunctionBegin;
+    MOFEM_LOG("FS", Sev::inform) << "Set solution";
     SmartPetscObj<Vec> x;
     CHKERR m_field.getInterface<VecManager>()->vecCreateGhost("SUB_SOLVER", COL,
                                                               x);
@@ -2714,7 +2729,8 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
         "SUB_SOLVER", COL, x, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateBegin(x, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(x, INSERT_VALUES, SCATTER_FORWARD);
-    MOFEM_LOG("FS", Sev::inform) << "Set solution, vector norm " << get_norm(x);
+    MOFEM_LOG("FS", Sev::verbose)
+        << "Set solution, vector norm " << get_norm(x);
     CHKERR TSSetSolution(ts, x);
     MoFEMFunctionReturn(0);
   };
@@ -2724,10 +2740,14 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   CHKERR rebuild_sub_dm();
 
   CHKERR TSReset(ts);
-  CHKERR TSSetUp(ts);
+  CHKERR DMClearGlobalVectors(fsRawPtr->solverSubDM);
+  CHKERR DMClearGlobalVectors(fsRawPtr->solverSubDM);
   CHKERR set_solution();
-  CHKERR apply_restrict();
   CHKERR set_jacobian_operators();
+  CHKERR TSSetUp(ts);
+  CHKERR apply_restrict();
+
+  MOFEM_LOG("FS", Sev::inform) << "Pre-proc done";
 
   MoFEMFunctionReturn(0);
 }
