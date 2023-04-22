@@ -110,10 +110,14 @@ using OpDomainMassH = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
     I>::OpMass<BASE_DIM, 1>;
 using OpDomainMassP = OpDomainMassH;
 using OpDomainMassG = OpDomainMassH;
+using OpBoundaryMassL = FormsIntegrators<BoundaryEleOp>::Assembly<
+    A>::BiLinearForm<I>::OpMass<BASE_DIM, 1>;
 
 using OpDomainAssembleVector = FormsIntegrators<DomainEleOp>::Assembly<
     A>::LinearForm<I>::OpBaseTimesVector<BASE_DIM, SPACE_DIM, 1>;
 using OpDomainAssembleScalar = FormsIntegrators<DomainEleOp>::Assembly<
+    A>::LinearForm<I>::OpBaseTimesScalar<BASE_DIM>;
+using OpBoundaryAssembleScalar = FormsIntegrators<BoundaryEleOp>::Assembly<
     A>::LinearForm<I>::OpBaseTimesScalar<BASE_DIM>;
 
 using OpBaseTimesScalar = FormsIntegrators<DomainEleOp>::Assembly<
@@ -842,7 +846,7 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
 
   using UDO = ForcesAndSourcesCore::UserDataOperator;
 
-  auto add_parent_field = [&](auto fe, auto op, auto field, auto bit) {
+  auto add_parent_field_domain = [&](auto fe, auto op, auto field, auto bit) {
     return setParentDofs(
         fe, field, op, bit,
 
@@ -855,34 +859,46 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
         QUIET, Sev::noisy);
   };
 
+  auto add_parent_field_bdy = [&](auto fe, auto op, auto field, auto bit) {
+    return setParentDofs(
+        fe, field, op, bit,
+
+        [&]() {
+          boost::shared_ptr<ForcesAndSourcesCore> fe_parent(
+              new BoundaryParentEle(mField));
+          return fe_parent;
+        },
+
+        QUIET, Sev::noisy);
+  };
+
+  auto create_run_parent_op = [&](auto parent_fe_ptr, auto this_fe_ptr,
+                                  auto fe_bit) {
+    auto parent_mask = fe_bit;
+    parent_mask.flip();
+    return new OpRunParent(parent_fe_ptr, BitRefLevel().set(), parent_mask,
+                           this_fe_ptr, fe_bit, BitRefLevel().set(), QUIET,
+                           Sev::inform);
+  };
+
+  auto get_parents_vel_fe_ptr = [&](auto this_fe_ptr, auto fe_bit) {
+    std::vector<boost::shared_ptr<DomianParentEle>> parents_elems_ptr_vec;
+    for (int l = 0; l < nb_levels; ++l)
+      parents_elems_ptr_vec.emplace_back(
+          boost::make_shared<DomianParentEle>(mField));
+    for (auto l = 1; l < nb_levels; ++l) {
+      parents_elems_ptr_vec[l - 1]->getOpPtrVector().push_back(
+          create_run_parent_op(parents_elems_ptr_vec[l], this_fe_ptr, fe_bit));
+    }
+    return parents_elems_ptr_vec[0];
+  };
+
   auto solve_projection = [&](auto exe_test) {
     MoFEMFunctionBegin;
 
     auto set_domain_rhs = [&](auto fe) {
       MoFEMFunctionBegin;
       auto &pip = fe->getOpPtrVector();
-
-      auto create_run_parent_op = [&](auto parent_fe_ptr, auto this_fe_ptr,
-                                      auto fe_bit) {
-        auto parent_mask = fe_bit;
-        parent_mask.flip();
-        return new OpRunParent(parent_fe_ptr, BitRefLevel().set(), parent_mask,
-                               this_fe_ptr, fe_bit, BitRefLevel().set(), QUIET,
-                               Sev::inform);
-      };
-
-      auto get_parents_vel_fe_ptr = [&](auto this_fe_ptr, auto fe_bit) {
-        std::vector<boost::shared_ptr<DomianParentEle>> parents_elems_ptr_vec;
-        for (int l = 0; l < nb_levels; ++l)
-          parents_elems_ptr_vec.emplace_back(
-              boost::make_shared<DomianParentEle>(mField));
-        for (auto l = 1; l < nb_levels; ++l) {
-          parents_elems_ptr_vec[l - 1]->getOpPtrVector().push_back(
-              create_run_parent_op(parents_elems_ptr_vec[l], this_fe_ptr,
-                                   fe_bit));
-        }
-        return parents_elems_ptr_vec[0];
-      };
 
       auto u_ptr = boost::make_shared<MatrixDouble>();
       auto p_ptr = boost::make_shared<VectorDouble>();
@@ -905,17 +921,17 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
             QUIET, Sev::noisy);
         // That can be done much smarter, by block, field by field. For
         // simplicity is like that.
-        CHKERR add_parent_field(eval_fe_ptr, UDO::OPROW, "U",
-                                bit(get_skin_projection_bit()));
+        CHKERR add_parent_field_domain(eval_fe_ptr, UDO::OPROW, "U",
+                                       bit(get_skin_projection_bit()));
         pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
-        CHKERR add_parent_field(eval_fe_ptr, UDO::OPROW, "P",
-                                bit(get_skin_projection_bit()));
+        CHKERR add_parent_field_domain(eval_fe_ptr, UDO::OPROW, "P",
+                                       bit(get_skin_projection_bit()));
         pip.push_back(new OpCalculateScalarFieldValues("P", p_ptr));
-        CHKERR add_parent_field(eval_fe_ptr, UDO::OPROW, "H",
-                                bit(get_skin_projection_bit()));
+        CHKERR add_parent_field_domain(eval_fe_ptr, UDO::OPROW, "H",
+                                       bit(get_skin_projection_bit()));
         pip.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
-        CHKERR add_parent_field(eval_fe_ptr, UDO::OPROW, "G",
-                                bit(get_skin_projection_bit()));
+        CHKERR add_parent_field_domain(eval_fe_ptr, UDO::OPROW, "G",
+                                       bit(get_skin_projection_bit()));
         pip.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
       }
       auto parent_eval_fe_ptr =
@@ -937,17 +953,17 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
             },
 
             QUIET, Sev::noisy);
-        CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "U",
-                                bit(get_skin_parent_bit()));
+        CHKERR add_parent_field_domain(assemble_fe_ptr, UDO::OPROW, "U",
+                                       bit(get_skin_parent_bit()));
         pip.push_back(new OpDomainAssembleVector("U", u_ptr));
-        CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "P",
-                                bit(get_skin_parent_bit()));
+        CHKERR add_parent_field_domain(assemble_fe_ptr, UDO::OPROW, "P",
+                                       bit(get_skin_parent_bit()));
         pip.push_back(new OpDomainAssembleScalar("P", p_ptr));
-        CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "H",
-                                bit(get_skin_parent_bit()));
+        CHKERR add_parent_field_domain(assemble_fe_ptr, UDO::OPROW, "H",
+                                       bit(get_skin_parent_bit()));
         pip.push_back(new OpDomainAssembleScalar("H", h_ptr));
-        CHKERR add_parent_field(assemble_fe_ptr, UDO::OPROW, "G",
-                                bit(get_skin_parent_bit()));
+        CHKERR add_parent_field_domain(assemble_fe_ptr, UDO::OPROW, "G",
+                                       bit(get_skin_parent_bit()));
         pip.push_back(new OpDomainAssembleScalar("G", g_ptr));
       }
       auto parent_assemble_fe_ptr =
@@ -978,21 +994,101 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
 
       // That can be done much smarter, by block, field by field. For simplicity
       // is like that.
-      CHKERR add_parent_field(fe, UDO::OPROW, "U", bit(get_skin_parent_bit()));
-      CHKERR add_parent_field(fe, UDO::OPCOL, "U", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPROW, "U", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "U", bit(get_skin_parent_bit()));
       pip.push_back(new OpDomainMassU("U", "U"));
-      CHKERR add_parent_field(fe, UDO::OPROW, "P", bit(get_skin_parent_bit()));
-      CHKERR add_parent_field(fe, UDO::OPCOL, "P", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPROW, "P", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "P", bit(get_skin_parent_bit()));
       pip.push_back(new OpDomainMassP("P", "P"));
-      CHKERR add_parent_field(fe, UDO::OPROW, "H", bit(get_skin_parent_bit()));
-      CHKERR add_parent_field(fe, UDO::OPCOL, "H", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPROW, "H", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "H", bit(get_skin_parent_bit()));
       pip.push_back(new OpDomainMassH("H", "H"));
-      CHKERR add_parent_field(fe, UDO::OPROW, "G", bit(get_skin_parent_bit()));
-      CHKERR add_parent_field(fe, UDO::OPCOL, "G", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPROW, "G", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_domain(fe, UDO::OPCOL, "G", bit(get_skin_parent_bit()));
       pip.push_back(new OpDomainMassG("G", "G"));
 
       MoFEMFunctionReturn(0);
     };
+
+    auto set_bdy_rhs = [&](auto fe) {
+      MoFEMFunctionBegin;
+      auto &pip = fe->getOpPtrVector();
+
+      auto l_ptr = boost::make_shared<VectorDouble>();
+
+      auto eval_fe_ptr = boost::make_shared<BoundaryParentEle>(mField);
+      {
+        auto &pip = eval_fe_ptr->getOpPtrVector();
+        CHKERR setParentDofs(
+            eval_fe_ptr, "", UDO::OPSPACE, bit(get_skin_projection_bit()),
+
+            [&]() {
+              boost::shared_ptr<ForcesAndSourcesCore> fe_parent(
+                  new BoundaryParentEle(mField));
+              return fe_parent;
+            },
+
+            QUIET, Sev::noisy);
+        // That can be done much smarter, by block, field by field. For
+        // simplicity is like that.
+        CHKERR add_parent_field_bdy(eval_fe_ptr, UDO::OPROW, "L",
+                                    bit(get_skin_projection_bit()));
+        pip.push_back(new OpCalculateScalarFieldValues("L", l_ptr));
+      }
+      auto parent_eval_fe_ptr =
+          get_parents_vel_fe_ptr(eval_fe_ptr, bit(get_projection_bit()));
+      pip.push_back(create_run_parent_op(parent_eval_fe_ptr, eval_fe_ptr,
+                                         bit(get_projection_bit())));
+
+      auto assemble_fe_ptr = boost::make_shared<BoundaryParentEle>(mField);
+      {
+        auto &pip = assemble_fe_ptr->getOpPtrVector();
+        CHKERR setParentDofs(
+            assemble_fe_ptr, "", UDO::OPSPACE, bit(get_skin_parent_bit()),
+
+            [&]() {
+              boost::shared_ptr<ForcesAndSourcesCore> fe_parent(
+                  new BoundaryParentEle(mField));
+              return fe_parent;
+            },
+
+            QUIET, Sev::noisy);
+        CHKERR add_parent_field_bdy(assemble_fe_ptr, UDO::OPROW, "L",
+                                    bit(get_skin_parent_bit()));
+        pip.push_back(new OpBoundaryAssembleScalar("L", l_ptr));
+      }
+      auto parent_assemble_fe_ptr =
+          get_parents_vel_fe_ptr(assemble_fe_ptr, bit(get_current_bit()));
+      pip.push_back(create_run_parent_op(
+          parent_assemble_fe_ptr, assemble_fe_ptr, bit(get_current_bit())));
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto set_bdy_lhs = [&](auto fe) {
+      MoFEMFunctionBegin;
+
+      auto &pip = fe->getOpPtrVector();
+
+      CHKERR setParentDofs(
+          fe, "", UDO::OPSPACE, bit(get_skin_parent_bit()),
+
+          [&]() {
+            boost::shared_ptr<ForcesAndSourcesCore> fe_parent(
+                new BoundaryParentEle(mField));
+            return fe_parent;
+          },
+
+          QUIET, Sev::noisy);
+
+      // That can be done much smarter, by block, field by field. For simplicity
+      // is like that.
+      CHKERR add_parent_field_bdy(fe, UDO::OPROW, "L", bit(get_skin_parent_bit()));
+      CHKERR add_parent_field_bdy(fe, UDO::OPCOL, "L", bit(get_skin_parent_bit()));
+      pip.push_back(new OpBoundaryMassL("L", "L"));
+
+      MoFEMFunctionReturn(0);
+    };    
 
     auto create_subdm = [&]() -> SmartPetscObj<DM> {
       auto level_ents_ptr = boost::make_shared<Range>();
@@ -1023,12 +1119,13 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
         CHKERR DMSetType(subdm, "DMMOFEM");
         CHKERR DMMoFEMCreateSubDM(subdm, dm, "SUB_PRJ");
         CHKERR DMMoFEMAddElement(subdm, simple->getDomainFEName());
+        CHKERR DMMoFEMAddElement(subdm, simple->getBoundaryFEName());
         CHKERR DMMoFEMSetSquareProblem(subdm, PETSC_TRUE);
         CHKERR DMMoFEMSetDestroyProblem(
             subdm, PETSC_FALSE); // Do not destroy projection problem. It will
                                  // reuse it next time.
 
-        for (auto f : {"U", "P", "H", "G"}) {
+        for (auto f : {"U", "P", "H", "G", "L"}) {
           CHKERR DMMoFEMAddSubFieldRow(subdm, f, level_ents_ptr);
           CHKERR DMMoFEMAddSubFieldCol(subdm, f, level_ents_ptr);
         }
@@ -1047,15 +1144,25 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
 
       pip_mng->getDomainRhsFE().reset();
       pip_mng->getDomainLhsFE().reset();
+      pip_mng->getBoundaryRhsFE().reset();
+      pip_mng->getBoundaryLhsFE().reset();
       CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule);
       CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule);
+      CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule);
+      CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule);
       pip_mng->getDomainLhsFE()->exeTestHook = exe_test;
       pip_mng->getDomainRhsFE()->exeTestHook = [](FEMethod *fe_ptr) {
+        return get_fe_bit(fe_ptr).test(nb_levels - 1);
+      };
+      pip_mng->getBoundaryLhsFE()->exeTestHook = exe_test;
+      pip_mng->getBoundaryRhsFE()->exeTestHook = [](FEMethod *fe_ptr) {
         return get_fe_bit(fe_ptr).test(nb_levels - 1);
       };
 
       CHKERR set_domain_rhs(pip_mng->getCastDomainRhsFE());
       CHKERR set_domain_lhs(pip_mng->getCastDomainLhsFE());
+      CHKERR set_bdy_rhs(pip_mng->getCastBoundaryRhsFE());
+      CHKERR set_bdy_lhs(pip_mng->getCastBoundaryLhsFE());
 
       auto D = smartCreateDMVector(subdm);
       auto F = smartVectorDuplicate(D);
@@ -1096,7 +1203,6 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
             CHKERR VecGhostUpdateEnd(F, ADD_VALUES, SCATTER_REVERSE);
             MoFEMFunctionReturn(0);
           };
-
 
           CHKERR assemble_rhs();
           CHKERR solve(sub_v);
@@ -1190,17 +1296,17 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
     auto h_ptr = boost::make_shared<VectorDouble>();
     auto g_ptr = boost::make_shared<VectorDouble>();
 
-    CHKERR add_parent_field(post_proc_fe, UDO::OPROW, "U",
-                            bit(get_skin_parent_bit()));
+    CHKERR add_parent_field_domain(post_proc_fe, UDO::OPROW, "U",
+                                   bit(get_skin_parent_bit()));
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
-    CHKERR add_parent_field(post_proc_fe, UDO::OPROW, "P",
-                            bit(get_skin_parent_bit()));
+    CHKERR add_parent_field_domain(post_proc_fe, UDO::OPROW, "P",
+                                   bit(get_skin_parent_bit()));
     pip.push_back(new OpCalculateScalarFieldValues("P", p_ptr));
-    CHKERR add_parent_field(post_proc_fe, UDO::OPROW, "H",
-                            bit(get_skin_parent_bit()));
+    CHKERR add_parent_field_domain(post_proc_fe, UDO::OPROW, "H",
+                                   bit(get_skin_parent_bit()));
     pip.push_back(new OpCalculateScalarFieldValues("H", h_ptr));
-    CHKERR add_parent_field(post_proc_fe, UDO::OPROW, "G",
-                            bit(get_skin_parent_bit()));
+    CHKERR add_parent_field_domain(post_proc_fe, UDO::OPROW, "G",
+                                   bit(get_skin_parent_bit()));
     pip.push_back(new OpCalculateScalarFieldValues("G", g_ptr));
 
     post_proc_fe->getOpPtrVector().push_back(
