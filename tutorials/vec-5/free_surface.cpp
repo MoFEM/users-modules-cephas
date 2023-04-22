@@ -152,7 +152,7 @@ auto get_projection_bit = []() { return 2 * get_start_bit() + 4; };
 auto get_skin_projection_bit = []() { return 2 * get_start_bit() + 5; };
 
 // Physical parameters
-constexpr double a0 = 0;//980;
+constexpr double a0 = 0; // 980;
 constexpr double rho_m = 0.998;
 constexpr double mu_m = 0.010101;
 constexpr double rho_p = 0.0012;
@@ -196,7 +196,7 @@ auto cylindrical = [](const double r) {
 
 auto wetting_angle_sub_stepping = [](auto ts_step) {
   constexpr int sub_stepping = 16;
-  return  std::min(1., static_cast<double>(ts_step) / sub_stepping);
+  return std::min(1., static_cast<double>(ts_step) / sub_stepping);
 };
 
 auto my_max = [](const double x) { return (x - 1 + std::abs(x + 1)) / 2; };
@@ -284,6 +284,10 @@ auto capillary_tube = [](double x, double y, double z) {
   ;
 };
 
+auto bubble_device = [](double x, double y, double z) {
+  return -tanh((-0.039 - x) / (eta * std::sqrt(2)));
+};
+
 auto init_h = [](double r, double y, double theta) {
 #ifdef PYTHON_INIT_SURFACE
   double s = 1;
@@ -293,7 +297,8 @@ auto init_h = [](double r, double y, double theta) {
   }
   return s;
 #else
-  return capillary_tube(r, y, theta);
+  return bubble_device(r, y, theta);
+  // return capillary_tube(r, y, theta);
   // return kernel_eye(r, y, theta);
 #endif
 };
@@ -394,11 +399,9 @@ private:
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode boundaryCondition();
-  MoFEMErrorCode projectData();
+  MoFEMErrorCode projectData(std::vector<Vec> vecs);
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
-
-  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
   /// @brief Find entities on refinement levels
   /// @param overlap level of overlap
@@ -432,6 +435,8 @@ private:
       int verbosity, LogManager::SeverityLevel sev);
 
   friend struct TSPrePostProc;
+
+  SmartPetscObj<DM> solverSubDM;
 };
 
 //! [Run programme]
@@ -790,7 +795,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 
   // if constexpr (debug) {
   //   CHKERR refineMesh(1);
-  //   CHKERR projectData();
+  //   CHKERR projectData({});
   // }
 
   pip_mng->getOpDomainRhsPipeline().clear();
@@ -817,7 +822,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 //! [Boundary condition]
 
 //! [Data projection]
-MoFEMErrorCode FreeSurface::projectData() {
+MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
   MoFEMFunctionBegin;
 
   auto simple = mField.getInterface<Simple>();
@@ -1055,13 +1060,53 @@ MoFEMErrorCode FreeSurface::projectData() {
       auto D = smartCreateDMVector(subdm);
       auto F = smartVectorDuplicate(D);
       auto ksp = pip_mng->createKSP(subdm);
-
       CHKERR KSPSetFromOptions(ksp);
       CHKERR KSPSetUp(ksp);
-      CHKERR KSPSolve(ksp, F, D);
 
-      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+      auto solve = [&](auto S) {
+        MoFEMFunctionBegin;
+        CHKERR KSPSolve(ksp, F, S);
+        CHKERR VecGhostUpdateBegin(S, INSERT_VALUES, SCATTER_FORWARD);
+        CHKERR VecGhostUpdateEnd(S, INSERT_VALUES, SCATTER_FORWARD);
+        MoFEMFunctionReturn(0);
+      };
+
+      CHKERR solve(D);
+
+      if (vecs.size()) {
+
+        auto sub_v = smartVectorDuplicate(D);
+
+        for (auto v : vecs) {
+
+          CHKERR DMoFEMMeshToLocalVector(simple->getDM(), v, INSERT_VALUES,
+                                         SCATTER_REVERSE);
+
+          auto assemble_rhs = [&]() {
+            MoFEMFunctionBegin;
+            CHKERR VecZeroEntries(F);
+            CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
+            CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+            pip_mng->getCastDomainRhsFE()->ksp_f = F;
+            CHKERR DMoFEMLoopFiniteElements(subdm, simple->getDomainFEName(),
+                                            pip_mng->getCastDomainRhsFE());
+            CHKERR VecAssemblyBegin(F);
+            CHKERR VecAssemblyEnd(F);
+            CHKERR VecGhostUpdateBegin(F, ADD_VALUES, SCATTER_REVERSE);
+            CHKERR VecGhostUpdateEnd(F, ADD_VALUES, SCATTER_REVERSE);
+            MoFEMFunctionReturn(0);
+          };
+
+
+          CHKERR assemble_rhs();
+          CHKERR solve(sub_v);
+
+          CHKERR DMoFEMMeshToLocalVector(subdm, sub_v, INSERT_VALUES,
+                                         SCATTER_REVERSE);
+          CHKERR DMoFEMMeshToLocalVector(simple->getDM(), v, INSERT_VALUES,
+                                         SCATTER_FORWARD);
+        }
+      }
 
       CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
 
@@ -1669,8 +1714,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     return SmartPetscObj<DM>(subdm);
   };
 
-  auto sub_dm = create_solver_dm(simple->getDM());
-  auto snes_ctx_ptr = smartGetDMSnesCtx(sub_dm);
+  solverSubDM = create_solver_dm(simple->getDM());
+  auto snes_ctx_ptr = smartGetDMSnesCtx(solverSubDM);
 
   auto get_fe_post_proc = [&](auto post_proc_mesh) {
     auto add_parent_field_domain = [&](auto fe, auto op, auto field) {
@@ -1910,7 +1955,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  auto ts = pip_mng->createTSIM(sub_dm);
+  auto ts = pip_mng->createTSIM(solverSubDM);
 
   auto set_post_proc_monitor = [&](auto dm) {
     MoFEMFunctionBegin;
@@ -1923,14 +1968,15 @@ MoFEMErrorCode FreeSurface::solveSystem() {
                                null_fe, monitor_ptr);
     MoFEMFunctionReturn(0);
   };
-  CHKERR set_post_proc_monitor(sub_dm);
+  CHKERR set_post_proc_monitor(solverSubDM);
 
   // Add monitor to time solver
   double ftime = 1;
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
-  auto T = smartCreateDMVector(sub_dm);
-  CHKERR DMoFEMMeshToLocalVector(sub_dm, T, INSERT_VALUES, SCATTER_FORWARD);
+  auto T = smartCreateDMVector(solverSubDM);
+  CHKERR DMoFEMMeshToLocalVector(solverSubDM, T, INSERT_VALUES,
+                                 SCATTER_FORWARD);
   CHKERR TSSetSolution(ts, T);
   CHKERR TSSetFromOptions(ts);
   CHKERR set_ts(ts);
@@ -2328,19 +2374,19 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
                                       BitRefLevel().set(), name.c_str(), "MOAB",
                                       "PARALLEL=WRITE_PART");
       }
-      CHKERR bit_mng->writeBitLevel(
-          BitRefLevel().set(get_current_bit()), BitRefLevel().set(),
-          "current_bit.h5m", "MOAB", "PARALLEL=WRITE_PART");
-      CHKERR bit_mng->writeBitLevel(
-          BitRefLevel().set(get_projection_bit()), BitRefLevel().set(),
-          "projection_bit.h5m", "MOAB", "PARALLEL=WRITE_PART");
+      CHKERR bit_mng->writeBitLevel(BitRefLevel().set(get_current_bit()),
+                                    BitRefLevel().set(), "current_bit.h5m",
+                                    "MOAB", "PARALLEL=WRITE_PART");
+      CHKERR bit_mng->writeBitLevel(BitRefLevel().set(get_projection_bit()),
+                                    BitRefLevel().set(), "projection_bit.h5m",
+                                    "MOAB", "PARALLEL=WRITE_PART");
 
-      CHKERR bit_mng->writeBitLevel(
-          BitRefLevel().set(get_skin_child_bit()), BitRefLevel().set(),
-          "skin_child_bit.h5m", "MOAB", "PARALLEL=WRITE_PART");
-      CHKERR bit_mng->writeBitLevel(
-          BitRefLevel().set(get_skin_parent_bit()), BitRefLevel().set(),
-          "skin_parent_bit.h5m", "MOAB", "PARALLEL=WRITE_PART");
+      CHKERR bit_mng->writeBitLevel(BitRefLevel().set(get_skin_child_bit()),
+                                    BitRefLevel().set(), "skin_child_bit.h5m",
+                                    "MOAB", "PARALLEL=WRITE_PART");
+      CHKERR bit_mng->writeBitLevel(BitRefLevel().set(get_skin_parent_bit()),
+                                    BitRefLevel().set(), "skin_parent_bit.h5m",
+                                    "MOAB", "PARALLEL=WRITE_PART");
     }
   }
 
@@ -2432,11 +2478,69 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     return nrm;
   };
 
-  auto refine_problem = [&](auto ts) {
+  auto get_theta_data = [&](auto dm) {
+    Vec X0, Xdot;
+    CHK_THROW_MESSAGE(DMGetNamedGlobalVector(dm, "TSTheta_X0", &X0), "get X0");
+    CHK_THROW_MESSAGE(DMGetNamedGlobalVector(dm, "TSTheta_Xdot", &Xdot),
+                      "get Xdot");
+    return std::make_tuple(X0, Xdot);
+  };
+
+  auto restore_theta_data = [&](auto dm, auto X0, auto Xdot) {
+    MoFEMFunctionBegin;
+    CHK_THROW_MESSAGE(DMRestoreNamedGlobalVector(dm, "TSTheta_X0", &X0),
+                      "get X0");
+    CHK_THROW_MESSAGE(DMRestoreNamedGlobalVector(dm, "TSTheta_Xdot", &Xdot),
+                      "get Xdot");
+    MoFEMFunctionReturn(0);
+  };
+
+  enum FR { F, R };
+
+  auto get_scatter = [&](auto x, auto y, enum FR fr) {
+    auto prb_ptr = m_field.get_problem("SUB_SOLVER");
+    if (auto sub_data = prb_ptr->getSubData()) {
+      auto is = sub_data->getSmartColIs();
+      VecScatter s;
+      if (fr == R) {
+        CHK_THROW_MESSAGE(VecScatterCreate(x, PETSC_NULL, y, is, &s),
+                          "crate scatter");
+      } else {
+        CHK_THROW_MESSAGE(VecScatterCreate(x, is, y, PETSC_NULL, &s),
+                          "crate scatter");
+      }
+      return SmartPetscObj<VecScatter>(s);
+    }
+    return SmartPetscObj<VecScatter>();
+  };
+
+  auto apply_scatter = [&]() {
+    MoFEMFunctionBegin;
+
+    auto x = smartCreateDMVector(fsRawPtr->solverSubDM);
+    auto y = smartCreateDMVector(simple->getDM());
+    auto s = get_scatter(x, y, R);
+
+    CHKERR DMSubDomainRestrict(fsRawPtr->solverSubDM, s, PETSC_NULL,
+                               simple->getDM());
+
+    if constexpr (debug) {
+      auto [X0, Xdot] = get_theta_data(simple->getDM());
+      MOFEM_LOG("FS", Sev::inform) << "Reverse restrict: X0 " << get_norm(X0)
+                                   << " Xdot " << get_norm(Xdot);
+      CHKERR restore_theta_data(simple->getDM(), X0, Xdot);
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
+  auto refine_problem = [&]() {
     MoFEMFunctionBegin;
     MOFEM_LOG("FS", Sev::inform) << "Refine problem";
     CHKERR fsRawPtr->refineMesh(4);
-    CHKERR fsRawPtr->projectData();
+    auto [X0, Xdot] = get_theta_data(simple->getDM());
+    CHKERR fsRawPtr->projectData({X0, Xdot});
+    CHKERR restore_theta_data(simple->getDM(), X0, Xdot);
     MoFEMFunctionReturn(0);
   };
 
@@ -2471,45 +2575,53 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     MoFEMFunctionReturn(0);
   };
 
-  auto ts_reset_theta = [&](auto ts) {
+  auto set_jacobian_operators = [&]() {
     MoFEMFunctionBegin;
-    MOFEM_LOG("FS", Sev::inform) << "Reset time solver";
-    CHKERR TSReset(ts);
-    CHKERR TSSetUp(ts);
+    auto B = smartCreateDMMatrix(fsRawPtr->solverSubDM);
+    CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, nullptr);
+    MoFEMFunctionReturn(0);
+  };
 
-    auto set_jacobian_operators = [&](auto ts) {
-      MoFEMFunctionBegin;
-      SmartPetscObj<Mat> B;
-      CHKERR m_field.getInterface<MatrixManager>()
-          ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("SUB_SOLVER", B);
-      CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, nullptr);
-      MoFEMFunctionReturn(0);
-    };
+  auto apply_restrict = [&]() {
+    MoFEMFunctionBegin;
+    MOFEM_LOG("FS", Sev::inform) << "Restrict time solver";
 
-    auto set_solution = [&](auto ts) {
-      MoFEMFunctionBegin;
-      SmartPetscObj<Vec> x;
-      CHKERR m_field.getInterface<VecManager>()->vecCreateGhost("SUB_SOLVER",
-                                                                COL, x);
-      CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
-          "SUB_SOLVER", COL, x, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateBegin(x, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateEnd(x, INSERT_VALUES, SCATTER_FORWARD);
-      MOFEM_LOG("FS", Sev::inform)
-          << "Set solution, vector norm " << get_norm(x);
-      CHKERR TSSetSolution(ts, x);
-      MoFEMFunctionReturn(0);
-    };
+    // TS solver stores named vectors in DM. Those vector are destroyed, and
+    // created with new size, then values are populated using
+    // DMSubDomainRestrict
 
-    CHKERR set_jacobian_operators(ts);
-    CHKERR set_solution(ts);
+    auto x = smartCreateDMVector(simple->getDM());
+    auto y = smartCreateDMVector(fsRawPtr->solverSubDM);
+    auto s = get_scatter(x, y, F);
+    CHKERR DMSubDomainRestrict(simple->getDM(), s, PETSC_NULL,
+                               fsRawPtr->solverSubDM);
 
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR refine_problem(ts);
+  auto set_solution = [&]() {
+    MoFEMFunctionBegin;
+    SmartPetscObj<Vec> x;
+    CHKERR m_field.getInterface<VecManager>()->vecCreateGhost("SUB_SOLVER", COL,
+                                                              x);
+    CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
+        "SUB_SOLVER", COL, x, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateBegin(x, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(x, INSERT_VALUES, SCATTER_FORWARD);
+    MOFEM_LOG("FS", Sev::inform) << "Set solution, vector norm " << get_norm(x);
+    CHKERR TSSetSolution(ts, x);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR apply_scatter();
+  CHKERR refine_problem();
   CHKERR rebuild_sub_dm();
-  CHKERR ts_reset_theta(ts);
+
+  CHKERR TSReset(ts);
+  CHKERR TSSetUp(ts);
+  CHKERR set_solution();
+  CHKERR apply_restrict();
+  CHKERR set_jacobian_operators();
 
   MoFEMFunctionReturn(0);
 }
