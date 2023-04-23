@@ -831,6 +831,8 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
   auto bc_mng = mField.getInterface<BcManager>();
   auto bit_mng = mField.getInterface<BitRefManager>();
 
+  // Store all existing elements pipelines, replace them by data projection
+  // pipelines, to put them back when projection is done.
   auto fe_domain_lhs = pip_mng->getDomainLhsFE();
   auto fe_domain_rhs = pip_mng->getDomainRhsFE();
   auto fe_bdy_lhs = pip_mng->getBoundaryLhsFE();
@@ -843,6 +845,7 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
 
   using UDO = ForcesAndSourcesCore::UserDataOperator;
 
+  // extract field data for domain parent element
   auto add_parent_field_domain = [&](auto fe, auto op, auto field, auto bit) {
     return setParentDofs(
         fe, field, op, bit,
@@ -856,6 +859,7 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
         QUIET, Sev::noisy);
   };
 
+  // extract field data for boundary parent element
   auto add_parent_field_bdy = [&](auto fe, auto op, auto field, auto bit) {
     return setParentDofs(
         fe, field, op, bit,
@@ -869,6 +873,8 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
         QUIET, Sev::noisy);
   };
 
+  // run this element on element with given bit, otherwise run other nested
+  // element
   auto create_run_parent_op = [&](auto parent_fe_ptr, auto this_fe_ptr,
                                   auto fe_bit) {
     auto parent_mask = fe_bit;
@@ -878,6 +884,7 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
                            Sev::inform);
   };
 
+  // create hierarchy of nested elements
   auto get_parents_vel_fe_ptr = [&](auto this_fe_ptr, auto fe_bit) {
     std::vector<boost::shared_ptr<DomianParentEle>> parents_elems_ptr_vec;
     for (int l = 0; l < nb_levels; ++l)
@@ -890,6 +897,7 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
     return parents_elems_ptr_vec[0];
   };
 
+  // solve projection problem
   auto solve_projection = [&](auto exe_test) {
     MoFEMFunctionBegin;
 
@@ -1300,6 +1308,7 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
     MoFEMFunctionReturn(0);
   };
 
+  // postprocessing (only for debugging proposes)
   auto post_proc = [&](auto exe_test) {
     MoFEMFunctionBegin;
     auto post_proc_fe = boost::make_shared<PostProcEleDomain>(mField);
