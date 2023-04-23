@@ -2610,12 +2610,14 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
 
   MOFEM_LOG("FS", Sev::inform) << "Run step pre proc";
 
+  // get vector norm
   auto get_norm = [&](auto x) {
     double nrm;
     CHKERR VecNorm(x, NORM_2, &nrm);
     return nrm;
   };
 
+  // get data for theta vector on dm
   auto get_theta_data = [&](auto dm) {
     Vec X0, Xdot;
     CHK_THROW_MESSAGE(DMGetNamedGlobalVector(dm, "TSTheta_X0", &X0), "get X0");
@@ -2624,6 +2626,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     return std::make_tuple(X0, Xdot);
   };
 
+  // restore data for theta vector on dm
   auto restore_theta_data = [&](auto dm, auto X0, auto Xdot) {
     MoFEMFunctionBegin;
     CHK_THROW_MESSAGE(DMRestoreNamedGlobalVector(dm, "TSTheta_X0", &X0),
@@ -2633,8 +2636,9 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     MoFEMFunctionReturn(0);
   };
 
-  enum FR { F, R };
+  enum FR { F, R }; // F - forward, and reverse
 
+  // get scatter for data for theta method on two dms
   auto get_scatter = [&](auto x, auto y, enum FR fr) {
     auto prb_ptr = m_field.get_problem("SUB_SOLVER");
     if (auto sub_data = prb_ptr->getSubData()) {
@@ -2652,6 +2656,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     return SmartPetscObj<VecScatter>();
   };
 
+  // get data for theta vector on subproblem, and store result in "simple" dm
   auto apply_scatter = [&]() {
     MoFEMFunctionBegin;
 
@@ -2672,6 +2677,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     MoFEMFunctionReturn(0);
   };
 
+  // refine problem and project data, including theta data
   auto refine_problem = [&]() {
     MoFEMFunctionBegin;
     MOFEM_LOG("FS", Sev::inform) << "Refine problem";
@@ -2682,6 +2688,8 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     MoFEMFunctionReturn(0);
   };
 
+  // rebuild subdm (FIXME: that can be implemented with DMs interface, instead
+  // using lower level interface)
   auto rebuild_sub_dm = [&]() {
     MoFEMFunctionBegin;
 
@@ -2713,6 +2721,8 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     MoFEMFunctionReturn(0);
   };
 
+  // set new jacobin operator, since problem and thus tangent matrix size has
+  // changed
   auto set_jacobian_operators = [&]() {
     MoFEMFunctionBegin;
     auto B = smartCreateDMMatrix(fsRawPtr->solverSubDM);
@@ -2720,6 +2730,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     MoFEMFunctionReturn(0);
   };
 
+  // restore theta data on sub dm
   auto apply_restrict = [&]() {
     MoFEMFunctionBegin;
     MOFEM_LOG("FS", Sev::inform) << "Restrict time solver";
@@ -2738,6 +2749,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     MoFEMFunctionReturn(0);
   };
 
+  // set new solution
   auto set_solution = [&]() {
     MoFEMFunctionBegin;
     MOFEM_LOG("FS", Sev::inform) << "Set solution";
@@ -2754,18 +2766,19 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR apply_scatter();
-  CHKERR refine_problem();
-  CHKERR rebuild_sub_dm();
+  CHKERR apply_scatter(); // store theta data
+  CHKERR refine_problem(); // refine problem
+  CHKERR rebuild_sub_dm(); // rebuild TS (theta) solver subproblem
 
-  CHKERR TSReset(ts);
-  CHKERR DMClearGlobalVectors(fsRawPtr->solverSubDM);
-  CHKERR DMClearGlobalVectors(fsRawPtr->solverSubDM);
-  CHKERR set_solution();
-  CHKERR set_jacobian_operators();
-  CHKERR TSSetUp(ts);
-  CHKERR apply_restrict();
+  CHKERR TSReset(ts); // reset data
+  CHKERR set_solution(); // restore solution
+  CHKERR set_jacobian_operators(); // set new jacobian
+  CHKERR TSSetUp(ts); // recreate internal TS data with new vector sizes
+  CHKERR apply_restrict(); // restore internal data, by scattering from "simple"
+                           // DM to solver sub DM
 
+  // Need barriers, somme functions in TS solver need are called collectively
+  // and requite the same state of variables
   PetscBarrier((PetscObject)ts);
 
   MOFEM_LOG_CHANNEL("SYNC");
