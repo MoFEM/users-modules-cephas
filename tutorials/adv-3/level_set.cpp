@@ -2063,6 +2063,8 @@ MoFEMErrorCode LevelSet::solveAdvection() {
       DM dm;
       CHKERR TSGetDM(ts, &dm);
 
+      // FIXME: Look into vec-5 how to transfer internal theta method variables
+
       CHKERR TSReset(ts);
       CHKERR TSSetUp(ts);
 
