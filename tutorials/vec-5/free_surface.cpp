@@ -2766,9 +2766,11 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   CHKERR TSSetUp(ts);
   CHKERR apply_restrict();
 
+  PetscBarrier((PetscObject)ts);
+
   MOFEM_LOG_CHANNEL("SYNC");
-  MOFEM_TAG_AND_LOG("SYNC", Sev::inform, "FS") << "PreProc done";
-  MOFEM_LOG_SEVERITY_SYNC(m_field.get_comm(), Sev::inform);
+  MOFEM_TAG_AND_LOG("SYNC", Sev::verbose, "FS") << "PreProc done";
+  MOFEM_LOG_SEVERITY_SYNC(m_field.get_comm(), Sev::verbose);
 
   MoFEMFunctionReturn(0);
 }
