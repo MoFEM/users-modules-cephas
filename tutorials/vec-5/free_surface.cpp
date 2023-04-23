@@ -826,6 +826,9 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
   MoFEMFunctionBegin;
 
+  // FIXME: Funcionality in this method should be improved (projection should be
+  // done field by field), generalised, and move to become core functionality.
+
   auto simple = mField.getInterface<Simple>();
   auto pip_mng = mField.getInterface<PipelineManager>();
   auto bc_mng = mField.getInterface<BcManager>();
