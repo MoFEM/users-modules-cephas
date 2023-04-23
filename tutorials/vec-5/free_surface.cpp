@@ -421,12 +421,12 @@ private:
   /// @return
   MoFEMErrorCode refineMesh(size_t overlap);
 
-  /// @brief
-  /// @param fe_top
-  /// @param op
-  /// @param get_elem
-  /// @param verbosity
-  /// @param sev
+  /// @brief Create hierarchy of elements run on parents levels
+  /// @param fe_top pipeline element to which hierarchy is attached
+  /// @param op type of operator OPSPACE, OPROW, OPCOL or OPROWCOL
+  /// @param get_elema lambda function to create element on hierarchy
+  /// @param verbosity verbosity level
+  /// @param sev severity level
   /// @return
   MoFEMErrorCode setParentDofs(
       boost::shared_ptr<FEMethod> fe_top, std::string field_name,
