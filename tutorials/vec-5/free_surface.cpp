@@ -1058,6 +1058,25 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
             },
 
             QUIET, Sev::noisy);
+
+        struct OpLSize : public BoundaryEleOp {
+          OpLSize(boost::shared_ptr<VectorDouble> l_ptr)
+              : BoundaryEleOp(NOSPACE, DomainEleOp::OPSPACE), lPtr(l_ptr) {}
+          MoFEMErrorCode doWork(int, EntityType, EntData &) {
+            MoFEMFunctionBegin;
+            if (lPtr->size() != getGaussPts().size2()) {
+              lPtr->resize(getGaussPts().size2());
+              lPtr->clear();
+            }
+            MoFEMFunctionReturn(0);
+          }
+
+        private:
+          boost::shared_ptr<VectorDouble> lPtr;
+        };
+
+        pip.push_back(new OpLSize(l_ptr));
+
         CHKERR add_parent_field_bdy(assemble_fe_ptr, UDO::OPROW, "L",
                                     bit(get_skin_parent_bit()));
         pip.push_back(new OpBoundaryAssembleScalar("L", l_ptr));
@@ -2747,7 +2766,9 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   CHKERR TSSetUp(ts);
   CHKERR apply_restrict();
 
-  MOFEM_LOG("FS", Sev::inform) << "Pre-proc done";
+  MOFEM_LOG_CHANNEL("SYNC");
+  MOFEM_TAG_AND_LOG("SYNC", Sev::inform, "FS") << "PreProc done";
+  MOFEM_LOG_SEVERITY_SYNC(m_field.get_comm(), Sev::inform);
 
   MoFEMFunctionReturn(0);
 }
