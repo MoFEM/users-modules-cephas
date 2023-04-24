@@ -80,7 +80,7 @@ constexpr CoordinateTypes coord_type =
 
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType I =
-    IntegrationType::GAUSS; //< selected integration type
+    IntegrationType::GAUSS;                     //< selected integration type
 
 template <int DIM>
 using ElementsAndOps = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>;
@@ -826,8 +826,9 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
   MoFEMFunctionBegin;
 
-  // FIXME: Functionality in this method should be improved (projection should be
-  // done field by field), generalised, and move to become core functionality.
+  // FIXME: Functionality in this method should be improved (projection should
+  // be done field by field), generalised, and move to become core
+  // functionality.
 
   auto simple = mField.getInterface<Simple>();
   auto pip_mng = mField.getInterface<PipelineManager>();
