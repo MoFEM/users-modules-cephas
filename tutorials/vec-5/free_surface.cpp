@@ -2805,4 +2805,9 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode TSPrePostProc::tsPostProc(TS ts) { return 0; }
+MoFEMErrorCode TSPrePostProc::tsPostProc(TS ts) {
+  MOFEM_LOG_CHANNEL("SYNC");
+  MOFEM_TAG_AND_LOG("SYNC", Sev::verbose, "FS") << "PostProc done";
+  MOFEM_LOG_SEVERITY_SYNC(m_field.get_comm(), Sev::verbose);
+  return 0;
+}
