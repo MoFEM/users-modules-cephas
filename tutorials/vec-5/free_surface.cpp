@@ -1776,8 +1776,11 @@ struct Monitor : public FEMethod {
         postProcEdge(post_proc_edge), liftFE(p.first), liftVec(p.second) {}
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
+
+    MOFEM_LOG("FS", Sev::verbose) << "Monitor";
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
+      MOFEM_LOG("FS", Sev::verbose) << "Mesh pre proc";
       MoFEM::Interface *m_field_ptr;
       CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
       auto post_proc_begin =
@@ -1793,6 +1796,7 @@ struct Monitor : public FEMethod {
       CHKERR DMoFEMPostProcessFiniteElements(dM, post_proc_end->getFEMethod());
       CHKERR post_proc_end->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      MOFEM_LOG("FS", Sev::verbose) << "Mesh pre proc done";
     }
 
     liftVec->resize(SPACE_DIM, false);
