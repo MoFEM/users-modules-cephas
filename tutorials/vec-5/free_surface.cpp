@@ -2783,16 +2783,31 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR apply_scatter(); // store theta data
-  CHKERR refine_problem(); // refine problem
-  CHKERR rebuild_sub_dm(); // rebuild TS (theta) solver subproblem
+  PetscBool is_theta;
+  PetscObjectTypeCompare((PetscObject)ts, TSTHETA, &is_theta);
+  if (is_theta) {
 
-  CHKERR TSReset(ts); // reset data
-  CHKERR set_solution(); // restore solution
-  CHKERR set_jacobian_operators(); // set new jacobian
-  CHKERR TSSetUp(ts); // recreate internal TS data with new vector sizes
-  CHKERR apply_restrict(); // restore internal data, by scattering from "simple"
-                           // DM to solver sub DM
+    CHKERR apply_scatter();          // store theta data
+    CHKERR refine_problem();         // refine problem
+    CHKERR rebuild_sub_dm();         // rebuild TS (theta) solver subproblem
+
+
+    CHKERR TSReset(ts);              // reset data
+    TSAdapt ts_adapt;
+    CHKERR TSGetAdapt(ts, &ts_adapt);
+    CHKERR TSAdaptReset(ts_adapt); // reset TSAdapt
+
+    CHKERR set_solution();           // restore solution
+    CHKERR set_jacobian_operators(); // set new jacobian
+    CHKERR TSSetUp(ts);            // setup ts
+
+    CHKERR apply_restrict();       // restore internal data, by scattering from
+                                   // "simple" DM to solver sub DM
+
+  } else {
+    SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED,
+            "Sorry, only TSTheta handling is implemented");
+  }
 
   // Need barriers, somme functions in TS solver need are called collectively
   // and requite the same state of variables
