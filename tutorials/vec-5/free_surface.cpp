@@ -2721,6 +2721,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   auto set_jacobian_operators = [&]() {
     MoFEMFunctionBegin;
     subB = smartCreateDMMatrix(TSPrePostProc::solverSubDM);
+    CHKERR KSPReset(subKSP);
     MoFEMFunctionReturn(0);
   };
 
