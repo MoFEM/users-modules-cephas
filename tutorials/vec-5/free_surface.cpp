@@ -1185,6 +1185,33 @@ MoFEMErrorCode FreeSurface::projectData() {
       auto prj_ents = get_prj_ents();
 
       if (get_global_size(prj_ents.size())) {
+
+        auto rebuild = [&]() {
+          auto prb_mng = mField.getInterface<ProblemsManager>();
+
+          std::vector<std::string> fields{"U", "P", "H", "G", "L"};
+          std::map<std::string, boost::shared_ptr<Range>> range_maps{
+
+              {"U", level_ents_ptr},
+              {"P", level_ents_ptr},
+              {"H", level_ents_ptr},
+              {"G", level_ents_ptr},
+              {"L", level_ents_ptr}
+
+          };
+
+          CHKERR prb_mng->buildSubProblem("SUB_SOLVER", fields, fields,
+                                          simple->getProblemName(), PETSC_TRUE,
+                                          &range_maps, &range_maps);
+
+          // partition problem
+          CHKERR prb_mng->partitionFiniteElements("SUB_SOLVER", true, 0,
+                                                  mField.get_comm_size());
+          // set ghost nodes
+          CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_SOLVER");
+          
+        };
+
         MOFEM_LOG("FS", Sev::verbose) << "Create projection problem dm";
         auto dm = simple->getDM();
         DM subdm;
@@ -2655,48 +2682,11 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     return nrm;
   };
 
-  // rebuild subdm (FIXME: that can be implemented with DMs interface, instead
-  // using lower level interface)
-  auto rebuild_sub_dm = [&]() {
-    MoFEMFunctionBegin;
-
-    auto level_ents_ptr = boost::make_shared<Range>();
-    CHKERR bit_mng->getEntitiesByRefLevel(bit(get_current_bit()),
-                                          BitRefLevel().set(), *level_ents_ptr);
-
-    std::vector<std::string> fields{"U", "P", "H", "G", "L"};
-    std::map<std::string, boost::shared_ptr<Range>> range_maps{
-
-        {"U", level_ents_ptr},
-        {"P", level_ents_ptr},
-        {"H", level_ents_ptr},
-        {"G", level_ents_ptr},
-        {"L", level_ents_ptr}
-
-    };
-
-    CHKERR prb_mng->buildSubProblem("SUB_SOLVER", fields, fields,
-                                    simple->getProblemName(), PETSC_TRUE,
-                                    &range_maps, &range_maps);
-
-    // partition problem
-    CHKERR prb_mng->partitionFiniteElements("SUB_SOLVER", true, 0,
-                                            m_field.get_comm_size());
-    // set ghost nodes
-    CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_SOLVER");
-
-    CHKERR DMClearGlobalVectors(TSPrePostProc::solverSubDM);
-    CHKERR DMClearLocalVectors(TSPrePostProc::solverSubDM);
-
-    MoFEMFunctionReturn(0);
-  };  
-
   // refine problem and project data, including theta data
   auto refine_problem = [&]() {
     MoFEMFunctionBegin;
     MOFEM_LOG("FS", Sev::inform) << "Refine problem";
     CHKERR fsRawPtr->refineMesh(4);
-    CHKERR rebuild_sub_dm(); // rebuild TS (theta) solver subproblem
     CHKERR fsRawPtr->projectData();
     MoFEMFunctionReturn(0);
   };
