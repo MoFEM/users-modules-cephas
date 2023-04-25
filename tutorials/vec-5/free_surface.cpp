@@ -396,12 +396,9 @@ struct TSPrePostProc {
   static SmartPetscObj<VecScatter> getScatter(Vec x, Vec y, enum FR fr);
 
   static SmartPetscObj<DM> solverSubDM;
-  static boost::shared_ptr<SnesCtx> snesCtxPtr;
-  static boost::shared_ptr<TsCtx> tsCtxPtr;
-
   static FreeSurface *fsRawPtr;
 
-// private:
+private:
   static MoFEMErrorCode tsPreProc(TS ts);
   static MoFEMErrorCode tsPostProc(TS ts);
   static SmartPetscObj<Vec> getSubVector();
@@ -419,7 +416,10 @@ struct TSPrePostProc {
   static SmartPetscObj<Vec> globF;
   static SmartPetscObj<Mat> subB;
   static SmartPetscObj<KSP> subKSP;
-  };
+
+  static boost::shared_ptr<SnesCtx> snesCtxPtr;
+  static boost::shared_ptr<TsCtx> tsCtxPtr;
+};
 
 SmartPetscObj<DM> TSPrePostProc::solverSubDM;
 SmartPetscObj<Vec> TSPrePostProc::globF;
@@ -1309,10 +1309,11 @@ MoFEMErrorCode FreeSurface::projectData() {
 
       auto apply_update = [&](std::vector<Vec> vecs) {
         MoFEMFunctionBegin;
-        CHKERR DMRestoreNamedGlobalVector(subdm, "TSTheta_X0", &vecs[0]);
-        CHKERR DMRestoreNamedGlobalVector(subdm, "TSTheta_Xdot", &vecs[1]);
         auto s = TSPrePostProc::getScatter(vecs[0], glob_x, FR::R);
         CHKERR DMSubDomainRestrict(subdm, s, PETSC_NULL, simple->getDM());
+
+        CHKERR DMRestoreNamedGlobalVector(subdm, "TSTheta_X0", &vecs[0]);
+        CHKERR DMRestoreNamedGlobalVector(subdm, "TSTheta_Xdot", &vecs[1]);
         MoFEMFunctionReturn(0);
       };
 
