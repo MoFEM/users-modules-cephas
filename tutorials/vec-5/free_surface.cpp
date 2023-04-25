@@ -1253,23 +1253,6 @@ MoFEMErrorCode FreeSurface::projectData() {
         return nrm;
       };
 
-      auto assemble_rhs = [&](auto F) {
-        MoFEMFunctionBegin;
-        CHKERR VecZeroEntries(F);
-        CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
-        CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
-        pip_mng->getCastDomainRhsFE()->ksp_f = F;
-        CHKERR DMoFEMLoopFiniteElements(subdm, simple->getDomainFEName(),
-                                        pip_mng->getCastDomainRhsFE());
-        CHKERR VecAssemblyBegin(F);
-        CHKERR VecAssemblyEnd(F);
-        CHKERR VecGhostUpdateBegin(F, ADD_VALUES, SCATTER_REVERSE);
-        CHKERR VecGhostUpdateEnd(F, ADD_VALUES, SCATTER_REVERSE);
-
-        MOFEM_LOG("FS", Sev::inform) << "Norm F " << get_norm(F);
-        MoFEMFunctionReturn(0);
-      };
-
       auto solve = [&](auto S) {
         MoFEMFunctionBegin;
         CHKERR VecZeroEntries(S);
@@ -1280,14 +1263,14 @@ MoFEMErrorCode FreeSurface::projectData() {
       };
 
       MOFEM_LOG("FS", Sev::inform) << "Solve projection";
-      CHKERR assemble_rhs(F);
+      // CHKERR assemble_rhs(F);
       CHKERR solve(D);
 
       auto glob_x = smartCreateDMVector(simple->getDM());
 
       auto apply_restrict = [&]() {
-        auto s = TSPrePostProc::getScatter(glob_x, D, FR::F);
 
+        auto s = TSPrePostProc::getScatter(glob_x, D, FR::F);
         CHK_THROW_MESSAGE(
             DMSubDomainRestrict(simple->getDM(), s, PETSC_NULL, subdm),
             "restrict");
@@ -1297,6 +1280,7 @@ MoFEMErrorCode FreeSurface::projectData() {
                           "get X0");
         CHK_THROW_MESSAGE(DMGetNamedGlobalVector(subdm, "TSTheta_Xdot", &Xdot),
                           "get Xdot");
+
 
         if constexpr (debug) {
           MOFEM_LOG("FS", Sev::inform)
@@ -1326,7 +1310,6 @@ MoFEMErrorCode FreeSurface::projectData() {
 
           CHKERR DMoFEMMeshToLocalVector(subdm, v, INSERT_VALUES,
                                          SCATTER_REVERSE);
-          CHKERR assemble_rhs(F);
           CHKERR solve(v);
 
           MOFEM_LOG("FS", Sev::inform) << "Norm V " << get_norm(v);
