@@ -1188,6 +1188,7 @@ MoFEMErrorCode FreeSurface::projectData() {
 
         auto rebuild = [&]() {
           auto prb_mng = mField.getInterface<ProblemsManager>();
+          MoFEMFunctionBegin;
 
           std::vector<std::string> fields{"U", "P", "H", "G", "L"};
           std::map<std::string, boost::shared_ptr<Range>> range_maps{
@@ -1209,10 +1210,13 @@ MoFEMErrorCode FreeSurface::projectData() {
                                                   mField.get_comm_size());
           // set ghost nodes
           CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_SOLVER");
-          
+          MoFEMFunctionReturn(0);
         };
 
-        MOFEM_LOG("FS", Sev::verbose) << "Create projection problem dm";
+        MOFEM_LOG("FS", Sev::verbose) << "Create projection problem";
+
+        CHKERR rebuild();
+
         auto dm = simple->getDM();
         DM subdm;
         CHKERR DMCreate(mField.get_comm(), &subdm);
@@ -2859,7 +2863,9 @@ MoFEMErrorCode TSPrePostProc::pcApply(PC pc, Vec pc_f, Vec pc_x) {
   CHKERR VecScatterBegin(scatter, pc_f, sub_f, INSERT_VALUES, SCATTER_REVERSE);
   CHKERR VecScatterEnd(scatter, pc_f, sub_f, INSERT_VALUES, SCATTER_REVERSE);
   CHKERR KSPSetOperators(subKSP, subB, subB);
+  MOFEM_LOG("FS", Sev::verbose) << "PCShell solve";
   CHKERR KSPSolve(subKSP, sub_f, sub_x);
+  MOFEM_LOG("FS", Sev::verbose) << "PCShell solve <- done";
   CHKERR VecScatterBegin(scatter, sub_x, pc_x, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecScatterEnd(scatter, sub_x, pc_x, INSERT_VALUES, SCATTER_FORWARD);
   MoFEMFunctionReturn(0);
@@ -2894,15 +2900,14 @@ MoFEMErrorCode TSPrePostProc::tsSetUp(TS ts) {
 
   CHKERR set_section_monitor(snes);
 
-  KSP ksp;
-  CHKERR SNESGetKSP(snes, &ksp);
+  auto ksp = createKSP(m_field.get_comm());
   CHKERR KSPSetType(ksp, KSPPREONLY); // Run KSP internally in ShellPC
   auto sub_pc = createPC(fsRawPtr->mField.get_comm());
   CHKERR PCSetType(sub_pc, PCSHELL);
-  CHKERR PCShellSetContext(sub_pc, TSPrePostProc::fsRawPtr);
   CHKERR PCShellSetSetUp(sub_pc, TSPrePostProc::pcSetup);
   CHKERR PCShellSetApply(sub_pc, TSPrePostProc::pcApply);
   CHKERR KSPSetPC(ksp, sub_pc);
+  CHKERR SNESSetKSP(snes, ksp);
 
   snesCtxPtr = smartGetDMSnesCtx(TSPrePostProc::solverSubDM);
   tsCtxPtr = smartGetDMTsCtx(TSPrePostProc::solverSubDM);
