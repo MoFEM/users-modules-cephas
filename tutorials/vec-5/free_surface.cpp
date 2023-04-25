@@ -169,7 +169,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.0015 / 4; // mesh size
+constexpr double h = 0.0015 / 2; // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -386,6 +386,50 @@ auto get_dofs_ents_all = [](auto dm) {
 #include <FreeSurfaceOps.hpp>
 using namespace FreeSurfaceOps;
 
+struct FreeSurface;
+
+enum FR { F, R }; // F - forward, and reverse
+
+struct TSPrePostProc {
+
+  static MoFEMErrorCode setTS(TS ts);
+  static SmartPetscObj<VecScatter> getScatter(Vec x, Vec y, enum FR fr);
+
+  static SmartPetscObj<DM> solverSubDM;
+  static boost::shared_ptr<SnesCtx> snesCtxPtr;
+  static boost::shared_ptr<TsCtx> tsCtxPtr;
+
+  static FreeSurface *fsRawPtr;
+
+// private:
+  static MoFEMErrorCode tsPreProc(TS ts);
+  static MoFEMErrorCode tsPostProc(TS ts);
+  static SmartPetscObj<Vec> getSubVector();
+
+  static MoFEMErrorCode tsSetIFunction(TS ts, PetscReal t, Vec u, Vec u_t,
+                                       Vec f, void *ctx);
+  static MoFEMErrorCode tsSetIJacobian(TS ts, PetscReal t, Vec u, Vec u_t,
+                                       PetscReal a, Mat A, Mat B, void *ctx);
+  static MoFEMErrorCode tsMonitor(TS ts, PetscInt step, PetscReal t, Vec u,
+                                  void *ctx);
+
+  static MoFEMErrorCode pcSetup(PC pc);
+  static MoFEMErrorCode pcApply(PC pc, Vec pc_f, Vec pc_x);
+
+  static SmartPetscObj<Vec> globF;
+  static SmartPetscObj<Mat> subB;
+  static SmartPetscObj<KSP> subKSP;
+  };
+
+SmartPetscObj<DM> TSPrePostProc::solverSubDM;
+SmartPetscObj<Vec> TSPrePostProc::globF;
+SmartPetscObj<Mat> TSPrePostProc::subB;
+SmartPetscObj<KSP> TSPrePostProc::subKSP;
+boost::shared_ptr<SnesCtx> TSPrePostProc::snesCtxPtr;
+boost::shared_ptr<TsCtx> TSPrePostProc::tsCtxPtr;
+
+FreeSurface *TSPrePostProc::fsRawPtr = nullptr;
+
 struct FreeSurface {
 
   FreeSurface(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -400,7 +444,7 @@ private:
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode boundaryCondition();
-  MoFEMErrorCode projectData(std::vector<Vec> vecs);
+  MoFEMErrorCode projectData();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
 
@@ -436,8 +480,6 @@ private:
       int verbosity, LogManager::SeverityLevel sev);
 
   friend struct TSPrePostProc;
-
-  SmartPetscObj<DM> solverSubDM;
 };
 
 //! [Run programme]
@@ -794,11 +836,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     return get_fe_bit(fe_ptr).test(get_start_bit() + nb_levels - 1);
   });
 
-  // if constexpr (debug) {
-  //   CHKERR refineMesh(1);
-  //   CHKERR projectData({});
-  // }
-
   pip_mng->getOpDomainRhsPipeline().clear();
   pip_mng->getOpDomainLhsPipeline().clear();
 
@@ -823,7 +860,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
 //! [Boundary condition]
 
 //! [Data projection]
-MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
+MoFEMErrorCode FreeSurface::projectData() {
   MoFEMFunctionBegin;
 
   // FIXME: Functionality in this method should be improved (projection should
@@ -1209,6 +1246,30 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
       CHKERR KSPSetFromOptions(ksp);
       CHKERR KSPSetUp(ksp);
 
+      // get vector norm
+      auto get_norm = [&](auto x) {
+        double nrm;
+        CHKERR VecNorm(x, NORM_2, &nrm);
+        return nrm;
+      };
+
+      auto assemble_rhs = [&](auto F) {
+        MoFEMFunctionBegin;
+        CHKERR VecZeroEntries(F);
+        CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
+        CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+        pip_mng->getCastDomainRhsFE()->ksp_f = F;
+        CHKERR DMoFEMLoopFiniteElements(subdm, simple->getDomainFEName(),
+                                        pip_mng->getCastDomainRhsFE());
+        CHKERR VecAssemblyBegin(F);
+        CHKERR VecAssemblyEnd(F);
+        CHKERR VecGhostUpdateBegin(F, ADD_VALUES, SCATTER_REVERSE);
+        CHKERR VecGhostUpdateEnd(F, ADD_VALUES, SCATTER_REVERSE);
+
+        MOFEM_LOG("FS", Sev::inform) << "Norm F " << get_norm(F);
+        MoFEMFunctionReturn(0);
+      };
+
       auto solve = [&](auto S) {
         MoFEMFunctionBegin;
         CHKERR VecZeroEntries(S);
@@ -1219,41 +1280,58 @@ MoFEMErrorCode FreeSurface::projectData(std::vector<Vec> vecs) {
       };
 
       MOFEM_LOG("FS", Sev::inform) << "Solve projection";
+      CHKERR assemble_rhs(F);
       CHKERR solve(D);
 
-      if (vecs.size()) {
+      auto glob_x = smartCreateDMVector(simple->getDM());
 
-        auto sub_v = smartVectorDuplicate(D);
+      auto apply_restrict = [&]() {
+        auto s = TSPrePostProc::getScatter(glob_x, D, FR::F);
+
+        CHK_THROW_MESSAGE(
+            DMSubDomainRestrict(simple->getDM(), s, PETSC_NULL, subdm),
+            "restrict");
+
+        Vec X0, Xdot;
+        CHK_THROW_MESSAGE(DMGetNamedGlobalVector(subdm, "TSTheta_X0", &X0),
+                          "get X0");
+        CHK_THROW_MESSAGE(DMGetNamedGlobalVector(subdm, "TSTheta_Xdot", &Xdot),
+                          "get Xdot");
+
+        if constexpr (debug) {
+          MOFEM_LOG("FS", Sev::inform)
+              << "Reverse restrict: X0 " << get_norm(X0) << " Xdot "
+              << get_norm(Xdot);
+        }
+
+        return std::vector<Vec>{X0, Xdot};
+      };
+
+      auto apply_update = [&](std::vector<Vec> vecs) {
+        MoFEMFunctionBegin;
+        CHKERR DMRestoreNamedGlobalVector(subdm, "TSTheta_X0", &vecs[0]);
+        CHKERR DMRestoreNamedGlobalVector(subdm, "TSTheta_Xdot", &vecs[1]);
+        auto s = TSPrePostProc::getScatter(vecs[0], glob_x, FR::R);
+        CHKERR DMSubDomainRestrict(subdm, s, PETSC_NULL, simple->getDM());
+        MoFEMFunctionReturn(0);
+      };
+
+      auto vecs = apply_restrict();
+
+      if (vecs.size()) {
 
         for (auto v : vecs) {
           MOFEM_LOG("FS", Sev::inform) << "Solve projection vector";
 
-          CHKERR DMoFEMMeshToLocalVector(simple->getDM(), v, INSERT_VALUES,
+          CHKERR DMoFEMMeshToLocalVector(subdm, v, INSERT_VALUES,
                                          SCATTER_REVERSE);
+          CHKERR assemble_rhs(F);
+          CHKERR solve(v);
 
-          auto assemble_rhs = [&]() {
-            MoFEMFunctionBegin;
-            CHKERR VecZeroEntries(F);
-            CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
-            CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
-            pip_mng->getCastDomainRhsFE()->ksp_f = F;
-            CHKERR DMoFEMLoopFiniteElements(subdm, simple->getDomainFEName(),
-                                            pip_mng->getCastDomainRhsFE());
-            CHKERR VecAssemblyBegin(F);
-            CHKERR VecAssemblyEnd(F);
-            CHKERR VecGhostUpdateBegin(F, ADD_VALUES, SCATTER_REVERSE);
-            CHKERR VecGhostUpdateEnd(F, ADD_VALUES, SCATTER_REVERSE);
-            MoFEMFunctionReturn(0);
-          };
-
-          CHKERR assemble_rhs();
-          CHKERR solve(sub_v);
-
-          CHKERR DMoFEMMeshToLocalVector(subdm, sub_v, INSERT_VALUES,
-                                         SCATTER_REVERSE);
-          CHKERR DMoFEMMeshToLocalVector(simple->getDM(), v, INSERT_VALUES,
-                                         SCATTER_FORWARD);
+          MOFEM_LOG("FS", Sev::inform) << "Norm V " << get_norm(v);
         }
+
+        CHKERR apply_update(vecs);
       }
 
       CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
@@ -1821,22 +1899,14 @@ private:
   boost::shared_ptr<VectorDouble> liftVec;
 };
 
-struct TSPrePostProc {
-  static MoFEMErrorCode tsPreProc(TS ts);
-  static MoFEMErrorCode tsPostProc(TS ts);
-  static FreeSurface *fsRawPtr;
-};
-
-FreeSurface *TSPrePostProc::fsRawPtr = nullptr;
-
 //! [Solve]
 MoFEMErrorCode FreeSurface::solveSystem() {
   MoFEMFunctionBegin;
 
   using UDO = ForcesAndSourcesCore::UserDataOperator;
 
-  auto *simple = mField.getInterface<Simple>();
-  auto *pip_mng = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>();
+  auto pip_mng = mField.getInterface<PipelineManager>();
 
   auto create_solver_dm = [&](auto dm) -> SmartPetscObj<DM> {
     DM subdm;
@@ -1855,7 +1925,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
       CHKERR DMMoFEMAddElement(subdm, simple->getDomainFEName());
       CHKERR DMMoFEMAddElement(subdm, simple->getBoundaryFEName());
       CHKERR DMMoFEMSetSquareProblem(subdm, PETSC_TRUE);
-      CHKERR DMMoFEMSetDestroyProblem(subdm, PETSC_TRUE);
+      CHKERR DMMoFEMSetDestroyProblem(subdm, PETSC_FALSE);
       for (auto f : {"U", "P", "H", "G", "L"}) {
         CHKERR DMMoFEMAddSubFieldRow(subdm, f, level_ents_ptr);
         CHKERR DMMoFEMAddSubFieldCol(subdm, f, level_ents_ptr);
@@ -1868,9 +1938,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     return SmartPetscObj<DM>(subdm);
   };
-
-  solverSubDM = create_solver_dm(simple->getDM());
-  auto snes_ctx_ptr = smartGetDMSnesCtx(solverSubDM);
 
   auto get_fe_post_proc = [&](auto post_proc_mesh) {
     auto add_parent_field_domain = [&](auto fe, auto op, auto field) {
@@ -2089,53 +2156,42 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     return std::make_pair(fe, lift_ptr);
   };
 
-  auto set_ts = [&](auto solver) {
+  auto set_post_proc_monitor = [&](auto ts) {
     MoFEMFunctionBegin;
-    SNES snes;
-    CHKERR TSGetSNES(solver, &snes);
-    KSP ksp;
-    CHKERR SNESGetKSP(snes, &ksp);
-    MoFEMFunctionReturn(0);
-  };
-
-  auto set_section_monitor = [&](auto solver) {
-    MoFEMFunctionBegin;
-    SNES snes;
-    CHKERR TSGetSNES(solver, &snes);
-    CHKERR SNESMonitorSet(snes,
-                          (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
-                                             void *))MoFEMSNESMonitorFields,
-                          (void *)(snes_ctx_ptr.get()), nullptr);
-
-    MoFEMFunctionReturn(0);
-  };
-
-  auto ts = pip_mng->createTSIM(solverSubDM);
-
-  auto set_post_proc_monitor = [&](auto dm) {
-    MoFEMFunctionBegin;
+    DM dm;
+    CHKERR TSGetDM(ts, &dm);
     boost::shared_ptr<FEMethod> null_fe;
     auto post_proc_mesh = boost::make_shared<moab::Core>();
     auto monitor_ptr = boost::make_shared<Monitor>(
-        dm, post_proc_mesh, get_fe_post_proc(post_proc_mesh),
-        get_bdy_post_proc_fe(post_proc_mesh), get_lift_fe());
+        SmartPetscObj<DM>(dm, true), post_proc_mesh,
+        get_fe_post_proc(post_proc_mesh), get_bdy_post_proc_fe(post_proc_mesh),
+        get_lift_fe());
     CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                                null_fe, monitor_ptr);
     MoFEMFunctionReturn(0);
   };
-  CHKERR set_post_proc_monitor(solverSubDM);
+
+  auto dm = simple->getDM();
+  auto ts = createTS(mField.get_comm());
+  CHKERR TSSetDM(ts, dm);
+
+  TSPrePostProc::fsRawPtr = this;
+  TSPrePostProc::solverSubDM = create_solver_dm(simple->getDM());
+
+  auto sub_ts = pip_mng->createTSIM(TSPrePostProc::solverSubDM);
+
+  CHKERR set_post_proc_monitor(sub_ts);
 
   // Add monitor to time solver
   double ftime = 1;
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
-  auto T = smartCreateDMVector(solverSubDM);
-  CHKERR DMoFEMMeshToLocalVector(solverSubDM, T, INSERT_VALUES,
+  auto T = smartCreateDMVector(simple->getDM());
+  CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                  SCATTER_FORWARD);
   CHKERR TSSetSolution(ts, T);
   CHKERR TSSetFromOptions(ts);
-  CHKERR set_ts(ts);
-  CHKERR set_section_monitor(ts);
+  CHKERR TSPrePostProc::setTS(ts);
   CHKERR TSSetUp(ts);
 
   auto print_fields_in_section = [&]() {
@@ -2154,10 +2210,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   };
 
   CHKERR print_fields_in_section();
-
-  TSPrePostProc::fsRawPtr = this;
-  CHKERR TSSetPreStep(ts, TSPrePostProc::tsPreProc);
-  CHKERR TSSetPostStep(ts, TSPrePostProc::tsPostProc);
 
   CHKERR TSSolve(ts, NULL);
 
@@ -2634,77 +2686,6 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     return nrm;
   };
 
-  // get data for theta vector on dm
-  auto get_theta_data = [&](auto dm) {
-    Vec X0, Xdot;
-    CHK_THROW_MESSAGE(DMGetNamedGlobalVector(dm, "TSTheta_X0", &X0), "get X0");
-    CHK_THROW_MESSAGE(DMGetNamedGlobalVector(dm, "TSTheta_Xdot", &Xdot),
-                      "get Xdot");
-    return std::make_tuple(X0, Xdot);
-  };
-
-  // restore data for theta vector on dm
-  auto restore_theta_data = [&](auto dm, auto X0, auto Xdot) {
-    MoFEMFunctionBegin;
-    CHK_THROW_MESSAGE(DMRestoreNamedGlobalVector(dm, "TSTheta_X0", &X0),
-                      "get X0");
-    CHK_THROW_MESSAGE(DMRestoreNamedGlobalVector(dm, "TSTheta_Xdot", &Xdot),
-                      "get Xdot");
-    MoFEMFunctionReturn(0);
-  };
-
-  enum FR { F, R }; // F - forward, and reverse
-
-  // get scatter for data for theta method on two dms
-  auto get_scatter = [&](auto x, auto y, enum FR fr) {
-    auto prb_ptr = m_field.get_problem("SUB_SOLVER");
-    if (auto sub_data = prb_ptr->getSubData()) {
-      auto is = sub_data->getSmartColIs();
-      VecScatter s;
-      if (fr == R) {
-        CHK_THROW_MESSAGE(VecScatterCreate(x, PETSC_NULL, y, is, &s),
-                          "crate scatter");
-      } else {
-        CHK_THROW_MESSAGE(VecScatterCreate(x, is, y, PETSC_NULL, &s),
-                          "crate scatter");
-      }
-      return SmartPetscObj<VecScatter>(s);
-    }
-    return SmartPetscObj<VecScatter>();
-  };
-
-  // get data for theta vector on subproblem, and store result in "simple" dm
-  auto apply_scatter = [&]() {
-    MoFEMFunctionBegin;
-
-    auto x = smartCreateDMVector(fsRawPtr->solverSubDM);
-    auto y = smartCreateDMVector(simple->getDM());
-    auto s = get_scatter(x, y, R);
-
-    CHKERR DMSubDomainRestrict(fsRawPtr->solverSubDM, s, PETSC_NULL,
-                               simple->getDM());
-
-    if constexpr (debug) {
-      auto [X0, Xdot] = get_theta_data(simple->getDM());
-      MOFEM_LOG("FS", Sev::inform) << "Reverse restrict: X0 " << get_norm(X0)
-                                   << " Xdot " << get_norm(Xdot);
-      CHKERR restore_theta_data(simple->getDM(), X0, Xdot);
-    }
-
-    MoFEMFunctionReturn(0);
-  };
-
-  // refine problem and project data, including theta data
-  auto refine_problem = [&]() {
-    MoFEMFunctionBegin;
-    MOFEM_LOG("FS", Sev::inform) << "Refine problem";
-    CHKERR fsRawPtr->refineMesh(4);
-    auto [X0, Xdot] = get_theta_data(simple->getDM());
-    CHKERR fsRawPtr->projectData({X0, Xdot});
-    CHKERR restore_theta_data(simple->getDM(), X0, Xdot);
-    MoFEMFunctionReturn(0);
-  };
-
   // rebuild subdm (FIXME: that can be implemented with DMs interface, instead
   // using lower level interface)
   auto rebuild_sub_dm = [&]() {
@@ -2735,6 +2716,19 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     // set ghost nodes
     CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_SOLVER");
 
+    CHKERR DMClearGlobalVectors(TSPrePostProc::solverSubDM);
+    CHKERR DMClearLocalVectors(TSPrePostProc::solverSubDM);
+
+    MoFEMFunctionReturn(0);
+  };  
+
+  // refine problem and project data, including theta data
+  auto refine_problem = [&]() {
+    MoFEMFunctionBegin;
+    MOFEM_LOG("FS", Sev::inform) << "Refine problem";
+    CHKERR fsRawPtr->refineMesh(4);
+    CHKERR rebuild_sub_dm(); // rebuild TS (theta) solver subproblem
+    CHKERR fsRawPtr->projectData();
     MoFEMFunctionReturn(0);
   };
 
@@ -2742,27 +2736,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   // changed
   auto set_jacobian_operators = [&]() {
     MoFEMFunctionBegin;
-    auto B = smartCreateDMMatrix(fsRawPtr->solverSubDM);
-    CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, nullptr);
-    MoFEMFunctionReturn(0);
-  };
-
-  // restore theta data on sub dm
-  auto apply_restrict = [&]() {
-    MoFEMFunctionBegin;
-    MOFEM_LOG("FS", Sev::inform) << "Restrict time solver";
-
-    // TS solver stores named vectors in DM. Those vector are destroyed, and
-    // created with new size, then values are populated using
-    // DMSubDomainRestrict
-
-    auto x = smartCreateDMVector(simple->getDM());
-    auto y = smartCreateDMVector(fsRawPtr->solverSubDM);
-    auto s = get_scatter(x, y, F);
-
-    CHKERR DMSubDomainRestrict(simple->getDM(), s, PETSC_NULL,
-                               fsRawPtr->solverSubDM);
-
+    subB = smartCreateDMMatrix(TSPrePostProc::solverSubDM);
     MoFEMFunctionReturn(0);
   };
 
@@ -2770,13 +2744,9 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   auto set_solution = [&]() {
     MoFEMFunctionBegin;
     MOFEM_LOG("FS", Sev::inform) << "Set solution";
-    SmartPetscObj<Vec> x;
-    CHKERR m_field.getInterface<VecManager>()->vecCreateGhost("SUB_SOLVER", COL,
-                                                              x);
-    CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
-        "SUB_SOLVER", COL, x, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateBegin(x, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(x, INSERT_VALUES, SCATTER_FORWARD);
+    auto x = smartCreateDMVector(simple->getDM());
+    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), x, INSERT_VALUES,
+                                   SCATTER_FORWARD);
     MOFEM_LOG("FS", Sev::verbose)
         << "Set solution, vector norm " << get_norm(x);
     CHKERR TSSetSolution(ts, x);
@@ -2787,22 +2757,9 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   PetscObjectTypeCompare((PetscObject)ts, TSTHETA, &is_theta);
   if (is_theta) {
 
-    CHKERR apply_scatter();          // store theta data
-    CHKERR refine_problem();         // refine problem
-    CHKERR rebuild_sub_dm();         // rebuild TS (theta) solver subproblem
-
-
-    CHKERR TSReset(ts);              // reset data
-    TSAdapt ts_adapt;
-    CHKERR TSGetAdapt(ts, &ts_adapt);
-    CHKERR TSAdaptReset(ts_adapt); // reset TSAdapt
-
-    CHKERR set_solution();           // restore solution
+    CHKERR refine_problem(); // refine problem
     CHKERR set_jacobian_operators(); // set new jacobian
-    CHKERR TSSetUp(ts);            // setup ts
-
-    CHKERR apply_restrict();       // restore internal data, by scattering from
-                                   // "simple" DM to solver sub DM
+    CHKERR set_solution(); // set solution 
 
   } else {
     SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED,
@@ -2821,8 +2778,160 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
 }
 
 MoFEMErrorCode TSPrePostProc::tsPostProc(TS ts) {
+  auto &m_field = fsRawPtr->mField;
   MOFEM_LOG_CHANNEL("SYNC");
   MOFEM_TAG_AND_LOG("SYNC", Sev::verbose, "FS") << "PostProc done";
   MOFEM_LOG_SEVERITY_SYNC(m_field.get_comm(), Sev::verbose);
   return 0;
+}
+
+SmartPetscObj<VecScatter> TSPrePostProc::getScatter(Vec x, Vec y, enum FR fr) {
+  auto prb_ptr = fsRawPtr->mField.get_problem("SUB_SOLVER");
+  if (auto sub_data = prb_ptr->getSubData()) {
+    auto is = sub_data->getSmartColIs();
+    VecScatter s;
+    if (fr == R) {
+      CHK_THROW_MESSAGE(VecScatterCreate(x, PETSC_NULL, y, is, &s),
+                        "crate scatter");
+    } else {
+      CHK_THROW_MESSAGE(VecScatterCreate(x, is, y, PETSC_NULL, &s),
+                        "crate scatter");
+    }
+    return SmartPetscObj<VecScatter>(s);
+  }
+  CHK_THROW_MESSAGE(MOFEM_DATA_INCONSISTENCY, "No prb pinter");
+  return SmartPetscObj<VecScatter>();
+}
+
+SmartPetscObj<Vec> TSPrePostProc::getSubVector() {
+  return smartCreateDMVector(TSPrePostProc::solverSubDM);
+}
+
+MoFEMErrorCode TSPrePostProc::tsSetIFunction(TS ts, PetscReal t, Vec u, Vec u_t,
+                                             Vec f, void *ctx) {
+  MoFEMFunctionBegin;
+  auto sub_u = getSubVector();
+  auto sub_u_t = smartVectorDuplicate(sub_u);
+  auto sub_f = smartVectorDuplicate(sub_u);
+  auto scatter = getScatter(sub_u, u, R);
+  CHKERR VecScatterBegin(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR VecScatterEnd(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR VecScatterBegin(scatter, u_t, sub_u_t, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR VecScatterEnd(scatter, u_t, sub_u_t, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR TsSetIFunction(ts, t, sub_u, sub_u_t, sub_f,
+                        TSPrePostProc::tsCtxPtr.get());
+  CHKERR VecScatterBegin(scatter, sub_f, f, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecScatterEnd(scatter, sub_f, f, INSERT_VALUES, SCATTER_FORWARD);
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode TSPrePostProc::tsSetIJacobian(TS ts, PetscReal t, Vec u, Vec u_t,
+                                             PetscReal a, Mat A, Mat B,
+                                             void *ctx) {
+  MoFEMFunctionBegin;
+  auto sub_u = getSubVector();
+  auto sub_u_t = smartVectorDuplicate(sub_u);
+  auto scatter = getScatter(sub_u, u, R);
+  CHKERR VecScatterBegin(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR VecScatterEnd(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR VecScatterBegin(scatter, u_t, sub_u_t, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR VecScatterEnd(scatter, u_t, sub_u_t, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR TsSetIJacobian(ts, t, sub_u, sub_u_t, a, subB, subB,
+                        TSPrePostProc::tsCtxPtr.get());
+  // CHKERR KSPSetOperators(subKSP, subB, subB);
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode TSPrePostProc::tsMonitor(TS ts, PetscInt step, PetscReal t,
+                                        Vec u, void *ctx) {
+  MoFEMFunctionBegin;
+
+  auto get_norm = [&](auto x) {
+    double nrm;
+    CHKERR VecNorm(x, NORM_2, &nrm);
+    return nrm;
+  };
+
+
+  auto sub_u = getSubVector();
+  auto scatter = getScatter(sub_u, u, R);
+  CHKERR VecScatterBegin(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR VecScatterEnd(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
+
+  MOFEM_LOG("FS", Sev::verbose)
+      << "u norm " << get_norm(u) << " u sub nom " << get_norm(sub_u);
+
+  CHKERR TsMonitorSet(ts, step, t, sub_u, TSPrePostProc::tsCtxPtr.get());
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode TSPrePostProc::pcSetup(PC pc) {
+  MoFEMFunctionBegin;
+  MOFEM_LOG("FS", Sev::verbose) << "SetUP sub PC";
+  subKSP = createKSP(fsRawPtr->mField.get_comm());
+  CHKERR KSPSetFromOptions(subKSP);
+  MoFEMFunctionReturn(0);
+};
+
+MoFEMErrorCode TSPrePostProc::pcApply(PC pc, Vec pc_f, Vec pc_x) {
+  MoFEMFunctionBegin;
+  auto sub_x = getSubVector();
+  auto sub_f = smartVectorDuplicate(sub_x);
+  auto scatter = getScatter(sub_x, pc_x, R);
+  CHKERR VecScatterBegin(scatter, pc_f, sub_f, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR VecScatterEnd(scatter, pc_f, sub_f, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR KSPSetOperators(subKSP, subB, subB);
+  CHKERR KSPSolve(subKSP, sub_f, sub_x);
+  CHKERR VecScatterBegin(scatter, sub_x, pc_x, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecScatterEnd(scatter, sub_x, pc_x, INSERT_VALUES, SCATTER_FORWARD);
+  MoFEMFunctionReturn(0);
+};
+
+MoFEMErrorCode TSPrePostProc::setTS(TS ts) {
+
+  auto &m_field = fsRawPtr->mField;
+  auto simple = m_field.getInterface<Simple>();
+
+  MoFEMFunctionBegin;
+
+  auto dm = simple->getDM();
+
+  globF = smartCreateDMVector(dm);
+  CHKERR TSSetIFunction(ts, globF, tsSetIFunction, nullptr);
+  CHKERR TSSetIJacobian(ts, PETSC_NULL, PETSC_NULL, tsSetIJacobian, nullptr);
+  CHKERR TSMonitorSet(ts, TSPrePostProc::tsMonitor, fsRawPtr, PETSC_NULL);
+
+  SNES snes;
+  CHKERR TSGetSNES(ts, &snes);
+  auto snes_ctx_ptr = smartGetDMSnesCtx(dm);
+
+  auto set_section_monitor = [&](auto snes) {
+    MoFEMFunctionBegin;
+    CHKERR SNESMonitorSet(snes,
+                          (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal,
+                                             void *))MoFEMSNESMonitorFields,
+                          (void *)(snes_ctx_ptr.get()), nullptr);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR set_section_monitor(snes);
+
+  KSP ksp;
+  CHKERR SNESGetKSP(snes, &ksp);
+  CHKERR KSPSetType(ksp, KSPPREONLY); // Run KSP internally in ShellPC
+  auto sub_pc = createPC(fsRawPtr->mField.get_comm());
+  CHKERR PCSetType(sub_pc, PCSHELL);
+  CHKERR PCShellSetContext(sub_pc, TSPrePostProc::fsRawPtr);
+  CHKERR PCShellSetSetUp(sub_pc, TSPrePostProc::pcSetup);
+  CHKERR PCShellSetApply(sub_pc, TSPrePostProc::pcApply);
+  CHKERR KSPSetPC(ksp, sub_pc);
+
+  snesCtxPtr = smartGetDMSnesCtx(TSPrePostProc::solverSubDM);
+  tsCtxPtr = smartGetDMTsCtx(TSPrePostProc::solverSubDM);
+
+  CHKERR TSSetPreStep(ts, TSPrePostProc::tsPreProc);
+  CHKERR TSSetPostStep(ts, TSPrePostProc::tsPostProc);
+
+
+  MoFEMFunctionReturn(0);
 }
