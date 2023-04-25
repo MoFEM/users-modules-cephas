@@ -392,7 +392,7 @@ enum FR { F, R }; // F - forward, and reverse
 
 struct TSPrePostProc {
 
-  static MoFEMErrorCode setTS(TS ts);
+  static MoFEMErrorCode tsSetUp(TS ts);
   static SmartPetscObj<VecScatter> getScatter(Vec x, Vec y, enum FR fr);
 
   static SmartPetscObj<DM> solverSubDM;
@@ -2192,7 +2192,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
                                  SCATTER_FORWARD);
   CHKERR TSSetSolution(ts, T);
   CHKERR TSSetFromOptions(ts);
-  CHKERR TSPrePostProc::setTS(ts);
+  CHKERR TSPrePostProc::tsSetUp(ts);
   CHKERR TSSetUp(ts);
 
   auto print_fields_in_section = [&]() {
@@ -2815,10 +2815,19 @@ MoFEMErrorCode TSPrePostProc::tsSetIFunction(TS ts, PetscReal t, Vec u, Vec u_t,
   auto sub_u_t = smartVectorDuplicate(sub_u);
   auto sub_f = smartVectorDuplicate(sub_u);
   auto scatter = getScatter(sub_u, u, R);
-  CHKERR VecScatterBegin(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
-  CHKERR VecScatterEnd(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
-  CHKERR VecScatterBegin(scatter, u_t, sub_u_t, INSERT_VALUES, SCATTER_REVERSE);
-  CHKERR VecScatterEnd(scatter, u_t, sub_u_t, INSERT_VALUES, SCATTER_REVERSE);
+
+  auto apply_scatter_and_update = [&](auto x, auto sub_x) {
+    MoFEMFunctionBegin;
+    CHKERR VecScatterBegin(scatter, x, sub_x, INSERT_VALUES, SCATTER_REVERSE);
+    CHKERR VecScatterEnd(scatter, x, sub_x, INSERT_VALUES, SCATTER_REVERSE);
+    CHKERR VecGhostUpdateBegin(sub_x, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(sub_x, INSERT_VALUES, SCATTER_FORWARD);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR apply_scatter_and_update(u, sub_u);
+  CHKERR apply_scatter_and_update(u_t, sub_u_t);
+
   CHKERR TsSetIFunction(ts, t, sub_u, sub_u_t, sub_f,
                         TSPrePostProc::tsCtxPtr.get());
   CHKERR VecScatterBegin(scatter, sub_f, f, INSERT_VALUES, SCATTER_FORWARD);
@@ -2833,13 +2842,21 @@ MoFEMErrorCode TSPrePostProc::tsSetIJacobian(TS ts, PetscReal t, Vec u, Vec u_t,
   auto sub_u = getSubVector();
   auto sub_u_t = smartVectorDuplicate(sub_u);
   auto scatter = getScatter(sub_u, u, R);
-  CHKERR VecScatterBegin(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
-  CHKERR VecScatterEnd(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
-  CHKERR VecScatterBegin(scatter, u_t, sub_u_t, INSERT_VALUES, SCATTER_REVERSE);
-  CHKERR VecScatterEnd(scatter, u_t, sub_u_t, INSERT_VALUES, SCATTER_REVERSE);
+
+  auto apply_scatter_and_update = [&](auto x, auto sub_x) {
+    MoFEMFunctionBegin;
+    CHKERR VecScatterBegin(scatter, x, sub_x, INSERT_VALUES, SCATTER_REVERSE);
+    CHKERR VecScatterEnd(scatter, x, sub_x, INSERT_VALUES, SCATTER_REVERSE);
+    CHKERR VecGhostUpdateBegin(sub_x, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(sub_x, INSERT_VALUES, SCATTER_FORWARD);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR apply_scatter_and_update(u, sub_u);
+  CHKERR apply_scatter_and_update(u_t, sub_u_t);
+
   CHKERR TsSetIJacobian(ts, t, sub_u, sub_u_t, a, subB, subB,
                         TSPrePostProc::tsCtxPtr.get());
-  // CHKERR KSPSetOperators(subKSP, subB, subB);
   MoFEMFunctionReturn(0);
 }
 
@@ -2853,11 +2870,12 @@ MoFEMErrorCode TSPrePostProc::tsMonitor(TS ts, PetscInt step, PetscReal t,
     return nrm;
   };
 
-
   auto sub_u = getSubVector();
   auto scatter = getScatter(sub_u, u, R);
   CHKERR VecScatterBegin(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
   CHKERR VecScatterEnd(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
+  CHKERR VecGhostUpdateBegin(sub_u, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(sub_u, INSERT_VALUES, SCATTER_FORWARD); 
 
   MOFEM_LOG("FS", Sev::verbose)
       << "u norm " << get_norm(u) << " u sub nom " << get_norm(sub_u);
@@ -2888,7 +2906,7 @@ MoFEMErrorCode TSPrePostProc::pcApply(PC pc, Vec pc_f, Vec pc_x) {
   MoFEMFunctionReturn(0);
 };
 
-MoFEMErrorCode TSPrePostProc::setTS(TS ts) {
+MoFEMErrorCode TSPrePostProc::tsSetUp(TS ts) {
 
   auto &m_field = fsRawPtr->mField;
   auto simple = m_field.getInterface<Simple>();
