@@ -1185,27 +1185,12 @@ MoFEMErrorCode FreeSurface::projectData() {
       auto prj_ents = get_prj_ents();
 
       if (get_global_size(prj_ents.size())) {
-
-        MOFEM_LOG("FS", Sev::inform) << "Create projection problem";
-
+        MOFEM_LOG("FS", Sev::verbose) << "Create projection problem dm";
         auto dm = simple->getDM();
         DM subdm;
         CHKERR DMCreate(mField.get_comm(), &subdm);
         CHKERR DMSetType(subdm, "DMMOFEM");
-        CHKERR DMMoFEMCreateSubDM(subdm, dm, "SUB_PRJ");
-        CHKERR DMMoFEMAddElement(subdm, simple->getDomainFEName());
-        CHKERR DMMoFEMAddElement(subdm, simple->getBoundaryFEName());
-        CHKERR DMMoFEMSetSquareProblem(subdm, PETSC_TRUE);
-        CHKERR DMMoFEMSetDestroyProblem(
-            subdm, PETSC_FALSE); // Do not destroy projection problem. It will
-                                 // reuse it next time.
-
-        for (auto f : {"U", "P", "H", "G", "L"}) {
-          CHKERR DMMoFEMAddSubFieldRow(subdm, f, level_ents_ptr);
-          CHKERR DMMoFEMAddSubFieldCol(subdm, f, level_ents_ptr);
-        }
-        CHKERR DMSetUp(subdm);
-
+        CHKERR DMMoFEMCreateSubDM(subdm, dm, "SUB_SOLVER");
         return SmartPetscObj<DM>(subdm);
       }
 
