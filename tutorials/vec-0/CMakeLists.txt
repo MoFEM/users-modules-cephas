@@ -40,3 +40,10 @@ add_test(
   ${CMAKE_CURRENT_BINARY_DIR}/elastic_2d
   -file_name part.h5m -order 3 
   -ksp_rtol 1e-12 -ksp_atol 1e-9 -test -log_no_color)
+
+add_test(
+  elastic_3d_rotation
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
+  ${CMAKE_CURRENT_BINARY_DIR}/elastic_3d
+  -file_name LShape_Rot_D0.cub -order 2
+  -ksp_rtol 1e-12 -ksp_atol 1e-12 -test)
