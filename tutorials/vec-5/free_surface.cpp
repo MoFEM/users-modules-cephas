@@ -2751,30 +2751,6 @@ MoFEMErrorCode TSPrePostProc::tsPostProc(TS ts) {
   return 0;
 }
 
-SmartPetscObj<VecScatter> TSPrePostProc::getScatter(Vec x, Vec y, enum FR fr) {
-  if (auto ptr = tsPrePostProc.lock()) {
-    auto prb_ptr = ptr->fsRawPtr->mField.get_problem("SUB_SOLVER");
-    if (auto sub_data = prb_ptr->getSubData()) {
-      auto is = sub_data->getSmartColIs();
-      VecScatter s;
-      if (fr == R) {
-        CHK_THROW_MESSAGE(VecScatterCreate(x, PETSC_NULL, y, is, &s),
-                          "crate scatter");
-      } else {
-        CHK_THROW_MESSAGE(VecScatterCreate(x, is, y, PETSC_NULL, &s),
-                          "crate scatter");
-      }
-      return SmartPetscObj<VecScatter>(s);
-    }
-  }
-  CHK_THROW_MESSAGE(MOFEM_DATA_INCONSISTENCY, "No prb pinter");
-  return SmartPetscObj<VecScatter>();
-}
-
-SmartPetscObj<Vec> TSPrePostProc::getSubVector() {
-  return smartCreateDMVector(solverSubDM);
-}
-
 MoFEMErrorCode TSPrePostProc::tsSetIFunction(TS ts, PetscReal t, Vec u, Vec u_t,
                                              Vec f, void *ctx) {
   MoFEMFunctionBegin;
@@ -2884,6 +2860,30 @@ MoFEMErrorCode TSPrePostProc::pcApply(PC pc, Vec pc_f, Vec pc_x) {
   }
   MoFEMFunctionReturn(0);
 };
+
+SmartPetscObj<VecScatter> TSPrePostProc::getScatter(Vec x, Vec y, enum FR fr) {
+  if (auto ptr = tsPrePostProc.lock()) {
+    auto prb_ptr = ptr->fsRawPtr->mField.get_problem("SUB_SOLVER");
+    if (auto sub_data = prb_ptr->getSubData()) {
+      auto is = sub_data->getSmartColIs();
+      VecScatter s;
+      if (fr == R) {
+        CHK_THROW_MESSAGE(VecScatterCreate(x, PETSC_NULL, y, is, &s),
+                          "crate scatter");
+      } else {
+        CHK_THROW_MESSAGE(VecScatterCreate(x, is, y, PETSC_NULL, &s),
+                          "crate scatter");
+      }
+      return SmartPetscObj<VecScatter>(s);
+    }
+  }
+  CHK_THROW_MESSAGE(MOFEM_DATA_INCONSISTENCY, "No prb pinter");
+  return SmartPetscObj<VecScatter>();
+}
+
+SmartPetscObj<Vec> TSPrePostProc::getSubVector() {
+  return smartCreateDMVector(solverSubDM);
+}
 
 MoFEMErrorCode TSPrePostProc::tsSetUp(TS ts) {
 
