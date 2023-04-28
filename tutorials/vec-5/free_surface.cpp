@@ -80,7 +80,7 @@ constexpr CoordinateTypes coord_type =
 
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType I =
-    IntegrationType::GAUSS;                     //< selected integration type
+    IntegrationType::GAUSS; //< selected integration type
 
 template <int DIM>
 using ElementsAndOps = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>;
@@ -169,7 +169,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.0015 / 4; // mesh size
+constexpr double h = 0.0015 / 10; // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -396,6 +396,9 @@ struct TSPrePostProc {
   static SmartPetscObj<VecScatter> getScatter(Vec x, Vec y, enum FR fr);
 
   static SmartPetscObj<DM> solverSubDM;
+  static SmartPetscObj<Vec> globT;
+  static SmartPetscObj<Vec> globF;
+
   static FreeSurface *fsRawPtr;
 
 private:
@@ -413,7 +416,6 @@ private:
   static MoFEMErrorCode pcSetup(PC pc);
   static MoFEMErrorCode pcApply(PC pc, Vec pc_f, Vec pc_x);
 
-  static SmartPetscObj<Vec> globF;
   static SmartPetscObj<Mat> subB;
   static SmartPetscObj<KSP> subKSP;
 
@@ -422,6 +424,7 @@ private:
 };
 
 SmartPetscObj<DM> TSPrePostProc::solverSubDM;
+SmartPetscObj<Vec> TSPrePostProc::globT;
 SmartPetscObj<Vec> TSPrePostProc::globF;
 SmartPetscObj<Mat> TSPrePostProc::subB;
 SmartPetscObj<KSP> TSPrePostProc::subKSP;
@@ -1285,7 +1288,6 @@ MoFEMErrorCode FreeSurface::projectData() {
       auto glob_x = smartCreateDMVector(simple->getDM());
 
       auto apply_restrict = [&]() {
-
         auto s = TSPrePostProc::getScatter(glob_x, D, FR::F);
         CHK_THROW_MESSAGE(
             DMSubDomainRestrict(simple->getDM(), s, PETSC_NULL, subdm),
@@ -1296,7 +1298,6 @@ MoFEMErrorCode FreeSurface::projectData() {
                           "get X0");
         CHK_THROW_MESSAGE(DMGetNamedGlobalVector(subdm, "TSTheta_Xdot", &Xdot),
                           "get Xdot");
-
 
         if constexpr (debug) {
           MOFEM_LOG("FS", Sev::inform)
@@ -2185,11 +2186,11 @@ MoFEMErrorCode FreeSurface::solveSystem() {
   // Add monitor to time solver
   double ftime = 1;
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
-
-  auto T = smartCreateDMVector(simple->getDM());
-  CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
-                                 SCATTER_FORWARD);
-  CHKERR TSSetSolution(ts, T);
+  TSPrePostProc::globF = smartCreateDMVector(dm);
+  TSPrePostProc::globT = smartVectorDuplicate(TSPrePostProc::globF);
+  CHKERR DMoFEMMeshToLocalVector(simple->getDM(), TSPrePostProc::globT,
+                                 INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR TSSetSolution(ts, TSPrePostProc::globT);
   CHKERR TSSetFromOptions(ts);
   CHKERR TSPrePostProc::tsSetUp(ts);
   CHKERR TSSetUp(ts);
@@ -2708,14 +2709,10 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   auto set_solution = [&]() {
     MoFEMFunctionBegin;
     MOFEM_LOG("FS", Sev::inform) << "Set solution";
-    auto x = smartCreateDMVector(simple->getDM());
-    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), x, INSERT_VALUES,
+    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), globT, INSERT_VALUES,
                                    SCATTER_FORWARD);
     MOFEM_LOG("FS", Sev::verbose)
-        << "Set solution, vector norm " << get_norm(x);
-    CHKERR VecAssemblyBegin(x);
-    CHKERR VecAssemblyEnd(x);
-    CHKERR TSSetSolution(ts, x);
+        << "Set solution, vector norm " << get_norm(globT);
     MoFEMFunctionReturn(0);
   };
 
@@ -2723,9 +2720,9 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   PetscObjectTypeCompare((PetscObject)ts, TSTHETA, &is_theta);
   if (is_theta) {
 
-    CHKERR refine_problem(); // refine problem
+    CHKERR refine_problem();         // refine problem
     CHKERR set_jacobian_operators(); // set new jacobian
-    CHKERR set_solution(); // set solution 
+    CHKERR set_solution();           // set solution
 
   } else {
     SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED,
@@ -2840,7 +2837,7 @@ MoFEMErrorCode TSPrePostProc::tsMonitor(TS ts, PetscInt step, PetscReal t,
   CHKERR VecScatterBegin(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
   CHKERR VecScatterEnd(scatter, u, sub_u, INSERT_VALUES, SCATTER_REVERSE);
   CHKERR VecGhostUpdateBegin(sub_u, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(sub_u, INSERT_VALUES, SCATTER_FORWARD); 
+  CHKERR VecGhostUpdateEnd(sub_u, INSERT_VALUES, SCATTER_FORWARD);
 
   MOFEM_LOG("FS", Sev::verbose)
       << "u norm " << get_norm(u) << " u sub nom " << get_norm(sub_u);
@@ -2882,7 +2879,6 @@ MoFEMErrorCode TSPrePostProc::tsSetUp(TS ts) {
 
   auto dm = simple->getDM();
 
-  globF = smartCreateDMVector(dm);
   CHKERR TSSetIFunction(ts, globF, tsSetIFunction, nullptr);
   CHKERR TSSetIJacobian(ts, PETSC_NULL, PETSC_NULL, tsSetIJacobian, nullptr);
   CHKERR TSMonitorSet(ts, TSPrePostProc::tsMonitor, fsRawPtr, PETSC_NULL);
@@ -2916,7 +2912,6 @@ MoFEMErrorCode TSPrePostProc::tsSetUp(TS ts) {
 
   CHKERR TSSetPreStep(ts, TSPrePostProc::tsPreProc);
   CHKERR TSSetPostStep(ts, TSPrePostProc::tsPostProc);
-
 
   MoFEMFunctionReturn(0);
 }
