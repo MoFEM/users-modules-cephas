@@ -169,7 +169,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.0015 / 10; // mesh size
+constexpr double h = 0.0015 / 4; // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -1268,6 +1268,9 @@ MoFEMErrorCode FreeSurface::projectData() {
       auto solve = [&](auto S) {
         MoFEMFunctionBegin;
         CHKERR VecZeroEntries(S);
+        CHKERR VecZeroEntries(F);
+        CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
+        CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
         CHKERR KSPSolve(ksp, F, S);
         CHKERR VecGhostUpdateBegin(S, INSERT_VALUES, SCATTER_FORWARD);
         CHKERR VecGhostUpdateEnd(S, INSERT_VALUES, SCATTER_FORWARD);
@@ -1291,6 +1294,15 @@ MoFEMErrorCode FreeSurface::projectData() {
                           "get X0");
         CHK_THROW_MESSAGE(DMGetNamedGlobalVector(subdm, "TSTheta_Xdot", &Xdot),
                           "get Xdot");
+
+        CHK_THROW_MESSAGE(
+            VecGhostUpdateBegin(X0, INSERT_VALUES, SCATTER_FORWARD), "");
+        CHK_THROW_MESSAGE(VecGhostUpdateEnd(X0, INSERT_VALUES, SCATTER_FORWARD),
+                          "");
+        CHK_THROW_MESSAGE(
+            VecGhostUpdateBegin(Xdot, INSERT_VALUES, SCATTER_FORWARD), "");
+        CHK_THROW_MESSAGE(
+            VecGhostUpdateEnd(Xdot, INSERT_VALUES, SCATTER_FORWARD), "");
 
         if constexpr (debug) {
           MOFEM_LOG("FS", Sev::inform)
@@ -2709,10 +2721,14 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     auto set_solution = [&]() {
       MoFEMFunctionBegin;
       MOFEM_LOG("FS", Sev::inform) << "Set solution";
-      CHKERR DMoFEMMeshToLocalVector(simple->getDM(), ptr->globSol,
-                                     INSERT_VALUES, SCATTER_FORWARD);
+      auto x = smartCreateDMVector(simple->getDM());
+       CHKERR DMoFEMMeshToLocalVector(simple->getDM(), x, INSERT_VALUES,
+                                     SCATTER_FORWARD);
       MOFEM_LOG("FS", Sev::verbose)
-          << "Set solution, vector norm " << get_norm(ptr->globSol);
+          << "Set solution, vector norm " << get_norm(x);
+      CHKERR VecAssemblyBegin(x);
+      CHKERR VecAssemblyEnd(x);
+      CHKERR TSSetSolution(ts, x);
       MoFEMFunctionReturn(0);
     };
 
