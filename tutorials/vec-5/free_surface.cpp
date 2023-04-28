@@ -169,7 +169,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.0015 / 2; // mesh size
+constexpr double h = 0.0015 / 4; // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
@@ -2713,6 +2713,8 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
                                    SCATTER_FORWARD);
     MOFEM_LOG("FS", Sev::verbose)
         << "Set solution, vector norm " << get_norm(x);
+    CHKERR VecAssemblyBegin(x);
+    CHKERR VecAssemblyEnd(x);
     CHKERR TSSetSolution(ts, x);
     MoFEMFunctionReturn(0);
   };
