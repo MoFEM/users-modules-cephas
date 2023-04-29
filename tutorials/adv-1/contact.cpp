@@ -648,7 +648,7 @@ MoFEMErrorCode Contact::tsSolve() {
   };
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMVector(dm);
+  auto D = createDMVector(dm);
 
   ContactOps::CommonData::createTotalTraction(mField);
 
@@ -659,7 +659,7 @@ MoFEMErrorCode Contact::tsSolve() {
 
   if (is_quasi_static) {
     auto solver = pip_mng->createTSIM();
-    auto D = smartCreateDMVector(dm);
+    auto D = createDMVector(dm);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
     CHKERR TSSetSolution(solver, D);
@@ -670,8 +670,8 @@ MoFEMErrorCode Contact::tsSolve() {
   } else {
     auto solver = pip_mng->createTSIM2();
     auto dm = simple->getDM();
-    auto D = smartCreateDMVector(dm);
-    auto DD = smartVectorDuplicate(D);
+    auto D = createDMVector(dm);
+    auto DD = vectorDuplicate(D);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
     CHKERR TS2SetSolution(solver, D, DD);

@@ -289,11 +289,11 @@ int main(int argc, char *argv[]) {
                                   nullFE);
 
     // Vector of DOFs and the RHS
-    auto D = smartCreateDMVector(dm);
-    auto F = smartVectorDuplicate(D);
+    auto D = createDMVector(dm);
+    auto F = vectorDuplicate(D);
 
-    auto D2 = smartVectorDuplicate(D);
-    auto F2 = smartVectorDuplicate(D);
+    auto D2 = vectorDuplicate(D);
+    auto F2 = vectorDuplicate(D);
 
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecZeroEntries(F);
@@ -307,7 +307,7 @@ int main(int argc, char *argv[]) {
     CHKERR MatSetOption(A, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(A);
 
-    auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
+    auto fdA = matDuplicate(A, MAT_COPY_VALUES);
 
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =

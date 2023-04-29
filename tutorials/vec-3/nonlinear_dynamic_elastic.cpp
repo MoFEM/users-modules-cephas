@@ -385,14 +385,14 @@ MoFEMErrorCode Example::solveSystem() {
   // CHKERR TSSetMaxTime(ts, ftime);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
-  auto T = smartCreateDMVector(simple->getDM());
+  auto T = createDMVector(simple->getDM());
   CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                  SCATTER_FORWARD);
   if (is_quasi_static) {
     CHKERR TSSetSolution(ts, T);
     CHKERR TSSetFromOptions(ts);
   } else {
-    auto TT = smartVectorDuplicate(T);
+    auto TT = vectorDuplicate(T);
     CHKERR TS2SetSolution(ts, T, TT);
     CHKERR TSSetFromOptions(ts);
   }
@@ -426,7 +426,7 @@ MoFEMErrorCode Example::outputResults() {
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test_flg, PETSC_NULL);
   if (test_flg) {
     auto *simple = mField.getInterface<Simple>();
-    auto T = smartCreateDMVector(simple->getDM());
+    auto T = createDMVector(simple->getDM());
     CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                    SCATTER_FORWARD);
     double nrm2;

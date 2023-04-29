@@ -468,7 +468,7 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
 
   auto dm = simple->getDM();
   auto solver = pipeline_mng->createTSIM();
-  auto snes_ctx_ptr = smartGetDMSnesCtx(dm);
+  auto snes_ctx_ptr = getDMSnesCtx(dm);
 
   auto set_section_monitor = [&](auto solver) {
     MoFEMFunctionBegin;
@@ -603,7 +603,7 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
     MoFEMFunctionReturnHot(0);
   };
 
-  auto D = smartCreateDMVector(dm);
+  auto D = createDMVector(dm);
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
   CHKERR set_section_monitor(solver);

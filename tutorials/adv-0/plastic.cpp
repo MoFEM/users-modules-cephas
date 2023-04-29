@@ -756,7 +756,7 @@ MoFEMErrorCode Example::tsSolve() {
   PipelineManager *pip = mField.getInterface<PipelineManager>();
   ISManager *is_manager = mField.getInterface<ISManager>();
 
-  auto snes_ctx_ptr = smartGetDMSnesCtx(simple->getDM());
+  auto snes_ctx_ptr = getDMSnesCtx(simple->getDM());
 
   auto set_section_monitor = [&](auto solver) {
     MoFEMFunctionBegin;
@@ -932,7 +932,7 @@ MoFEMErrorCode Example::tsSolve() {
                                   SmartPetscObj<AO> &ao_sub) {
         MoFEMFunctionBegin;
 
-        dm_sub = createSmartDM(mField.get_comm(), "DMMOFEM");
+        dm_sub = createDM(mField.get_comm(), "DMMOFEM");
         CHKERR DMMoFEMCreateSubDM(dm_sub, base_dm, "SUB_BC");
         CHKERR DMMoFEMSetSquareProblem(dm_sub, PETSC_TRUE);
         CHKERR DMMoFEMAddElement(dm_sub, simple->getDomainFEName());
@@ -970,7 +970,7 @@ MoFEMErrorCode Example::tsSolve() {
                                  SmartPetscObj<IS> &is_sub,
                                  SmartPetscObj<AO> &ao_sub) {
         MoFEMFunctionBegin;
-        dm_sub = createSmartDM(mField.get_comm(), "DMMOFEM");
+        dm_sub = createDM(mField.get_comm(), "DMMOFEM");
         CHKERR DMMoFEMCreateSubDM(dm_sub, base_dm, "SUB_U");
         CHKERR DMMoFEMSetSquareProblem(dm_sub, PETSC_TRUE);
         CHKERR DMMoFEMAddElement(dm_sub, simple->getDomainFEName());
@@ -1064,7 +1064,7 @@ MoFEMErrorCode Example::tsSolve() {
   };
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMVector(dm);
+  auto D = createDMVector(dm);
   uXScatter = scatter_create(D, 0);
   uYScatter = scatter_create(D, 1);
   if constexpr (SPACE_DIM == 3)

@@ -318,8 +318,8 @@ MoFEMErrorCode Plate::solveSystem() {
 
   // Create RHS and solution vectors
   auto dm = simple->getDM();
-  auto F = smartCreateDMVector(dm);
-  auto D = smartVectorDuplicate(F);
+  auto F = createDMVector(dm);
+  auto D = vectorDuplicate(F);
 
   CHKERR KSPSolve(ksp_solver, F, D);
 

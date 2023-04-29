@@ -226,10 +226,10 @@ MoFEMErrorCode PhotonDiffusion::createCommonData() {
   PetscInt ghosts[1] = {0};
   if (!mField.get_comm_rank())
     commonDataPtr->petscVec =
-        createSmartGhostVector(mField.get_comm(), 1, 1, 0, ghosts);
+        createGhostVector(mField.get_comm(), 1, 1, 0, ghosts);
   else
     commonDataPtr->petscVec =
-        createSmartGhostVector(mField.get_comm(), 0, 1, 1, ghosts);
+        createGhostVector(mField.get_comm(), 0, 1, 1, ghosts);
   commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
   MoFEMFunctionReturn(0);
 }
@@ -574,7 +574,7 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   };
 
   auto dm = simple->getDM();
-  auto X = smartCreateDMVector(dm);
+  auto X = createDMVector(dm);
 
   if (from_initial) {
 

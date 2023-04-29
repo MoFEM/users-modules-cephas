@@ -214,10 +214,10 @@ MoFEMErrorCode MixedPoisson::createCommonData() {
   PetscInt ghosts[4] = {0, 1, 2, 3};
   if (!mField.get_comm_rank())
     commonDataPtr->petscVec =
-        createSmartGhostVector(mField.get_comm(), 4, 4, 0, ghosts);
+        createGhostVector(mField.get_comm(), 4, 4, 0, ghosts);
   else
     commonDataPtr->petscVec =
-        createSmartGhostVector(mField.get_comm(), 0, 4, 4, ghosts);
+        createGhostVector(mField.get_comm(), 0, 4, 4, ghosts);
   commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
   commonDataPtr->approxValsGrad = boost::make_shared<MatrixDouble>();
   commonDataPtr->approxFlux = boost::make_shared<MatrixDouble>();
@@ -272,8 +272,8 @@ MoFEMErrorCode MixedPoisson::solveSystem() {
   CHKERR KSPSetUp(solver);
 
   auto dm = simpleInterface->getDM();
-  auto D = smartCreateDMVector(dm);
-  auto F = smartVectorDuplicate(D);
+  auto D = createDMVector(dm);
+  auto F = vectorDuplicate(D);
   CHKERR VecZeroEntries(D);
 
   CHKERR KSPSolve(solver, F, D);

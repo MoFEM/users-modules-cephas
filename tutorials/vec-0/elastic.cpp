@@ -399,8 +399,8 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR KSPSetFromOptions(solver);
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMVector(dm);
-  auto F = smartVectorDuplicate(D);
+  auto D = createDMVector(dm);
+  auto F = vectorDuplicate(D);
 
   auto setup_and_solve = [&]() {
     MoFEMFunctionBegin;
@@ -624,7 +624,7 @@ MoFEMErrorCode Example::checkResults() {
       pip->getOpBoundaryRhsPipeline(), mField, "U", 1, Sev::verbose);
 
   auto dm = simple->getDM();
-  auto res = smartCreateDMVector(dm);
+  auto res = createDMVector(dm);
   pip->getDomainRhsFE()->ksp_f = res;
   pip->getBoundaryRhsFE()->ksp_f = res;
 
@@ -805,7 +805,7 @@ MoFEMErrorCode SetUpSchurImpl::setEntities() {
 MoFEMErrorCode SetUpSchurImpl::setUpSubDM() {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
-  subDM = createSmartDM(mField.get_comm(), "DMMOFEM");
+  subDM = createDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(subDM, simple->getDM(), "SUB");
   CHKERR DMMoFEMSetSquareProblem(subDM, PETSC_TRUE);
   CHKERR DMMoFEMAddElement(subDM, simple->getDomainFEName());

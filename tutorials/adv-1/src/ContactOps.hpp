@@ -23,7 +23,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   static auto createTotalTraction(MoFEM::Interface &m_field) {
     constexpr int ghosts[] = {0, 1, 2};
     totalTraction =
-        createSmartGhostVector(m_field.get_comm(),
+        createGhostVector(m_field.get_comm(),
 
                                (m_field.get_comm_rank() == 0) ? 3 : 0, 3,
 

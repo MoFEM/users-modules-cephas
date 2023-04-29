@@ -351,7 +351,7 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
-  auto D = smartCreateDMVector(simple->getDM());
+  auto D = createDMVector(simple->getDM());
 
   CHKERR TSSetSolution(ts, D);
   CHKERR TSSetFromOptions(ts);
@@ -381,7 +381,7 @@ MoFEMErrorCode Example::outputResults() {
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test_flg, PETSC_NULL);
   if (test_flg) {
     auto *simple = mField.getInterface<Simple>();
-    auto T = smartCreateDMVector(simple->getDM());
+    auto T = createDMVector(simple->getDM());
     CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                    SCATTER_FORWARD);
     double nrm2;

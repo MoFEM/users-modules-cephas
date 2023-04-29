@@ -190,8 +190,8 @@ MoFEMErrorCode Example::setIntegrationRules() {
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
   commonDataPtr = boost::make_shared<CommonData>();
-  commonDataPtr->resVec = smartCreateDMVector(simpleInterface->getDM());
-  commonDataPtr->L2Vec = createSmartVectorMPI(
+  commonDataPtr->resVec = createDMVector(simpleInterface->getDM());
+  commonDataPtr->L2Vec = createVectorMPI(
       mField.get_comm(), (!mField.get_comm_rank()) ? 1 : 0, 1);
   commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
   MoFEMFunctionReturn(0);
@@ -224,8 +224,8 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR KSPSetUp(solver);
 
   auto dm = simpleInterface->getDM();
-  auto D = smartCreateDMVector(dm);
-  auto F = smartVectorDuplicate(D);
+  auto D = createDMVector(dm);
+  auto F = vectorDuplicate(D);
 
   CHKERR KSPSolve(solver, F, D);
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);

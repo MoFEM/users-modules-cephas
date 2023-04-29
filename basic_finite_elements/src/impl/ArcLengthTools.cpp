@@ -50,10 +50,10 @@ ArcLengthCtx::ArcLengthCtx(MoFEM::Interface &m_field,
 
   auto vec_duplicate = [&]() {
     MoFEMFunctionBegin;
-    db = smartVectorDuplicate(F_lambda);
-    xLambda = smartVectorDuplicate(F_lambda);
-    x0 = smartVectorDuplicate(F_lambda);
-    dx = smartVectorDuplicate(F_lambda);
+    db = vectorDuplicate(F_lambda);
+    xLambda = vectorDuplicate(F_lambda);
+    x0 = vectorDuplicate(F_lambda);
+    dx = vectorDuplicate(F_lambda);
     MoFEMFunctionReturn(0);
   };
 

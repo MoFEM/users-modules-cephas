@@ -695,7 +695,7 @@ MoFEMErrorCode HookeElement::calculateEnergy(
   MoFEM::Interface *m_field_ptr;
   CHKERR DMoFEMGetInterfacePtr(dm, &m_field_ptr);
 
-  v_energy = createSmartVectorMPI(m_field_ptr->get_comm(), PETSC_DECIDE, 1);
+  v_energy = createVectorMPI(m_field_ptr->get_comm(), PETSC_DECIDE, 1);
 
   boost::shared_ptr<DataAtIntegrationPts> data_at_pts(
       new DataAtIntegrationPts());

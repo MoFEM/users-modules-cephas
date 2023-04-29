@@ -161,7 +161,7 @@ MoFEMErrorCode Example::createCommonData() {
     // other processors (e.g. 1, 2, 3, etc.)
     local_size = 0; // local size of vector is zero on other processors
 
-  commonDataPtr->petscVec = createSmartVectorMPI(mField.get_comm(), local_size,
+  commonDataPtr->petscVec = createVectorMPI(mField.get_comm(), local_size,
                                                  CommonData::LAST_ELEMENT);
 
   MoFEMFunctionReturn(0);

@@ -308,7 +308,7 @@ MoFEMErrorCode NonlinearPoisson::solveSystem() {
   // Create RHS and solution vectors
   SmartPetscObj<Vec> global_rhs, global_solution;
   CHKERR DMCreateGlobalVector_MoFEM(dM, global_rhs);
-  global_solution = smartVectorDuplicate(global_rhs);
+  global_solution = vectorDuplicate(global_rhs);
 
   // Create nonlinear solver (SNES)
   snesSolver = createSNES(mField.get_comm());

@@ -176,8 +176,8 @@ MoFEMErrorCode Poisson2DHomogeneous::solveSystem() {
 
   // Create RHS and solution vectors
   auto dm = simpleInterface->getDM();
-  auto F = smartCreateDMVector(dm);
-  auto D = smartVectorDuplicate(F);
+  auto F = createDMVector(dm);
+  auto D = vectorDuplicate(F);
 
   // Solve the system
   CHKERR KSPSolve(ksp_solver, F, D);

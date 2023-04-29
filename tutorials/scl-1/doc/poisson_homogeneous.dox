@@ -1030,8 +1030,8 @@ initilising the RHS and solution vectors
 \code
   // Create RHS and solution vectors
   auto dm = simpleInterface->getDM();
-  auto F = smartCreateDMVector(dm);
-  auto D = smartVectorDuplicate(F);
+  auto F = createDMVector(dm);
+  auto D = vectorDuplicate(F);
 \endcode
 
 At this particular point, Discrete Manager allows the two pipelines (responsible

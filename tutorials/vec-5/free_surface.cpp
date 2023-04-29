@@ -770,9 +770,9 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     CHKERR set_domain_rhs(pip_mng->getCastDomainRhsFE());
     CHKERR set_domain_lhs(pip_mng->getCastDomainLhsFE());
 
-    auto D = smartCreateDMVector(subdm);
+    auto D = createDMVector(subdm);
     auto snes = pip_mng->createSNES(subdm);
-    auto snes_ctx_ptr = smartGetDMSnesCtx(subdm);
+    auto snes_ctx_ptr = getDMSnesCtx(subdm);
 
     auto set_section_monitor = [&](auto solver) {
       MoFEMFunctionBegin;
@@ -1252,7 +1252,7 @@ MoFEMErrorCode FreeSurface::projectData() {
       CHKERR set_bdy_lhs(pip_mng->getCastBoundaryLhsFE());
 
       auto D = smartCreateDMVector(subdm);
-      auto F = smartVectorDuplicate(D);
+      auto F = vectorDuplicate(D);
 
       auto ksp = pip_mng->createKSP(subdm);
       CHKERR KSPSetFromOptions(ksp);
@@ -1282,6 +1282,7 @@ MoFEMErrorCode FreeSurface::projectData() {
       CHKERR solve(D);
 
       auto glob_x = smartCreateDMVector(simple->getDM());
+      auto sub_x = smartCreateDMVector(subdm);
 
       auto apply_restrict = [&]() {
         auto s = tsPrePostProc.lock()->getScatter(glob_x, D, FR::F);
@@ -2188,7 +2189,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     ptr->fsRawPtr = this;
     ptr->solverSubDM = create_solver_dm(simple->getDM());
-    ptr->globSol = smartCreateDMVector(dm);
+    ptr->globSol = createDMVector(dm);
 
     auto sub_ts = pip_mng->createTSIM(ptr->solverSubDM);
 
@@ -2721,7 +2722,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     auto set_solution = [&]() {
       MoFEMFunctionBegin;
       MOFEM_LOG("FS", Sev::inform) << "Set solution";
-      auto x = smartCreateDMVector(simple->getDM());
+      auto x = createDMVector(simple->getDM());
        CHKERR DMoFEMMeshToLocalVector(simple->getDM(), x, INSERT_VALUES,
                                      SCATTER_FORWARD);
       MOFEM_LOG("FS", Sev::verbose)
@@ -2772,8 +2773,8 @@ MoFEMErrorCode TSPrePostProc::tsSetIFunction(TS ts, PetscReal t, Vec u, Vec u_t,
   MoFEMFunctionBegin;
   if (auto ptr = tsPrePostProc.lock()) {
     auto sub_u = ptr->getSubVector();
-    auto sub_u_t = smartVectorDuplicate(sub_u);
-    auto sub_f = smartVectorDuplicate(sub_u);
+    auto sub_u_t = vectorDuplicate(sub_u);
+    auto sub_f = vectorDuplicate(sub_u);
     auto scatter = ptr->getScatter(sub_u, u, R);
 
     auto apply_scatter_and_update = [&](auto x, auto sub_x) {
@@ -2801,7 +2802,7 @@ MoFEMErrorCode TSPrePostProc::tsSetIJacobian(TS ts, PetscReal t, Vec u, Vec u_t,
   MoFEMFunctionBegin;
   if (auto ptr = tsPrePostProc.lock()) {
     auto sub_u = ptr->getSubVector();
-    auto sub_u_t = smartVectorDuplicate(sub_u);
+    auto sub_u_t = vectorDuplicate(sub_u);
     auto scatter = ptr->getScatter(sub_u, u, R);
 
     auto apply_scatter_and_update = [&](auto x, auto sub_x) {
@@ -2861,7 +2862,7 @@ MoFEMErrorCode TSPrePostProc::pcApply(PC pc, Vec pc_f, Vec pc_x) {
   MoFEMFunctionBegin;
   if (auto ptr = tsPrePostProc.lock()) {
     auto sub_x = ptr->getSubVector();
-    auto sub_f = smartVectorDuplicate(sub_x);
+    auto sub_f = vectorDuplicate(sub_x);
     auto scatter = ptr->getScatter(sub_x, pc_x, R);
     CHKERR VecScatterBegin(scatter, pc_f, sub_f, INSERT_VALUES,
                            SCATTER_REVERSE);
@@ -2898,7 +2899,7 @@ SmartPetscObj<VecScatter> TSPrePostProc::getScatter(Vec x, Vec y, enum FR fr) {
 }
 
 SmartPetscObj<Vec> TSPrePostProc::getSubVector() {
-  return smartCreateDMVector(solverSubDM);
+  return createDMVector(solverSubDM);
 }
 
 MoFEMErrorCode TSPrePostProc::tsSetUp(TS ts) {
@@ -2910,14 +2911,14 @@ MoFEMErrorCode TSPrePostProc::tsSetUp(TS ts) {
 
   auto dm = simple->getDM();
 
-  globRes = smartVectorDuplicate(globSol);
+  globRes = vectorDuplicate(globSol);
   CHKERR TSSetIFunction(ts, globRes, tsSetIFunction, nullptr);
   CHKERR TSSetIJacobian(ts, PETSC_NULL, PETSC_NULL, tsSetIJacobian, nullptr);
   CHKERR TSMonitorSet(ts, tsMonitor, fsRawPtr, PETSC_NULL);
 
   SNES snes;
   CHKERR TSGetSNES(ts, &snes);
-  auto snes_ctx_ptr = smartGetDMSnesCtx(dm);
+  auto snes_ctx_ptr = getDMSnesCtx(dm);
 
   auto set_section_monitor = [&](auto snes) {
     MoFEMFunctionBegin;
@@ -2939,8 +2940,8 @@ MoFEMErrorCode TSPrePostProc::tsSetUp(TS ts) {
   CHKERR KSPSetPC(ksp, sub_pc);
   CHKERR SNESSetKSP(snes, ksp);
 
-  snesCtxPtr = smartGetDMSnesCtx(solverSubDM);
-  tsCtxPtr = smartGetDMTsCtx(solverSubDM);
+  snesCtxPtr = getDMSnesCtx(solverSubDM);
+  tsCtxPtr = getDMTsCtx(solverSubDM);
 
   CHKERR TSSetPreStep(ts, tsPreProc);
   CHKERR TSSetPostStep(ts, tsPostProc);

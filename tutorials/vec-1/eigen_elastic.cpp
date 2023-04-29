@@ -159,9 +159,9 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto *simple = mField.getInterface<Simple>();
   MoFEMFunctionBegin;
 
-  rigidBodyMotion[0] = smartCreateDMVector(simple->getDM());
+  rigidBodyMotion[0] = createDMVector(simple->getDM());
   for (int n = 1; n != 6; ++n)
-    rigidBodyMotion[n] = smartVectorDuplicate(rigidBodyMotion[0]);
+    rigidBodyMotion[n] = vectorDuplicate(rigidBodyMotion[0]);
 
   // Create space of vectors or rigid motion
   auto problem_ptr = mField.get_problem(simple->getProblemName());
@@ -236,7 +236,7 @@ MoFEMErrorCode Example::assembleSystem() {
 
   auto dm = simple->getDM();
   CHKERR DMCreateMatrix_MoFEM(dm, K);
-  M = smartMatDuplicate(K, MAT_SHARE_NONZERO_PATTERN);
+  M = matDuplicate(K, MAT_SHARE_NONZERO_PATTERN);
 
   auto calculate_stiffness_matrix = [&]() {
     MoFEMFunctionBegin;
@@ -443,7 +443,7 @@ MoFEMErrorCode Example::outputResults() {
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMVector(dm);
+  auto D = createDMVector(dm);
 
   PetscInt nev;
   CHKERR EPSGetDimensions(ePS, &nev, NULL, NULL);

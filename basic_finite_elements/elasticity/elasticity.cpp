@@ -696,7 +696,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMRegister_MGViaApproxOrders("MOFEM");
 
     // Create DM manager
-    auto dm = createSmartDM(PETSC_COMM_WORLD, "MOFEM");
+    auto dm = createDM(PETSC_COMM_WORLD, "MOFEM");
     CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "ELASTIC_PROB", bit_level0);
     CHKERR DMSetFromOptions(dm);
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
@@ -715,8 +715,8 @@ int main(int argc, char *argv[]) {
     // but under the PETSc interface MoFEM implementation is running.
     SmartPetscObj<Vec> F;
     CHKERR DMCreateGlobalVector_MoFEM(dm, F);
-    auto D = smartVectorDuplicate(F);
-    auto D0 = smartVectorDuplicate(F);
+    auto D = vectorDuplicate(F);
+    auto D0 = vectorDuplicate(F);
     SmartPetscObj<Mat> Aij;
     CHKERR DMCreateMatrix_MoFEM(dm, Aij);
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
@@ -724,7 +724,7 @@ int main(int argc, char *argv[]) {
     // Initialise mass matrix
     SmartPetscObj<Mat> Mij;
     if (is_calculating_frequency == PETSC_TRUE) {
-      Mij = smartMatDuplicate(Aij, MAT_DO_NOT_COPY_VALUES);
+      Mij = matDuplicate(Aij, MAT_DO_NOT_COPY_VALUES);
       CHKERR MatSetOption(Mij, MAT_SPD, PETSC_TRUE);
       // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
     }

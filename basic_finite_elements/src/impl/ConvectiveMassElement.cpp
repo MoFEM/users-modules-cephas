@@ -26,9 +26,9 @@ ConvectiveMassElement::MyVolumeFE::MyVolumeFE(MoFEM::Interface &m_field)
   auto create_vec = [&]() {
     constexpr int ghosts[] = {0};
     if (mField.get_comm_rank() == 0) {
-      return createSmartVectorMPI(mField.get_comm(), 1, 1);
+      return createVectorMPI(mField.get_comm(), 1, 1);
     } else {
-      return createSmartVectorMPI(mField.get_comm(), 0, 1);
+      return createVectorMPI(mField.get_comm(), 0, 1);
     }
   };
 

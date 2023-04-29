@@ -229,8 +229,8 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR KSPSetUp(solver);
 
   auto dm = simpleInterface->getDM();
-  auto D = smartCreateDMVector(dm);
-  auto F = smartVectorDuplicate(D);
+  auto D = createDMVector(dm);
+  auto F = vectorDuplicate(D);
 
   CHKERR KSPSolve(solver, F, D);
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -290,7 +290,7 @@ MoFEMErrorCode Example::checkResults() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto dm = simpleInterface->getDM();
-  auto D = smartCreateDMVector(dm);
+  auto D = createDMVector(dm);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
   double nrm2;
   CHKERR VecNorm(D, NORM_2, &nrm2);

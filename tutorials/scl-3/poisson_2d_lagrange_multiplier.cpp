@@ -204,8 +204,8 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::solveSystem() {
 
   // Create RHS and solution vectors
   auto dm = simpleInterface->getDM();
-  auto F = smartCreateDMVector(dm);
-  auto D = smartVectorDuplicate(F);
+  auto F = createDMVector(dm);
+  auto D = vectorDuplicate(F);
 
   // Setup fieldsplit (block) solver - optional: yes/no
   if (1) {

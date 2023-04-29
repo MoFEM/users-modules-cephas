@@ -325,8 +325,8 @@ MoFEMErrorCode PhotonDiffusion::solveSystem() {
   // CHKERR KSPSetUp(solver);
 
   auto dm = simple->getDM();
-  auto X = smartCreateDMVector(dm);
-  auto F = smartVectorDuplicate(X);
+  auto X = createDMVector(dm);
+  auto F = vectorDuplicate(X);
 
   MOFEM_LOG("INITIAL", Sev::inform) << "Solver start";
   CHKERR KSPSolve(solver, F, X);
