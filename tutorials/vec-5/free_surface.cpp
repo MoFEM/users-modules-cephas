@@ -158,7 +158,7 @@ constexpr double rho_m = 0.998;
 constexpr double mu_m = 0.010101;
 constexpr double rho_p = 0.0012;
 constexpr double mu_p = 0.000182;
-constexpr double lambda = 73;
+constexpr double lambda = 73 / 4; ///< surface tension
 constexpr double W = 0.25;
 
 template <int T> constexpr int powof2() {
@@ -169,7 +169,7 @@ template <int T> constexpr int powof2() {
 };
 
 // Model parameters
-constexpr double h = 0.0015 / 4; // mesh size
+constexpr double h = 0.0015 / 12; // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
