@@ -867,6 +867,7 @@ MoFEMErrorCode FreeSurface::projectData() {
   auto pip_mng = mField.getInterface<PipelineManager>();
   auto bc_mng = mField.getInterface<BcManager>();
   auto bit_mng = mField.getInterface<BitRefManager>();
+  auto field_blas = mField.getInterface<FieldBlas>();
 
   // Store all existing elements pipelines, replace them by data projection
   // pipelines, to put them back when projection is done.
@@ -1226,6 +1227,15 @@ MoFEMErrorCode FreeSurface::projectData() {
       return SmartPetscObj<DM>();
     };
 
+    auto create_dummy_dm = [&]() {
+      auto dummy_dm = createDM(mField.get_comm(), "DMMOFEM");
+      CHK_THROW_MESSAGE(DMMoFEMCreateMoFEM(dummy_dm, &mField,
+                                           simple->getProblemName().c_str(),
+                                           BitRefLevel(), BitRefLevel()),
+                        "create dummy dm");
+      return dummy_dm;
+    };
+
     auto subdm = create_subdm();
     if (subdm) {
 
@@ -1251,7 +1261,7 @@ MoFEMErrorCode FreeSurface::projectData() {
       CHKERR set_bdy_rhs(pip_mng->getCastBoundaryRhsFE());
       CHKERR set_bdy_lhs(pip_mng->getCastBoundaryLhsFE());
 
-      auto D = smartCreateDMVector(subdm);
+      auto D = createDMVector(subdm);
       auto F = vectorDuplicate(D);
 
       auto ksp = pip_mng->createKSP(subdm);
@@ -1265,106 +1275,11 @@ MoFEMErrorCode FreeSurface::projectData() {
         return nrm;
       };
 
-      auto solve = [&](auto S) {
+      auto zero_dofs = [](boost::shared_ptr<FieldEntity> ent_ptr) {
         MoFEMFunctionBegin;
-        CHKERR VecZeroEntries(S);
-        CHKERR VecZeroEntries(F);
-        CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
-        CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
-        CHKERR KSPSolve(ksp, F, S);
-        CHKERR VecGhostUpdateBegin(S, INSERT_VALUES, SCATTER_FORWARD);
-        CHKERR VecGhostUpdateEnd(S, INSERT_VALUES, SCATTER_FORWARD);
-        MoFEMFunctionReturn(0);
-      };
-
-      MOFEM_LOG("FS", Sev::inform) << "Solve projection";
-      // CHKERR assemble_rhs(F);
-      CHKERR solve(D);
-
-      auto glob_x = smartCreateDMVector(simple->getDM());
-      auto sub_x = smartCreateDMVector(subdm);
-
-      auto apply_restrict = [&]() {
-        auto s = tsPrePostProc.lock()->getScatter(glob_x, D, FR::F);
-        CHK_THROW_MESSAGE(
-            DMSubDomainRestrict(simple->getDM(), s, PETSC_NULL, subdm),
-            "restrict");
-
-        Vec X0, Xdot;
-        CHK_THROW_MESSAGE(DMGetNamedGlobalVector(subdm, "TSTheta_X0", &X0),
-                          "get X0");
-        CHK_THROW_MESSAGE(DMGetNamedGlobalVector(subdm, "TSTheta_Xdot", &Xdot),
-                          "get Xdot");
-
-        CHK_THROW_MESSAGE(
-            VecGhostUpdateBegin(X0, INSERT_VALUES, SCATTER_FORWARD), "");
-        CHK_THROW_MESSAGE(VecGhostUpdateEnd(X0, INSERT_VALUES, SCATTER_FORWARD),
-                          "");
-        CHK_THROW_MESSAGE(
-            VecGhostUpdateBegin(Xdot, INSERT_VALUES, SCATTER_FORWARD), "");
-        CHK_THROW_MESSAGE(
-            VecGhostUpdateEnd(Xdot, INSERT_VALUES, SCATTER_FORWARD), "");
-
-        if constexpr (debug) {
-          MOFEM_LOG("FS", Sev::inform)
-              << "Reverse restrict: X0 " << get_norm(X0) << " Xdot "
-              << get_norm(Xdot);
+        for (auto &v : ent_ptr->getEntFieldData()) {
+          v = 0;
         }
-
-        return std::vector<Vec>{X0, Xdot};
-      };
-
-      auto apply_update = [&](std::vector<Vec> vecs) {
-        MoFEMFunctionBegin;
-        auto s = tsPrePostProc.lock()->getScatter(vecs[0], glob_x, FR::R);
-        CHKERR DMSubDomainRestrict(subdm, s, PETSC_NULL, simple->getDM());
-
-        CHKERR DMRestoreNamedGlobalVector(subdm, "TSTheta_X0", &vecs[0]);
-        CHKERR DMRestoreNamedGlobalVector(subdm, "TSTheta_Xdot", &vecs[1]);
-        MoFEMFunctionReturn(0);
-      };
-
-      auto vecs = apply_restrict();
-
-      if (vecs.size()) {
-
-        for (auto v : vecs) {
-          MOFEM_LOG("FS", Sev::inform) << "Solve projection vector";
-
-          CHKERR DMoFEMMeshToLocalVector(subdm, v, INSERT_VALUES,
-                                         SCATTER_REVERSE);
-          CHKERR solve(v);
-
-          MOFEM_LOG("FS", Sev::inform) << "Norm V " << get_norm(v);
-        }
-
-        CHKERR apply_update(vecs);
-      }
-
-      CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
-
-      // Dofs which are not part of the problem are set to zero
-      auto zero_no_problem_dofs = [&]() {
-        MoFEMFunctionBegin;
-
-        Range other_ents;
-        CHKERR bit_mng->getEntitiesByRefLevel(
-            BitRefLevel().set(), bit(get_current_bit()).flip(), other_ents);
-
-        auto zero = [](boost::shared_ptr<FieldEntity> ent_ptr) {
-          MoFEMFunctionBegin;
-          for (auto &v : ent_ptr->getEntFieldData()) {
-            v = 0;
-          }
-          MoFEMFunctionReturn(0);
-        };
-
-        auto field_blas = mField.getInterface<FieldBlas>();
-        for (auto f : {"U", "P", "H", "G", "L"}) {
-          MOFEM_LOG("WORLD", Sev::verbose) << "Zero field " << f;
-          CHKERR field_blas->fieldLambdaOnEntities(zero, f, &other_ents);
-        }
-
         MoFEMFunctionReturn(0);
       };
 
@@ -1390,7 +1305,107 @@ MoFEMErrorCode FreeSurface::projectData() {
         MoFEMFunctionReturn(0);
       };
 
-      CHKERR zero_no_problem_dofs();
+      auto solve = [&](auto S) {
+        MoFEMFunctionBegin;
+        CHKERR VecZeroEntries(S);
+        CHKERR VecZeroEntries(F);
+        CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
+        CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+        CHKERR KSPSolve(ksp, F, S);
+        CHKERR VecGhostUpdateBegin(S, INSERT_VALUES, SCATTER_FORWARD);
+        CHKERR VecGhostUpdateEnd(S, INSERT_VALUES, SCATTER_FORWARD);
+        MoFEMFunctionReturn(0);
+      };
+
+      MOFEM_LOG("FS", Sev::inform) << "Solve projection";
+      CHKERR solve(D);
+
+
+      auto glob_x = createDMVector(simple->getDM());
+      auto sub_x = createDMVector(subdm);
+      auto dummy_dm = create_dummy_dm();
+      
+      auto apply_restrict = [&]() {
+        auto get_is = [](auto v) {
+          IS iy;
+          auto create = [&]() {
+            MoFEMFunctionBegin;
+            int n, ystart;
+            CHKERR VecGetLocalSize(v, &n);
+            CHKERR VecGetOwnershipRange(v, &ystart, NULL);
+            CHKERR ISCreateStride(PETSC_COMM_SELF, n, ystart, 1, &iy);
+            MoFEMFunctionReturn(0);
+          };
+          CHK_THROW_MESSAGE(create(), "create is");
+          return SmartPetscObj<IS>(iy);
+        };
+
+        auto iy = get_is(glob_x);
+        auto s = createVecScatter(glob_x, PETSC_NULL, glob_x, iy);
+
+        CHK_THROW_MESSAGE(
+            DMSubDomainRestrict(simple->getDM(), s, PETSC_NULL, dummy_dm),
+            "restrict");
+        Vec X0, Xdot;
+        CHK_THROW_MESSAGE(DMGetNamedGlobalVector(dummy_dm, "TSTheta_X0", &X0),
+                          "get X0");
+        CHK_THROW_MESSAGE(
+            DMGetNamedGlobalVector(dummy_dm, "TSTheta_Xdot", &Xdot),
+            "get Xdot");
+
+        auto forward_ghost = [](auto g) {
+          MoFEMFunctionBegin;
+          CHKERR VecGhostUpdateBegin(g, INSERT_VALUES, SCATTER_FORWARD);
+          CHKERR VecGhostUpdateEnd(g, INSERT_VALUES, SCATTER_FORWARD);
+          MoFEMFunctionReturn(0);
+        };
+
+        CHK_THROW_MESSAGE(forward_ghost(X0), "");
+        CHK_THROW_MESSAGE(forward_ghost(Xdot), "");
+
+        if constexpr (debug) {
+          MOFEM_LOG("FS", Sev::inform)
+              << "Reverse restrict: X0 " << get_norm(X0) << " Xdot "
+              << get_norm(Xdot);
+        }
+
+        return std::vector<Vec>{X0, Xdot};
+      };
+
+      auto ts_solver_vecs = apply_restrict();
+
+      if (ts_solver_vecs.size()) {
+
+        for (auto v : ts_solver_vecs) {
+          MOFEM_LOG("FS", Sev::inform) << "Solve projection vector";
+
+          CHKERR DMoFEMMeshToLocalVector(simple->getDM(), v, INSERT_VALUES,
+                                         SCATTER_REVERSE);
+          CHKERR solve(sub_x);
+
+          for (auto f : {"U", "P", "H", "G", "L"}) {
+            MOFEM_LOG("WORLD", Sev::verbose) << "Zero field " << f;
+            CHKERR field_blas->fieldLambdaOnEntities(zero_dofs, f);
+          }
+          CHKERR DMoFEMMeshToLocalVector(subdm, sub_x, INSERT_VALUES,
+                                         SCATTER_REVERSE);
+          CHKERR DMoFEMMeshToLocalVector(simple->getDM(), v, INSERT_VALUES,
+                                         SCATTER_FORWARD);
+
+          MOFEM_LOG("FS", Sev::inform) << "Norm V " << get_norm(v);
+        }
+
+        CHKERR DMRestoreNamedGlobalVector(dummy_dm, "TSTheta_X0",
+                                          &ts_solver_vecs[0]);
+        CHKERR DMRestoreNamedGlobalVector(dummy_dm, "TSTheta_Xdot",
+                                          &ts_solver_vecs[1]);
+      }
+
+      for (auto f : {"U", "P", "H", "G", "L"}) {
+        MOFEM_LOG("WORLD", Sev::verbose) << "Zero field " << f;
+        CHKERR field_blas->fieldLambdaOnEntities(zero_dofs, f);
+      }
+      CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
       CHKERR cut_off_dofs();
     }
 
@@ -2713,7 +2728,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     // changed
     auto set_jacobian_operators = [&]() {
       MoFEMFunctionBegin;
-      ptr->subB = smartCreateDMMatrix(ptr->solverSubDM);
+      ptr->subB = createDMMatrix(ptr->solverSubDM);
       CHKERR KSPReset(ptr->subKSP);
       MoFEMFunctionReturn(0);
     };
