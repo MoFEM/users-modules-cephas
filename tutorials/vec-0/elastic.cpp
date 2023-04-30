@@ -775,7 +775,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
     }
     CHKERR setEntities();
     CHKERR setUpSubDM();
-    S = smartCreateDMMatrix(subDM);
+    S = createDMMatrix(subDM);
     // CHKERR MatSetBlockSize(S, SPACE_DIM);
     // CHKERR MatSetOption(S, MAT_SYMMETRIC, PETSC_TRUE);
     CHKERR setOperator();

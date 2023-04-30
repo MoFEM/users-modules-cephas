@@ -383,7 +383,7 @@ MoFEMErrorCode NavierStokesExample::setupAlgebraicStructures() {
 
   D = createDMVector(dM);
   F = vectorDuplicate(D);
-  Aij = smartCreateDMMatrix(dM);
+  Aij = createDMMatrix(dM);
 
   CHKERR VecZeroEntries(F);
   CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);

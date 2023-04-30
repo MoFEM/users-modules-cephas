@@ -302,7 +302,7 @@ int main(int argc, char *argv[]) {
     CHKERR VecZeroEntries(F2);
 
     // Stiffness matrix
-    auto A = smartCreateDMMatrix(dm);
+    auto A = createDMMatrix(dm);
 
     CHKERR MatSetOption(A, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(A);

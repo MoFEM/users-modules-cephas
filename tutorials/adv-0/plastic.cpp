@@ -1279,7 +1279,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
           "Is expected that schur matrix is not allocated. This is "
           "possible only is PC is set up twice");
     }
-    S = smartCreateDMMatrix(subDM);
+    S = createDMMatrix(subDM);
     CHKERR setOperator();
     CHKERR setPC(pc);
 
