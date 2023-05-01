@@ -138,6 +138,7 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 // mesh refinement
 int order = 3;     ///< approximation order
 int nb_levels = 4; //< number of refinement levels
+int refine_overlap = 4; //< mesh overlap while refine
 
 constexpr bool debug = true;
 
@@ -152,6 +153,8 @@ auto get_skin_child_bit = []() { return 2 * get_start_bit() + 3; };
 auto get_projection_bit = []() { return 2 * get_start_bit() + 4; };
 auto get_skin_projection_bit = []() { return 2 * get_start_bit() + 5; };
 
+// FIXME: Set parameters from command line
+
 // Physical parameters
 constexpr double a0 = 0; // 980;
 constexpr double rho_m = 0.998;
@@ -160,13 +163,6 @@ constexpr double rho_p = 0.0012;
 constexpr double mu_p = 0.000182;
 constexpr double lambda = 73 / 4; ///< surface tension
 constexpr double W = 0.25;
-
-template <int T> constexpr int powof2() {
-  if constexpr (T == 0)
-    return 1;
-  else
-    return powof2<T - 1>() * 2;
-};
 
 // Model parameters
 constexpr double h = 0.0015 / 12; // mesh size
@@ -200,6 +196,8 @@ auto wetting_angle_sub_stepping = [](auto ts_step) {
   return std::min(1., static_cast<double>(ts_step) / sub_stepping);
 };
 
+// cut off function
+
 auto my_max = [](const double x) { return (x - 1 + std::abs(x + 1)) / 2; };
 auto my_min = [](const double x) { return (x + 1 - std::abs(x - 1)) / 2; };
 auto cut_off = [](const double h) { return my_max(my_min(h)); };
@@ -217,6 +215,8 @@ auto phase_function = [](const double h, const double diff, const double ave) {
 auto d_phase_function_h = [](const double h, const double diff) {
   return diff * d_cut_off(h);
 };
+
+// order function (free energy)
 
 auto get_f = [](const double h) { return 4 * W * h * (h * h - 1); };
 auto get_f_dh = [](const double h) { return 4 * W * (3 * h * h - 1); };
@@ -261,6 +261,8 @@ auto get_D = [](const double A) {
   return t_D;
 };
 
+// some examples of initialisation functions
+
 auto kernel_oscillation = [](double r, double y, double) {
   constexpr int n = 3;
   constexpr double R = 0.0125;
@@ -289,6 +291,13 @@ auto bubble_device = [](double x, double y, double z) {
   return -tanh((-0.039 - x) / (eta * std::sqrt(2)));
 };
 
+/**
+ * @brief Initialisation function
+ *
+ * @note If UMs are compiled with Python to initialise phase field "H"
+ * surface.py function is used, which has to be present in execution folder.
+ *
+ */
 auto init_h = [](double r, double y, double theta) {
 #ifdef PYTHON_INIT_SURFACE
   double s = 1;
@@ -390,12 +399,25 @@ struct FreeSurface;
 
 enum FR { F, R }; // F - forward, and reverse
 
+/**
+ * @brief Set of functions called by PETSc solver used to refine and update
+ * mesh.
+ * 
+ * @note Currently theta method is only handled by this code.
+ *
+ */
 struct TSPrePostProc {
 
   TSPrePostProc() = default;
   virtual ~TSPrePostProc() = default;
 
-  MoFEMErrorCode tsSetUp(TS ts);
+  /**
+   * @brief Used to setup TS solver
+   * 
+   * @param ts 
+   * @return MoFEMErrorCode 
+   */
+  MoFEMErrorCode tsSetUp(TS ts); 
 
   SmartPetscObj<VecScatter> getScatter(Vec x, Vec y, enum FR fr);
   SmartPetscObj<Vec> getSubVector();
@@ -405,23 +427,46 @@ struct TSPrePostProc {
   FreeSurface *fsRawPtr;
 
 private:
-  static MoFEMErrorCode tsPreProc(TS ts);
+
+  /**
+   * @brief Pre process time step
+   * 
+   * Refine mesh and update fields
+   * 
+   * @param ts 
+   * @return MoFEMErrorCode 
+   */
+  static MoFEMErrorCode tsPreProc(TS ts); 
+
+  /**
+   * @brief Post process time step.
+   * 
+   * Currently that function do not make anything major
+   * 
+   * @param ts 
+   * @return MoFEMErrorCode 
+   */
   static MoFEMErrorCode tsPostProc(TS ts);
+
   static MoFEMErrorCode tsSetIFunction(TS ts, PetscReal t, Vec u, Vec u_t,
-                                       Vec f, void *ctx);
+                                       Vec f,
+                                       void *ctx); //< Wrapper for SNES Rhs
   static MoFEMErrorCode tsSetIJacobian(TS ts, PetscReal t, Vec u, Vec u_t,
-                                       PetscReal a, Mat A, Mat B, void *ctx);
+                                       PetscReal a, Mat A, Mat B,
+                                       void *ctx); ///< Wrapper for SNES Lhs
   static MoFEMErrorCode tsMonitor(TS ts, PetscInt step, PetscReal t, Vec u,
-                                  void *ctx);
+                                  void *ctx); ///< Wrapper for TS monitor
   static MoFEMErrorCode pcSetup(PC pc);
   static MoFEMErrorCode pcApply(PC pc, Vec pc_f, Vec pc_x);
 
-  SmartPetscObj<Vec> globRes;
-  SmartPetscObj<Mat> subB;
-  SmartPetscObj<KSP> subKSP;
+  SmartPetscObj<Vec> globRes; //< global residual
+  SmartPetscObj<Mat> subB; //< sub problem tangent matrix
+  SmartPetscObj<KSP> subKSP; //< sub problem KSP solver
 
-  boost::shared_ptr<SnesCtx> snesCtxPtr;
-  boost::shared_ptr<TsCtx> tsCtxPtr;
+  boost::shared_ptr<SnesCtx>
+      snesCtxPtr; //< infernal data (context) for MoFEM SNES fuctions
+  boost::shared_ptr<TsCtx>
+      tsCtxPtr; //<  internal data (context) for MoFEM TS functions.
 };
 
 static boost::weak_ptr<TSPrePostProc> tsPrePostProc;
@@ -513,6 +558,8 @@ MoFEMErrorCode FreeSurface::setupProblem() {
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-nb_levels", &nb_levels,
+                            PETSC_NULL);
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-refine_overlap", &refine_overlap,
                             PETSC_NULL);
 
   MOFEM_LOG("FS", Sev::inform) << "order = " << order;
@@ -821,7 +868,7 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   CHKERR reset_bits();
   CHKERR solve_init(
       [](FEMethod *fe_ptr) { return get_fe_bit(fe_ptr).test(0); });
-  CHKERR refineMesh(4);
+  CHKERR refineMesh(refine_overlap);
   for (auto f : {"U", "P", "H", "G", "L"}) {
     CHKERR mField.getInterface<FieldBlas>()->setField(0, f);
   }
@@ -1275,6 +1322,9 @@ MoFEMErrorCode FreeSurface::projectData() {
         return nrm;
       };
 
+      /**
+       * @brief Zero DOFs, used by FieldBlas
+       */
       auto zero_dofs = [](boost::shared_ptr<FieldEntity> ent_ptr) {
         MoFEMFunctionBegin;
         for (auto &v : ent_ptr->getEntFieldData()) {
@@ -1283,6 +1333,10 @@ MoFEMErrorCode FreeSurface::projectData() {
         MoFEMFunctionReturn(0);
       };
 
+      /**
+       * @brief cut-off values at nodes, i.e. abs("H") <= 1
+       * 
+       */
       auto cut_off_dofs = [&]() {
         MoFEMFunctionBegin;
 
@@ -1325,6 +1379,9 @@ MoFEMErrorCode FreeSurface::projectData() {
       auto sub_x = createDMVector(subdm);
       auto dummy_dm = create_dummy_dm();
       
+      /**
+       * @brief get TSTheta data operators
+       */
       auto apply_restrict = [&]() {
         auto get_is = [](auto v) {
           IS iy;
@@ -2719,7 +2776,7 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     auto refine_problem = [&]() {
       MoFEMFunctionBegin;
       MOFEM_LOG("FS", Sev::inform) << "Refine problem";
-      CHKERR ptr->fsRawPtr->refineMesh(4);
+      CHKERR ptr->fsRawPtr->refineMesh(refine_overlap);
       CHKERR ptr->fsRawPtr->projectData();
       MoFEMFunctionReturn(0);
     };
