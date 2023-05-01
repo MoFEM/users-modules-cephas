@@ -18,6 +18,7 @@ static char help[] = "...\n\n";
 #ifdef PYTHON_INIT_SURFACE
 #include <boost/python.hpp>
 #include <boost/python/def.hpp>
+#include <petsc/private/petscimpl.h>
 namespace bp = boost::python;
 
 struct SurfacePython {
@@ -447,6 +448,8 @@ private:
    * @return MoFEMErrorCode 
    */
   static MoFEMErrorCode tsPostProc(TS ts);
+
+  static MoFEMErrorCode tsPreStage(TS ts);
 
   static MoFEMErrorCode tsSetIFunction(TS ts, PetscReal t, Vec u, Vec u_t,
                                        Vec f,
@@ -2262,6 +2265,10 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     ptr->fsRawPtr = this;
     ptr->solverSubDM = create_solver_dm(simple->getDM());
     ptr->globSol = createDMVector(dm);
+    CHKERR DMoFEMMeshToLocalVector(dm, ptr->globSol, INSERT_VALUES,
+                                   SCATTER_FORWARD);
+    CHKERR VecAssemblyBegin(ptr->globSol);
+    CHKERR VecAssemblyEnd(ptr->globSol);
 
     auto sub_ts = pip_mng->createTSIM(ptr->solverSubDM);
 
@@ -2269,10 +2276,8 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     // Add monitor to time solver
     double ftime = 1;
-    CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
-    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), ptr->globSol, INSERT_VALUES,
-                                   SCATTER_FORWARD);
-    CHKERR TSSetSolution(ts, ptr->globSol);
+    // CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
+    // CHKERR TSSetSolution(ts, ptr->globSol);
     CHKERR TSSetFromOptions(ts);
     CHKERR ptr->tsSetUp(ts);
     CHKERR TSSetUp(ts);
@@ -2294,7 +2299,7 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     CHKERR print_fields_in_section();
 
-    CHKERR TSSolve(ts, NULL);
+    CHKERR TSSolve(ts, ptr->globSol);
   }
 
   MoFEMFunctionReturn(0);
@@ -2794,14 +2799,22 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
     auto set_solution = [&]() {
       MoFEMFunctionBegin;
       MOFEM_LOG("FS", Sev::inform) << "Set solution";
-      auto x = createDMVector(simple->getDM());
-       CHKERR DMoFEMMeshToLocalVector(simple->getDM(), x, INSERT_VALUES,
-                                     SCATTER_FORWARD);
+
+      PetscObjectState state;
+
+      // Record the state, and set it again. This is to fool PETSc that solution
+      // vector is not updated. Otherwise PETSc will treat every step as a first
+      // step.
+
+      // globSol is updated as result mesh refinement -  this is not really set
+      // a new solution.
+
+      CHKERR PetscObjectStateGet(getPetscObject(ptr->globSol.get()), &state);
+      CHKERR DMoFEMMeshToLocalVector(simple->getDM(), ptr->globSol,
+                                     INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR PetscObjectStateSet(getPetscObject(ptr->globSol.get()), state);
       MOFEM_LOG("FS", Sev::verbose)
-          << "Set solution, vector norm " << get_norm(x);
-      CHKERR VecAssemblyBegin(x);
-      CHKERR VecAssemblyEnd(x);
-      CHKERR TSSetSolution(ts, x);
+          << "Set solution, vector norm " << get_norm(ptr->globSol);
       MoFEMFunctionReturn(0);
     };
 
