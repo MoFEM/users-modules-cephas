@@ -81,7 +81,7 @@ constexpr CoordinateTypes coord_type =
 
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType I =
-    IntegrationType::GAUSS; //< selected integration type
+    IntegrationType::GAUSS;                     //< selected integration type
 
 template <int DIM>
 using ElementsAndOps = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>;
@@ -137,8 +137,8 @@ FTensor::Index<'l', SPACE_DIM> l;
 constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // mesh refinement
-int order = 3;     ///< approximation order
-int nb_levels = 4; //< number of refinement levels
+int order = 3;          ///< approximation order
+int nb_levels = 4;      //< number of refinement levels
 int refine_overlap = 4; //< mesh overlap while refine
 
 constexpr bool debug = true;
@@ -166,12 +166,12 @@ constexpr double lambda = 73 / 4; ///< surface tension
 constexpr double W = 0.25;
 
 // Model parameters
-constexpr double h = 0.0015 / 12; // mesh size
+constexpr double h = 0.0015 / 15; // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameters
-constexpr double md = 1e-2;
+constexpr double md = 1e-4;
 constexpr double eps = 1e-12;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
@@ -403,7 +403,7 @@ enum FR { F, R }; // F - forward, and reverse
 /**
  * @brief Set of functions called by PETSc solver used to refine and update
  * mesh.
- * 
+ *
  * @note Currently theta method is only handled by this code.
  *
  */
@@ -414,11 +414,11 @@ struct TSPrePostProc {
 
   /**
    * @brief Used to setup TS solver
-   * 
-   * @param ts 
-   * @return MoFEMErrorCode 
+   *
+   * @param ts
+   * @return MoFEMErrorCode
    */
-  MoFEMErrorCode tsSetUp(TS ts); 
+  MoFEMErrorCode tsSetUp(TS ts);
 
   SmartPetscObj<VecScatter> getScatter(Vec x, Vec y, enum FR fr);
   SmartPetscObj<Vec> getSubVector();
@@ -428,24 +428,23 @@ struct TSPrePostProc {
   FreeSurface *fsRawPtr;
 
 private:
-
   /**
    * @brief Pre process time step
-   * 
+   *
    * Refine mesh and update fields
-   * 
-   * @param ts 
-   * @return MoFEMErrorCode 
+   *
+   * @param ts
+   * @return MoFEMErrorCode
    */
-  static MoFEMErrorCode tsPreProc(TS ts); 
+  static MoFEMErrorCode tsPreProc(TS ts);
 
   /**
    * @brief Post process time step.
-   * 
+   *
    * Currently that function do not make anything major
-   * 
-   * @param ts 
-   * @return MoFEMErrorCode 
+   *
+   * @param ts
+   * @return MoFEMErrorCode
    */
   static MoFEMErrorCode tsPostProc(TS ts);
 
@@ -458,18 +457,18 @@ private:
                                        PetscReal a, Mat A, Mat B,
                                        void *ctx); ///< Wrapper for SNES Lhs
   static MoFEMErrorCode tsMonitor(TS ts, PetscInt step, PetscReal t, Vec u,
-                                  void *ctx); ///< Wrapper for TS monitor
+                                  void *ctx);      ///< Wrapper for TS monitor
   static MoFEMErrorCode pcSetup(PC pc);
   static MoFEMErrorCode pcApply(PC pc, Vec pc_f, Vec pc_x);
 
   SmartPetscObj<Vec> globRes; //< global residual
-  SmartPetscObj<Mat> subB; //< sub problem tangent matrix
-  SmartPetscObj<KSP> subKSP; //< sub problem KSP solver
+  SmartPetscObj<Mat> subB;    //< sub problem tangent matrix
+  SmartPetscObj<KSP> subKSP;  //< sub problem KSP solver
 
   boost::shared_ptr<SnesCtx>
       snesCtxPtr; //< infernal data (context) for MoFEM SNES fuctions
   boost::shared_ptr<TsCtx>
-      tsCtxPtr; //<  internal data (context) for MoFEM TS functions.
+      tsCtxPtr;   //<  internal data (context) for MoFEM TS functions.
 };
 
 static boost::weak_ptr<TSPrePostProc> tsPrePostProc;
@@ -1338,7 +1337,7 @@ MoFEMErrorCode FreeSurface::projectData() {
 
       /**
        * @brief cut-off values at nodes, i.e. abs("H") <= 1
-       * 
+       *
        */
       auto cut_off_dofs = [&]() {
         MoFEMFunctionBegin;
@@ -1377,11 +1376,10 @@ MoFEMErrorCode FreeSurface::projectData() {
       MOFEM_LOG("FS", Sev::inform) << "Solve projection";
       CHKERR solve(D);
 
-
       auto glob_x = createDMVector(simple->getDM());
       auto sub_x = createDMVector(subdm);
       auto dummy_dm = create_dummy_dm();
-      
+
       /**
        * @brief get TSTheta data operators
        */
