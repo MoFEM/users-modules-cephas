@@ -1,210 +1,213 @@
-
+/**
+ * \file PostProcContact.hpp
+ *
+ *
+ * @copyright Copyright (c) 2023
+ */
 
 namespace ContactOps {
 
-struct OpPostProcVertex : public BoundaryEleOp {
-  OpPostProcVertex(MoFEM::Interface &m_field, const std::string field_name,
-                   boost::shared_ptr<CommonData> common_data_ptr,
-                   moab::Interface *moab_vertex);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+template <int DIM> struct PostProcEleByDim;
 
-private:
-  MoFEM::Interface &mField;
-  moab::Interface *moabVertex;
-  boost::shared_ptr<CommonData> commonDataPtr;
-  boost::shared_ptr<WrapMPIComm> moabCommWrap;
-  ParallelComm *pComm;
+template <> struct PostProcEleByDim<2> {
+  using PostProcEleDomain = PostProcBrokenMeshInMoabBaseCont<DomainEle>;
+  using PostProcEleBdy = PostProcBrokenMeshInMoabBaseCont<BoundaryEle>;
+  using SideEle = PipelineManager::ElementsAndOpsByDim<2>::FaceSideEle;
 };
 
-OpPostProcVertex::OpPostProcVertex(
-    MoFEM::Interface &m_field, const std::string field_name,
-    boost::shared_ptr<CommonData> common_data_ptr, moab::Interface *moab_vertex)
-    : mField(m_field), BoundaryEleOp(field_name, BoundaryEleOp::OPROW),
-      commonDataPtr(common_data_ptr), moabVertex(moab_vertex) {
-  std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-  doEntities[boundary_ent] = true;
-  if (boundary_ent == MBTRI)
-    doEntities[MBQUAD] = true;
-  pComm = ParallelComm::get_pcomm(moabVertex, MYPCOMM_INDEX);
-  if (pComm == NULL) {
-    moabCommWrap = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-    pComm = new ParallelComm(moabVertex, moabCommWrap->get_comm());
-  }
-}
+template <> struct PostProcEleByDim<3> {
+  using PostProcEleDomain = PostProcBrokenMeshInMoabBaseCont<BoundaryEle>;
+  using PostProcEleBdy = PostProcBrokenMeshInMoabBaseCont<BoundaryEle>;
+  using SideEle = PipelineManager::ElementsAndOpsByDim<3>::FaceSideEle;
+};
 
-MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
-                                        EntData &data) {
-  MoFEMFunctionBegin;
-
-  const size_t nb_gauss_pts = getGaussPts().size2();
-  const size_t nb_dofs = data.getIndices().size();
-  std::array<double, 9> def;
-  std::fill(def.begin(), def.end(), 0);
-
-  auto get_tag = [&](const std::string name, size_t size) {
-    Tag th;
-    CHKERR moabVertex->tag_get_handle(name.c_str(), size, MB_TYPE_DOUBLE, th,
-                                      MB_TAG_CREAT | MB_TAG_SPARSE, def.data());
-    return th;
-  };
-
-  auto t_coords = getFTensor1CoordsAtGaussPts();
-  auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
-  auto t_traction =
-      getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
-
-  auto th_gap = get_tag("GAP", 1);
-  auto th_cons = get_tag("CONSTRAINT", 1);
-  auto th_traction = get_tag("TRACTION", 3);
-  auto th_normal = get_tag("NORMAL", 3);
-  auto th_cont_normal = get_tag("CONTACT_NORMAL", 3);
-  auto th_disp = get_tag("DISPLACEMENT", 3);
-
-  EntityHandle ent = getFEEntityHandle();
-
-  for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-    double coords[] = {0, 0, 0};
-    EntityHandle new_vertex;
-    for (int dd = 0; dd != 3; dd++) {
-      coords[dd] = getCoordsAtGaussPts()(gg, dd);
-    }
-    CHKERR moabVertex->create_vertex(&coords[0], new_vertex);
-    FTensor::Tensor1<double, 3> trac(t_traction(0), t_traction(1), 0.);
-    FTensor::Tensor1<double, 3> disp(t_disp(0), t_disp(1), 0.);
-
-    auto t_contact_normal = normal(t_coords, t_disp);
-    const double g0 = gap0(t_coords, t_contact_normal);
-    const double g = gap(t_disp, t_contact_normal);
-    const double gap_tot = g - g0;
-    const double constra = constrian(
-        gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
-        normal_traction(t_traction, t_contact_normal));
-    CHKERR moabVertex->tag_set_data(th_gap, &new_vertex, 1, &gap_tot);
-    CHKERR moabVertex->tag_set_data(th_cons, &new_vertex, 1, &constra);
-
-    FTensor::Tensor1<double, 3> norm(t_contact_normal(0), t_contact_normal(1),
-                                     0.);
-
-    if (SPACE_DIM == 3) {
-      trac(2) = t_traction(2);
-      norm(2) = t_contact_normal(2);
-      disp(2) = t_disp(2);
-    }
-
-    CHKERR moabVertex->tag_set_data(th_traction, &new_vertex, 1, &trac(0));
-    CHKERR moabVertex->tag_set_data(th_cont_normal, &new_vertex, 1, &norm(0));
-    CHKERR moabVertex->tag_set_data(th_disp, &new_vertex, 1, &disp(0));
-    auto t_normal = getFTensor1Normal();
-    CHKERR moabVertex->tag_set_data(th_normal, &new_vertex, 1, &t_normal(0));
-
-    auto set_part = [&](const auto vert) {
-      MoFEMFunctionBegin;
-      const int rank = mField.get_comm_rank();
-      CHKERR moabVertex->tag_set_data(pComm->part_tag(), &vert, 1, &rank);
-      MoFEMFunctionReturn(0);
-    };
-
-    CHKERR set_part(new_vertex);
-
-    ++t_traction;
-    ++t_coords;
-    ++t_disp;
-  }
-
-  MoFEMFunctionReturn(0);
-}
+using PostProcEleDomain = PostProcEleByDim<SPACE_DIM>::PostProcEleDomain;
+using SideEle = PostProcEleByDim<SPACE_DIM>::SideEle;
+using PostProcEleBdy = PostProcEleByDim<SPACE_DIM>::PostProcEleBdy;
 
 struct Monitor : public FEMethod {
 
-  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<CommonData> common_data_ptr,
+  Monitor(SmartPetscObj<DM> &dm,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
-      : dM(dm), commonDataPtr(common_data_ptr), uXScatter(ux_scatter),
-        uYScatter(uy_scatter), uZScatter(uz_scatter),
-        moabVertex(mbVertexPostproc), sTEP(0) {
+      : dM(dm), uXScatter(ux_scatter), uYScatter(uy_scatter),
+        uZScatter(uz_scatter), moabVertex(mbVertexPostproc), sTEP(0) {
+
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
-    vertexPostProc = boost::make_shared<BoundaryEle>(*m_field_ptr);
-
-    vertexPostProc->getOpPtrVector().push_back(
-        new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
-    vertexPostProc->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<SPACE_DIM>(
-            "U", commonDataPtr->contactDispPtr));
-    vertexPostProc->getOpPtrVector().push_back(
-        new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
-            "SIGMA", commonDataPtr->contactTractionPtr));
-    vertexPostProc->getOpPtrVector().push_back(
-        new OpPostProcVertex(*m_field_ptr, "U", commonDataPtr, &moabVertex));
-
-    postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
-
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
-    if (SPACE_DIM == 2) {
-      postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
-      postProcFe->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpSetInvJacHcurlFace(inv_jac_ptr));
-    } else {
-      postProcFe->getOpPtrVector().push_back(
-          new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
-      postProcFe->getOpPtrVector().push_back(
-          new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
-    }
-
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-            "U", commonDataPtr->mGradPtr));
-    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-            "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
-            commonDataPtr->mDPtr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-            "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-            "SIGMA", commonDataPtr->contactStressPtr));
-
-    auto u_ptr = boost::make_shared<MatrixDouble>();
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-    postProcFe->getOpPtrVector().push_back(
+    auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
+    auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
+    henky_common_data_ptr->matGradPtr = common_data_ptr->mGradPtr();
+    henky_common_data_ptr->matDPtr = common_data_ptr->mDPtr();
 
-        new OpPPMap(
+    auto push_domain_ops = [&](auto &pip) {
+      CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+                            pip, {H1, HDIV} /*, "GEOMETRY"*/)),
+                        "Apply base transform");
+      CHK_THROW_MESSAGE(
+          ContactOps::addMatBlockOps(*m_field_ptr, pip, "U", "MAT_ELASTIC",
+                                     common_data_ptr->mDPtr(), Sev::inform),
+          "Set block data");
+      pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+          "U", common_data_ptr->mGradPtr()));
+      pip.push_back(
+          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+          "SIGMA", common_data_ptr->contactStressPtr()));
+    };
 
-            postProcFe->getPostProcMesh(), postProcFe->getMapGaussPts(),
+    auto get_post_proc_domain_fe = [&]() {
+      auto post_proc_fe =
+          boost::make_shared<PostProcEleDomain>(*m_field_ptr, postProcMesh);
+      auto &pip = post_proc_fe->getOpPtrVector();
 
-            {},
+      // Evaluate domain on side element
+      if constexpr (SPACE_DIM == 3) {
+        CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+                              pip, {HDIV} /*, "GEOMETRY"*/)),
+                          "Apply transform");
+        // create OP which run element on side
+        auto op_loop_side =
+            new OpLoopSide<SideEle>(*m_field_ptr, "dFE", SPACE_DIM);
+        // push ops to side element, through op_loop_side operator
+        push_domain_ops(op_loop_side->getOpPtrVector());
+        pip.push_back(op_loop_side);
+        pip.push_back(new OpCalculateStressTraction(common_data_ptr,
+                                                    henky_common_data_ptr));
+        // evaluate traction
+        pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+            "SIGMA", common_data_ptr->contactTractionPtr()));
+      } else {
+        push_domain_ops(pip);
+      }
 
-            {{"U", u_ptr}},
+      auto u_ptr = boost::make_shared<MatrixDouble>();
+      pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
-            {{"SIGMA", commonDataPtr->contactStressPtr}},
+      post_proc_fe->getOpPtrVector().push_back(
 
-            {{"STRAIN", commonDataPtr->mStrainPtr},
-             {"STRESS", commonDataPtr->mStressPtr}}
+          new OpPPMap(
 
-            )
+              post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-    );
+              {},
 
+              {
+
+                  {"U", u_ptr},
+
+                  // Note: post-process tractions in 3d, i.e. when mesh is
+                  // post-process on skin
+                  {"t_contact", (SPACE_DIM == 3)
+                                    ? common_data_ptr->contactTractionPtr()
+                                    : nullptr},
+
+                  {"t_stress", (SPACE_DIM == 3)
+                                   ? common_data_ptr->stressTractionPtr()
+                                   : nullptr}
+
+              },
+
+              {
+
+                  {"SIGMA", common_data_ptr->contactStressPtr()},
+
+                  {"G", common_data_ptr->mGradPtr()},
+
+                  {"P2", henky_common_data_ptr->getMatFirstPiolaStress()}
+
+              },
+
+              {}
+
+              )
+
+      );
+
+      return post_proc_fe;
+    };
+
+    auto get_post_proc_bdy_fe = [&]() {
+      auto post_proc_fe =
+          boost::make_shared<PostProcEleBdy>(*m_field_ptr, postProcMesh);
+      auto &pip = post_proc_fe->getOpPtrVector();
+
+      auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
+
+      CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+                            pip, {HDIV} /*, "GEOMETRY"*/)),
+                        "Apply transform");
+
+      // create OP which run element on side
+      auto op_loop_side =
+          new OpLoopSide<SideEle>(*m_field_ptr, "dFE", SPACE_DIM);
+      // push ops to side element, through op_loop_side operator
+      push_domain_ops(op_loop_side->getOpPtrVector());
+      pip.push_back(op_loop_side);
+      pip.push_back(new OpCalculateStressTraction(common_data_ptr,
+                                                  henky_common_data_ptr));
+
+      pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+          "U", common_data_ptr->contactDispPtr()));
+      pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+          "SIGMA", common_data_ptr->contactTractionPtr()));
+
+      pip.push_back(
+
+          new OpPPMap(
+
+              post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+              {},
+
+              {{"U", common_data_ptr->contactDispPtr()},
+               {"t_contact", common_data_ptr->contactTractionPtr()},
+               {"t_stress", common_data_ptr->stressTractionPtr()}},
+
+              {},
+
+              {}
+
+              )
+
+      );
+
+      return post_proc_fe;
+    };
+
+    auto get_integrate_traction = [&]() {
+      auto integrate_traction = boost::make_shared<BoundaryEle>(*m_field_ptr);
+      auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
+      CHK_THROW_MESSAGE(
+          (AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+              integrate_traction->getOpPtrVector(), {HDIV} /*, "GEOMETRY"*/)),
+          "Apply transfrom");
+      integrate_traction->getOpPtrVector().push_back(
+          new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+              "SIGMA", common_data_ptr->contactTractionPtr()));
+      integrate_traction->getOpPtrVector().push_back(
+          new OpAssembleTotalContactTraction(common_data_ptr));
+      integrate_traction->getRuleHook = [](int, int, int approx_order) {
+        return 2 * approx_order;
+      };
+      return integrate_traction;
+    };
+
+    postProcDomainFe = get_post_proc_domain_fe();
+    if constexpr (SPACE_DIM == 2)
+      postProcBdyFe = get_post_proc_bdy_fe();
+    integrateTraction = get_integrate_traction();
   }
 
   MoFEMErrorCode preProcess() { return 0; }
@@ -212,23 +215,38 @@ struct Monitor : public FEMethod {
 
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
+    MoFEM::Interface *m_field_ptr;
+    CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
 
-    auto post_proc_volume = [&]() {
+    auto post_proc = [&]() {
       MoFEMFunctionBegin;
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
-      CHKERR postProcFe->writeFile(
+
+      auto post_proc_begin =
+          boost::make_shared<PostProcBrokenMeshInMoabBaseBegin>(*m_field_ptr,
+                                                                postProcMesh);
+      auto post_proc_end = boost::make_shared<PostProcBrokenMeshInMoabBaseEnd>(
+          *m_field_ptr, postProcMesh);
+
+      CHKERR DMoFEMPreProcessFiniteElements(dM, post_proc_begin->getFEMethod());
+      if (!postProcBdyFe) {
+        CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcDomainFe);
+      } else {
+        CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcDomainFe);
+        CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcBdyFe);
+      }
+      CHKERR DMoFEMPostProcessFiniteElements(dM, post_proc_end->getFEMethod());
+
+      CHKERR post_proc_end->writeFile(
           "out_contact_" + boost::lexical_cast<std::string>(sTEP) + ".h5m");
       MoFEMFunctionReturn(0);
     };
 
-    auto post_proc_boundary = [&] {
+    auto calculate_traction = [&] {
       MoFEMFunctionBegin;
-      std::ostringstream ostrm;
-      ostrm << "out_boundary_contact_" << sTEP << ".h5m";
-      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", vertexPostProc);
-      CHKERR moabVertex.write_file(ostrm.str().c_str(), "MOAB",
-                                   "PARALLEL=WRITE_PART");
-      moabVertex.delete_mesh();
+      CHKERR VecZeroEntries(CommonData::totalTraction);
+      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", integrateTraction);
+      CHKERR VecAssemblyBegin(CommonData::totalTraction);
+      CHKERR VecAssemblyEnd(CommonData::totalTraction);
       MoFEMFunctionReturn(0);
     };
 
@@ -241,35 +259,55 @@ struct Monitor : public FEMethod {
       double max, min;
       CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
       CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
-      MOFEM_LOG_C("EXAMPLE", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
+      MOFEM_LOG_C("CONTACT", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
                   msg.c_str(), ts_t, min, max);
       MoFEMFunctionReturn(0);
     };
 
-    MOFEM_LOG("EXAMPLE", Sev::inform)
+    auto print_traction = [&](const std::string msg) {
+      MoFEMFunctionBegin;
+      MoFEM::Interface *m_field_ptr;
+      CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
+      if (!m_field_ptr->get_comm_rank()) {
+        const double *t_ptr;
+        CHKERR VecGetArrayRead(CommonData::totalTraction, &t_ptr);
+        MOFEM_LOG_C("CONTACT", Sev::inform, "%s time %3.4e %3.4e %3.4e %3.4e",
+                    msg.c_str(), ts_t, t_ptr[0], t_ptr[1], t_ptr[2]);
+        CHKERR VecRestoreArrayRead(CommonData::totalTraction, &t_ptr);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    MOFEM_LOG("CONTACT", Sev::inform)
         << "Write file at time " << ts_t << " write step " << sTEP;
 
-    ++sTEP;
-    CHKERR post_proc_volume();
-    CHKERR post_proc_boundary();
+    CHKERR post_proc();
+    CHKERR calculate_traction();
 
     CHKERR print_max_min(uXScatter, "Ux");
     CHKERR print_max_min(uYScatter, "Uy");
     if (SPACE_DIM == 3)
       CHKERR print_max_min(uZScatter, "Uz");
+    CHKERR print_traction("Force");
+
+    ++sTEP;
 
     MoFEMFunctionReturn(0);
   }
 
 private:
   SmartPetscObj<DM> dM;
-  boost::shared_ptr<CommonData> commonDataPtr;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
-  boost::shared_ptr<PostProcEle> postProcFe;
-  boost::shared_ptr<BoundaryEle> vertexPostProc;
+  boost::shared_ptr<moab::Core> postProcMesh = boost::make_shared<moab::Core>();
+
+  boost::shared_ptr<PostProcEleDomain> postProcDomainFe;
+  boost::shared_ptr<PostProcEleBdy> postProcBdyFe;
+
+  boost::shared_ptr<BoundaryEle> integrateTraction;
+
   moab::Core mbVertexPostproc;
   moab::Interface &moabVertex;
 

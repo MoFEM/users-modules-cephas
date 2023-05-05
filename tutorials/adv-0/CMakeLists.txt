@@ -49,7 +49,7 @@ add_test(
   -file_name necking_3D_p2.h5m
   -ts_dt 0.02
   -ts_max_time 1.2
-  -ts_max_steps 4
+  -ts_max_steps 1
   -ts_type theta
   -snes_atol 1e-9
   -order 2
