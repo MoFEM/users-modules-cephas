@@ -166,12 +166,12 @@ constexpr double lambda = 73 / 4; ///< surface tension
 constexpr double W = 0.25;
 
 // Model parameters
-constexpr double h = 0.0015 / 15; // mesh size
+constexpr double h = 0.0015 / 20; // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
 // Numerical parameters
-constexpr double md = 1e-4;
+constexpr double md = 1e-2;
 constexpr double eps = 1e-12;
 constexpr double tol = std::numeric_limits<float>::epsilon();
 
@@ -182,7 +182,7 @@ constexpr double mu_diff = (mu_p - mu_m) / 2;
 
 const double kappa = (3. / (4. * std::sqrt(2. * W))) * (lambda / eta);
 
-auto integration_rule = [](int, int, int) { return 2 * order; };
+auto integration_rule = [](int, int, int) { return 2 * order + 1; };
 
 auto cylindrical = [](const double r) {
   // When we move to C++17 add if constexpr()
@@ -899,7 +899,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
                                            0, 0);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO",
                                            "L", 0, 0);
-
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
