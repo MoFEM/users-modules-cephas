@@ -33,7 +33,7 @@ def is_not_vtk(files):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description="Convert multiple h5m files to vtk files using the mbconvert tool (part of the MOAB library). The input files can be distributed between multiple processes to speed-up the conversion.")
+        description="Convert multiple vtk files to png files using the pyvista.")
     parser.add_argument(
         "files", help="list of vtk files or a regexp mask", nargs='+')
     parser.add_argument('-d2', '--d2', dest='d2', action='store_true')
