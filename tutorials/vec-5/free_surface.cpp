@@ -2499,7 +2499,9 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
   CHKERR bit_mng->setNthBitRefLevel(prev_level_skin, get_skin_projection_bit(),
                                     true);
 
-  auto set_levels = [&](auto &&vec_levels) {
+  // set refinement levels
+  auto set_levels = [&](auto &&
+                            vec_levels /*entities are refined on each level*/) {
     MoFEMFunctionBegin;
 
     // start with zero level, which is the coarsest mesh
@@ -2530,8 +2532,12 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
                                                   SPACE_DIM, level_prev);
       Range parents;
       CHKERR bit_mng->updateRangeByParent(vec_levels[l], parents);
+      // subtract entities from previous level, which are refined, so should be
+      // not there
       level_prev = subtract(level_prev, parents);
+      // and instead add their children
       level_prev.merge(vec_levels[l]);
+      // set bit to each level
       CHKERR bit_mng->setNthBitRefLevel(level_prev, get_start_bit() + l, true);
     }
 
@@ -2548,6 +2554,7 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
     MoFEMFunctionReturn(0);
   };
 
+  // resolve skin between refined levels
   auto set_skins = [&]() {
     MoFEMFunctionBegin;
 
@@ -2555,6 +2562,7 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
     ParallelComm *pcomm =
         ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
 
+    // get skin of bit level
     auto get_bit_skin = [&](BitRefLevel bit, BitRefLevel mask) {
       Range bit_ents;
       CHK_THROW_MESSAGE(
@@ -2572,17 +2580,22 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
       BitRefLevel bit_prev;
       for (auto l = 1; l != nb_levels; ++l) {
         auto skin_level_mesh = get_bit_skin(bit(l), BitRefLevel().set());
+        // filter (remove) all entities which are on partitions boarders
         CHKERR pcomm->filter_pstatus(skin_level_mesh,
                                      PSTATUS_SHARED | PSTATUS_MULTISHARED,
                                      PSTATUS_NOT, -1, nullptr);
         auto skin_level =
             get_bit_skin(bit(get_start_bit() + l), BitRefLevel().set());
-        skin_level = subtract(skin_level, skin_level_mesh);
+        skin_level = subtract(skin_level,
+                              skin_level_mesh); // get only internal skins, not
+                                                // on the body boundary
+        // get lower dimension adjacencies (FIXME: add edges if 3D)
         Range skin_level_verts;
         CHKERR mField.get_moab().get_connectivity(skin_level, skin_level_verts,
                                                   true);
         skin_level.merge(skin_level_verts);
 
+        // remove previous level
         bit_prev.set(l - 1);
         Range level_prev;
         CHKERR bit_mng->getEntitiesByRefLevel(bit_prev, BitRefLevel().set(),
@@ -2600,16 +2613,19 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
       CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
           tmp_skin, &map_procs);
 
-      Range from_other_procs;
+      Range from_other_procs; // entities which also exist on other processors
       for (auto &m : map_procs) {
         if (m.first != mField.get_comm_rank()) {
           from_other_procs.merge(m.second);
         }
       }
 
-      auto common = intersect(skin, from_other_procs);
+      auto common = intersect(
+          skin, from_other_procs); // entities which are on internal skin
       skin.merge(from_other_procs);
 
+      // entities which are on processors boards, and several processors are not
+      // true skin.
       if (!common.empty()) {
         // skin is internal exist on other procs
         skin = subtract(skin, common);
@@ -2618,6 +2634,7 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
       return skin;
     };
 
+    // get parents of entities
     auto get_parent_level_skin = [&](auto skin) {
       Range skin_parents;
       CHKERR bit_mng->updateRangeByParent(
@@ -2641,6 +2658,7 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
     MoFEMFunctionReturn(0);
   };
 
+  // take last level, remove childs on boarder, and set bit
   auto set_current = [&]() {
     MoFEMFunctionBegin;
     Range last_level;
@@ -2655,8 +2673,11 @@ MoFEMErrorCode FreeSurface::refineMesh(size_t overlap) {
     MoFEMFunctionReturn(0);
   };
 
+  // set bits to levels
   CHKERR set_levels(findEntitiesCrossedByPhaseInterface(overlap));
+  // set bits to skin
   CHKERR set_skins();
+  // set current level bit
   CHKERR set_current();
 
   if constexpr (debug) {
