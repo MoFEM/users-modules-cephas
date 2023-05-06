@@ -10,6 +10,7 @@
  */
 
 #include <MoFEM.hpp>
+#include <petsc/private/petscimpl.h>
 
 using namespace MoFEM;
 
@@ -18,7 +19,6 @@ static char help[] = "...\n\n";
 #ifdef PYTHON_INIT_SURFACE
 #include <boost/python.hpp>
 #include <boost/python/def.hpp>
-#include <petsc/private/petscimpl.h>
 namespace bp = boost::python;
 
 struct SurfacePython {
