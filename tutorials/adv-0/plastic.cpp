@@ -1268,9 +1268,9 @@ private:
   SmartPetscObj<Mat> S;
 
   MoFEM::Interface &mField;
-  SmartPetscObj<DM> subDM;
-  SmartPetscObj<IS> fieldSplitIS;
-  SmartPetscObj<AO> subAO;
+  SmartPetscObj<DM> subDM; ///< field split sub dm
+  SmartPetscObj<IS> fieldSplitIS; ///< IS for split Schur block
+  SmartPetscObj<AO> subAO; ///> SM AO map to main problem
 };
 
 MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
