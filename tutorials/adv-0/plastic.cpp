@@ -978,9 +978,7 @@ MoFEMErrorCode Example::tsSolve() {
 
       // create sub dm for Schur complement
       auto create_sub_u_dm = [&](SmartPetscObj<DM> base_dm,
-                                 SmartPetscObj<DM> &dm_sub,
-                                 SmartPetscObj<IS> &is_sub,
-                                 SmartPetscObj<AO> &ao_sub) {
+                                 SmartPetscObj<DM> &dm_sub) {
         MoFEMFunctionBegin;
         dm_sub = createDM(mField.get_comm(), "DMMOFEM");
         CHKERR DMMoFEMCreateSubDM(dm_sub, base_dm, "SUB_U");
@@ -993,21 +991,6 @@ MoFEMErrorCode Example::tsSolve() {
         }
         CHKERR DMSetUp(dm_sub);
 
-        auto *prb_ptr = getProblemPtr(dm_sub);
-        if (auto sub_data = prb_ptr->getSubData()) {
-          is_sub = sub_data->getSmartRowIs();
-          ao_sub = sub_data->getSmartRowMap();
-          // ISView(is_sub, PETSC_VIEWER_STDOUT_WORLD);
-          int is_sub_size;
-          CHKERR ISGetSize(is_sub, &is_sub_size);
-          MOFEM_LOG("EXAMPLE", Sev::inform)
-              << "Field split second block size " << is_sub_size;
-
-        } else {
-          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "No sub data");
-        }
-
-        CHKERR DMSetUp(dm_sub);
         MoFEMFunctionReturn(0);
       };
 
@@ -1054,15 +1037,13 @@ MoFEMErrorCode Example::tsSolve() {
         SmartPetscObj<IS> is_union(is_union_raw);
 
         SmartPetscObj<DM> dm_u_sub;
-        SmartPetscObj<IS> is_u_sub;
-        SmartPetscObj<AO> ao_u_sub;
-        CHKERR create_sub_u_dm(dm_bc_sub, dm_u_sub, is_u_sub, ao_u_sub);
+        CHKERR create_sub_u_dm(dm_bc_sub, dm_u_sub);
 
         // Indices has to be map fro very to level, while assembling Schur
         // complement.
-        auto is_up = is_u_sub;
+        auto is_up = getDMSubData(dm_u_sub)->getSmartRowIs();
         CHKERR AOPetscToApplicationIS(ao_bc_sub, is_up);
-        auto ao_up = createAOMappingIS(is_u_sub, PETSC_NULL);
+        auto ao_up = createAOMappingIS(is_up, PETSC_NULL);
         schur_ptr =
             SetUpSchur::createSetUpSchur(mField, dm_u_sub, is_union, ao_up);
         PetscInt n;
