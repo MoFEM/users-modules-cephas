@@ -820,15 +820,15 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
   MoFEMFunctionBegin;
   auto pip = mField.getInterface<PipelineManager>();
   // Boundary
+  auto dm_is = getDMSubData(subDM)->getSmartRowIs();
+  auto ao_up = createAOMappingIS(dm_is, PETSC_NULL);
   pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
   pip->getOpBoundaryLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DSYSV>(
-      {"U"}, {boost::make_shared<Range>(volEnts)},
-      {getDMSubData(subDM)->getSmartRowMap()}, {S}, {true}));
+      {"U"}, {boost::make_shared<Range>(volEnts)}, {ao_up}, {S}, {true}));
   // Domain
   pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
   pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DSYSV>(
-      {"U"}, {boost::make_shared<Range>(volEnts)},
-      {getDMSubData(subDM)->getSmartRowMap()}, {S}, {true}));
+      {"U"}, {boost::make_shared<Range>(volEnts)}, {ao_up}, {S}, {true}));
   MoFEMFunctionReturn(0);
 }
 
