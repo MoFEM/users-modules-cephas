@@ -1150,6 +1150,8 @@ MoFEMErrorCode Example::tsSolve() {
   boost::shared_ptr<SetUpSchur> schur_ptr;
   CHKERR set_fieldsplit_preconditioner(solver, schur_ptr);
 
+  // Domain element is run first by TSSolber, thus run Schur pre-proc, which
+  // clears Schur complement matrix
   mField.getInterface<PipelineManager>()->getDomainLhsFE()->preProcessHook =
       [&]() {
         MoFEMFunctionBegin;
@@ -1158,15 +1160,14 @@ MoFEMErrorCode Example::tsSolve() {
         CHKERR active_pre_lhs();
         MoFEMFunctionReturn(0);
       };
+  // Do nothing, assemble after integrating boundary
   mField.getInterface<PipelineManager>()->getDomainLhsFE()->postProcessHook =
       [&]() {
         MoFEMFunctionBegin;
-        // if (schur_ptr)
-        //   CHKERR schur_ptr->postProc();
         CHKERR active_post_lhs();
         MoFEMFunctionReturn(0);
       };
-
+  // Assemble matrices in post-proc of boundary pipeline
   mField.getInterface<PipelineManager>()->getBoundaryLhsFE()->postProcessHook =
       [&]() {
         MoFEMFunctionBegin;
