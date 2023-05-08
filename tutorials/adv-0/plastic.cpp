@@ -926,6 +926,7 @@ MoFEMErrorCode Example::tsSolve() {
       auto bc_mng = mField.getInterface<BcManager>();
       auto name_prb = simple->getProblemName();
 
+      // create sub dm to handle boundary conditions (least square)
       auto create_sub_bc_dm = [&](SmartPetscObj<DM> base_dm,
                                   SmartPetscObj<DM> &dm_sub,
                                   SmartPetscObj<IS> &is_sub,
@@ -965,6 +966,7 @@ MoFEMErrorCode Example::tsSolve() {
         MoFEMFunctionReturn(0);
       };
 
+      // create sub dm for Schur complement
       auto create_sub_u_dm = [&](SmartPetscObj<DM> base_dm,
                                  SmartPetscObj<DM> &dm_sub,
                                  SmartPetscObj<IS> &is_sub,
@@ -999,6 +1001,7 @@ MoFEMErrorCode Example::tsSolve() {
         MoFEMFunctionReturn(0);
       };
 
+      // get IS for all boundary conditions
       auto create_all_bc_is = [&](SmartPetscObj<IS> &is_all_bc) {
         MoFEMFunctionBegin;
         is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_X", "U", 0, 0);
@@ -1019,16 +1022,15 @@ MoFEMErrorCode Example::tsSolve() {
       SmartPetscObj<AO> ao_bc_sub;
 
       CHKERR create_all_bc_is(is_all_bc);
+      // note that Schur dm is sub dm for boundary conditions, i.e. is nested.
       CHKERR create_sub_bc_dm(simple->getDM(), dm_bc_sub, is_bc_sub, ao_bc_sub);
 
-      SmartPetscObj<IS> is_prb;
-      CHKERR mField.getInterface<ISManager>()->isCreateProblem(
-          simple->getProblemName(), ROW, is_prb);
-
+      // Create field split for boundary conditions
       CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
                                is_all_bc); // boundary block
       CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_bc_sub);
 
+      // Create nested (sub BC) Schur DM
       if constexpr (A == AssemblyType::SCHUR) {
 
         SmartPetscObj<IS> is_epp;
@@ -1056,7 +1058,8 @@ MoFEMErrorCode Example::tsSolve() {
         PetscInt n;
         KSP *ksps;
         CHKERR PCFieldSplitGetSubKSP(pc, &n, &ksps);
-        CHKERR schur_ptr->setUp(ksps[1]);
+        CHKERR schur_ptr->setUp(
+            ksps[1]); // note that FS is applied in second block of boundary BC
       }
     }
 
