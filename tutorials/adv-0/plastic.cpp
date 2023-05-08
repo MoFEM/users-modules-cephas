@@ -1249,9 +1249,9 @@ int main(int argc, char *argv[]) {
 struct SetUpSchurImpl : public SetUpSchur {
 
   SetUpSchurImpl(MoFEM::Interface &m_field, SmartPetscObj<DM> sub_dm,
-                 SmartPetscObj<IS> field_split_is, SmartPetscObj<AO> sub_ao)
+                 SmartPetscObj<IS> field_split_is, SmartPetscObj<AO> ao_up)
       : SetUpSchur(), mField(m_field), subDM(sub_dm),
-        fieldSplitIS(field_split_is), subAO(sub_ao) {
+        fieldSplitIS(field_split_is), aoUp(ao_up) {
     if (S) {
       CHK_THROW_MESSAGE(
           MOFEM_DATA_INCONSISTENCY,
@@ -1271,7 +1271,7 @@ private:
   MoFEM::Interface &mField;
   SmartPetscObj<DM> subDM; ///< field split sub dm
   SmartPetscObj<IS> fieldSplitIS; ///< IS for split Schur block
-  SmartPetscObj<AO> subAO; ///> SM AO map to main problem
+  SmartPetscObj<AO> aoUp; ///> main DM to subDM
 };
 
 MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
@@ -1299,7 +1299,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
       pip->getOpBoundaryLhsPipeline().push_back(
           new OpSchurAssembleEnd<SCHUR_DGESV>(
 
-              {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), subAO},
+              {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), aoUp},
               {SmartPetscObj<Mat>(), S}, {false, false}
 
               ));
@@ -1308,7 +1308,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
       pip->getOpDomainLhsPipeline().push_back(
           new OpSchurAssembleEnd<SCHUR_DGESV>(
 
-              {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), subAO},
+              {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), aoUp},
               {SmartPetscObj<Mat>(), S}, {false, false}
 
               ));
@@ -1337,7 +1337,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
   // we do not those anymore
   subDM.reset();
   fieldSplitIS.reset();
-  subAO.reset();
+  aoUp.reset();
   MoFEMFunctionReturn(0);
 }
 
@@ -1363,7 +1363,7 @@ MoFEMErrorCode SetUpSchurImpl::postProc() {
 boost::shared_ptr<SetUpSchur>
 SetUpSchur::createSetUpSchur(MoFEM::Interface &m_field,
                              SmartPetscObj<DM> sub_dm, SmartPetscObj<IS> is_sub,
-                             SmartPetscObj<AO> ao_sub) {
+                             SmartPetscObj<AO> ao_up) {
   return boost::shared_ptr<SetUpSchur>(
-      new SetUpSchurImpl(m_field, sub_dm, is_sub, ao_sub));
+      new SetUpSchurImpl(m_field, sub_dm, is_sub, ao_up));
 }
