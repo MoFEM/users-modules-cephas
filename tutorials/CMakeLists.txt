@@ -81,6 +81,7 @@ set(TUTORIALS_DIRS
   scl-9
   scl-10
   scl-11
+  scl-12
   clx-0
   vec-0
   vec-1
