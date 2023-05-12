@@ -9,10 +9,14 @@ import matplotlib.image as mpimg
     
 debug=True
 
-def make_png(file, d2, field): 
+def make_png(file, d2, field, wrap): 
     my_cmap = plt.cm.get_cmap("turbo", 124)
     mesh = pv.read(file)
-    p = pv.Plotter(notebook=False, off_screen=True)
+    
+    if wrap:
+        mesh = mesh.warp_by_vector(wrap, factor=1)
+    
+    p = pv.Plotter(notebook=False, off_screen=True)    
     if field:
         p.add_mesh(
             mesh, 
@@ -37,7 +41,8 @@ if __name__ == '__main__':
     parser.add_argument(
         "files", help="list of vtk files or a regexp mask", nargs='+')
     parser.add_argument('-d2', '--d2', dest='d2', action='store_true')
-    parser.add_argument('-f', '--field', dest='field', type=str)
+    parser.add_argument('-f', '--field', dest='field', default='', type=str)
+    parser.add_argument('-w', '--wrap', dest='wrap', default='', type=str)
     args = parser.parse_args()
     
     if debug: 
@@ -48,8 +53,5 @@ if __name__ == '__main__':
     display.start()
     
     for f in args.files:
-        if 'field' in args:
-            make_png(f, args.d2, args.field)
-        else:
-            make_png(f, args.d2, '')    
+        make_png(f, args.d2, args.field, args.wrap)
 
