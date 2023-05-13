@@ -358,7 +358,7 @@ MoFEMErrorCode Contact::bC() {
   // corrupted.
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
-  boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_"});
+  boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE_"});
 
   MoFEMFunctionReturn(0);
 }
