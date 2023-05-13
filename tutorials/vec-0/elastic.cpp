@@ -156,13 +156,14 @@ MoFEMErrorCode Example::addMatBlockOps(
                      Sev sev) {
       MoFEMFunctionBegin;
 
+
       for (auto m : meshset_vec_ptr) {
         MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock") << *m;
         std::vector<double> block_data;
         CHKERR m->getAttributes(block_data);
-        if (block_data.size() != 2) {
+        if (block_data.size() < 2) {
           SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                  "Expected that block has two attribute");
+                  "Expected that block has two attributes");
         }
         auto get_block_ents = [&]() {
           Range ents;
