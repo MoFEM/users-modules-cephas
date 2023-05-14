@@ -194,13 +194,6 @@ static boost::weak_ptr<SDFPython> sdfPythonWeakPtr;
 #endif
 //! [Surface distance function from python]
 
-FTensor::Index<'i', SPACE_DIM> i;
-FTensor::Index<'j', SPACE_DIM> j;
-FTensor::Index<'k', SPACE_DIM> k;
-FTensor::Index<'l', SPACE_DIM> l;
-
-#ifdef __HENKY_OPS_HPP__
-
 using SurfaceDistanceFunction = boost::function<double(double t,
                                         double x, double y, double z,
                                         double tx, double ty, double tz)>;
@@ -255,6 +248,13 @@ hess_surface_distance_function(double t, double x, double y, double z,
 #endif
   return FTensor::Tensor2_symmetric<double, 3>{0., 0., 0., 0., 0., 0.};
 }
+
+FTensor::Index<'i', SPACE_DIM> i;
+FTensor::Index<'j', SPACE_DIM> j;
+FTensor::Index<'k', SPACE_DIM> k;
+FTensor::Index<'l', SPACE_DIM> l;
+
+#ifdef __HENKY_OPS_HPP__
 
 struct OpCalculateStressTraction : public BoundaryEleOp {
   OpCalculateStressTraction(
