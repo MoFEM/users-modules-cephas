@@ -5,6 +5,9 @@
  * @copyright Copyright (c) 2023
  */
 
+#ifndef __HENKY_OPS_HPP__
+#define __HENKY_OPS_HPP__
+
 namespace HenckyOps {
 
 constexpr double eps = std::numeric_limits<float>::epsilon();
@@ -610,3 +613,5 @@ MoFEMErrorCode OpPostProcHencky<DIM>::doWork(int side, EntityType type,
 }
 
 } // namespace HenckyOps
+
+#endif // __HENKY_OPS_HPP__

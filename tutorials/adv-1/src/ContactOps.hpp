@@ -199,6 +199,8 @@ FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
 FTensor::Index<'l', SPACE_DIM> l;
 
+#ifdef __HENKY_OPS_HPP__
+
 struct OpCalculateStressTraction : public BoundaryEleOp {
   OpCalculateStressTraction(
       boost::shared_ptr<CommonData> common_data_ptr,
@@ -210,6 +212,8 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> henckyCommonDataPtr;
 };
+
+#endif
 
 struct OpAssembleTotalContactTraction : public BoundaryEleOp {
   OpAssembleTotalContactTraction(boost::shared_ptr<CommonData> common_data_ptr);
@@ -319,6 +323,8 @@ inline double constrain(double sdf, double tn) {
   return (1 - s) / 2;
 }
 
+#ifdef __HENKY_OPS_HPP__ 
+
 OpCalculateStressTraction::OpCalculateStressTraction(
     boost::shared_ptr<CommonData> common_data_ptr,
     boost::shared_ptr<HenckyOps::CommonData> hencky_common_data_ptr)
@@ -345,6 +351,8 @@ OpCalculateStressTraction::doWork(int side, EntityType type,
   }
   MoFEMFunctionReturn(0);
 }
+
+#endif __HENKY_OPS_HPP__
 
 OpAssembleTotalContactTraction::OpAssembleTotalContactTraction(
     boost::shared_ptr<CommonData> common_data_ptr)
