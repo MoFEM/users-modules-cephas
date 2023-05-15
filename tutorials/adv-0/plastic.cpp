@@ -414,7 +414,8 @@ MoFEMErrorCode Example::bC() {
       simple->getProblemName(), "U");
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
-  boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE_"});
+  boundaryMarker =
+      bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE_"});
 
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
