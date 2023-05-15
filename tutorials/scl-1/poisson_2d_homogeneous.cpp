@@ -120,6 +120,7 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
       fe->preProcessHook = get_bc_hook();
     };
 
+    // you can skip that if boundary condition is prescribing zero
     auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
       using DomainEle =
           PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
