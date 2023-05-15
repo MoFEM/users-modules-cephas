@@ -97,17 +97,12 @@ MoFEMErrorCode Poisson2DNonhomogeneous::boundaryCondition() {
                                         "BOUNDARY_CONDITION", domainField, 0, 1,
                                         true);
 
-  // merge markers from all blocksets "BOUNDARY_CONDITION"                                    
+  // merge markers from all blocksets "BOUNDARY_CONDITION"
   boundaryMarker =
-      bc_mng->getMergedBlocksMarker(vector<string>{""});
-
+      bc_mng->getMergedBlocksMarker({"BOUNDARY_CONDITION"});
   // get entities on blocksets "BOUNDARY_CONDITION"
-  auto &bcs = bc_mng->getBcMapByBlockName();
-  for (auto &bc : bcs) {
-    if (bc_mng->checkBlock(bc, "BOUNDARY_CONDITION")) {
-      boundaryEntitiesForFieldsplit.merge(bc.second->bcEnts);
-    }
-  }
+  boundaryEntitiesForFieldsplit =
+      bc_mng->getMergedBlocksRange({"BOUNDARY_CONDITION"});
 
   MoFEMFunctionReturn(0);
 }
