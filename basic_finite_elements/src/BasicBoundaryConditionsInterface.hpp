@@ -26,17 +26,44 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
   using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<
       PETSC>::LinearForm<GAUSS>::OpSource<1, 3>;
+  using DomainNaturalBC =
+      NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+  using OpBodyForceVector =
+      DomainNaturalBC::OpFlux<NaturalMeshsetTypeVectorScaling<BLOCKSET>, 1, 3>;
+
   using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
       GAUSS>::OpMass<1, 3>;
   using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
       PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, 3, 1>;
 
-  using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
-      PETSC>::BiLinearForm<GAUSS>::OpMass<1, 3>;
-  using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
-      PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, 3, 0>;
-  using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
-      PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, 3, 1>;
+  struct BasicBCVectorConst : public MoFEM::TimeScaleVector3 {
+    BasicBCVectorConst(double scale, FTensor::Tensor1<double, 3> t_vec)
+        : tForce(t_vec), sCale(scale) {}
+
+    FTensor::Tensor1<double, 3> getVector(const double time) {
+      FTensor::Index<'i', 3> i;
+      tForce(i) *= sCale;
+      return tForce;
+    }
+
+  private:
+    double sCale;
+    FTensor::Tensor1<double, 3> tForce;
+  };
+
+  struct BasicBCVectorScale : public MoFEM::TimeScaleVector3 {
+    double sCale;
+    BasicBCVectorScale(double scale, std::string file_name)
+        : sCale(scale), TimeScaleVector3(file_name, false) {}
+
+    FTensor::Tensor1<double, 3> getVector(const double time) {
+      FTensor::Tensor1<double, 3> vec;
+      auto vec2 = MoFEM::TimeScaleVector3::getVector(time);
+      FTensor::Index<'i', 3> i;
+      vec(i) = sCale * vec2(i);
+      return vec;
+    }
+  };
 
   MoFEM::Interface &mField;
   SmartPetscObj<DM> dM;
@@ -81,12 +108,6 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
 
   const string domainProblemName;
   const string domainElementName;
-
-  using BcDataTuple = std::tuple<VectorDouble, double,
-                                 boost::shared_ptr<MethodForForceScaling>>;
-
-  std::map<int, BcDataTuple> bodyForceMap;
-  std::map<int, BcDataTuple> dispConstraintMap;
 
   // boost::shared_ptr<PostProcVolumeOnRefinedMesh> postProc;
   // boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcSkin;
@@ -262,45 +283,33 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                                                      bc_ents, true);
           auto bc_ents_ptr = boost::make_shared<Range>(get_adj_ents(bc_ents));
 
-          VectorDouble accel({attr[1], attr[2], attr[3]});
+          // the first parameter is density!!! FIXME:
+
+          VectorDouble acc({attr[1], attr[2], attr[3]});
           double density = attr[0];
           bool inertia_flag =
               attr.size() > 4 ? bool(std::floor(attr[4])) : true;
           // if accelerogram is provided then change the acceleration,
           // otherwise use whatever is in that block TODO:
-          boost::shared_ptr<MethodForForceScaling> method_for_scaling;
-          auto param_name_for_scaling =
+          std::vector<boost::shared_ptr<TimeScaleVector3>> methods_for_scaling;
+          std::string param_name_for_scaling =
               get_id_block_param("accelerogram", id);
 
           if (!param_name_for_scaling.empty())
-            method_for_scaling = boost::shared_ptr<MethodForForceScaling>(
-                new TimeAccelerogram(param_name_for_scaling));
-
-          bodyForceMap[id] =
-              std::make_tuple(accel, density, method_for_scaling);
-          auto &acc = std::get<0>(bodyForceMap.at(id));
-          auto &rho0 = std::get<1>(bodyForceMap.at(id));
-          auto &method = std::get<2>(bodyForceMap.at(id));
-
-          auto get_scale_body = [&](double, double, double) {
-            auto *pipeline_mng = mField.getInterface<PipelineManager>();
-            FTensor::Index<'i', 3> i;
-            auto acc_c = acc;
-            auto fe_domain_rhs = bodyForceRhsPtr;
-            if (method)
-              CHKERR MethodForForceScaling::applyScale(fe_domain_rhs.get(),
-                                                       method, acc_c);
-
-            FTensor::Tensor1<double, 3> t_source(acc_c(0), acc_c(1), acc_c(2));
-            t_source(i) *= rho0;
-            return t_source;
-          };
+            methods_for_scaling.push_back(
+                boost::make_shared<BasicBCVectorScale>(density,
+                                                       param_name_for_scaling));
+          else
+            methods_for_scaling.push_back(
+                boost::make_shared<BasicBCVectorConst>(
+                    density,
+                    FTensor::Tensor1<double, 3>({acc(0), acc(1), acc(2)})));
 
           // FIXME: this require correction for large strains, multiply by det_F
           auto get_rho = [&](double, double, double) {
             auto *pipeline_mng = mField.getInterface<PipelineManager>();
             auto &fe_domain_lhs = bodyForceLhsPtr;
-            return rho0 * fe_domain_lhs->ts_aa;
+            return density * fe_domain_lhs->ts_aa;
           };
 
           auto &pipeline_rhs = bodyForceRhsPtr->getOpPtrVector();
@@ -311,12 +320,16 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
           CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *bodyForceLhsPtr, true,
                              false, false, false);
 
-          // boundaryMarker.reset();
           //FIXME: fix for large strains
           pipeline_rhs.push_back(
               new OpSetBc(positionField, true, mBoundaryMarker));
-          pipeline_rhs.push_back(
-              new OpBodyForce(positionField, get_scale_body, bc_ents_ptr));
+
+          // using new way of adding BCs
+          CHKERR
+          DomainNaturalBC::AddFluxToPipeline<OpBodyForceVector>::add(
+              pipeline_rhs, mField, "U", {}, methods_for_scaling,
+              it->getName(), Sev::inform);
+
           if (!isQuasiStatic && inertia_flag) {
             pipeline_lhs.push_back(
                 new OpSetBc(positionField, true, mBoundaryMarker));
@@ -327,7 +340,7 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                 positionField, mat_acceleration));
             pipeline_rhs.push_back(new OpInertiaForce(
                 positionField, mat_acceleration,
-                [&](double, double, double) { return rho0; }, bc_ents_ptr));
+                [&](double, double, double) { return density; }, bc_ents_ptr));
             pipeline_lhs.push_back(new OpUnSetBc(positionField));
           }
           pipeline_rhs.push_back(new OpUnSetBc(positionField));
