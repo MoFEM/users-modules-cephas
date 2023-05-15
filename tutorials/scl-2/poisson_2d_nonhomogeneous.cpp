@@ -5,8 +5,12 @@
 using namespace MoFEM;
 using namespace Poisson2DNonhomogeneousOperators;
 
+
+constexpr int SPACE_DIM = 2;
 using PostProcFaceEle =
     PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
+
+
 
 static char help[] = "...\n\n";
 
@@ -88,40 +92,22 @@ MoFEMErrorCode Poisson2DNonhomogeneous::setupProblem() {
 MoFEMErrorCode Poisson2DNonhomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
-  // Get boundary edges marked in block named "BOUNDARY_CONDITION"
-  auto get_entities_on_mesh = [&]() {
-    Range boundary_entities;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string entity_name = it->getName();
-      if (entity_name.compare(0, 18, "BOUNDARY_CONDITION") == 0) {
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   boundary_entities, true);
-      }
+  auto bc_mng = mField.getInterface<BcManager>();
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
+                                        "BOUNDARY_CONDITION", domainField, 0, 1,
+                                        true);
+
+  // merge markers from all blocksets "BOUNDARY_CONDITION"                                    
+  boundaryMarker =
+      bc_mng->getMergedBlocksMarker(vector<string>{""});
+
+  // get entities on blocksets "BOUNDARY_CONDITION"
+  auto &bcs = bc_mng->getBcMapByBlockName();
+  for (auto &bc : bcs) {
+    if (bc_mng->checkBlock(bc, "BOUNDARY_CONDITION")) {
+      boundaryEntitiesForFieldsplit.merge(bc.second->bcEnts);
     }
-    // Add vertices to boundary entities
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
-
-    // Store entities for fieldsplit (block) solver
-    boundaryEntitiesForFieldsplit = boundary_entities;
-
-    return boundary_entities;
-  };
-
-  auto mark_boundary_dofs = [&](Range &&skin_edges) {
-    auto problem_manager = mField.getInterface<ProblemsManager>();
-    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
-    problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
-                              skin_edges, *marker_ptr);
-    return marker_ptr;
-  };
-
-  // Get global local vector of marked DOFs. Is global, since is set for all
-  // DOFs on processor. Is local since only DOFs on processor are in the
-  // vector. To access DOFs use local indices.
-  boundaryMarker = mark_boundary_dofs(get_entities_on_mesh());
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -130,16 +116,11 @@ MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // domain elements
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateHOJacForFace(jac_ptr));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetBc(domainField, true, boundaryMarker));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -230,9 +211,7 @@ MoFEMErrorCode Poisson2DNonhomogeneous::solveSystem() {
           problem_ptr->getName(), ROW, domainField, 0, 1, &is_boundary,
           &boundaryEntitiesForFieldsplit);
       // CHKERR ISView(is_boundary, PETSC_VIEWER_STDOUT_SELF);
-
       CHKERR PCFieldSplitSetIS(pc, NULL, is_boundary);
-
       CHKERR ISDestroy(&is_boundary);
     }
   }
@@ -262,7 +241,7 @@ MoFEMErrorCode Poisson2DNonhomogeneous::outputResults() {
   auto d_ptr = boost::make_shared<VectorDouble>();
   auto l_ptr = boost::make_shared<VectorDouble>();
 
-  using OpPPMap = OpPostProcMapInMoab<2, 2>;
+  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
   auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
 
