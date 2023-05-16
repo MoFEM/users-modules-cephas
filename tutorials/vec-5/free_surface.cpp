@@ -157,16 +157,16 @@ auto get_skin_projection_bit = []() { return 2 * get_start_bit() + 5; };
 // FIXME: Set parameters from command line
 
 // Physical parameters
-constexpr double a0 = 0; // 980;
+constexpr double a0 = 980;
 constexpr double rho_m = 0.998;
 constexpr double mu_m = 0.010101;
 constexpr double rho_p = 0.0012;
 constexpr double mu_p = 0.000182;
-constexpr double lambda = 73 / 4; ///< surface tension
+constexpr double lambda = 73; ///< surface tension
 constexpr double W = 0.25;
 
 // Model parameters
-constexpr double h = 0.0015 / 20; // mesh size
+constexpr double h = 0.01 / 8; // mesh size
 constexpr double eta = h;
 constexpr double eta2 = eta * eta;
 
