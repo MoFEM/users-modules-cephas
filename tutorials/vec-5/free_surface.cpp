@@ -72,12 +72,11 @@ static boost::weak_ptr<SurfacePython> surfacePythonWeakPtr;
 
 #endif
 
+int coord_type = EXECUTABLE_COORD_TYPE;
+
 constexpr int BASE_DIM = 1;
 constexpr int SPACE_DIM = 2;
 constexpr int U_FIELD_DIM = SPACE_DIM;
-constexpr CoordinateTypes coord_type =
-    EXECUTABLE_COORD_TYPE; ///< select coordinate system <CARTESIAN,
-                           ///< CYLINDRICAL>;
 
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType I =
@@ -121,8 +120,9 @@ using OpDomainAssembleScalar = FormsIntegrators<DomainEleOp>::Assembly<
 using OpBoundaryAssembleScalar = FormsIntegrators<BoundaryEleOp>::Assembly<
     A>::LinearForm<I>::OpBaseTimesScalar<BASE_DIM>;
 
+template <CoordinateTypes COORD_TYPE>
 using OpMixScalarTimesDiv = FormsIntegrators<DomainEleOp>::Assembly<
-    A>::BiLinearForm<I>::OpMixScalarTimesDiv<SPACE_DIM, coord_type>;
+    A>::BiLinearForm<I>::OpMixScalarTimesDiv<SPACE_DIM, COORD_TYPE>;
 
 // Flux is applied by Lagrange Multiplie
 using BoundaryNaturalBC = NaturalBC<BoundaryEleOp>::Assembly<A>::LinearForm<I>;
@@ -185,8 +185,7 @@ const double kappa = (3. / (4. * std::sqrt(2. * W))) * (lambda / eta);
 auto integration_rule = [](int, int, int) { return 2 * order + 1; };
 
 auto cylindrical = [](const double r) {
-  // When we move to C++17 add if constexpr()
-  if constexpr (coord_type == CYLINDRICAL)
+  if (coord_type == CYLINDRICAL)
     return 2 * M_PI * r;
   else
     return 1.;
@@ -540,8 +539,7 @@ MoFEMErrorCode FreeSurface::runProblem() {
 //! [Read mesh]
 MoFEMErrorCode FreeSurface::readMesh() {
   MoFEMFunctionBegin;
-  MOFEM_LOG("FS", Sev::inform)
-      << "Read mesh for problem in " << EXECUTABLE_COORD_TYPE;
+  MOFEM_LOG("FS", Sev::inform) << "Read mesh for problem";
   auto simple = mField.getInterface<Simple>();
 
   simple->getParentAdjacencies() = true;
@@ -563,6 +561,11 @@ MoFEMErrorCode FreeSurface::setupProblem() {
                             PETSC_NULL);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-refine_overlap", &refine_overlap,
                             PETSC_NULL);
+
+  const char *coord_type_names[] = {"cartesian", "polar", "cylindrical",
+                                    "spherical"};
+  CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-coords", coord_type_names,
+                              LAST_COORDINATE_SYSTEM, &coord_type, PETSC_NULL);
 
   MOFEM_LOG("FS", Sev::inform) << "order = " << order;
   MOFEM_LOG("FS", Sev::inform) << "nb_levels = " << nb_levels;
@@ -1631,9 +1634,22 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pip.push_back(new OpCalculateVectorFieldValues<U_FIELD_DIM>("U", u_ptr));
     pip.push_back(new OpCalculateVectorFieldGradient<U_FIELD_DIM, SPACE_DIM>(
         "U", grad_u_ptr));
-    pip.push_back(
-        new OpCalculateDivergenceVectorFieldValues<SPACE_DIM, coord_type>(
-            "U", div_u_ptr));
+
+    switch (coord_type) {
+    case CARTESIAN:
+      pip.push_back(
+          new OpCalculateDivergenceVectorFieldValues<SPACE_DIM, CARTESIAN>(
+              "U", div_u_ptr));
+      break;
+    case CYLINDRICAL:
+      pip.push_back(
+          new OpCalculateDivergenceVectorFieldValues<SPACE_DIM, CYLINDRICAL>(
+              "U", div_u_ptr));
+      break;
+    default:
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED,
+              "Coordinate system not implemented");
+    }
 
     CHKERR add_parent_field_domain(fe, UDO::OPROW, "H");
     pip.push_back(new OpCalculateScalarFieldValuesDot("H", dot_h_ptr));
@@ -1719,12 +1735,29 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     CHKERR add_parent_field_domain(fe, UDO::OPROW, "P");
     {
       CHKERR add_parent_field_domain(fe, UDO::OPCOL, "U");
-      pip.push_back(new OpMixScalarTimesDiv(
-          "P", "U",
-          [](const double r, const double, const double) {
-            return cylindrical(r);
-          },
-          true, false));
+
+      switch (coord_type) {
+      case CARTESIAN:
+        pip.push_back(new OpMixScalarTimesDiv<CARTESIAN>(
+            "P", "U",
+            [](const double r, const double, const double) {
+              return cylindrical(r);
+            },
+            true, false));
+        break;
+      case CYLINDRICAL:
+        pip.push_back(new OpMixScalarTimesDiv<CYLINDRICAL>(
+            "P", "U",
+            [](const double r, const double, const double) {
+              return cylindrical(r);
+            },
+            true, false));
+        break;
+      default:
+        SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED,
+                "Coordinate system not implemented");
+      }
+
       CHKERR add_parent_field_domain(fe, UDO::OPCOL, "P");
       pip.push_back(new OpDomainMassP("P", "P", [](double r, double, double) {
         return eps * cylindrical(r);
@@ -1766,55 +1799,61 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pip.push_back(new OpNormalConstrainRhs("L", u_ptr));
 
     CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpFluidFlux>::add(
-        pip, mField, "L", {}, "INFLUX", Sev::inform);
+        pip, mField, "L", {}, "INFLUX",
+        [](double r, double, double) { return cylindrical(r); }, Sev::inform);
 
     CHKERR add_parent_field_bdy(fe, UDO::OPROW, "U");
     pip.push_back(new OpNormalForceRhs("U", lambda_ptr));
 
-    // push operators to the side element which is called from op_bdy_side
-    auto op_bdy_side =
-        new OpLoopSide<SideEle>(mField, simple->getDomainFEName(), SPACE_DIM);
-    op_bdy_side->getSideFEPtr()->exeTestHook = test_bit_child;
+    auto wetting_block = get_blocks(get_block_name("WETTING_ANGLE"));
+    if(wetting_block.size()) {
+      // push operators to the side element which is called from op_bdy_side
+      auto op_bdy_side =
+          new OpLoopSide<SideEle>(mField, simple->getDomainFEName(), SPACE_DIM);
+      op_bdy_side->getSideFEPtr()->exeTestHook = test_bit_child;
 
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-        op_bdy_side->getOpPtrVector(), {H1});
+      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+          op_bdy_side->getOpPtrVector(), {H1});
 
-    CHKERR setParentDofs(
-        op_bdy_side->getSideFEPtr(), "", UDO::OPSPACE,
-        bit(get_skin_parent_bit()),
+      CHKERR setParentDofs(
+          op_bdy_side->getSideFEPtr(), "", UDO::OPSPACE,
+          bit(get_skin_parent_bit()),
 
-        [&]() {
-          boost::shared_ptr<ForcesAndSourcesCore> fe_parent(
-              new DomianParentEle(mField));
-          AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-              fe_parent->getOpPtrVector(), {H1});
-          return fe_parent;
-        },
+          [&]() {
+            boost::shared_ptr<ForcesAndSourcesCore> fe_parent(
+                new DomianParentEle(mField));
+            AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+                fe_parent->getOpPtrVector(), {H1});
+            return fe_parent;
+          },
 
-        QUIET, Sev::noisy);
+          QUIET, Sev::noisy);
 
-    CHKERR add_parent_field_domain(op_bdy_side->getSideFEPtr(), UDO::OPROW,
-                                   "H");
-    op_bdy_side->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
-    // push bdy side op
-    pip.push_back(op_bdy_side);
+      CHKERR add_parent_field_domain(op_bdy_side->getSideFEPtr(), UDO::OPROW,
+                                     "H");
+      op_bdy_side->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
+      // push bdy side op
+      pip.push_back(op_bdy_side);
 
-    // push operators for rhs wetting angle
-    for (auto &b : get_blocks(get_block_name("WETTING_ANGLE"))) {
-      Range force_edges;
-      std::vector<double> attr_vec;
-      CHKERR b->getMeshsetIdEntitiesByDimension(
-          mField.get_moab(), SPACE_DIM - 1, force_edges, true);
-      b->getAttributes(attr_vec);
-      if (attr_vec.size() != 1)
-        SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA, "Should be one attribute");
-      MOFEM_LOG("FS", Sev::inform) << "Wetting angle: " << attr_vec.front();
-      // need to find the attributes and pass to operator
-      CHKERR add_parent_field_bdy(fe, UDO::OPROW, "G");
-      pip.push_back(new OpWettingAngleRhs(
-          "G", grad_h_ptr, boost::make_shared<Range>(force_edges),
-          attr_vec.front()));
+      // push operators for rhs wetting angle
+      for (auto &b : wetting_block) {
+        Range force_edges;
+        std::vector<double> attr_vec;
+        CHKERR b->getMeshsetIdEntitiesByDimension(
+            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
+        b->getAttributes(attr_vec);
+        if (attr_vec.size() != 1)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+                  "Should be one attribute");
+        MOFEM_LOG("FS", Sev::inform) << "Wetting angle: " << attr_vec.front();
+        // need to find the attributes and pass to operator
+        CHKERR add_parent_field_bdy(fe, UDO::OPROW, "G");
+        pip.push_back(new OpWettingAngleRhs(
+            "G", grad_h_ptr, boost::make_shared<Range>(force_edges),
+            attr_vec.front()));
+      }
+
     }
 
     MoFEMFunctionReturn(0);
@@ -1839,59 +1878,64 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     CHKERR add_parent_field_bdy(fe, UDO::OPCOL, "U");
     pip.push_back(new OpNormalConstrainLhs("L", "U"));
 
-    auto col_ind_ptr = boost::make_shared<std::vector<VectorInt>>();
-    auto col_diff_base_ptr = boost::make_shared<std::vector<MatrixDouble>>();
+    auto wetting_block = get_blocks(get_block_name("WETTING_ANGLE"));
+    if(wetting_block.size()) {
+      auto col_ind_ptr = boost::make_shared<std::vector<VectorInt>>();
+      auto col_diff_base_ptr = boost::make_shared<std::vector<MatrixDouble>>();
 
-    // push operators to the side element which is called from op_bdy_side
-    auto op_bdy_side =
-        new OpLoopSide<SideEle>(mField, simple->getDomainFEName(), SPACE_DIM);
-    op_bdy_side->getSideFEPtr()->exeTestHook = test_bit_child;
+      // push operators to the side element which is called from op_bdy_side
+      auto op_bdy_side =
+          new OpLoopSide<SideEle>(mField, simple->getDomainFEName(), SPACE_DIM);
+      op_bdy_side->getSideFEPtr()->exeTestHook = test_bit_child;
 
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-        op_bdy_side->getOpPtrVector(), {H1});
+      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+          op_bdy_side->getOpPtrVector(), {H1});
 
-    CHKERR setParentDofs(
-        op_bdy_side->getSideFEPtr(), "", UDO::OPSPACE,
-        bit(get_skin_parent_bit()),
+      CHKERR setParentDofs(
+          op_bdy_side->getSideFEPtr(), "", UDO::OPSPACE,
+          bit(get_skin_parent_bit()),
 
-        [&]() {
-          boost::shared_ptr<ForcesAndSourcesCore> fe_parent(
-              new DomianParentEle(mField));
-          AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-              fe_parent->getOpPtrVector(), {H1});
-          return fe_parent;
-        },
+          [&]() {
+            boost::shared_ptr<ForcesAndSourcesCore> fe_parent(
+                new DomianParentEle(mField));
+            AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+                fe_parent->getOpPtrVector(), {H1});
+            return fe_parent;
+          },
 
-        QUIET, Sev::noisy);
+          QUIET, Sev::noisy);
 
-    CHKERR add_parent_field_domain(op_bdy_side->getSideFEPtr(), UDO::OPROW,
-                                   "H");
-    op_bdy_side->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
-    CHKERR add_parent_field_domain(op_bdy_side->getSideFEPtr(), UDO::OPCOL,
-                                   "H");
-    op_bdy_side->getOpPtrVector().push_back(
-        new OpLoopSideGetDataForSideEle("H", col_ind_ptr, col_diff_base_ptr));
+      CHKERR add_parent_field_domain(op_bdy_side->getSideFEPtr(), UDO::OPROW,
+                                     "H");
+      op_bdy_side->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldGradient<SPACE_DIM>("H", grad_h_ptr));
+      CHKERR add_parent_field_domain(op_bdy_side->getSideFEPtr(), UDO::OPCOL,
+                                     "H");
+      op_bdy_side->getOpPtrVector().push_back(
+          new OpLoopSideGetDataForSideEle("H", col_ind_ptr, col_diff_base_ptr));
 
-    // push bdy side op
-    pip.push_back(op_bdy_side);
+      // push bdy side op
+      pip.push_back(op_bdy_side);
 
-    // push operators for lhs wetting angle
-    for (auto &b : get_blocks(get_block_name("WETTING_ANGLE"))) {
-      Range force_edges;
-      std::vector<double> attr_vec;
-      CHKERR b->getMeshsetIdEntitiesByDimension(
-          mField.get_moab(), SPACE_DIM - 1, force_edges, true);
-      b->getAttributes(attr_vec);
-      if (attr_vec.size() != 1)
-        SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA, "Should be one attribute");
-      MOFEM_LOG("FS", Sev::inform)
-          << "wetting angle edges size " << force_edges.size();
+      // push operators for lhs wetting angle
+      for (auto &b : wetting_block) {
+        Range force_edges;
+        std::vector<double> attr_vec;
+        CHKERR b->getMeshsetIdEntitiesByDimension(
+            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
+        b->getAttributes(attr_vec);
+        if (attr_vec.size() != 1)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+                  "Should be one attribute");
+        MOFEM_LOG("FS", Sev::inform)
+            << "wetting angle edges size " << force_edges.size();
 
-      CHKERR add_parent_field_bdy(fe, UDO::OPROW, "G");
-      pip.push_back(new OpWettingAngleLhs(
-          "G", grad_h_ptr, col_ind_ptr, col_diff_base_ptr,
-          boost::make_shared<Range>(force_edges), attr_vec.front()));
+        CHKERR add_parent_field_bdy(fe, UDO::OPROW, "G");
+        pip.push_back(new OpWettingAngleLhs(
+            "G", grad_h_ptr, col_ind_ptr, col_diff_base_ptr,
+            boost::make_shared<Range>(force_edges), attr_vec.front()));
+      }
+
     }
 
     MoFEMFunctionReturn(0);
