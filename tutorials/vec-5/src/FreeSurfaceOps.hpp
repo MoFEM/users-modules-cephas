@@ -430,8 +430,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
         t_nf(i) += t_base * t_forces(i);
         t_nf(i) += t_diff_base(j) * t_stress(i, j);
 
-        // When we move to C++17 add if constexpr()
-        if constexpr (coord_type == CYLINDRICAL) {
+        if (coord_type == CYLINDRICAL) {
           t_nf(0) += (t_base * (alpha / t_coords(0))) * (2 * mu * t_u(0) + t_p);
         }
 
@@ -543,8 +542,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
               (beta0 * t_row_base) * t_kd(i, j) * (t_col_diff_base(k) * t_u(k));
           t_mat(i, j) += t_d_stress(i, j, k) * t_col_diff_base(k);
 
-          // When we move to C++17 add if constexpr()
-          if constexpr (coord_type == CYLINDRICAL) {
+          if (coord_type == CYLINDRICAL) {
             t_mat(0, 0) += (bb * (alpha / t_coords(0))) * (2 * mu);
           }
 
@@ -691,8 +689,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
           t_mat(i) += (t_phase_force_g_dh * t_row_base) * t_col_diff_base(i);
           t_mat(i) += (t_row_diff_base(j) * t_col_base) * t_stress_dh(i, j);
 
-          // When we move to C++17 add if constexpr()
-          if constexpr (coord_type == CYLINDRICAL) {
+          if (coord_type == CYLINDRICAL) {
             t_mat(0) += (bb * (alpha / t_coords(0))) * (2 * mu_dh * t_u(0));
           }
 
@@ -939,14 +936,17 @@ struct OpLhsH_dU : public AssemblyDomainEleOp {
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
-      const double alpha = t_w * vol;
+      const auto r = t_coords(0);
+      const auto alpha = t_w * vol * cylindrical(r);
       auto t_mat = getFTensor1FromPtr<U_FIELD_DIM>(&locMat(0, 0));
+      FTensor::Tensor1<double, SPACE_DIM> t_row;
 
       int rr = 0;
       for (; rr != nbRows; ++rr) {
+        t_row(i) = (alpha * t_row_base) * t_grad_h(i);
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
-          t_mat(i) += (t_row_base * t_col_base * alpha) * t_grad_h(i);
+          t_mat(i) += t_row(i) * t_col_base;
           ++t_mat;
           ++t_col_base;
         }
@@ -958,6 +958,7 @@ struct OpLhsH_dU : public AssemblyDomainEleOp {
 
       ++t_grad_h;
       ++t_w;
+      ++t_coords;
     }
 
     MoFEMFunctionReturn(0);
