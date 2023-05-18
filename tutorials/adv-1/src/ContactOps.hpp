@@ -367,7 +367,7 @@ OpCalculateStressTraction::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-#endif __HENKY_OPS_HPP__
+#endif //__HENKY_OPS_HPP__
 
 OpAssembleTotalContactTraction::OpAssembleTotalContactTraction(
     boost::shared_ptr<CommonData> common_data_ptr)
