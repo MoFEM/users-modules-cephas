@@ -91,7 +91,7 @@ private:
 
 struct OpNormalForceRhs : public AssemblyBoundaryEleOp {
   OpNormalForceRhs(const std::string field_name,
-                    boost::shared_ptr<VectorDouble> lambda_ptr)
+                   boost::shared_ptr<VectorDouble> lambda_ptr)
       : AssemblyBoundaryEleOp(field_name, field_name,
                               AssemblyDomainEleOp::OPROW),
         lambdaPtr(lambda_ptr) {}
@@ -138,7 +138,8 @@ private:
 struct OpWettingAngleRhs : public AssemblyBoundaryEleOp {
   OpWettingAngleRhs(const std::string field_name,
                     boost::shared_ptr<MatrixDouble> grad_h_ptr,
-                    boost::shared_ptr<Range> ents_ptr = nullptr, double wetting_angle = 0)
+                    boost::shared_ptr<Range> ents_ptr = nullptr,
+                    double wetting_angle = 0)
       : AssemblyBoundaryEleOp(field_name, field_name,
                               AssemblyBoundaryEleOp::OPROW),
         gradHPtr(grad_h_ptr), entsPtr(ents_ptr), wettingAngle(wetting_angle) {}
@@ -161,7 +162,7 @@ struct OpWettingAngleRhs : public AssemblyBoundaryEleOp {
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
       const double r = t_coords(0);
-      const double alpha = t_w * cylindrical(r)  * area;
+      const double alpha = t_w * cylindrical(r) * area;
       const double h_grad_norm = sqrt(t_grad_h(i) * t_grad_h(i) +
                                       std::numeric_limits<double>::epsilon());
       const double cos_angle = std::cos(M_PI * wettingAngle / 180);
@@ -260,14 +261,13 @@ struct OpWettingAngleLhs : public BoundaryEleOp {
                         DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
     if (entsPtr) {
-      if (entsPtr->find(BoundaryEleOp::getFEEntityHandle()) ==
-          entsPtr->end())
+      if (entsPtr->find(BoundaryEleOp::getFEEntityHandle()) == entsPtr->end())
         MoFEMFunctionReturnHot(0);
     }
     const double area = getMeasure();
 
     const auto row_size = data.getIndices().size();
-    if(row_size == 0)
+    if (row_size == 0)
       MoFEMFunctionReturnHot(0);
 
     auto integrate = [&](auto col_indicies, auto &col_diff_base_functions) {
@@ -284,7 +284,7 @@ struct OpWettingAngleLhs : public BoundaryEleOp {
       auto t_coords = getFTensor1CoordsAtGaussPts();
       auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
       auto t_row_base = data.getFTensor0N();
-      int  nb_row_base_functions = data.getN().size2();
+      int nb_row_base_functions = data.getN().size2();
 
       auto s = wetting_angle_sub_stepping(getFEMethod()->ts_step);
 
@@ -306,8 +306,8 @@ struct OpWettingAngleLhs : public BoundaryEleOp {
           auto t_col_diff_base = getFTensor1FromPtr<SPACE_DIM>(ptr);
 
           for (int cc = 0; cc != col_size; ++cc) {
-             locMat(rr, cc) += delta * t_col_diff_base(i) * t_grad_h(i);
-             ++t_col_diff_base;
+            locMat(rr, cc) += delta * t_col_diff_base(i) * t_grad_h(i);
+            ++t_col_diff_base;
           }
           ++t_row_base;
         }
@@ -342,7 +342,6 @@ struct OpWettingAngleLhs : public BoundaryEleOp {
   }
 
 private:
-
   MatrixDouble locMat;
 
   boost::shared_ptr<MatrixDouble> gradHPtr;
@@ -468,7 +467,6 @@ private:
   boost::shared_ptr<VectorDouble> gPtr;
   boost::shared_ptr<VectorDouble> pPtr;
 };
-
 
 /**
  * @brief Lhs for U dU
@@ -815,7 +813,7 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
 
 #ifndef NDEBUG
-    if(data.getDiffN().size1() != data.getN().size1())
+    if (data.getDiffN().size1() != data.getN().size1())
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
     if (data.getDiffN().size2() != data.getN().size2() * SPACE_DIM) {
       MOFEM_LOG("SELF", Sev::error)
@@ -1368,7 +1366,5 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
 
 private:
 };
-
-
 
 } // namespace FreeSurfaceOps
