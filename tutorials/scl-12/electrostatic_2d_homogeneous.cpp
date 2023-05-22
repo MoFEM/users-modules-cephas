@@ -48,7 +48,8 @@ private:
   int oRder;
 };
 
-Electrostatic2DHomogeneous::Electrostatic2DHomogeneous(MoFEM::Interface &m_field)
+Electrostatic2DHomogeneous::Electrostatic2DHomogeneous(
+    MoFEM::Interface &m_field)
     : mField(m_field) {}
 
 //! [Read mesh]
@@ -106,8 +107,9 @@ MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
   { // Push operators to the Pipeline that is responsible for calculating LHS
     CHKERR AddHOOps<space_dim, space_dim, space_dim>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {H1});
+    double Permittivity = 2.5;
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK(field_name, field_name));
+        new OpDomainLhsMatrixK(field_name, field_name, Permittivity));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS
@@ -143,6 +145,9 @@ MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
         pipeline_mng->getOpDomainRhsPipeline());
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsVectorF(field_name));
+    // double sigma_in = 4.5;
+    // pipeline_mng->getOpDomainRhsPipeline().push_back(
+    //     new OpDomainRhsSurfaceCharge(field_name, sigma_in));
   }
 
   MoFEMFunctionReturn(0);
@@ -212,7 +217,6 @@ MoFEMErrorCode Electrostatic2DHomogeneous::outputResults() {
       new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
 
   auto u_ptr = boost::make_shared<VectorDouble>();
   auto grad_u_ptr = boost::make_shared<MatrixDouble>();

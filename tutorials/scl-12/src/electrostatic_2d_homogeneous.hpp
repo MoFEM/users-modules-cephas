@@ -1,6 +1,6 @@
 /**
- * \file poisson_2d_homogeneous.hpp
- * \example poisson_2d_homogeneous.hpp
+ * \file electrostatic_2d_homogeneous.hpp
+ * \example electrostatic_2d_homogeneous.hpp
  *
  * Solution of poisson equation. Direct implementation of User Data Operators
  * for teaching proposes.
@@ -27,12 +27,85 @@ namespace Electrostatic2DHomogeneousOperators {
 FTensor::Index<'i', 2> i;
 
 // For simplicity, source term f will be constant throughout the domain
-const double body_source = 5.;
+const double body_source = 5.; // 
 
-struct OpDomainLhsMatrixK : public OpFaceEle {
+// struct OpDomainLhsMatrixK : public OpFaceEle {
+// public:
+//   OpDomainLhsMatrixK(std::string row_field_name, std::string col_field_name)
+//       : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL) {
+//     sYmm = true;
+//   }
+
+//   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+//                         EntityType col_type, EntData &row_data,
+//                         EntData &col_data) {
+//     MoFEMFunctionBegin;
+
+//     const int nb_row_dofs = row_data.getIndices().size();
+//     const int nb_col_dofs = col_data.getIndices().size();
+
+//     if (nb_row_dofs && nb_col_dofs) {
+
+//       locLhs.resize(nb_row_dofs, nb_col_dofs, false);
+//       locLhs.clear();
+
+//       // get element area
+//       const double area = getMeasure();
+
+//       // get number of integration points
+//       const int nb_integration_points = getGaussPts().size2();
+//       // get integration weights
+//       auto t_w = getFTensor0IntegrationWeight();
+
+//       // get derivatives of base functions on row
+//       auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
+
+//       // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
+//       for (int gg = 0; gg != nb_integration_points; gg++) {
+//         const double a = t_w * area;
+
+
+//         for (int rr = 0; rr != nb_row_dofs; ++rr) {
+//           // get derivatives of base functions on column
+//           auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
+
+//           for (int cc = 0; cc != nb_col_dofs; cc++) {
+//             locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
+
+//             // move to the derivatives of the next base functions on column
+//             ++t_col_diff_base;
+//           }
+
+//           // move to the derivatives of the next base functions on row
+//           ++t_row_diff_base;
+//         }
+
+//         // move to the weight of the next integration point
+//         ++t_w;
+//       }
+
+//       // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
+//       CHKERR MatSetValues(getKSPB(), row_data, col_data, &locLhs(0, 0),
+//                           ADD_VALUES);
+//       if (row_side != col_side || row_type != col_type) {
+//         transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
+//         noalias(transLocLhs) = trans(locLhs);
+//         CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
+//                             ADD_VALUES);
+//       }
+//     }
+
+//     MoFEMFunctionReturn(0);
+//   }
+
+// private:
+//   MatrixDouble locLhs, transLocLhs;
+// };
+
+struct OpDomainLhsMatrixK: public OpFaceEle {
 public:
-  OpDomainLhsMatrixK(std::string row_field_name, std::string col_field_name)
-      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL) {
+  OpDomainLhsMatrixK(std::string row_field_name, std::string col_field_name, double rel_permit)
+      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL), relPermit(rel_permit) {
     sYmm = true;
   }
 
@@ -64,12 +137,13 @@ public:
       for (int gg = 0; gg != nb_integration_points; gg++) {
         const double a = t_w * area;
 
+
         for (int rr = 0; rr != nb_row_dofs; ++rr) {
           // get derivatives of base functions on column
           auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
 
           for (int cc = 0; cc != nb_col_dofs; cc++) {
-            locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
+            locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a * relPermit;
 
             // move to the derivatives of the next base functions on column
             ++t_col_diff_base;
@@ -99,8 +173,8 @@ public:
 
 private:
   MatrixDouble locLhs, transLocLhs;
+  double relPermit;
 };
-
 struct OpDomainRhsVectorF : public OpFaceEle {
 public:
   OpDomainRhsVectorF(std::string field_name)
