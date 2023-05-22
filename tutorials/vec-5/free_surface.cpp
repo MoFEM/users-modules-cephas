@@ -159,9 +159,9 @@ auto get_skin_projection_bit = []() { return 2 * get_start_bit() + 5; };
 // Physical parameters
 constexpr double a0 = 980;
 constexpr double rho_m = 0.998;
-constexpr double mu_m = 0.010101;
+constexpr double mu_m = 0.010101 * 1e2;
 constexpr double rho_p = 0.0012;
-constexpr double mu_p = 0.000182;
+constexpr double mu_p = 0.000182 * 1e2;
 constexpr double lambda = 73; ///< surface tension
 constexpr double W = 0.25;
 
@@ -1965,7 +1965,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
 /**
  * @brief Monitor solution
  *
- * This functions is cplled by TS kso at the end of each step. It is used
+ * This functions is called by TS kso at the end of each step. It is used
  */
 struct Monitor : public FEMethod {
   Monitor(
@@ -2184,9 +2184,39 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
         QUIET, Sev::noisy);
 
+    struct OpGetNormal : public BoundaryEleOp { 
+
+        OpGetNormal(boost::shared_ptr<VectorDouble> l_ptr,
+                    boost::shared_ptr<MatrixDouble> n_ptr)
+            : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE), ptrL(l_ptr),
+              ptrNormal(n_ptr) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type,
+                              EntitiesFieldData::EntData &data) {
+          MoFEMFunctionBegin;
+          auto t_l = getFTensor0FromVec(*ptrL);
+          auto t_n_fe = getFTensor1NormalsAtGaussPts();
+          ptrNormal->resize(SPACE_DIM, getGaussPts().size2(), false);
+          auto t_n = getFTensor1FromMat<SPACE_DIM>(*ptrNormal);
+          for(auto gg = 0;gg!=getGaussPts().size2(); ++gg) {
+            t_n(i) = t_n_fe(i) * t_l / std::sqrt(t_n_fe(i) * t_n_fe(i));
+            ++t_n_fe;
+            ++t_l;
+            ++t_n;
+          }
+          MoFEMFunctionReturn(0);
+        };
+
+      protected:
+        boost::shared_ptr<VectorDouble> ptrL;
+        boost::shared_ptr<MatrixDouble> ptrNormal;
+      };
+
+
     auto u_ptr = boost::make_shared<MatrixDouble>();
     auto p_ptr = boost::make_shared<VectorDouble>();
     auto lambda_ptr = boost::make_shared<VectorDouble>();
+    auto normal_l_ptr = boost::make_shared<MatrixDouble>();
 
     CHKERR add_parent_field_bdy(post_proc_fe, UDO::OPROW, "U");
     post_proc_fe->getOpPtrVector().push_back(
@@ -2195,10 +2225,21 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     CHKERR add_parent_field_bdy(post_proc_fe, UDO::OPROW, "L");
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("L", lambda_ptr));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpGetNormal(lambda_ptr, normal_l_ptr));
 
     CHKERR add_parent_field_bdy(post_proc_fe, UDO::OPROW, "P");
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("P", p_ptr));
+
+    auto op_ptr = new BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE);
+    op_ptr->doWorkRhsHook = [&](DataOperator *base_op_ptr, int side,
+                                EntityType type,
+                                EntitiesFieldData::EntData &data) {
+      MoFEMFunctionBegin;
+      auto op_ptr = static_cast<BoundaryEleOp *>(base_op_ptr);
+      MoFEMFunctionReturn(0);
+    };
 
     using OpPPMap = OpPostProcMapInMoab<2, 2>;
 
@@ -2207,9 +2248,9 @@ MoFEMErrorCode FreeSurface::solveSystem() {
         new OpPPMap(post_proc_fe->getPostProcMesh(),
                     post_proc_fe->getMapGaussPts(),
 
-                    OpPPMap::DataMapVec{{"L", lambda_ptr}, {"P", p_ptr}},
+                    OpPPMap::DataMapVec{{"P", p_ptr}},
 
-                    OpPPMap::DataMapMat{{"U", u_ptr}},
+                    OpPPMap::DataMapMat{{"U", u_ptr}, {"L", normal_l_ptr}},
 
                     OpPPMap::DataMapMat(),
 
@@ -2272,9 +2313,9 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     CHKERR add_parent_field_bdy(fe, UDO::OPROW, "P");
     fe->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldValues("P", p_ptr));
+        new OpCalculateScalarFieldValues("L", p_ptr));
     fe->getOpPtrVector().push_back(
-        new OpCalculateLift("P", p_ptr, lift_ptr, ents_ptr));
+        new OpCalculateLift("L", p_ptr, lift_ptr, ents_ptr));
 
     return std::make_pair(fe, lift_ptr);
   };
