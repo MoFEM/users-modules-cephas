@@ -29,7 +29,7 @@ struct OpCalculateLift : public BoundaryEleOp {
       for (int gg = 0; gg != nb_int_points; gg++) {
 
         const double r = t_coords(0);
-        const double alpha = cylindrical(r) * t_w / 2;
+        const double alpha = cylindrical(r) * t_w;
         t_lift(i) -= t_normal(i) * (t_p * alpha);
 
         ++t_w;
@@ -411,7 +411,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
 
       t_inertia_force(i) = (rho * alpha) * (t_dot_u(i));
       // t_buoyancy(SPACE_DIM - 1) = -(alpha * rho * a0) * t_h;
-      t_gravity(SPACE_DIM - 1) = -(alpha * rho * a0);
+      t_gravity(SPACE_DIM - 1) = (alpha * rho * a0);
       t_phase_force(i) = -alpha * kappa * t_g * t_grad_h(i);
       t_convection(i) = (rho * alpha) * (t_u(j) * t_grad_u(i, j));
 
