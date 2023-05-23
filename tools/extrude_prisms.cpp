@@ -65,7 +65,8 @@ int main(int argc, char *argv[]) {
         CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
                                                        true);
         Range block_prisms;
-        CHKERR prisms_from_surface_interface->createPrisms(tris, block_prisms);
+        CHKERR prisms_from_surface_interface->createPrisms(
+            tris, PrismsFromSurfaceInterface::NO_SWAP, block_prisms);
         CHKERR prisms_from_surface_interface->setNormalThickness(
             block_prisms, thickness[0], thickness[1]);
         CHKERR prisms_from_surface_interface->updateMeshestByEdgeBlock(
