@@ -351,8 +351,8 @@ MoFEMErrorCode
 OpCalculateStressTraction::doWork(int side, EntityType type,
                                   EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
-  auto t_normal = getFTensor1Normal();
-  t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+
+  auto t_normal_at_pts = getFTensor1NormalsAtGaussPts();
   const auto nb_integration_pts = getGaussPts().size2();
   auto traction_ptr = commonDataPtr->stressTractionPtr();
   traction_ptr->resize(SPACE_DIM, nb_integration_pts, false);
@@ -360,9 +360,13 @@ OpCalculateStressTraction::doWork(int side, EntityType type,
   auto t_P = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(
       *(henckyCommonDataPtr->getMatFirstPiolaStress()));
   for (auto gg = 0; gg != nb_integration_pts; ++gg) {
+    FTensor::Tensor1<double, SPACE_DIM> t_normal;
+    t_normal(i) = t_normal_at_pts(i) /
+                  std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
     t_traction(i) = t_P(i, j) * t_normal(j);
     ++t_P;
     ++t_traction;
+    ++t_normal_at_pts;
   }
   MoFEMFunctionReturn(0);
 }
@@ -412,8 +416,7 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
 
   auto &nf = AssemblyBoundaryEleOp::locF;
 
-  auto t_normal = getFTensor1Normal();
-  t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+  auto t_normal_at_pts = getFTensor1NormalsAtGaussPts();
   auto t_total_traction = CommonData::getFTensor1TotalTraction();
 
   auto t_w = getFTensor0IntegrationWeight();
@@ -425,6 +428,10 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   size_t nb_base_functions = data.getN().size2() / 3;
   auto t_base = data.getFTensor1N<3>();
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    FTensor::Tensor1<double, SPACE_DIM> t_normal;
+    t_normal(i) = t_normal_at_pts(i) /
+                  std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
     auto t_nf = getFTensor1FromPtr<SPACE_DIM>(&nf[0]);
     const double alpha = t_w * getMeasure();
@@ -475,6 +482,7 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
     ++t_traction;
     ++t_coords;
     ++t_w;
+    ++t_normal_at_pts;
   }
 
   MoFEMFunctionReturn(0);
@@ -497,8 +505,7 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
   const size_t nb_gauss_pts = getGaussPts().size2();
   auto &locMat = AssemblyBoundaryEleOp::locMat;
 
-  auto t_normal = getFTensor1Normal();
-  t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+  auto t_normal_at_pts = getFTensor1NormalsAtGaussPts();
   auto t_total_traction = CommonData::getFTensor1TotalTraction();
 
   auto t_disp = getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactDisp);
@@ -513,6 +520,10 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
   constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    FTensor::Tensor1<double, SPACE_DIM> t_normal;
+    t_normal(i) = t_normal_at_pts(i) /
+                  std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
     const double alpha = t_w * getMeasure();
 
@@ -578,6 +589,7 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
     ++t_traction;
     ++t_coords;
     ++t_w;
+    ++t_normal_at_pts;
   }
 
   MoFEMFunctionReturn(0);
@@ -600,8 +612,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
   const size_t nb_gauss_pts = getGaussPts().size2();
   auto &locMat = AssemblyBoundaryEleOp::locMat;
 
-  auto t_normal = getFTensor1Normal();
-  t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+  auto t_normal_at_pts = getFTensor1NormalsAtGaussPts();
   auto t_total_traction = CommonData::getFTensor1TotalTraction();
 
   auto t_disp = getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactDisp);
@@ -614,6 +625,10 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
   size_t nb_face_functions = row_data.getN().size2() / 3;
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    FTensor::Tensor1<double, SPACE_DIM> t_normal;
+    t_normal(i) = t_normal_at_pts(i) /
+                  std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
     const double alpha = t_w * getMeasure();
 
@@ -668,6 +683,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
     ++t_traction;
     ++t_coords;
     ++t_w;
+    ++t_normal_at_pts;
   }
 
   MoFEMFunctionReturn(0);
