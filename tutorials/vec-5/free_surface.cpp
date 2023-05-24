@@ -884,26 +884,60 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     return get_fe_bit(fe_ptr).test(get_start_bit() + nb_levels - 1);
   });
 
-  pip_mng->getOpDomainRhsPipeline().clear();
-  pip_mng->getOpDomainLhsPipeline().clear();
+  PetscBool all_boundary_wet = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-all_boundary_wet",
+                             &all_boundary_wet, PETSC_NULL);
+  if (all_boundary_wet) {
 
-  // Remove DOFs where boundary conditions are set
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_X",
-                                           "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_X",
-                                           "L", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_Y",
-                                           "U", 1, 1);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_Y",
-                                           "L", 1, 1);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "U",
-                                           0, SPACE_DIM);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
-                                           0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO",
-                                           "L", 0, 0);
-  MoFEMFunctionReturn(0);
-}
+      moab::Skinner skinner(&mField.get_moab());
+      ParallelComm *pcomm =
+          ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+
+      auto get_bit_skin = [&](BitRefLevel bit, BitRefLevel mask) {
+        Range bit_ents;
+        CHK_THROW_MESSAGE(
+            mField.getInterface<BitRefManager>()->getEntitiesByDimAndRefLevel(
+                bit, mask, SPACE_DIM, bit_ents),
+            "can't get bit level");
+        Range bit_skin;
+        CHK_MOAB_THROW(skinner.find_skin(0, bit_ents, false, bit_skin),
+                       "can't get skin");
+        CHK_MOAB_THROW(pcomm->filter_pstatus(
+                           bit_skin, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                           PSTATUS_NOT, -1, nullptr),
+                       "filter boundary");
+        return bit_skin;
+      };
+
+      auto skin_ents = get_bit_skin(get_current_bit(), BitRefLevel().set());
+      Range skin_verts;
+      CHKERR mField.get_moab().get_connectivity(skin_ents, skin_verts, true);
+
+      auto field_blas = mField.getInterface<FieldBlas>();
+      CHKERR field_blas->setField(-1, MBVERTEX, skin_verts, "H");
+
+    };
+
+    pip_mng->getOpDomainRhsPipeline().clear();
+    pip_mng->getOpDomainLhsPipeline().clear();
+
+    // Remove DOFs where boundary conditions are set
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_X",
+                                             "U", 0, 0);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_X",
+                                             "L", 0, 0);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_Y",
+                                             "U", 1, 1);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_Y",
+                                             "L", 1, 1);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
+                                             "U", 0, SPACE_DIM);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
+                                             "L", 0, 0);
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO",
+                                             "L", 0, 0);
+    MoFEMFunctionReturn(0);
+  }
 //! [Boundary condition]
 
 //! [Data projection]
