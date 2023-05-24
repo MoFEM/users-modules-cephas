@@ -648,9 +648,11 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
     FTensor::Tensor1<double, U_FIELD_DIM> t_inertia_force_dh;
     FTensor::Tensor1<double, U_FIELD_DIM> t_convection_dh;
     FTensor::Tensor1<double, U_FIELD_DIM> t_buoyancy_dh;
+    FTensor::Tensor1<double, U_FIELD_DIM> t_gravity_dh;
     FTensor::Tensor1<double, U_FIELD_DIM> t_forces_dh;
 
     t_buoyancy_dh(i) = 0;
+    t_gravity_dh(i) = 0;
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -665,10 +667,11 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
 
       t_inertia_force_dh(i) = (alpha * rho_dh) * t_dot_u(i);
       // t_buoyancy_dh(SPACE_DIM - 1) = -(alpha * a0) * (rho + rho_dh * t_h);
+      t_gravity_dh(SPACE_DIM - 1) = (alpha * rho_dh * a0);
       t_convection_dh(i) = (rho_dh * alpha) * (t_u(j) * t_grad_u(i, j));
       const double t_phase_force_g_dh = -alpha * kappa * t_g;
-      t_forces_dh(i) =
-          t_inertia_force_dh(i) + t_buoyancy_dh(i) + t_convection_dh(i);
+      t_forces_dh(i) = t_inertia_force_dh(i) + t_buoyancy_dh(i) +
+                       t_gravity_dh(i) + t_convection_dh(i);
 
       t_stress_dh(i, j) = alpha * (t_D_dh(i, j, k, l) * t_grad_u(k, l));
 
