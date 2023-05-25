@@ -908,8 +908,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
                                            0, 0);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO",
                                            "L", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ALL_WET",
-                                           "H", 0, 0);
 
   MoFEMFunctionReturn(0);
 }
@@ -1267,6 +1265,9 @@ MoFEMErrorCode FreeSurface::projectData() {
                                                   mField.get_comm_size());
           // set ghost nodes
           CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_SOLVER");
+          CHKERR bc_mng->removeBlockDOFsOnEntities("SUB_SOLVER", "ALL_WET", "H",
+                                                   0, 0, true);
+
           MoFEMFunctionReturn(0);
         };
 
@@ -1476,6 +1477,9 @@ MoFEMErrorCode FreeSurface::projectData() {
       }
       CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
       CHKERR cut_off_dofs();
+      
+      CHKERR allBoundaryWet(get_start_bit() + nb_levels - 1,
+                            BitRefLevel().set());
     }
 
     MoFEMFunctionReturn(0);
@@ -2940,8 +2944,6 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
       MOFEM_LOG("FS", Sev::inform) << "Refine problem";
       CHKERR ptr->fsRawPtr->refineMesh(refine_overlap);
       CHKERR ptr->fsRawPtr->projectData();
-      CHKERR ptr->fsRawPtr->allBoundaryWet(get_current_bit(),
-                                           BitRefLevel().set());
       MoFEMFunctionReturn(0);
     };
 
