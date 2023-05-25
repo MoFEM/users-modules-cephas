@@ -908,6 +908,8 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
                                            0, 0);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO",
                                            "L", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ALL_WET",
+                                           "H", 0, 0, true);
 
   MoFEMFunctionReturn(0);
 }
@@ -1265,8 +1267,6 @@ MoFEMErrorCode FreeSurface::projectData() {
                                                   mField.get_comm_size());
           // set ghost nodes
           CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_SOLVER");
-          CHKERR bc_mng->removeBlockDOFsOnEntities("SUB_SOLVER", "ALL_WET", "H",
-                                                   0, 0, true);
 
           MoFEMFunctionReturn(0);
         };
