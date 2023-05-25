@@ -908,6 +908,8 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
                                            0, 0);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO",
                                            "L", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ALL_WET",
+                                           "H", 0, 0);
 
   MoFEMFunctionReturn(0);
 }
