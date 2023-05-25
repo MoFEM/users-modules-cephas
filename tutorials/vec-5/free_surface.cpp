@@ -1477,7 +1477,7 @@ MoFEMErrorCode FreeSurface::projectData() {
       }
       CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
       CHKERR cut_off_dofs();
-      
+
       CHKERR allBoundaryWet(get_start_bit() + nb_levels - 1,
                             BitRefLevel().set());
     }
@@ -2435,6 +2435,8 @@ MoFEMErrorCode FreeSurface::allBoundaryWet(BitRefLevel bit, BitRefLevel mask) {
     auto skin_ents = get_bit_ents(bit, mask);
     Range skin_verts;
     CHKERR mField.get_moab().get_connectivity(skin_ents, skin_verts, true);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+        skin_verts);
     // FIXME: Add faces in edges
     skin_ents.merge(skin_verts);
 
