@@ -2922,6 +2922,39 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
   MoFEMFunctionBegin;
 
   if (auto ptr = tsPrePostProc.lock()) {
+
+    /**
+     * @brief cut-off values at nodes, i.e. abs("H") <= 1
+     *
+     */
+    auto cut_off_dofs = [&]() {
+      MoFEMFunctionBegin;
+
+      auto &m_field = ptr->fsRawPtr->mField;
+
+      Range current_verts;
+      auto bit_mng = m_field.getInterface<BitRefManager>();
+      CHKERR bit_mng->getEntitiesByTypeAndRefLevel(
+          bit(get_current_bit()), BitRefLevel().set(), MBVERTEX, current_verts);
+
+      auto cut_off_verts = [&](boost::shared_ptr<FieldEntity> ent_ptr) {
+        MoFEMFunctionBegin;
+        for (auto &h : ent_ptr->getEntFieldData()) {
+          h = cut_off(h);
+        }
+        MoFEMFunctionReturn(0);
+      };
+
+      auto field_blas = m_field.getInterface<FieldBlas>();
+      CHKERR field_blas->fieldLambdaOnEntities(cut_off_verts, "H",
+                                               &current_verts);
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR cut_off_dofs();
+  }
+
+  if (auto ptr = tsPrePostProc.lock()) {
     MOFEM_LOG("FS", Sev::inform) << "Run step pre proc";
 
     auto &m_field = ptr->fsRawPtr->mField;
