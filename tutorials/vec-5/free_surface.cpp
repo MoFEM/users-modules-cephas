@@ -909,13 +909,18 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
         return bit_skin;
       };
 
-      auto skin_ents = get_bit_skin(get_current_bit(), BitRefLevel().set());
+      auto skin_ents = get_bit_skin(bit(nb_levels - 1), BitRefLevel().set());
       Range skin_verts;
       CHKERR mField.get_moab().get_connectivity(skin_ents, skin_verts, true);
+      // FIXME: Add faces in edges
+      skin_ents.merge(skin_verts);
 
       auto field_blas = mField.getInterface<FieldBlas>();
       CHKERR field_blas->setField(-1, MBVERTEX, skin_verts, "H");
 
+      auto prb_mng = mField.getInterface<ProblemsManager>();
+      CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "H",
+                                           skin_ents);
     };
 
     pip_mng->getOpDomainRhsPipeline().clear();
