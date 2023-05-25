@@ -490,6 +490,8 @@ private:
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
 
+  MoFEMErrorCode allBoundaryWet(BitRefLevel bit, BitRefLevel mask);
+
   /// @brief Find entities on refinement levels
   /// @param overlap level of overlap
   /// @return
@@ -873,7 +875,10 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   CHKERR reset_bits();
   CHKERR solve_init(
       [](FEMethod *fe_ptr) { return get_fe_bit(fe_ptr).test(0); });
+  CHKERR allBoundaryWet(bit(0), BitRefLevel().set());
   CHKERR refineMesh(refine_overlap);
+  CHKERR allBoundaryWet(get_current_bit(), BitRefLevel().set());
+
   for (auto f : {"U", "P", "H", "G", "L"}) {
     CHKERR mField.getInterface<FieldBlas>()->setField(0, f);
   }
@@ -884,65 +889,27 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
     return get_fe_bit(fe_ptr).test(get_start_bit() + nb_levels - 1);
   });
 
-  PetscBool all_boundary_wet = PETSC_FALSE;
-  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-all_boundary_wet",
-                             &all_boundary_wet, PETSC_NULL);
-  if (all_boundary_wet) {
+  pip_mng->getOpDomainRhsPipeline().clear();
+  pip_mng->getOpDomainLhsPipeline().clear();
 
-      moab::Skinner skinner(&mField.get_moab());
-      ParallelComm *pcomm =
-          ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+  // Remove DOFs where boundary conditions are set
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_X",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_X",
+                                           "L", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_Y",
+                                           "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_Y",
+                                           "L", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "U",
+                                           0, SPACE_DIM);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX", "L",
+                                           0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO",
+                                           "L", 0, 0);
 
-      auto get_bit_skin = [&](BitRefLevel bit, BitRefLevel mask) {
-        Range bit_ents;
-        CHK_THROW_MESSAGE(
-            mField.getInterface<BitRefManager>()->getEntitiesByDimAndRefLevel(
-                bit, mask, SPACE_DIM, bit_ents),
-            "can't get bit level");
-        Range bit_skin;
-        CHK_MOAB_THROW(skinner.find_skin(0, bit_ents, false, bit_skin),
-                       "can't get skin");
-        CHK_MOAB_THROW(pcomm->filter_pstatus(
-                           bit_skin, PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                           PSTATUS_NOT, -1, nullptr),
-                       "filter boundary");
-        return bit_skin;
-      };
-
-      auto skin_ents = get_bit_skin(bit(nb_levels - 1), BitRefLevel().set());
-      Range skin_verts;
-      CHKERR mField.get_moab().get_connectivity(skin_ents, skin_verts, true);
-      // FIXME: Add faces in edges
-      skin_ents.merge(skin_verts);
-
-      auto field_blas = mField.getInterface<FieldBlas>();
-      CHKERR field_blas->setField(-1, MBVERTEX, skin_verts, "H");
-
-      auto prb_mng = mField.getInterface<ProblemsManager>();
-      CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "H",
-                                           skin_ents);
-    };
-
-    pip_mng->getOpDomainRhsPipeline().clear();
-    pip_mng->getOpDomainLhsPipeline().clear();
-
-    // Remove DOFs where boundary conditions are set
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_X",
-                                             "U", 0, 0);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_X",
-                                             "L", 0, 0);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_Y",
-                                             "U", 1, 1);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "SYM_Y",
-                                             "L", 1, 1);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
-                                             "U", 0, SPACE_DIM);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX",
-                                             "L", 0, 0);
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO",
-                                             "L", 0, 0);
-    MoFEMFunctionReturn(0);
-  }
+  MoFEMFunctionReturn(0);
+}
 //! [Boundary condition]
 
 //! [Data projection]
@@ -1845,7 +1812,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pip.push_back(new OpNormalForceRhs("U", lambda_ptr));
 
     auto wetting_block = get_blocks(get_block_name("WETTING_ANGLE"));
-    if(wetting_block.size()) {
+    if (wetting_block.size()) {
       // push operators to the side element which is called from op_bdy_side
       auto op_bdy_side =
           new OpLoopSide<SideEle>(mField, simple->getDomainFEName(), SPACE_DIM);
@@ -1892,7 +1859,6 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
             "G", grad_h_ptr, boost::make_shared<Range>(force_edges),
             attr_vec.front()));
       }
-
     }
 
     MoFEMFunctionReturn(0);
@@ -1918,7 +1884,7 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
     pip.push_back(new OpNormalConstrainLhs("L", "U"));
 
     auto wetting_block = get_blocks(get_block_name("WETTING_ANGLE"));
-    if(wetting_block.size()) {
+    if (wetting_block.size()) {
       auto col_ind_ptr = boost::make_shared<std::vector<VectorInt>>();
       auto col_diff_base_ptr = boost::make_shared<std::vector<MatrixDouble>>();
 
@@ -1974,7 +1940,6 @@ MoFEMErrorCode FreeSurface::assembleSystem() {
             "G", grad_h_ptr, col_ind_ptr, col_diff_base_ptr,
             boost::make_shared<Range>(force_edges), attr_vec.front()));
       }
-
     }
 
     MoFEMFunctionReturn(0);
@@ -2223,34 +2188,33 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
         QUIET, Sev::noisy);
 
-    struct OpGetNormal : public BoundaryEleOp { 
+    struct OpGetNormal : public BoundaryEleOp {
 
-        OpGetNormal(boost::shared_ptr<VectorDouble> l_ptr,
-                    boost::shared_ptr<MatrixDouble> n_ptr)
-            : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE), ptrL(l_ptr),
-              ptrNormal(n_ptr) {}
+      OpGetNormal(boost::shared_ptr<VectorDouble> l_ptr,
+                  boost::shared_ptr<MatrixDouble> n_ptr)
+          : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE), ptrL(l_ptr),
+            ptrNormal(n_ptr) {}
 
-        MoFEMErrorCode doWork(int side, EntityType type,
-                              EntitiesFieldData::EntData &data) {
-          MoFEMFunctionBegin;
-          auto t_l = getFTensor0FromVec(*ptrL);
-          auto t_n_fe = getFTensor1NormalsAtGaussPts();
-          ptrNormal->resize(SPACE_DIM, getGaussPts().size2(), false);
-          auto t_n = getFTensor1FromMat<SPACE_DIM>(*ptrNormal);
-          for(auto gg = 0;gg!=getGaussPts().size2(); ++gg) {
-            t_n(i) = t_n_fe(i) * t_l / std::sqrt(t_n_fe(i) * t_n_fe(i));
-            ++t_n_fe;
-            ++t_l;
-            ++t_n;
-          }
-          MoFEMFunctionReturn(0);
-        };
-
-      protected:
-        boost::shared_ptr<VectorDouble> ptrL;
-        boost::shared_ptr<MatrixDouble> ptrNormal;
+      MoFEMErrorCode doWork(int side, EntityType type,
+                            EntitiesFieldData::EntData &data) {
+        MoFEMFunctionBegin;
+        auto t_l = getFTensor0FromVec(*ptrL);
+        auto t_n_fe = getFTensor1NormalsAtGaussPts();
+        ptrNormal->resize(SPACE_DIM, getGaussPts().size2(), false);
+        auto t_n = getFTensor1FromMat<SPACE_DIM>(*ptrNormal);
+        for (auto gg = 0; gg != getGaussPts().size2(); ++gg) {
+          t_n(i) = t_n_fe(i) * t_l / std::sqrt(t_n_fe(i) * t_n_fe(i));
+          ++t_n_fe;
+          ++t_l;
+          ++t_n;
+        }
+        MoFEMFunctionReturn(0);
       };
 
+    protected:
+      boost::shared_ptr<VectorDouble> ptrL;
+      boost::shared_ptr<MatrixDouble> ptrNormal;
+    };
 
     auto u_ptr = boost::make_shared<MatrixDouble>();
     auto p_ptr = boost::make_shared<VectorDouble>();
@@ -2421,6 +2385,47 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     CHKERR print_fields_in_section();
 
     CHKERR TSSolve(ts, ptr->globSol);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode FreeSurface::allBoundaryWet(BitRefLevel bit, BitRefLevel mask) {
+  MoFEMFunctionBegin;
+
+  PetscBool all_boundary_wet = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-all_boundary_wet",
+                             &all_boundary_wet, PETSC_NULL);
+  if (all_boundary_wet) {
+
+    moab::Skinner skinner(&mField.get_moab());
+    ParallelComm *pcomm =
+        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+
+    auto get_bit_skin = [&](BitRefLevel bit, BitRefLevel mask) {
+      Range bit_ents;
+      CHK_THROW_MESSAGE(
+          mField.getInterface<BitRefManager>()->getEntitiesByDimAndRefLevel(
+              bit, mask, SPACE_DIM, bit_ents),
+          "can't get bit level");
+      Range bit_skin;
+      CHK_MOAB_THROW(skinner.find_skin(0, bit_ents, false, bit_skin),
+                     "can't get skin");
+      CHK_MOAB_THROW(pcomm->filter_pstatus(bit_skin,
+                                           PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                           PSTATUS_NOT, -1, nullptr),
+                     "filter boundary");
+      return bit_skin;
+    };
+
+    auto skin_ents = get_bit_skin(bit, mask);
+    Range skin_verts;
+    CHKERR mField.get_moab().get_connectivity(skin_ents, skin_verts, true);
+    // FIXME: Add faces in edges
+    skin_ents.merge(skin_verts);
+
+    auto field_blas = mField.getInterface<FieldBlas>();
+    CHKERR field_blas->setField(-1, MBVERTEX, skin_verts, "H");
   }
 
   MoFEMFunctionReturn(0);
@@ -2925,6 +2930,8 @@ MoFEMErrorCode TSPrePostProc::tsPreProc(TS ts) {
       MOFEM_LOG("FS", Sev::inform) << "Refine problem";
       CHKERR ptr->fsRawPtr->refineMesh(refine_overlap);
       CHKERR ptr->fsRawPtr->projectData();
+      CHKERR ptr->fsRawPtr->allBoundaryWet(get_current_bit(),
+                                           BitRefLevel().set());
       MoFEMFunctionReturn(0);
     };
 
