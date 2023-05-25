@@ -908,8 +908,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
                                            0, 0);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ZERO",
                                            "L", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "ALL_WET",
-                                           "H", 0, 0, true);
 
   MoFEMFunctionReturn(0);
 }
@@ -1373,14 +1371,12 @@ MoFEMErrorCode FreeSurface::projectData() {
         MoFEMFunctionReturn(0);
       };
 
-      auto solve = [&](auto S, bool set_all_wet) {
+      auto solve = [&](auto S) {
         MoFEMFunctionBegin;
         CHKERR VecZeroEntries(S);
         CHKERR VecZeroEntries(F);
         CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
         CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
-        if (set_all_wet)
-          CHKERR allBoundaryWet(BitRefLevel().set(), BitRefLevel().set());
         CHKERR KSPSolve(ksp, F, S);
         CHKERR VecGhostUpdateBegin(S, INSERT_VALUES, SCATTER_FORWARD);
         CHKERR VecGhostUpdateEnd(S, INSERT_VALUES, SCATTER_FORWARD);
@@ -1391,7 +1387,7 @@ MoFEMErrorCode FreeSurface::projectData() {
       };
 
       MOFEM_LOG("FS", Sev::inform) << "Solve projection";
-      CHKERR solve(D, true);
+      CHKERR solve(D);
 
       auto glob_x = createDMVector(simple->getDM());
       auto sub_x = createDMVector(subdm);
@@ -1457,16 +1453,12 @@ MoFEMErrorCode FreeSurface::projectData() {
 
           CHKERR DMoFEMMeshToLocalVector(simple->getDM(), v, INSERT_VALUES,
                                          SCATTER_REVERSE);
-          CHKERR solve(sub_x, !ii);
+          CHKERR solve(sub_x);
 
           for (auto f : {"U", "P", "H", "G", "L"}) {
             MOFEM_LOG("WORLD", Sev::verbose) << "Zero field " << f;
             CHKERR field_blas->fieldLambdaOnEntities(zero_dofs, f);
           }
-          if(!ii) {
-            CHKERR allBoundaryWet(bit(get_current_bit()), BitRefLevel().set());
-          }
-          ++ii;
 
           CHKERR DMoFEMMeshToLocalVector(subdm, sub_x, INSERT_VALUES,
                                          SCATTER_REVERSE);
@@ -1486,7 +1478,6 @@ MoFEMErrorCode FreeSurface::projectData() {
         MOFEM_LOG("WORLD", Sev::verbose) << "Zero field " << f;
         CHKERR field_blas->fieldLambdaOnEntities(zero_dofs, f);
       }
-      CHKERR allBoundaryWet(bit(get_current_bit()), BitRefLevel().set());
       CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
       CHKERR cut_off_dofs();
     }
