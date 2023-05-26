@@ -106,8 +106,9 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
   { // Push operators to the Pipeline that is responsible for calculating LHS
     CHKERR AddHOOps<space_dim, space_dim, space_dim>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {H1});
+     double Permittivity = 2.5;
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK(field_name, field_name));
+        new OpDomainLhsMatrixK(field_name, field_name, Permittivity));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS

@@ -1,5 +1,9 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+include_directories(
+  ${UM_SOURCE_DIR}/tutorials/cor-2to5/src
+)
+
 set(permissions_default 
   OWNER_WRITE 
   OWNER_READ

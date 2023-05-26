@@ -13,6 +13,7 @@
 constexpr auto field_name = "U";
 
 #include <BasicFiniteElements.hpp>
+#include <PoissonOperators.hpp>
 #include <electrostatic_2d_homogeneous.hpp>
 
 using namespace MoFEM;
@@ -20,6 +21,12 @@ using namespace Electrostatic2DHomogeneousOperators;
 
 using PostProcFaceEle =
     PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
+
+// struct InterfaceRule {
+//   int operator()(int p_row, int p_col, int p_data) const {
+//     return p_data + 1;
+//   }
+// };
 
 static char help[] = "...\n\n";
 
@@ -43,6 +50,8 @@ private:
   // MoFEM interfaces
   MoFEM::Interface &mField;
   Simple *simpleInterface;
+
+  boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe;
 
   // Field name and approximation order
   int oRder;
@@ -75,7 +84,39 @@ MoFEMErrorCode Electrostatic2DHomogeneous::setupProblem() {
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder(field_name, oRder);
 
-  CHKERR simpleInterface->setUp();
+  Range interface_ents;
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+    if (bit->getName().compare(0, 9, "INTERFACE") == 0) {
+      const int id = bit->getMeshsetId();
+      Range ents;
+      CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), 1,
+                                                         ents, true);
+      interface_ents.merge(ents);
+    }
+  }
+
+  cout << interface_ents.size() << endl;
+
+
+
+  CHKERR mField.add_finite_element("INTERFACE");
+  CHKERR mField.modify_finite_element_add_field_row("INTERFACE", field_name);
+  CHKERR mField.modify_finite_element_add_field_col("INTERFACE", field_name);
+  CHKERR mField.modify_finite_element_add_field_data("INTERFACE", field_name);
+  CHKERR mField.add_ents_to_finite_element_by_dim(interface_ents, 1,
+                                                         "INTERFACE");
+
+  CHKERR simpleInterface->defineFiniteElements();
+  CHKERR simpleInterface->defineProblem(PETSC_TRUE);
+  CHKERR simpleInterface->buildFields();
+  CHKERR simpleInterface->buildFiniteElements();
+
+  CHKERR mField.build_finite_elements("INTERFACE");
+  CHKERR DMMoFEMAddElement(simpleInterface->getDM(), "INTERFACE");
+
+  CHKERR simpleInterface->buildProblem();
+
+  // CHKERR simpleInterface->setUp();
 
   MoFEMFunctionReturn(0);
 }
@@ -143,11 +184,22 @@ MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
     set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
     calculate_residual_from_set_values_on_bc(
         pipeline_mng->getOpDomainRhsPipeline());
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDomainRhsVectorF(field_name));
+
+    // pipeline_mng->getOpDomainRhsPipeline().push_back(
+    //     new OpDomainRhsVectorF(field_name));
+
     // double sigma_in = 4.5;
     // pipeline_mng->getOpDomainRhsPipeline().push_back(
     //     new OpDomainRhsSurfaceCharge(field_name, sigma_in));
+
+    interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
+        new EdgeElementForcesAndSourcesCore(mField));
+    // CHKERR AddHOOps<1, space_dim, space_dim>::add(
+    //     interface_rhs_fe->getOpPtrVector(), {H1});
+    double chargeDens = 2.5;
+    interface_rhs_fe->getOpPtrVector().push_back(
+      new OpInterfaceRhsVectorF(field_name, chargeDens));
+    
   }
 
   MoFEMFunctionReturn(0);
@@ -165,6 +217,8 @@ MoFEMErrorCode Electrostatic2DHomogeneous::setIntegrationRules() {
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
 
+  // interface_rhs_fe->getRuleHook = PoissonExample::FaceRule();
+
   MoFEMFunctionReturn(0);
 }
 //! [Set integration rules]
@@ -176,6 +230,11 @@ MoFEMErrorCode Electrostatic2DHomogeneous::solveSystem() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto ksp_solver = pipeline_mng->createKSP();
+
+  boost::shared_ptr<ForcesAndSourcesCore> null; ///< Null element does nothing
+  CHKERR DMMoFEMKSPSetComputeRHS(simpleInterface->getDM(), "INTERFACE",
+                                 interface_rhs_fe, null, null);
+
   CHKERR KSPSetFromOptions(ksp_solver);
   CHKERR KSPSetUp(ksp_solver);
 

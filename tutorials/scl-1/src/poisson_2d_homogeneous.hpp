@@ -31,8 +31,8 @@ const double body_source = 5.;
 
 struct OpDomainLhsMatrixK : public OpFaceEle {
 public:
-  OpDomainLhsMatrixK(std::string row_field_name, std::string col_field_name)
-      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL) {
+  OpDomainLhsMatrixK(std::string row_field_name, std::string col_field_name, double relperm)
+      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL), relPerm(relperm) {
     sYmm = true;
   }
 
@@ -69,7 +69,7 @@ public:
           auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
 
           for (int cc = 0; cc != nb_col_dofs; cc++) {
-            locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
+            locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a * relPerm;
 
             // move to the derivatives of the next base functions on column
             ++t_col_diff_base;
@@ -99,6 +99,7 @@ public:
 
 private:
   MatrixDouble locLhs, transLocLhs;
+  double relPerm;
 };
 
 struct OpDomainRhsVectorF : public OpFaceEle {
