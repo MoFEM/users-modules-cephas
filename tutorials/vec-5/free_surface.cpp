@@ -209,11 +209,11 @@ auto d_cut_off = [](const double h) {
 };
 
 auto phase_function = [](const double h, const double diff, const double ave) {
-  return diff * cut_off(h) + ave;
+  return diff * h + ave;
 };
 
 auto d_phase_function_h = [](const double h, const double diff) {
-  return diff * d_cut_off(h);
+  return diff;
 };
 
 // order function (free energy)
@@ -224,18 +224,13 @@ auto get_f_dh = [](const double h) { return 4 * W * (3 * h * h - 1); };
 auto get_M0 = [](auto h) { return md; };
 auto get_M0_dh = [](auto h) { return 0; };
 
-auto get_M2 = [](auto h_tmp) {
-  const double h = cut_off(h_tmp);
+auto get_M2 = [](auto h) {
   return md * (1 - h * h);
 };
 
-auto get_M2_dh = [](auto h_tmp) {
-  const double h = cut_off(h_tmp);
-  return -md * 2 * h * d_cut_off(h_tmp);
-};
+auto get_M2_dh = [](auto h) { return -md * 2 * h; };
 
-auto get_M3 = [](auto h_tmp) {
-  const double h = cut_off(h_tmp);
+auto get_M3 = [](auto h) {
   const double h2 = h * h;
   const double h3 = h2 * h;
   if (h >= 0)
@@ -244,12 +239,11 @@ auto get_M3 = [](auto h_tmp) {
     return md * (-2 * h3 - 3 * h2 + 1);
 };
 
-auto get_M3_dh = [](auto h_tmp) {
-  const double h = cut_off(h_tmp);
+auto get_M3_dh = [](auto h) {
   if (h >= 0)
-    return md * (6 * h * (h - 1)) * d_cut_off(h_tmp);
+    return md * (6 * h * (h - 1));
   else
-    return md * (-6 * h * (h + 1)) * d_cut_off(h_tmp);
+    return md * (-6 * h * (h + 1));
 };
 
 auto get_M = [](auto h) { return get_M0(h); };
@@ -1341,32 +1335,6 @@ MoFEMErrorCode FreeSurface::projectData() {
         MoFEMFunctionReturn(0);
       };
 
-      /**
-       * @brief cut-off values at nodes, i.e. abs("H") <= 1
-       *
-       */
-      auto cut_off_dofs = [&]() {
-        MoFEMFunctionBegin;
-
-        Range current_verts;
-        CHKERR bit_mng->getEntitiesByTypeAndRefLevel(bit(get_current_bit()),
-                                                     BitRefLevel().set(),
-                                                     MBVERTEX, current_verts);
-
-        auto cut_off_verts = [&](boost::shared_ptr<FieldEntity> ent_ptr) {
-          MoFEMFunctionBegin;
-          for (auto &h : ent_ptr->getEntFieldData()) {
-            h = cut_off(h);
-          }
-          MoFEMFunctionReturn(0);
-        };
-
-        auto field_blas = mField.getInterface<FieldBlas>();
-        CHKERR field_blas->fieldLambdaOnEntities(cut_off_verts, "H",
-                                                 &current_verts);
-        MoFEMFunctionReturn(0);
-      };
-
       auto solve = [&](auto S) {
         MoFEMFunctionBegin;
         CHKERR VecZeroEntries(S);
@@ -1475,7 +1443,6 @@ MoFEMErrorCode FreeSurface::projectData() {
         CHKERR field_blas->fieldLambdaOnEntities(zero_dofs, f);
       }
       CHKERR DMoFEMMeshToLocalVector(subdm, D, INSERT_VALUES, SCATTER_REVERSE);
-      CHKERR cut_off_dofs();
     }
 
     MoFEMFunctionReturn(0);
@@ -2364,8 +2331,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
 
     // Add monitor to time solver
     double ftime = 1;
-    // CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
-    // CHKERR TSSetSolution(ts, ptr->globSol);
     CHKERR TSSetFromOptions(ts);
     CHKERR ptr->tsSetUp(ts);
     CHKERR TSSetUp(ts);
