@@ -13,6 +13,7 @@
 using namespace MoFEM;
 
 //! [Define dimension]
+constexpr int BASE_DIM = 1; //< Dimension of the base functions
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 constexpr AssemblyType A = (SCHUR_ASSEMBLE)
@@ -30,9 +31,9 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
-    I>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+    I>::OpGradSymTensorGrad<BASE_DIM, SPACE_DIM, SPACE_DIM, 0>;
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
-    I>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+    I>::OpGradTimesSymTensor<BASE_DIM, SPACE_DIM, SPACE_DIM>;
 
 struct DomainBCs {};
 struct BoundaryBCs {};
