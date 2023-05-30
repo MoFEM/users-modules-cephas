@@ -490,8 +490,6 @@ private:
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
 
-  MoFEMErrorCode allBoundaryWet(BitRefLevel bit, BitRefLevel mask);
-
   /// @brief Find entities on refinement levels
   /// @param overlap level of overlap
   /// @return
@@ -875,7 +873,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   CHKERR reset_bits();
   CHKERR solve_init(
       [](FEMethod *fe_ptr) { return get_fe_bit(fe_ptr).test(0); });
-  CHKERR allBoundaryWet(bit(0), BitRefLevel().set());
   CHKERR refineMesh(refine_overlap);
 
   for (auto f : {"U", "P", "H", "G", "L"}) {
@@ -884,7 +881,6 @@ MoFEMErrorCode FreeSurface::boundaryCondition() {
   CHKERR solve_init([](FEMethod *fe_ptr) {
     return get_fe_bit(fe_ptr).test(get_start_bit() + nb_levels - 1);
   });
-  CHKERR allBoundaryWet(get_start_bit() + nb_levels - 1, BitRefLevel().set());
 
   CHKERR post_proc([](FEMethod *fe_ptr) {
     return get_fe_bit(fe_ptr).test(get_start_bit() + nb_levels - 1);
@@ -2392,56 +2388,6 @@ MoFEMErrorCode FreeSurface::solveSystem() {
     CHKERR print_fields_in_section();
 
     CHKERR TSSolve(ts, ptr->globSol);
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode FreeSurface::allBoundaryWet(BitRefLevel bit, BitRefLevel mask) {
-  MoFEMFunctionBegin;
-
-  PetscBool all_boundary_wet = PETSC_FALSE;
-  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-all_boundary_wet",
-                             &all_boundary_wet, PETSC_NULL);
-  if (all_boundary_wet) {
-
-    moab::Skinner skinner(&mField.get_moab());
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-
-    auto get_bit_ents = [&](BitRefLevel bit, BitRefLevel mask) {
-      Range bit_skin;
-      for (auto m : mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
-               std::regex(
-
-                   (boost::format("%s(.*)") % "ALL_WET").str()
-
-                       ))
-
-      ) {
-        auto meshset = m->getMeshset();
-        Range wet_ents;
-        CHKERR mField.get_moab().get_entities_by_dimension(
-            meshset, SPACE_DIM - 1, wet_ents, true);
-        bit_skin.merge(wet_ents);
-      }
-
-      CHKERR mField.getInterface<BitRefManager>()->filterEntitiesByRefLevel(
-          bit, mask, bit_skin);
-
-      return bit_skin;
-    };
-
-    auto skin_ents = get_bit_ents(bit, mask);
-    Range skin_verts;
-    CHKERR mField.get_moab().get_connectivity(skin_ents, skin_verts, true);
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
-        skin_verts);
-    // FIXME: Add faces in edges
-    skin_ents.merge(skin_verts);
-
-    auto field_blas = mField.getInterface<FieldBlas>();
-    CHKERR field_blas->setField(-1, MBVERTEX, skin_verts, "H");
   }
 
   MoFEMFunctionReturn(0);
