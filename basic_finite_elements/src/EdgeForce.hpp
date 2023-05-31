@@ -103,8 +103,16 @@ struct MetaEdgeForces {
     edge_forces.insert(fe_name, new EdgeForce(m_field));
     if (m_field.check_field(mesh_node_positions)) {
       auto &fe = edge_forces.at(fe_name).getLoopFe();
-      fe.getOpPtrVector().push_back(
-          new OpGetHOTangentsOnEdge(mesh_node_positions));
+      auto field_ptr = m_field.get_field_structure(field_name);
+      const int nb_coefficients = field_ptr->getNbOfCoeffs();
+      if (nb_coefficients == 3) {
+        fe.getOpPtrVector().push_back(
+            new OpGetHOTangentsOnEdge<3>(mesh_node_positions));
+      }
+      else if (nb_coefficients == 2) {
+        fe.getOpPtrVector().push_back(
+            new OpGetHOTangentsOnEdge<2>(mesh_node_positions));
+      }
     }
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
                                                     it)) {
