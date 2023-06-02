@@ -95,9 +95,6 @@ MoFEMErrorCode Electrostatic2DHomogeneous::setupProblem() {
     }
   }
 
-  cout << interface_ents.size() << endl;
-
-
 
   CHKERR mField.add_finite_element("INTERFACE");
   CHKERR mField.modify_finite_element_add_field_row("INTERFACE", field_name);

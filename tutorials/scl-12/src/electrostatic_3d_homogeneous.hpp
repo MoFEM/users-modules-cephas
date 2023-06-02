@@ -206,7 +206,7 @@ public:
 
     for (size_t gg = 0; gg < nb_gauss_pts; gg++) {
       for (size_t i = 0; i < 3; i++) {
-        (*gradUNeg)(i, gg) = -(*gradU)(i, gg);//gg->OpRow;
+        (*gradUNeg)(i, gg) = -(*gradU)(i, gg);//gg->OpRow
       }
     }
 

@@ -7,7 +7,9 @@
  *
  */
 
+constexpr auto domainField = "U";
 #include <BasicFiniteElements.hpp>
+#include <PoissonOperators.hpp>
 #include <electrostatic_3d_homogeneous.hpp>
 
 using namespace MoFEM;
@@ -39,14 +41,17 @@ private:
   MoFEM::Interface &mField;
   Simple *simpleInterface;
 
+  boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe; //
   // Field name and approximation order
   std::string domainField;
   int oRder;
 };
 
-Electrostatic3DHomogeneous::Electrostatic3DHomogeneous(MoFEM::Interface &m_field)
+Electrostatic3DHomogeneous::Electrostatic3DHomogeneous(
+    MoFEM::Interface &m_field)
     : domainField("U"), mField(m_field) {}
 
+//! [Read mesh]
 MoFEMErrorCode Electrostatic3DHomogeneous::readMesh() {
   MoFEMFunctionBegin;
 
@@ -57,6 +62,7 @@ MoFEMErrorCode Electrostatic3DHomogeneous::readMesh() {
   MoFEMFunctionReturn(0);
 }
 
+//! [Setup problem]
 MoFEMErrorCode Electrostatic3DHomogeneous::setupProblem() {
   MoFEMFunctionBegin;
 
@@ -68,10 +74,42 @@ MoFEMErrorCode Electrostatic3DHomogeneous::setupProblem() {
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
 
   CHKERR simpleInterface->setUp();
+  Range interface_ents;
+
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+
+    if (bit->getName().compare(0, 9, "INTERFACE") == 0) {
+      const int id = bit->getMeshsetId();
+      cout << bit->getMeshsetId() << endl;
+      Range ents;
+      CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), 2,
+                                                         ents, true);                                               
+      interface_ents.merge(ents);
+    }
+  }
+
+  CHKERR mField.add_finite_element("INTERFACE");
+  CHKERR mField.modify_finite_element_add_field_row("INTERFACE", domainField);
+  CHKERR mField.modify_finite_element_add_field_col("INTERFACE", domainField);
+  CHKERR mField.modify_finite_element_add_field_data("INTERFACE", domainField);
+  CHKERR mField.add_ents_to_finite_element_by_dim(interface_ents, 2,
+                                                  "INTERFACE");
+
+  CHKERR simpleInterface->defineFiniteElements();
+  CHKERR simpleInterface->defineProblem(PETSC_TRUE);
+  CHKERR simpleInterface->buildFields();
+  CHKERR simpleInterface->buildFiniteElements();
+
+  CHKERR mField.build_finite_elements("INTERFACE");
+  CHKERR DMMoFEMAddElement(simpleInterface->getDM(), "INTERFACE");
+
+  CHKERR simpleInterface->buildProblem();
+
+  // CHKERR simpleInterface->setUp();
 
   MoFEMFunctionReturn(0);
 }
-
+//! [Boundary condition]
 MoFEMErrorCode Electrostatic3DHomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
@@ -98,8 +136,9 @@ MoFEMErrorCode Electrostatic3DHomogeneous::assembleSystem() {
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
     CHKERR AddHOOps<3, 3, 3>::add(pipeline_mng->getOpDomainLhsPipeline(), {H1});
+    double Permittivity = 2.5;
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK(domainField, domainField));
+        new OpDomainLhsMatrixK(domainField, domainField, Permittivity));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
@@ -135,8 +174,20 @@ MoFEMErrorCode Electrostatic3DHomogeneous::assembleSystem() {
     set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
     calculate_residual_from_set_values_on_bc(
         pipeline_mng->getOpDomainRhsPipeline());
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDomainRhsVectorF(domainField));
+
+    // pipeline_mng->getOpDomainRhsPipeline().push_back(
+    //     new OpDomainRhsVectorF(domainField));
+
+    interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
+        new FaceElementForcesAndSourcesCore(mField)); ///
+    // CHKERR AddHOOps<1, space_dim, space_dim>::add(
+    //     interface_rhs_fe->getOpPtrVector(), {H1});
+    double chargeDens = 2.5;
+    interface_rhs_fe->getOpPtrVector().push_back(
+    new OpInterfaceRhsVectorF(domainField, chargeDens));
+    // double chargeDens = 2.5;
+    // pipeline_mng->getOpDomainRhsPipeline().push_back(
+    //     new OpInterfaceRhsVectorF(domainField, chargeDens));
   }
 
   MoFEMFunctionReturn(0);
@@ -161,6 +212,15 @@ MoFEMErrorCode Electrostatic3DHomogeneous::solveSystem() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto ksp_solver = pipeline_mng->createKSP();
+
+  boost::shared_ptr<ForcesAndSourcesCore> null; ///< Null element does nothing
+  CHKERR DMMoFEMKSPSetComputeRHS(simpleInterface->getDM(), "INTERFACE",
+                                 interface_rhs_fe, null, null);
+
+  pipeline_mng->getDomainLhsFE().reset();
+
+  auto post_proc_fe = boost::make_shared<PostProcVolEle>(mField); ///
+
   CHKERR KSPSetFromOptions(ksp_solver);
   CHKERR KSPSetUp(ksp_solver);
 
@@ -188,25 +248,52 @@ MoFEMErrorCode Electrostatic3DHomogeneous::outputResults() {
 
   auto post_proc_fe = boost::make_shared<PostProcVolEle>(mField);
 
+  auto det_ptr = boost::make_shared<VectorDouble>();
+  auto jac_ptr = boost::make_shared<MatrixDouble>();
+  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+  constexpr auto SPACE_DIM = 3; // dimension of problem
+
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
+
   auto u_ptr = boost::make_shared<VectorDouble>();
+  auto grad_u_ptr = boost::make_shared<MatrixDouble>();
+
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateScalarFieldValues(domainField, u_ptr));
-
-  using OpPPMap = OpPostProcMapInMoab<3, 3>;
-
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldGradient<SPACE_DIM>(domainField, grad_u_ptr));
+  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+  
+  // boost::shared_ptr<MatrixDouble> neg_grad_u_ptr;
+  // neg_grad_u_ptr = boost::make_shared<MatrixDouble>(*grad_u_ptr);
+  // auto negative_gradient_op = boost::make_shared<OpNegativeGradient>(neg_grad_u_ptr);
+  // post_proc_fe->getOpPtrVector().push_back(negative_gradient_op);
+  
+  auto neg_grad_u_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpNegativeGradient(neg_grad_u_ptr, grad_u_ptr));
+      //  new OpNegativeGradient<SPACE_DIM>(neg_grad_u_ptr, grad_u_ptr));
+     
   post_proc_fe->getOpPtrVector().push_back(
 
-      new OpPPMap(
+      new OpPPMap(post_proc_fe->getPostProcMesh(),
+                  post_proc_fe->getMapGaussPts(),
 
-          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+                  OpPPMap::DataMapVec{{"U", u_ptr}},
 
-          {{domainField, u_ptr}},
+                  OpPPMap::DataMapMat{{"ELECTRIC FILED", neg_grad_u_ptr}},
 
-          {},
+                  OpPPMap::DataMapMat{},
 
-          {},
+                  OpPPMap::DataMapMat{}
 
-          {})
+                  )
 
   );
 
