@@ -5,6 +5,9 @@
  * \example ContactOps.hpp
  */
 
+#ifndef __CONTACTOPS_HPP__
+#define __CONTACTOPS_HPP__
+
 namespace ContactOps {
 
 //! [Common data]
@@ -32,13 +35,17 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   }
 
   static auto getFTensor1TotalTraction() {
-    const double *t_ptr;
-    CHK_THROW_MESSAGE(VecGetArrayRead(CommonData::totalTraction, &t_ptr),
-                      "get array");
-    FTensor::Tensor1<double, 3> t{t_ptr[0], t_ptr[1], t_ptr[2]};
-    CHK_THROW_MESSAGE(VecRestoreArrayRead(CommonData::totalTraction, &t_ptr),
-                      "restore array");
-    return t;
+    if (CommonData::totalTraction) {
+      const double *t_ptr;
+      CHK_THROW_MESSAGE(VecGetArrayRead(CommonData::totalTraction, &t_ptr),
+                        "get array");
+      FTensor::Tensor1<double, 3> t{t_ptr[0], t_ptr[1], t_ptr[2]};
+      CHK_THROW_MESSAGE(VecRestoreArrayRead(CommonData::totalTraction, &t_ptr),
+                        "restore array");
+      return t;
+    } else {
+      return FTensor::Tensor1<double, 3>{0, 0, 0};
+    }
   }
 
   inline auto mDPtr() {
@@ -208,6 +215,7 @@ using HessSurfaceDistanceFunction =
 
 inline double surface_distance_function(double t, double x, double y, double z,
                                         double tx, double ty, double tz) {
+
 #ifdef PYTHON_SFD
   if (auto sdf_ptr = sdfPythonWeakPtr.lock()) {
     double sdf;
@@ -690,3 +698,5 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
 }
 
 }; // namespace ContactOps
+
+#endif // __CONTACTOPS_HPP__
