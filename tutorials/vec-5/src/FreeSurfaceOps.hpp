@@ -163,8 +163,7 @@ struct OpWettingAngleRhs : public AssemblyBoundaryEleOp {
 
       const double r = t_coords(0);
       const double alpha = t_w * cylindrical(r) * area;
-      const double h_grad_norm = sqrt(t_grad_h(i) * t_grad_h(i) +
-                                      std::numeric_limits<double>::epsilon());
+      const double h_grad_norm = sqrt(t_grad_h(i) * t_grad_h(i) + eps);
       const double cos_angle = std::cos(M_PI * wettingAngle / 180);
       const double rhs_wetting = s * eta2 * h_grad_norm * cos_angle;
 
@@ -292,8 +291,7 @@ struct OpWettingAngleLhs : public BoundaryEleOp {
 
         const double r = t_coords(0);
         const double alpha = t_w * area * cylindrical(r);
-        const double h_grad_norm = sqrt(t_grad_h(i) * t_grad_h(i) +
-                                        std::numeric_limits<double>::epsilon());
+        const double h_grad_norm = sqrt(t_grad_h(i) * t_grad_h(i) + eps);
         const double one_over_h_grad_norm = 1. / h_grad_norm;
         const double beta = s * alpha * eta2 * one_over_h_grad_norm *
                             std::cos(M_PI * wettingAngle / 180);
@@ -306,7 +304,7 @@ struct OpWettingAngleLhs : public BoundaryEleOp {
           auto t_col_diff_base = getFTensor1FromPtr<SPACE_DIM>(ptr);
 
           for (int cc = 0; cc != col_size; ++cc) {
-            locMat(rr, cc) += delta * t_col_diff_base(i) * t_grad_h(i);
+            locMat(rr, cc) += t_col_diff_base(i) * (delta * t_grad_h(i));
             ++t_col_diff_base;
           }
           ++t_row_base;
