@@ -475,7 +475,8 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
             //   CHKERR function(dm, element_name.c_str(), method, method, method);
             // };
 
-            auto set_neumann_methods = [&](auto &neumann_el, string hist_name) {
+            auto set_neumann_methods = [&](auto &neumann_el, string hist_name,
+                                           bool add_ho_ops) {
               MoFEMFunctionBeginHot;
               for (auto &&mit : neumann_el) {
                 if constexpr (std::is_same_v<T, SNES>)
@@ -485,19 +486,22 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                   mit->second->methodsOp.push_back(
                       new TimeForceScale(getHistoryParam(hist_name), false));
                 string element_name = mit->first;
-                CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
-                                      mit->second->getLoopFe(), false, false);
-                // CHKERR push_fmethods(&mit->second->getLoopFe(), element_name);
+                if (add_ho_ops) {
+                  CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
+                                        mit->second->getLoopFe(), false, false);
+                }
+                // CHKERR push_fmethods(&mit->second->getLoopFe(),
+                // element_name);
                 CHKERR function(dM, element_name.c_str(),
                                 &mit->second->getLoopFe(), NULL, NULL);
               }
               MoFEMFunctionReturnHot(0);
             };
 
-            CHKERR set_neumann_methods(neumann_forces, "force");
-            CHKERR set_neumann_methods(nodal_forces, "force");
-            CHKERR set_neumann_methods(edge_forces, "force");
-
+            CHKERR set_neumann_methods(neumann_forces, "force", true);
+            CHKERR set_neumann_methods(nodal_forces, "force", false);
+            //FIXME: are HO Ops needed for edges?
+            CHKERR set_neumann_methods(edge_forces, "force", false);
 
             CHKERR function(dM, domainElementName.c_str(), dirichletBcPtr.get(),
                             dirichletBcPtr.get(), dirichletBcPtr.get());
