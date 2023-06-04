@@ -60,6 +60,55 @@ else (Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
 
 endif(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
 
+set(IS_MFRONT_MOD false)  
+
+# Add mfront interface
+# if(MFRONT_INTERFACE_DIR) #in spack
+if(MFRONT_INTERFACE_INSTALL_PREFIX)
+  include(${MFRONT_INTERFACE_INSTALL_PREFIX}/mfront_interface/mfront_interface_all_targets.cmake)
+  include_directories(${MFRONT_INTERFACE_INSTALL_PREFIX}/mfront_interface/src)
+  set(IS_MFRONT_MOD true)  
+  else(MFRONT_INTERFACE_INSTALL_PREFIX)
+if(EXISTS ${PROJECT_SOURCE_DIR}/mfront_interface/src)
+  include_directories(${PROJECT_SOURCE_DIR}/mfront_interface/src)
+  set(IS_MFRONT_MOD true)  
+  endif()
+endif(MFRONT_INTERFACE_INSTALL_PREFIX)
+
+if(IS_MFRONT_MOD)
+  message("WITH MFRONT")
+  target_link_libraries(contact_2d
+    mfront_lib_all)
+  target_link_libraries(contact_3d
+    mfront_lib_all)
+endif(IS_MFRONT_MOD)
+
+target_link_libraries(contact_2d
+  users_modules
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  mofem_matrix_function
+  mofem_post_proc
+  mofem_boundary_conditions
+${MoFEM_PROJECT_LIBS})
+
+target_link_libraries(contact_3d
+  users_modules
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  mofem_matrix_function
+  mofem_post_proc
+  mofem_boundary_conditions
+${MoFEM_PROJECT_LIBS})
+
 add_test(
   contact_2d
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1

@@ -14,6 +14,9 @@
 #include <MoFEM.hpp>
 #include <MatrixFunction.hpp>
 
+#include <BasicFiniteElements.hpp>
+#include <MFrontMoFEMInterface.hpp>
+
 #ifdef PYTHON_SFD
 #include <boost/python.hpp>
 #include <boost/python/def.hpp>
@@ -112,7 +115,7 @@ MoFEMErrorCode addMatBlockOps(
 
 }; // namespace ContactOps
 
-constexpr bool is_quasi_static = true;
+constexpr PetscBool is_quasi_static = PETSC_TRUE;
 
 int order = 2;
 int geom_order = 1; 
@@ -120,9 +123,12 @@ double young_modulus = 100;
 double poisson_ratio = 0.25;
 double rho = 0.0;
 double cn = 0.1;
-double spring_stiffness = 0.1;
+double spring_stiffness = 0.0;
 
 double alpha_dumping = 0;
+
+bool use_mfront = true;
+bool axisymmetry = false;
 
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
@@ -154,6 +160,8 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
+
+  boost::shared_ptr<GenericElementInterface> mfrontInterface;
 
 #ifdef PYTHON_SFD
   boost::shared_ptr<SDFPython> sdfPythonPtr;
@@ -272,7 +280,29 @@ MoFEMErrorCode Contact::setupProblem() {
   CHKERR simple->setFieldOrder("SIGMA", 0);
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
 
-  CHKERR simple->setUp();
+  if (!use_mfront) {
+    CHKERR simple->setUp();
+  } else {
+
+    mfrontInterface =
+        boost::make_shared<MFrontMoFEMInterface<PLANESTRAIN>>(
+            mField, "U", "GEOMETRY", true, is_quasi_static);
+    
+    CHKERR mfrontInterface->getCommandLineParameters();
+    CHKERR mfrontInterface->addElementFields();
+    CHKERR mfrontInterface->createElements();
+
+    CHKERR simple->defineFiniteElements();
+    CHKERR simple->defineProblem(PETSC_TRUE);
+    CHKERR simple->buildFields();
+    CHKERR simple->buildFiniteElements();
+
+    CHKERR mField.build_finite_elements("MFRONT_EL");
+    CHKERR mfrontInterface->addElementsToDM(simple->getDM());
+
+    CHKERR simple->buildProblem();
+  }
+
 
   auto project_ho_geometry = [&]() {
     Projection10NodeCoordsOnField ent_method(mField, "GEOMETRY");
@@ -386,22 +416,24 @@ MoFEMErrorCode Contact::OPs() {
     CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC",
                           common_data_ptr->mDPtr(), Sev::verbose);
 
-    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", common_data_ptr->mGradPtr()));
-    pip.push_back(
-        new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(
-        new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(
-        new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(
-        new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(
-        new OpKPiola("U", "U", henky_common_data_ptr->getMatTangent()));
+    if (!use_mfront) {
+      pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+          "U", common_data_ptr->mGradPtr()));
+      pip.push_back(
+          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpKPiola("U", "U", henky_common_data_ptr->getMatTangent()));
+    }
 
-    if (!is_quasi_static) {
+    if (is_quasi_static != PETSC_TRUE) {
       auto get_inertia_and_mass_dumping = [this](const double, const double,
                                                  const double) {
         auto *pip_mng = mField.getInterface<PipelineManager>();
@@ -437,17 +469,28 @@ MoFEMErrorCode Contact::OPs() {
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", common_data_ptr->mGradPtr()));
 
-    pip.push_back(
-        new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(
-        new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(
-        new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(
-        new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
-    pip.push_back(new OpInternalForcePiola(
-        "U", henky_common_data_ptr->getMatFirstPiolaStress()));
+    if (!use_mfront) {
+      pip.push_back(
+          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pip.push_back(new OpInternalForcePiola(
+          "U", henky_common_data_ptr->getMatFirstPiolaStress()));
+    } else {
+
+      auto t_type = GenericElementInterface::IM2;
+      if (is_quasi_static == PETSC_TRUE)
+        t_type = GenericElementInterface::IM;
+
+      mfrontInterface->setOperators();
+      mfrontInterface->setupSolverFunctionTS(t_type);
+      mfrontInterface->setupSolverJacobianTS(t_type);
+    }
 
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", common_data_ptr->contactDispPtr()));
@@ -468,7 +511,7 @@ MoFEMErrorCode Contact::OPs() {
         new OpMixUTimesLambdaRhs("U", common_data_ptr->contactStressPtr()));
 
     // only in case of dynamics
-    if (!is_quasi_static) {
+    if (is_quasi_static != PETSC_TRUE) {
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
       pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
           "U", mat_acceleration));
@@ -606,8 +649,8 @@ MoFEMErrorCode Contact::tsSolve() {
 
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
-    boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, uXScatter, uYScatter, uZScatter));
+    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(
+        dm, uXScatter, uYScatter, uZScatter, use_mfront, mfrontInterface));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
@@ -655,7 +698,7 @@ MoFEMErrorCode Contact::tsSolve() {
   if (SPACE_DIM == 3)
     uZScatter = scatter_create(D, 2);
 
-  if (is_quasi_static) {
+  if (is_quasi_static == PETSC_TRUE) {
     auto solver = pip_mng->createTSIM();
     auto D = createDMVector(dm);
     CHKERR set_section_monitor(solver);

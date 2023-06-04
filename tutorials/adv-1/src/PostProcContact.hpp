@@ -30,9 +30,12 @@ struct Monitor : public FEMethod {
   Monitor(SmartPetscObj<DM> &dm,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter,
+          bool use_mfront = false,
+          boost::shared_ptr<GenericElementInterface> mfront_interface = nullptr)
       : dM(dm), uXScatter(ux_scatter), uYScatter(uy_scatter),
-        uZScatter(uz_scatter), moabVertex(mbVertexPostproc), sTEP(0) {
+        uZScatter(uz_scatter), moabVertex(mbVertexPostproc), sTEP(0),
+        useMFront(use_mfront), mfrontInterface(mfront_interface) {
 
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
@@ -204,13 +207,20 @@ struct Monitor : public FEMethod {
       return integrate_traction;
     };
 
-    postProcDomainFe = get_post_proc_domain_fe();
-    if constexpr (SPACE_DIM == 2)
-      postProcBdyFe = get_post_proc_bdy_fe();
+    if (!useMFront) {
+      postProcDomainFe = get_post_proc_domain_fe();
+      if constexpr (SPACE_DIM == 2)
+        postProcBdyFe = get_post_proc_bdy_fe();
+    }
+
     integrateTraction = get_integrate_traction();
   }
 
-  MoFEMErrorCode preProcess() { return 0; }
+  MoFEMErrorCode preProcess() { 
+    MoFEMFunctionBegin;
+      mfront_dt = ts_dt;
+    MoFEMFunctionReturn(0);
+  }
   MoFEMErrorCode operator()() { return 0; }
 
   MoFEMErrorCode postProcess() {
@@ -221,23 +231,32 @@ struct Monitor : public FEMethod {
     auto post_proc = [&]() {
       MoFEMFunctionBegin;
 
-      auto post_proc_begin =
-          boost::make_shared<PostProcBrokenMeshInMoabBaseBegin>(*m_field_ptr,
+      if (!use_mfront) {
+        auto post_proc_begin =
+            boost::make_shared<PostProcBrokenMeshInMoabBaseBegin>(*m_field_ptr,
+                                                                  postProcMesh);
+        auto post_proc_end =
+            boost::make_shared<PostProcBrokenMeshInMoabBaseEnd>(*m_field_ptr,
                                                                 postProcMesh);
-      auto post_proc_end = boost::make_shared<PostProcBrokenMeshInMoabBaseEnd>(
-          *m_field_ptr, postProcMesh);
 
-      CHKERR DMoFEMPreProcessFiniteElements(dM, post_proc_begin->getFEMethod());
-      if (!postProcBdyFe) {
-        CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcDomainFe);
+        CHKERR DMoFEMPreProcessFiniteElements(dM,
+                                              post_proc_begin->getFEMethod());
+        if (!postProcBdyFe) {
+          CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcDomainFe);
+        } else {
+          CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcDomainFe);
+          CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcBdyFe);
+        }
+        CHKERR DMoFEMPostProcessFiniteElements(dM,
+                                               post_proc_end->getFEMethod());
+
+        CHKERR post_proc_end->writeFile(
+            "out_contact_" + boost::lexical_cast<std::string>(sTEP) + ".h5m");
       } else {
-        CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcDomainFe);
-        CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcBdyFe);
+        mfrontInterface->updateElementVariables();
+        mfrontInterface->postProcessElement(ts_step);
       }
-      CHKERR DMoFEMPostProcessFiniteElements(dM, post_proc_end->getFEMethod());
 
-      CHKERR post_proc_end->writeFile(
-          "out_contact_" + boost::lexical_cast<std::string>(sTEP) + ".h5m");
       MoFEMFunctionReturn(0);
     };
 
@@ -314,6 +333,9 @@ private:
   double lastTime;
   double deltaTime;
   int sTEP;
+  bool useMFront;
+
+  boost::shared_ptr<GenericElementInterface> mfrontInterface;
 };
 
 } // namespace ContactOps
