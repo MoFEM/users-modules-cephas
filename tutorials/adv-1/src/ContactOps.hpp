@@ -44,7 +44,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
                         "restore array");
       return t;
     } else {
-      return FTensor::Tensor1<double, 3>{0, 0, 0};
+      return FTensor::Tensor1<double, 3>{0., 0., 0.};
     }
   }
 
@@ -213,6 +213,7 @@ using HessSurfaceDistanceFunction =
         double t, double x, double y, double z, double tx, double ty,
         double tz)>;
 
+
 inline double surface_distance_function(double t, double x, double y, double z,
                                         double tx, double ty, double tz) {
 
@@ -224,7 +225,7 @@ inline double surface_distance_function(double t, double x, double y, double z,
     return sdf;
   }
 #endif
-  return y + 0.5;
+  return y - 0.5 - t;
 }
 
 inline FTensor::Tensor1<double, 3>
