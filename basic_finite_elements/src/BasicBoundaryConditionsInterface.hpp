@@ -489,12 +489,12 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                 switch (dim) {
                 case 2:
                   CHKERR AddHOOps<2, 3, 3>::add(
-                      mit->second->getLoopFe().getOpPtrVector(), {H1},
+                      mit->second->getLoopFe().getOpPtrVector(), {},
                       meshNodeField);
                   break;
                 case 1:
                   CHKERR AddHOOps<1, 2, 2>::add(
-                      mit->second->getLoopFe().getOpPtrVector(), {H1},
+                      mit->second->getLoopFe().getOpPtrVector(), {},
                       meshNodeField);
                   break;
                 case 0:
