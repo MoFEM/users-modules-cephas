@@ -288,7 +288,8 @@ private:
 
 struct OpConstrainBoundaryRhs : public AssemblyBoundaryEleOp {
   OpConstrainBoundaryRhs(const std::string field_name,
-                         boost::shared_ptr<CommonData> common_data_ptr);
+                         boost::shared_ptr<CommonData> common_data_ptr,
+                         bool is_axisymmetric);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data);
 
   SurfaceDistanceFunction surfaceDistanceFunction = surface_distance_function;
@@ -297,12 +298,14 @@ struct OpConstrainBoundaryRhs : public AssemblyBoundaryEleOp {
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  bool isAxisymmetric;
 };
 
 struct OpConstrainBoundaryLhs_dU : public AssemblyBoundaryEleOp {
   OpConstrainBoundaryLhs_dU(const std::string row_field_name,
                             const std::string col_field_name,
-                            boost::shared_ptr<CommonData> common_data_ptr);
+                            boost::shared_ptr<CommonData> common_data_ptr,
+                            bool is_axisymmetric);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
@@ -313,12 +316,13 @@ struct OpConstrainBoundaryLhs_dU : public AssemblyBoundaryEleOp {
       hess_surface_distance_function;
 
   boost::shared_ptr<CommonData> commonDataPtr;
+  bool isAxisymmetric;
 };
 
 struct OpConstrainBoundaryLhs_dTraction : public AssemblyBoundaryEleOp {
   OpConstrainBoundaryLhs_dTraction(
       const std::string row_field_name, const std::string col_field_name,
-      boost::shared_ptr<CommonData> common_data_ptr);
+      boost::shared_ptr<CommonData> common_data_ptr, bool is_axisymmetric);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
@@ -328,6 +332,7 @@ struct OpConstrainBoundaryLhs_dTraction : public AssemblyBoundaryEleOp {
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  bool isAxisymmetric;
 };
 
 inline double sign(double x) {
@@ -412,9 +417,10 @@ MoFEMErrorCode OpAssembleTotalContactTraction::doWork(int side, EntityType type,
 }
 
 OpConstrainBoundaryRhs::OpConstrainBoundaryRhs(
-    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
+    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr,
+    bool is_axisymmetric = false)
     : AssemblyBoundaryEleOp(field_name, field_name, DomainEleOp::OPROW),
-      commonDataPtr(common_data_ptr) {}
+      commonDataPtr(common_data_ptr), isAxisymmetric(is_axisymmetric) {}
 
 MoFEMErrorCode
 OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
@@ -498,10 +504,10 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
 
 OpConstrainBoundaryLhs_dU::OpConstrainBoundaryLhs_dU(
     const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> common_data_ptr)
+    boost::shared_ptr<CommonData> common_data_ptr, bool is_axisymmetric = false)
     : AssemblyBoundaryEleOp(row_field_name, col_field_name,
                             DomainEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {
+      commonDataPtr(common_data_ptr), isAxisymmetric(is_axisymmetric) {
   sYmm = false;
 }
 
@@ -605,10 +611,10 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
 
 OpConstrainBoundaryLhs_dTraction::OpConstrainBoundaryLhs_dTraction(
     const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> common_data_ptr)
+    boost::shared_ptr<CommonData> common_data_ptr, bool is_axisymmetric = false)
     : AssemblyBoundaryEleOp(row_field_name, col_field_name,
                             DomainEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {
+      commonDataPtr(common_data_ptr), isAxisymmetric(is_axisymmetric) {
   sYmm = false;
 }
 
