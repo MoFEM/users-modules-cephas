@@ -35,6 +35,8 @@ if(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
   tutorials_build_and_install(
     contact_3d ${CMAKE_CURRENT_SOURCE_DIR}/contact.cpp)
 
+  message("WITH PYTHON")
+
   set_target_properties(
     contact_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DPYTHON_SFD") 
   set_target_properties(

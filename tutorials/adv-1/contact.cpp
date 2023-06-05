@@ -128,7 +128,7 @@ double spring_stiffness = 0.0;
 double alpha_dumping = 0;
 
 bool use_mfront = true;
-bool axisymmetry = false;
+bool is_axisymmetric = false;
 
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
@@ -284,10 +284,21 @@ MoFEMErrorCode Contact::setupProblem() {
     CHKERR simple->setUp();
   } else {
 
-    mfrontInterface =
-        boost::make_shared<MFrontMoFEMInterface<PLANESTRAIN>>(
+    if (SPACE_DIM == 3) {
+      mfrontInterface =
+          boost::make_shared<MFrontMoFEMInterface<TRIDIMENSIONAL>>(
+              mField, "U", "GEOMETRY", true, is_quasi_static);
+    } else if (SPACE_DIM == 2) {
+      if (is_axisymmetric) {
+        mfrontInterface =
+            boost::make_shared<MFrontMoFEMInterface<AXISYMMETRICAL>>(
+                mField, "U", "GEOMETRY", true, is_quasi_static);
+      } else {
+        mfrontInterface = boost::make_shared<MFrontMoFEMInterface<PLANESTRAIN>>(
             mField, "U", "GEOMETRY", true, is_quasi_static);
-    
+      }
+    }
+
     CHKERR mfrontInterface->getCommandLineParameters();
     CHKERR mfrontInterface->addElementFields();
     CHKERR mfrontInterface->createElements();
@@ -400,6 +411,13 @@ MoFEMErrorCode Contact::OPs() {
   auto bc_mng = mField.getInterface<BcManager>();
   auto time_scale = boost::make_shared<TimeScale>();
 
+  auto cylindrical_jacobian = [&](const double r, const double, const double) {
+    if (is_axisymmetric)
+      return 2. * M_PI * r;
+    else 
+    return 1.;
+  };
+
   auto add_domain_base_ops = [&](auto &pip) {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
                                                           "GEOMETRY");
@@ -416,9 +434,10 @@ MoFEMErrorCode Contact::OPs() {
     CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC",
                           common_data_ptr->mDPtr(), Sev::verbose);
 
+    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "U", common_data_ptr->mGradPtr()));
+
     if (!use_mfront) {
-      pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-          "U", common_data_ptr->mGradPtr()));
       pip.push_back(
           new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
       pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
@@ -452,8 +471,10 @@ MoFEMErrorCode Contact::OPs() {
     }
 
     auto unity = []() { return 1; };
-    pip.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
-    pip.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
+    pip.push_back(
+        new OpMixDivULhs("SIGMA", "U", unity, true));
+    pip.push_back(
+        new OpLambdaGraULhs("SIGMA", "U", unity, true));
 
     pip.push_back(new OpUnSetBc("U"));
   };
@@ -481,16 +502,7 @@ MoFEMErrorCode Contact::OPs() {
           new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
       pip.push_back(new OpInternalForcePiola(
           "U", henky_common_data_ptr->getMatFirstPiolaStress()));
-    } else {
-
-      auto t_type = GenericElementInterface::IM2;
-      if (is_quasi_static == PETSC_TRUE)
-        t_type = GenericElementInterface::IM;
-
-      mfrontInterface->setOperators();
-      mfrontInterface->setupSolverFunctionTS(t_type);
-      mfrontInterface->setupSolverJacobianTS(t_type);
-    }
+    } 
 
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", common_data_ptr->contactDispPtr()));
@@ -595,6 +607,16 @@ MoFEMErrorCode Contact::OPs() {
   add_boundary_base_ops(pip_mng->getOpBoundaryRhsPipeline());
   CHKERR add_boundary_ops_lhs(pip_mng->getOpBoundaryLhsPipeline());
   CHKERR add_boundary_ops_rhs(pip_mng->getOpBoundaryRhsPipeline());
+
+  if (use_mfront) {
+    auto t_type = GenericElementInterface::IM2;
+    if (is_quasi_static == PETSC_TRUE)
+      t_type = GenericElementInterface::IM;
+
+    mfrontInterface->setOperators();
+    mfrontInterface->setupSolverFunctionTS(t_type);
+    mfrontInterface->setupSolverJacobianTS(t_type);
+  }
 
   auto integration_rule_vol = [](int, int, int approx_order) {
     return 2 * approx_order + geom_order - 1;
