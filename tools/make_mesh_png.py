@@ -9,35 +9,41 @@ import matplotlib.image as mpimg
     
 debug=True
 
-def make_png(file, d2, field): 
+def make_png(file, args): 
     my_cmap = plt.cm.get_cmap("turbo", 124)
     mesh = pv.read(file)
-    p = pv.Plotter(notebook=False, off_screen=True)
-    if field:
+    
+    if args.wrap_vector:
+        mesh = mesh.warp_by_vector(args.wrap_vector, factor=1)
+    
+    p = pv.Plotter(notebook=False, off_screen=True)    
+    if args.field:
         p.add_mesh(
             mesh, 
-            scalars=field, 
+            scalars=args.field, 
             show_edges=False, 
             smooth_shading=False, cmap=my_cmap) 
     else:
        p.add_mesh(
             mesh, 
             show_edges=True, edge_color='white', color='white') 
-    if d2:
-        p.camera_position = "xy"
-    p.camera.zoom(1.2)
-    image = p.screenshot('%spng' %file[:-3])
+    if args.d2:
+        p.camera_position = args.d2
+    p.camera.zoom(args.zoom)
+    image = p.screenshot('%spng' % file[:-3])
     
 def is_not_vtk(files):
     return not files.endswith('vtk')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description="Convert multiple h5m files to vtk files using the mbconvert tool (part of the MOAB library). The input files can be distributed between multiple processes to speed-up the conversion.")
+        description="Convert multiple vtk files to png files using the pyvista.")
     parser.add_argument(
         "files", help="list of vtk files or a regexp mask", nargs='+')
-    parser.add_argument('-d2', '--d2', dest='d2', action='store_true')
-    parser.add_argument('-f', '--field', dest='field', type=str)
+    parser.add_argument('-d2', '--d2', dest='d2', default='')
+    parser.add_argument('-f', '--field', dest='field', default='', type=str)
+    parser.add_argument('-wv', '--wrap_vector', dest='wrap_vector', default='', type=str)
+    parser.add_argument('--zoom', dest='zoom', default=1.2, type=str)
     args = parser.parse_args()
     
     if debug: 
@@ -48,8 +54,5 @@ if __name__ == '__main__':
     display.start()
     
     for f in args.files:
-        if 'field' in args:
-            make_png(f, args.d2, args.field)
-        else:
-            make_png(f, args.d2, '')    
+        make_png(f, args)
 

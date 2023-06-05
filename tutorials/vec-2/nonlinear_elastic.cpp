@@ -23,7 +23,8 @@ template <> struct ElementsAndOps<3> {
   using BoundaryEle = FaceElementForcesAndSourcesCore;
 };
 
-constexpr int SPACE_DIM = 3; //< Space dimension of problem, mesh
+constexpr int SPACE_DIM =
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -377,8 +378,10 @@ MoFEMErrorCode Example::solveSystem() {
 //! [Postprocessing results]
 MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
+  PetscInt test_nb = 0;
   PetscBool test_flg = PETSC_FALSE;
-  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test_flg, PETSC_NULL);
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-test", &test_nb, &test_flg);
+
   if (test_flg) {
     auto *simple = mField.getInterface<Simple>();
     auto T = createDMVector(simple->getDM());
@@ -387,7 +390,23 @@ MoFEMErrorCode Example::outputResults() {
     double nrm2;
     CHKERR VecNorm(T, NORM_2, &nrm2);
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Regression norm " << nrm2;
-    constexpr double regression_value = 1.09572;
+    double regression_value = 0;
+    switch (test_nb) {
+    case 1:
+      regression_value = 1.02789;
+      break;
+    case 2:
+      regression_value = 1.62454;
+      break;
+    case 3:
+      regression_value = 1.62454;
+      break;
+    
+    default:
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+              "Wrong test number.");
+      break;
+    }
     if (fabs(nrm2 - regression_value) > 1e-2)
       SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
               "Regression test field; wrong norm value.");

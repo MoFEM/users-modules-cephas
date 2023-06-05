@@ -734,10 +734,20 @@ MoFEMErrorCode Example::OPs() {
 
 //! [Solve]
 struct SetUpSchur {
+
+  /**
+   * @brief Create data structure for handling Schur complement
+   *
+   * @param m_field
+   * @param sub_dm  Schur complement sub dm
+   * @param field_split_it IS of Schur block
+   * @param ao_map AO map from sub dm to main problem
+   * @return boost::shared_ptr<SetUpSchur>
+   */
   static boost::shared_ptr<SetUpSchur> createSetUpSchur(
 
-      MoFEM::Interface &m_field, SmartPetscObj<DM>, SmartPetscObj<IS>,
-      SmartPetscObj<AO>
+      MoFEM::Interface &m_field, SmartPetscObj<DM> sub_dm,
+      SmartPetscObj<IS> field_split_it, SmartPetscObj<AO> ao_map
 
   );
   virtual MoFEMErrorCode setUp(KSP solver) = 0;
@@ -926,6 +936,7 @@ MoFEMErrorCode Example::tsSolve() {
       auto bc_mng = mField.getInterface<BcManager>();
       auto name_prb = simple->getProblemName();
 
+      // create sub dm to handle boundary conditions (least square)
       auto create_sub_bc_dm = [&](SmartPetscObj<DM> base_dm,
                                   SmartPetscObj<DM> &dm_sub,
                                   SmartPetscObj<IS> &is_sub,
@@ -965,10 +976,9 @@ MoFEMErrorCode Example::tsSolve() {
         MoFEMFunctionReturn(0);
       };
 
+      // create sub dm for Schur complement
       auto create_sub_u_dm = [&](SmartPetscObj<DM> base_dm,
-                                 SmartPetscObj<DM> &dm_sub,
-                                 SmartPetscObj<IS> &is_sub,
-                                 SmartPetscObj<AO> &ao_sub) {
+                                 SmartPetscObj<DM> &dm_sub) {
         MoFEMFunctionBegin;
         dm_sub = createDM(mField.get_comm(), "DMMOFEM");
         CHKERR DMMoFEMCreateSubDM(dm_sub, base_dm, "SUB_U");
@@ -981,24 +991,10 @@ MoFEMErrorCode Example::tsSolve() {
         }
         CHKERR DMSetUp(dm_sub);
 
-        auto *prb_ptr = getProblemPtr(dm_sub);
-        if (auto sub_data = prb_ptr->getSubData()) {
-          is_sub = sub_data->getSmartRowIs();
-          ao_sub = sub_data->getSmartRowMap();
-          // ISView(is_sub, PETSC_VIEWER_STDOUT_WORLD);
-          int is_sub_size;
-          CHKERR ISGetSize(is_sub, &is_sub_size);
-          MOFEM_LOG("EXAMPLE", Sev::inform)
-              << "Field split second block size " << is_sub_size;
-
-        } else {
-          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "No sub data");
-        }
-
-        CHKERR DMSetUp(dm_sub);
         MoFEMFunctionReturn(0);
       };
 
+      // get IS for all boundary conditions
       auto create_all_bc_is = [&](SmartPetscObj<IS> &is_all_bc) {
         MoFEMFunctionBegin;
         is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_X", "U", 0, 0);
@@ -1019,16 +1015,15 @@ MoFEMErrorCode Example::tsSolve() {
       SmartPetscObj<AO> ao_bc_sub;
 
       CHKERR create_all_bc_is(is_all_bc);
+      // note that Schur dm is sub dm for boundary conditions, i.e. is nested.
       CHKERR create_sub_bc_dm(simple->getDM(), dm_bc_sub, is_bc_sub, ao_bc_sub);
 
-      SmartPetscObj<IS> is_prb;
-      CHKERR mField.getInterface<ISManager>()->isCreateProblem(
-          simple->getProblemName(), ROW, is_prb);
-
+      // Create field split for boundary conditions
       CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
                                is_all_bc); // boundary block
       CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_bc_sub);
 
+      // Create nested (sub BC) Schur DM
       if constexpr (A == AssemblyType::SCHUR) {
 
         SmartPetscObj<IS> is_epp;
@@ -1042,21 +1037,20 @@ MoFEMErrorCode Example::tsSolve() {
         SmartPetscObj<IS> is_union(is_union_raw);
 
         SmartPetscObj<DM> dm_u_sub;
-        SmartPetscObj<IS> is_u_sub;
-        SmartPetscObj<AO> ao_u_sub;
-        CHKERR create_sub_u_dm(dm_bc_sub, dm_u_sub, is_u_sub, ao_u_sub);
+        CHKERR create_sub_u_dm(dm_bc_sub, dm_u_sub);
 
         // Indices has to be map fro very to level, while assembling Schur
         // complement.
-        auto is_up = is_u_sub;
+        auto is_up = getDMSubData(dm_u_sub)->getSmartRowIs();
         CHKERR AOPetscToApplicationIS(ao_bc_sub, is_up);
-        auto ao_up = createAOMappingIS(is_u_sub, PETSC_NULL);
+        auto ao_up = createAOMappingIS(is_up, PETSC_NULL);
         schur_ptr =
             SetUpSchur::createSetUpSchur(mField, dm_u_sub, is_union, ao_up);
         PetscInt n;
         KSP *ksps;
         CHKERR PCFieldSplitGetSubKSP(pc, &n, &ksps);
-        CHKERR schur_ptr->setUp(ksps[1]);
+        CHKERR schur_ptr->setUp(
+            ksps[1]); // note that FS is applied in second block of boundary BC
       }
     }
 
@@ -1137,6 +1131,8 @@ MoFEMErrorCode Example::tsSolve() {
   boost::shared_ptr<SetUpSchur> schur_ptr;
   CHKERR set_fieldsplit_preconditioner(solver, schur_ptr);
 
+  // Domain element is run first by TSSolber, thus run Schur pre-proc, which
+  // clears Schur complement matrix
   mField.getInterface<PipelineManager>()->getDomainLhsFE()->preProcessHook =
       [&]() {
         MoFEMFunctionBegin;
@@ -1145,15 +1141,14 @@ MoFEMErrorCode Example::tsSolve() {
         CHKERR active_pre_lhs();
         MoFEMFunctionReturn(0);
       };
+  // Do nothing, assemble after integrating boundary
   mField.getInterface<PipelineManager>()->getDomainLhsFE()->postProcessHook =
       [&]() {
         MoFEMFunctionBegin;
-        // if (schur_ptr)
-        //   CHKERR schur_ptr->postProc();
         CHKERR active_post_lhs();
         MoFEMFunctionReturn(0);
       };
-
+  // Assemble matrices in post-proc of boundary pipeline
   mField.getInterface<PipelineManager>()->getBoundaryLhsFE()->postProcessHook =
       [&]() {
         MoFEMFunctionBegin;
@@ -1235,9 +1230,9 @@ int main(int argc, char *argv[]) {
 struct SetUpSchurImpl : public SetUpSchur {
 
   SetUpSchurImpl(MoFEM::Interface &m_field, SmartPetscObj<DM> sub_dm,
-                 SmartPetscObj<IS> sub_is, SmartPetscObj<AO> sub_ao)
-      : SetUpSchur(), mField(m_field), subDM(sub_dm), subIS(sub_is),
-        subAO(sub_ao) {
+                 SmartPetscObj<IS> field_split_is, SmartPetscObj<AO> ao_up)
+      : SetUpSchur(), mField(m_field), subDM(sub_dm),
+        fieldSplitIS(field_split_is), aoUp(ao_up) {
     if (S) {
       CHK_THROW_MESSAGE(
           MOFEM_DATA_INCONSISTENCY,
@@ -1252,16 +1247,12 @@ struct SetUpSchurImpl : public SetUpSchur {
   MoFEMErrorCode postProc();
 
 private:
-  MoFEMErrorCode setOperator();
-  MoFEMErrorCode setPC(PC pc);
-
   SmartPetscObj<Mat> S;
-  SmartPetscObj<PC> smartPC;
 
   MoFEM::Interface &mField;
-  SmartPetscObj<DM> subDM;
-  SmartPetscObj<IS> subIS;
-  SmartPetscObj<AO> subAO;
+  SmartPetscObj<DM> subDM; ///< field split sub dm
+  SmartPetscObj<IS> fieldSplitIS; ///< IS for split Schur block
+  SmartPetscObj<AO> aoUp; ///> main DM to subDM
 };
 
 MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
@@ -1280,8 +1271,40 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
           "possible only is PC is set up twice");
     }
     S = createDMMatrix(subDM);
-    CHKERR setOperator();
-    CHKERR setPC(pc);
+
+    auto set_ops = [&]() {
+      MoFEMFunctionBegin;
+      auto pip = mField.getInterface<PipelineManager>();
+      // Boundary
+      pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
+      pip->getOpBoundaryLhsPipeline().push_back(
+          new OpSchurAssembleEnd<SCHUR_DGESV>(
+
+              {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), aoUp},
+              {SmartPetscObj<Mat>(), S}, {false, false}
+
+              ));
+      // Domain
+      pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
+      pip->getOpDomainLhsPipeline().push_back(
+          new OpSchurAssembleEnd<SCHUR_DGESV>(
+
+              {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), aoUp},
+              {SmartPetscObj<Mat>(), S}, {false, false}
+
+              ));
+      MoFEMFunctionReturn(0);
+    };
+
+    auto set_pc = [&]() {
+      MoFEMFunctionBegin;
+      CHKERR PCFieldSplitSetIS(pc, NULL, fieldSplitIS);
+      CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR set_ops();
+    CHKERR set_pc();
 
   } else {
     pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
@@ -1292,39 +1315,10 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
         new OpSchurAssembleEnd<SCHUR_DGESV>({}, {}, {}, {}, {}));
   }
 
+  // we do not those anymore
   subDM.reset();
-  subIS.reset();
-  subAO.reset();
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode SetUpSchurImpl::setOperator() {
-  MoFEMFunctionBegin;
-  auto pip = mField.getInterface<PipelineManager>();
-  // Boundary
-  pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
-  pip->getOpBoundaryLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DGESV>(
-
-      {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), subAO},
-      {SmartPetscObj<Mat>(), S}, {false, false}
-
-      ));
-  // Domain
-  pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
-  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DGESV>(
-
-      {"EP", "TAU"}, {nullptr, nullptr}, {SmartPetscObj<AO>(), subAO},
-      {SmartPetscObj<Mat>(), S}, {false, false}
-
-      ));
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode SetUpSchurImpl::setPC(PC pc) {
-  MoFEMFunctionBegin;
-  smartPC = SmartPetscObj<PC>(pc, true);
-  CHKERR PCFieldSplitSetIS(pc, NULL, subIS);
-  CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
+  fieldSplitIS.reset();
+  aoUp.reset();
   MoFEMFunctionReturn(0);
 }
 
@@ -1350,7 +1344,7 @@ MoFEMErrorCode SetUpSchurImpl::postProc() {
 boost::shared_ptr<SetUpSchur>
 SetUpSchur::createSetUpSchur(MoFEM::Interface &m_field,
                              SmartPetscObj<DM> sub_dm, SmartPetscObj<IS> is_sub,
-                             SmartPetscObj<AO> ao_sub) {
+                             SmartPetscObj<AO> ao_up) {
   return boost::shared_ptr<SetUpSchur>(
-      new SetUpSchurImpl(m_field, sub_dm, is_sub, ao_sub));
+      new SetUpSchurImpl(m_field, sub_dm, is_sub, ao_up));
 }
