@@ -27,7 +27,7 @@ using namespace MoFEM;
 
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType I =
-    IntegrationType::GAUSS; //< selected integration type
+    IntegrationType::GAUSS;                     //< selected integration type
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -59,10 +59,17 @@ constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
 //! [Operators used for contact]
 using OpMixDivULhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<I>::OpMixDivTimesVec<SPACE_DIM>;
+using OpMixDivUCylLhs = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<I>::OpMixDivTimesVec<SPACE_DIM, CYLINDRICAL>;
+
 using OpLambdaGraULhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<I>::OpMixTensorTimesGrad<SPACE_DIM>;
+
 using OpMixDivURhs = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
     GAUSS>::OpMixDivTimesU<3, SPACE_DIM, SPACE_DIM>;
+using OpMixDivUCylRhs = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
+    GAUSS>::OpMixDivTimesU<3, SPACE_DIM, SPACE_DIM, CYLINDRICAL>;
+
 using OpMixLambdaGradURhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<I>::OpMixTensorTimesGradU<SPACE_DIM>;
 using OpMixUTimesDivLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
@@ -118,7 +125,7 @@ MoFEMErrorCode addMatBlockOps(
 constexpr PetscBool is_quasi_static = PETSC_TRUE;
 
 int order = 2;
-int geom_order = 1; 
+int geom_order = 1;
 double young_modulus = 100;
 double poisson_ratio = 0.25;
 double rho = 0.0;
@@ -128,7 +135,7 @@ double spring_stiffness = 0.0;
 double alpha_dumping = 0;
 
 bool use_mfront = true;
-bool is_axisymmetric = false;
+bool is_axisymmetric = true;
 
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
@@ -227,7 +234,6 @@ MoFEMErrorCode Contact::setupProblem() {
                                   SPACE_DIM);
   CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
 
-
   CHKERR simple->setFieldOrder("U", order);
   // CHKERR simple->setFieldOrder("SIGMA", 0);
   CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
@@ -314,7 +320,6 @@ MoFEMErrorCode Contact::setupProblem() {
     CHKERR simple->buildProblem();
   }
 
-
   auto project_ho_geometry = [&]() {
     Projection10NodeCoordsOnField ent_method(mField, "GEOMETRY");
     return mField.loop_dofs("GEOMETRY", ent_method);
@@ -397,7 +402,8 @@ MoFEMErrorCode Contact::bC() {
   // corrupted.
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
-  boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE_"});
+  boundaryMarker =
+      bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE_"});
 
   MoFEMFunctionReturn(0);
 }
@@ -411,11 +417,11 @@ MoFEMErrorCode Contact::OPs() {
   auto bc_mng = mField.getInterface<BcManager>();
   auto time_scale = boost::make_shared<TimeScale>();
 
-  auto cylindrical_jacobian = [&](const double r, const double, const double) {
+  auto jacobian = [&](const double r, const double, const double) {
     if (is_axisymmetric)
       return 2. * M_PI * r;
-    else 
-    return 1.;
+    else
+      return 1.;
   };
 
   auto add_domain_base_ops = [&](auto &pip) {
@@ -461,8 +467,7 @@ MoFEMErrorCode Contact::OPs() {
       };
       pip.push_back(new OpMass("U", "U", get_inertia_and_mass_dumping));
     } else if (alpha_dumping > 0) {
-      auto get_mass_dumping = [this](const double, const double,
-                                      const double) {
+      auto get_mass_dumping = [this](const double, const double, const double) {
         auto *pip_mng = mField.getInterface<PipelineManager>();
         auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
         return alpha_dumping * fe_domain_lhs->ts_a;
@@ -471,10 +476,12 @@ MoFEMErrorCode Contact::OPs() {
     }
 
     auto unity = []() { return 1; };
-    pip.push_back(
-        new OpMixDivULhs("SIGMA", "U", unity, true));
-    pip.push_back(
-        new OpLambdaGraULhs("SIGMA", "U", unity, true));
+    if (!is_axisymmetric) {
+      pip.push_back(new OpMixDivULhs("SIGMA", "U", unity, jacobian, true));
+    } else {
+      pip.push_back(new OpMixDivUCylLhs("SIGMA", "U", unity, jacobian, true));
+    }
+    pip.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, jacobian, true));
 
     pip.push_back(new OpUnSetBc("U"));
   };
@@ -502,25 +509,36 @@ MoFEMErrorCode Contact::OPs() {
           new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
       pip.push_back(new OpInternalForcePiola(
           "U", henky_common_data_ptr->getMatFirstPiolaStress()));
-    } 
+    }
 
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", common_data_ptr->contactDispPtr()));
 
     pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
         "SIGMA", common_data_ptr->contactStressPtr()));
-    pip.push_back(new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-        "SIGMA", common_data_ptr->contactStressDivergencePtr()));
+    if (!is_axisymmetric) {
+      pip.push_back(new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
+          "SIGMA", common_data_ptr->contactStressDivergencePtr()));
+    } else {
+      pip.push_back(new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM,
+                                                        CYLINDRICAL>(
+          "SIGMA", common_data_ptr->contactStressDivergencePtr()));
+    }
 
-    pip.push_back(new OpMixDivURhs("SIGMA", common_data_ptr->contactDispPtr(),
-                                   [](double, double, double) { return 1; }));
-    pip.push_back(
-        new OpMixLambdaGradURhs("SIGMA", common_data_ptr->mGradPtr()));
+    if (!is_axisymmetric) {
+      pip.push_back(new OpMixDivURhs("SIGMA", common_data_ptr->contactDispPtr(),
+                                     jacobian));
+    } else {
+      pip.push_back(new OpMixDivUCylRhs(
+          "SIGMA", common_data_ptr->contactDispPtr(), jacobian));
+    }
+    pip.push_back(new OpMixLambdaGradURhs("SIGMA", common_data_ptr->mGradPtr(),
+                                          jacobian));
 
     pip.push_back(new OpMixUTimesDivLambdaRhs(
-        "U", common_data_ptr->contactStressDivergencePtr()));
-    pip.push_back(
-        new OpMixUTimesLambdaRhs("U", common_data_ptr->contactStressPtr()));
+        "U", common_data_ptr->contactStressDivergencePtr(), jacobian));
+    pip.push_back(new OpMixUTimesLambdaRhs(
+        "U", common_data_ptr->contactStressPtr(), jacobian));
 
     // only in case of dynamics
     if (is_quasi_static != PETSC_TRUE) {
@@ -559,9 +577,10 @@ MoFEMErrorCode Contact::OPs() {
     pip.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
         pip, mField, "U", Sev::inform);
-    pip.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", common_data_ptr));
-    pip.push_back(new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA",
-                                                       common_data_ptr));
+    pip.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", common_data_ptr,
+                                                is_axisymmetric));
+    pip.push_back(new OpConstrainBoundaryLhs_dTraction(
+        "SIGMA", "SIGMA", common_data_ptr, is_axisymmetric));
 
     if (spring_stiffness > 0)
       pip.push_back(new OpSpringLhs(
@@ -589,7 +608,8 @@ MoFEMErrorCode Contact::OPs() {
     pip.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
-    pip.push_back(new OpConstrainBoundaryRhs("SIGMA", common_data_ptr));
+    pip.push_back(
+        new OpConstrainBoundaryRhs("SIGMA", common_data_ptr, is_axisymmetric));
     if (spring_stiffness > 0)
       pip.push_back(new OpSpringRhs(
           "U", common_data_ptr->contactDispPtr(),
@@ -619,12 +639,12 @@ MoFEMErrorCode Contact::OPs() {
   }
 
   auto integration_rule_vol = [](int, int, int approx_order) {
-    return 2 * approx_order + geom_order - 1;
+    return 2 * approx_order + geom_order;
   };
   CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule_vol);
   CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule_vol);
   auto integration_rule_boundary = [](int, int, int approx_order) {
-    return 2 * approx_order + geom_order - 1;
+    return 2 * approx_order + geom_order;
   };
   CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
   CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
@@ -671,8 +691,9 @@ MoFEMErrorCode Contact::tsSolve() {
 
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
-    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(
-        dm, uXScatter, uYScatter, uZScatter, use_mfront, mfrontInterface));
+    boost::shared_ptr<Monitor> monitor_ptr(
+        new Monitor(dm, uXScatter, uYScatter, uZScatter, use_mfront,
+                    mfrontInterface, is_axisymmetric));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);

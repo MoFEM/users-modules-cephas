@@ -32,10 +32,12 @@ struct Monitor : public FEMethod {
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter,
           bool use_mfront = false,
-          boost::shared_ptr<GenericElementInterface> mfront_interface = nullptr)
+          boost::shared_ptr<GenericElementInterface> mfront_interface = nullptr,
+          bool is_axisymmetric = false)
       : dM(dm), uXScatter(ux_scatter), uYScatter(uy_scatter),
         uZScatter(uz_scatter), moabVertex(mbVertexPostproc), sTEP(0),
-        useMFront(use_mfront), mfrontInterface(mfront_interface) {
+        useMFront(use_mfront), mfrontInterface(mfront_interface),
+        isAxisymmetric(is_axisymmetric) {
 
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
@@ -200,9 +202,9 @@ struct Monitor : public FEMethod {
           new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
               "SIGMA", common_data_ptr->contactTractionPtr()));
       integrate_traction->getOpPtrVector().push_back(
-          new OpAssembleTotalContactTraction(common_data_ptr));
+          new OpAssembleTotalContactTraction(common_data_ptr, isAxisymmetric));
       integrate_traction->getRuleHook = [](int, int, int approx_order) {
-        return 2 * approx_order;
+        return 2 * approx_order + 1;
       };
       return integrate_traction;
     };
@@ -290,8 +292,9 @@ struct Monitor : public FEMethod {
       if (!m_field_ptr->get_comm_rank()) {
         const double *t_ptr;
         CHKERR VecGetArrayRead(CommonData::totalTraction, &t_ptr);
-        MOFEM_LOG_C("CONTACT", Sev::inform, "%s time %3.4e %3.4e %3.4e %3.4e",
-                    msg.c_str(), ts_t, t_ptr[0], t_ptr[1], t_ptr[2]);
+        MOFEM_LOG_C("CONTACT", Sev::inform,
+                    "%s time %3.4e %3.4e %3.4e %3.4e %3.4e", msg.c_str(), ts_t,
+                    t_ptr[0], t_ptr[1], t_ptr[2], t_ptr[3]);
         CHKERR VecRestoreArrayRead(CommonData::totalTraction, &t_ptr);
       }
       MoFEMFunctionReturn(0);
@@ -334,7 +337,7 @@ private:
   double deltaTime;
   int sTEP;
   bool useMFront;
-
+  bool isAxisymmetric;
   boost::shared_ptr<GenericElementInterface> mfrontInterface;
 };
 

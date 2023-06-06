@@ -24,13 +24,13 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   static SmartPetscObj<Vec> totalTraction;
 
   static auto createTotalTraction(MoFEM::Interface &m_field) {
-    constexpr int ghosts[] = {0, 1, 2};
+    constexpr int ghosts[] = {0, 1, 2, 3};
     totalTraction =
         createGhostVector(m_field.get_comm(),
 
-                               (m_field.get_comm_rank() == 0) ? 3 : 0, 3,
+                               (m_field.get_comm_rank() == 0) ? 4 : 0, 4,
 
-                               (m_field.get_comm_rank() == 0) ? 0 : 3, ghosts);
+                               (m_field.get_comm_rank() == 0) ? 0 : 4, ghosts);
     return totalTraction;
   }
 
@@ -279,11 +279,13 @@ private:
 #endif
 
 struct OpAssembleTotalContactTraction : public BoundaryEleOp {
-  OpAssembleTotalContactTraction(boost::shared_ptr<CommonData> common_data_ptr);
+  OpAssembleTotalContactTraction(boost::shared_ptr<CommonData> common_data_ptr,
+                                 bool is_axisymmetric);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  bool isAxisymmetric;
 };
 
 struct OpConstrainBoundaryRhs : public AssemblyBoundaryEleOp {
@@ -387,9 +389,9 @@ OpCalculateStressTraction::doWork(int side, EntityType type,
 #endif //__HENKY_OPS_HPP__
 
 OpAssembleTotalContactTraction::OpAssembleTotalContactTraction(
-    boost::shared_ptr<CommonData> common_data_ptr)
+    boost::shared_ptr<CommonData> common_data_ptr, bool is_axisymmetric = false)
     : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE),
-      commonDataPtr(common_data_ptr) {}
+      commonDataPtr(common_data_ptr), isAxisymmetric(is_axisymmetric) {}
 
 MoFEMErrorCode OpAssembleTotalContactTraction::doWork(int side, EntityType type,
                                                       EntData &data) {
@@ -400,17 +402,36 @@ MoFEMErrorCode OpAssembleTotalContactTraction::doWork(int side, EntityType type,
   auto t_w = getFTensor0IntegrationWeight();
   auto t_traction =
       getFTensor1FromMat<SPACE_DIM>(commonDataPtr->contactTraction);
+  auto t_coords = getFTensor1CoordsAtGaussPts();
+
+  double contact_area = 0;
 
   const auto nb_gauss_pts = getGaussPts().size2();
   for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
-    const double alpha = t_w * getMeasure();
+
+    double jacobian = 1.;
+    if (isAxisymmetric) {
+      jacobian = 2. * M_PI * t_coords(0);
+    }   
+
+    const double alpha = t_w * jacobian * getMeasure();
     t_sum_t(i) += alpha * t_traction(i);
+
+    double traction_norm = t_sum_t(i) * t_sum_t(i);
+    if (traction_norm > 1e-8) {
+      contact_area += alpha;
+    }
+
     ++t_w;
     ++t_traction;
+    ++t_coords;
   }
 
   constexpr int ind[] = {0, 1, 2};
   CHKERR VecSetValues(commonDataPtr->totalTraction, 3, ind, &t_sum_t(0),
+                      ADD_VALUES);
+  constexpr int ind3[] = {3};
+  CHKERR VecSetValues(commonDataPtr->totalTraction, 1, ind3, &contact_area,
                       ADD_VALUES);
 
   MoFEMFunctionReturn(0);
@@ -448,7 +469,13 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
                   std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
     auto t_nf = getFTensor1FromPtr<SPACE_DIM>(&nf[0]);
-    const double alpha = t_w * getMeasure();
+
+    double jacobian = 1.;
+    if (isAxisymmetric) {
+      jacobian = 2. * M_PI * t_coords(0);
+    }          
+    
+    const double alpha = t_w * jacobian * getMeasure();
 
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
@@ -539,7 +566,12 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
     t_normal(i) = t_normal_at_pts(i) /
                   std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
-    const double alpha = t_w * getMeasure();
+    double jacobian = 1.;
+    if (isAxisymmetric) {
+      jacobian = 2. * M_PI * t_coords(0);
+    }             
+
+    const double alpha = t_w * jacobian * getMeasure();
 
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
@@ -644,7 +676,12 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
     t_normal(i) = t_normal_at_pts(i) /
                   std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
-    const double alpha = t_w * getMeasure();
+    double jacobian = 1.;
+    if (isAxisymmetric) {
+      jacobian = 2. * M_PI * t_coords(0);
+    }                 
+
+    const double alpha = t_w * jacobian * getMeasure();
 
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
