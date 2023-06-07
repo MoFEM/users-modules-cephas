@@ -209,7 +209,7 @@ struct Monitor : public FEMethod {
       return integrate_traction;
     };
 
-    if (!useMFront) {
+    {
       postProcDomainFe = get_post_proc_domain_fe();
       if constexpr (SPACE_DIM == 2)
         postProcBdyFe = get_post_proc_bdy_fe();
@@ -233,7 +233,7 @@ struct Monitor : public FEMethod {
     auto post_proc = [&]() {
       MoFEMFunctionBegin;
 
-      if (!use_mfront) {
+      {
         auto post_proc_begin =
             boost::make_shared<PostProcBrokenMeshInMoabBaseBegin>(*m_field_ptr,
                                                                   postProcMesh);
@@ -254,7 +254,8 @@ struct Monitor : public FEMethod {
 
         CHKERR post_proc_end->writeFile(
             "out_contact_" + boost::lexical_cast<std::string>(sTEP) + ".h5m");
-      } else {
+      } 
+      if (useMFront) {
         mfrontInterface->updateElementVariables();
         mfrontInterface->postProcessElement(ts_step);
       }

@@ -346,15 +346,15 @@ MoFEMErrorCode Contact::createCommonData() {
                                  &spring_stiffness, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-alpha_dumping",
                                  &alpha_dumping, PETSC_NULL);
-
-    MOFEM_LOG("CONTACT", Sev::inform) << "Young modulus " << young_modulus;
-    MOFEM_LOG("CONTACT", Sev::inform) << "Poisson_ratio " << poisson_ratio;
-    MOFEM_LOG("CONTACT", Sev::inform) << "Density " << rho;
-    MOFEM_LOG("CONTACT", Sev::inform) << "cn " << cn;
-    MOFEM_LOG("CONTACT", Sev::inform)
-        << "spring_stiffness " << spring_stiffness;
-    MOFEM_LOG("CONTACT", Sev::inform) << "alpha_dumping " << alpha_dumping;
-
+    if (!use_mfront) {
+      MOFEM_LOG("CONTACT", Sev::inform) << "Young modulus " << young_modulus;
+      MOFEM_LOG("CONTACT", Sev::inform) << "Poisson_ratio " << poisson_ratio;
+      MOFEM_LOG("CONTACT", Sev::inform) << "Density " << rho;
+      MOFEM_LOG("CONTACT", Sev::inform) << "cn " << cn;
+      MOFEM_LOG("CONTACT", Sev::inform)
+          << "spring_stiffness " << spring_stiffness;
+      MOFEM_LOG("CONTACT", Sev::inform) << "alpha_dumping " << alpha_dumping;
+    }
     MoFEMFunctionReturn(0);
   };
 
@@ -397,6 +397,11 @@ MoFEMErrorCode Contact::bC() {
                                            "SIGMA", 0, 3, false, true);
   CHKERR bc_mng->removeBlockDOFsOnEntities(
       simple->getProblemName(), "NO_CONTACT", "SIGMA", 0, 3, false, true);
+
+  if (is_axisymmetric) {
+    CHKERR bc_mng->removeBlockDOFsOnEntities(
+      simple->getProblemName(), "REMOVE_X", "SIGMA", 0, 3, false, true);
+  }
 
   // Note remove has to be always before push. Then node marking will be
   // corrupted.

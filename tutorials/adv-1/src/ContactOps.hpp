@@ -417,7 +417,7 @@ MoFEMErrorCode OpAssembleTotalContactTraction::doWork(int side, EntityType type,
     const double alpha = t_w * jacobian * getMeasure();
     t_sum_t(i) += alpha * t_traction(i);
 
-    double traction_norm = t_sum_t(i) * t_sum_t(i);
+    double traction_norm = sqrt(t_sum_t(i) * t_sum_t(i));
     if (traction_norm > 1e-8) {
       contact_area += alpha;
     }
