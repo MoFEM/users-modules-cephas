@@ -209,11 +209,11 @@ struct Monitor : public FEMethod {
       return integrate_traction;
     };
 
-    {
-      postProcDomainFe = get_post_proc_domain_fe();
-      if constexpr (SPACE_DIM == 2)
-        postProcBdyFe = get_post_proc_bdy_fe();
-    }
+    // {
+    //   postProcDomainFe = get_post_proc_domain_fe();
+    //   if constexpr (SPACE_DIM == 2)
+    //     postProcBdyFe = get_post_proc_bdy_fe();
+    // }
 
     integrateTraction = get_integrate_traction();
   }
@@ -233,28 +233,28 @@ struct Monitor : public FEMethod {
     auto post_proc = [&]() {
       MoFEMFunctionBegin;
 
-      {
-        auto post_proc_begin =
-            boost::make_shared<PostProcBrokenMeshInMoabBaseBegin>(*m_field_ptr,
-                                                                  postProcMesh);
-        auto post_proc_end =
-            boost::make_shared<PostProcBrokenMeshInMoabBaseEnd>(*m_field_ptr,
-                                                                postProcMesh);
+      // {
+      //   auto post_proc_begin =
+      //       boost::make_shared<PostProcBrokenMeshInMoabBaseBegin>(*m_field_ptr,
+      //                                                             postProcMesh);
+      //   auto post_proc_end =
+      //       boost::make_shared<PostProcBrokenMeshInMoabBaseEnd>(*m_field_ptr,
+      //                                                           postProcMesh);
 
-        CHKERR DMoFEMPreProcessFiniteElements(dM,
-                                              post_proc_begin->getFEMethod());
-        if (!postProcBdyFe) {
-          CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcDomainFe);
-        } else {
-          CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcDomainFe);
-          CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcBdyFe);
-        }
-        CHKERR DMoFEMPostProcessFiniteElements(dM,
-                                               post_proc_end->getFEMethod());
+      //   CHKERR DMoFEMPreProcessFiniteElements(dM,
+      //                                         post_proc_begin->getFEMethod());
+      //   if (!postProcBdyFe) {
+      //     CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcDomainFe);
+      //   } else {
+      //     CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcDomainFe);
+      //     CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcBdyFe);
+      //   }
+      //   CHKERR DMoFEMPostProcessFiniteElements(dM,
+      //                                          post_proc_end->getFEMethod());
 
-        CHKERR post_proc_end->writeFile(
-            "out_contact_" + boost::lexical_cast<std::string>(sTEP) + ".h5m");
-      } 
+      //   CHKERR post_proc_end->writeFile(
+      //       "out_contact_" + boost::lexical_cast<std::string>(sTEP) + ".h5m");
+      // } 
       if (useMFront) {
         mfrontInterface->updateElementVariables();
         mfrontInterface->postProcessElement(ts_step);
