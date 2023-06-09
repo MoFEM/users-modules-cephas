@@ -46,7 +46,7 @@ struct Monitor : public FEMethod {
 
     auto push_domain_ops = [&](auto &pip) {
       CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-                            pip, {H1, HDIV} /*, "GEOMETRY"*/)),
+                            pip, {H1, HDIV}, "GEOMETRY")),
                         "Apply base transform");
       CHK_THROW_MESSAGE(
           ContactOps::addMatBlockOps(*m_field_ptr, pip, "U", "MAT_ELASTIC",
@@ -75,7 +75,7 @@ struct Monitor : public FEMethod {
       // Evaluate domain on side element
       if constexpr (SPACE_DIM == 3) {
         CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-                              pip, {HDIV} /*, "GEOMETRY"*/)),
+                              pip, {HDIV}, "GEOMETRY")),
                           "Apply transform");
         // create OP which run element on side
         auto op_loop_side =
@@ -94,6 +94,9 @@ struct Monitor : public FEMethod {
 
       auto u_ptr = boost::make_shared<MatrixDouble>();
       pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+      auto X_ptr = boost::make_shared<MatrixDouble>();
+      pip.push_back(
+          new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", X_ptr));
 
       post_proc_fe->getOpPtrVector().push_back(
 
@@ -106,6 +109,7 @@ struct Monitor : public FEMethod {
               {
 
                   {"U", u_ptr},
+                  {"X", X_ptr},
 
                   // Note: post-process tractions in 3d, i.e. when mesh is
                   // post-process on skin
@@ -146,7 +150,7 @@ struct Monitor : public FEMethod {
       auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
 
       CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-                            pip, {HDIV} /*, "GEOMETRY"*/)),
+                            pip, {HDIV}, "GEOMETRY")),
                         "Apply transform");
 
       // create OP which run element on side
@@ -162,6 +166,9 @@ struct Monitor : public FEMethod {
           "U", common_data_ptr->contactDispPtr()));
       pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
           "SIGMA", common_data_ptr->contactTractionPtr()));
+      auto X_ptr = boost::make_shared<MatrixDouble>();
+      pip.push_back(
+          new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", X_ptr));
 
       pip.push_back(
 
@@ -172,6 +179,7 @@ struct Monitor : public FEMethod {
               {},
 
               {{"U", common_data_ptr->contactDispPtr()},
+               {"X", X_ptr},
                {"t_contact", common_data_ptr->contactTractionPtr()},
                {"t_stress", common_data_ptr->stressTractionPtr()}},
 
@@ -191,7 +199,7 @@ struct Monitor : public FEMethod {
       auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
       CHK_THROW_MESSAGE(
           (AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-              integrate_traction->getOpPtrVector(), {HDIV} /*, "GEOMETRY"*/)),
+              integrate_traction->getOpPtrVector(), {HDIV}, "GEOMETRY")),
           "Apply transfrom");
       integrate_traction->getOpPtrVector().push_back(
           new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
