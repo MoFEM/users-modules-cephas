@@ -500,7 +500,7 @@ MoFEMErrorCode Contact::OPs() {
                                                               "GEOMETRY");
     // We have to integrate on curved face geometry, thus integration weight
     // have to adjusted.
-    // pip.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
+    pip.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
 
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", common_data_ptr->contactDispPtr()));

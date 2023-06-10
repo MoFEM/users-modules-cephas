@@ -225,7 +225,7 @@ inline double surface_distance_function(double t, double x, double y, double z,
     return sdf;
   }
 #endif
-  return y - 0.5;
+  return y + 0.5;
 }
 
 inline FTensor::Tensor1<double, 3>
