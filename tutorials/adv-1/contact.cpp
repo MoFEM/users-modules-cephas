@@ -11,6 +11,7 @@
 #define EXECUTABLE_DIMENSION 3
 #endif
 
+
 #include <MoFEM.hpp>
 #include <MatrixFunction.hpp>
 
@@ -371,8 +372,10 @@ MoFEMErrorCode Contact::OPs() {
   auto time_scale = boost::make_shared<TimeScale>();
 
   auto add_domain_base_ops = [&](auto &pip) {
+    MoFEMFunctionBegin;
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
                                                           "GEOMETRY");
+    MoFEMFunctionReturn(0);
   };
 
   auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
@@ -381,6 +384,7 @@ MoFEMErrorCode Contact::OPs() {
   henky_common_data_ptr->matDPtr = common_data_ptr->mDPtr();
 
   auto add_domain_ops_lhs = [&](auto &pip) {
+    MoFEMFunctionBegin;
     pip.push_back(new OpSetBc("U", true, boundaryMarker));
 
     CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC",
@@ -424,9 +428,11 @@ MoFEMErrorCode Contact::OPs() {
     pip.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
 
     pip.push_back(new OpUnSetBc("U"));
+    MoFEMFunctionReturn(0);
   };
 
   auto add_domain_ops_rhs = [&](auto &pip) {
+    MoFEMFunctionBegin;
     pip.push_back(new OpSetBc("U", true, boundaryMarker));
 
     CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
@@ -485,15 +491,22 @@ MoFEMErrorCode Contact::OPs() {
           }));
     }
     pip.push_back(new OpUnSetBc("U"));
+    MoFEMFunctionReturn(0);
   };
 
   auto add_boundary_base_ops = [&](auto &pip) {
+    MoFEMFunctionBegin;
     CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV},
                                                               "GEOMETRY");
+    // We have to integrate on curved face geometry, thus integration weight
+    // have to adjusted.
+    // pip.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
+
     pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", common_data_ptr->contactDispPtr()));
     pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
         "SIGMA", common_data_ptr->contactTractionPtr()));
+    MoFEMFunctionReturn(0);
   };
 
   auto add_boundary_ops_lhs = [&](auto &pip) {
@@ -543,13 +556,13 @@ MoFEMErrorCode Contact::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  add_domain_base_ops(pip_mng->getOpDomainLhsPipeline());
-  add_domain_base_ops(pip_mng->getOpDomainRhsPipeline());
-  add_domain_ops_lhs(pip_mng->getOpDomainLhsPipeline());
-  add_domain_ops_rhs(pip_mng->getOpDomainRhsPipeline());
+  CHKERR add_domain_base_ops(pip_mng->getOpDomainLhsPipeline());
+  CHKERR add_domain_base_ops(pip_mng->getOpDomainRhsPipeline());
+  CHKERR add_domain_ops_lhs(pip_mng->getOpDomainLhsPipeline());
+  CHKERR add_domain_ops_rhs(pip_mng->getOpDomainRhsPipeline());
 
-  add_boundary_base_ops(pip_mng->getOpBoundaryLhsPipeline());
-  add_boundary_base_ops(pip_mng->getOpBoundaryRhsPipeline());
+  CHKERR add_boundary_base_ops(pip_mng->getOpBoundaryLhsPipeline());
+  CHKERR add_boundary_base_ops(pip_mng->getOpBoundaryRhsPipeline());
   CHKERR add_boundary_ops_lhs(pip_mng->getOpBoundaryLhsPipeline());
   CHKERR add_boundary_ops_rhs(pip_mng->getOpBoundaryRhsPipeline());
 

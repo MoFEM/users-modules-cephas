@@ -46,7 +46,7 @@ struct Monitor : public FEMethod {
 
     auto push_domain_ops = [&](auto &pip) {
       CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-                            pip, {H1, HDIV} /*, "GEOMETRY"*/)),
+                            pip, {H1, HDIV}, "GEOMETRY")),
                         "Apply base transform");
       CHK_THROW_MESSAGE(
           ContactOps::addMatBlockOps(*m_field_ptr, pip, "U", "MAT_ELASTIC",
@@ -75,7 +75,7 @@ struct Monitor : public FEMethod {
       // Evaluate domain on side element
       if constexpr (SPACE_DIM == 3) {
         CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-                              pip, {HDIV} /*, "GEOMETRY"*/)),
+                              pip, {HDIV}, "GEOMETRY")),
                           "Apply transform");
         // create OP which run element on side
         auto op_loop_side =
@@ -146,7 +146,7 @@ struct Monitor : public FEMethod {
       auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
 
       CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-                            pip, {HDIV} /*, "GEOMETRY"*/)),
+                            pip, {HDIV}, "GEOMETRY")),
                         "Apply transform");
 
       // create OP which run element on side
