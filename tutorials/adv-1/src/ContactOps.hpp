@@ -44,7 +44,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
                         "restore array");
       return t;
     } else {
-      return FTensor::Tensor1<double, 3>{0, 0, 0};
+      return FTensor::Tensor1<double, 3>{0., 0., 0.};
     }
   }
 
@@ -213,6 +213,7 @@ using HessSurfaceDistanceFunction =
         double t, double x, double y, double z, double tx, double ty,
         double tz)>;
 
+
 inline double surface_distance_function(double t, double x, double y, double z,
                                         double tx, double ty, double tz) {
 
@@ -341,6 +342,15 @@ inline double sign(double x) {
 
 inline double w(const double sdf, const double tn) { return sdf - cn * tn; }
 
+/**
+ * @brief constrain function
+ * 
+ * return 1 if negative sdn or positive tn
+ * 
+ * @param sdf signed distance
+ * @param tn traction
+ * @return double 
+ */
 inline double constrain(double sdf, double tn) {
   const auto s = sign(w(sdf, tn));
   return (1 - s) / 2;
@@ -458,7 +468,7 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
         t_total_traction(2));
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
-    auto c = constrain(sdf, tn);
+    auto c = constrain(sdf, tn); 
 
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cP;
     t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
