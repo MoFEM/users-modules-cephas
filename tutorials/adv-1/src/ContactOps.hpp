@@ -22,6 +22,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble stressTraction;
 
   static SmartPetscObj<Vec> totalTraction;
+  ~CommonData() { totalTraction.reset(); }
 
   static auto createTotalTraction(MoFEM::Interface &m_field) {
     constexpr int ghosts[] = {0, 1, 2};
