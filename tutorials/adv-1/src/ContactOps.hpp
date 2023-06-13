@@ -12,9 +12,6 @@ namespace ContactOps {
 
 //! [Common data]
 struct CommonData : public boost::enable_shared_from_this<CommonData> {
-  MatrixDouble mD;
-  MatrixDouble mGrad;
-
   MatrixDouble contactStress;
   MatrixDouble contactStressDivergence;
   MatrixDouble contactTraction;
@@ -47,14 +44,6 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
     } else {
       return FTensor::Tensor1<double, 3>{0., 0., 0.};
     }
-  }
-
-  inline auto mDPtr() {
-    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &mD);
-  }
-
-  inline auto mGradPtr() {
-    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &mGrad);
   }
 
   inline auto contactStressPtr() {

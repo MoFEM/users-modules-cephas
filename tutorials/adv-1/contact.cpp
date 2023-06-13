@@ -385,18 +385,18 @@ MoFEMErrorCode Contact::OPs() {
 
   auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
   auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
-  henky_common_data_ptr->matGradPtr = common_data_ptr->mGradPtr();
-  henky_common_data_ptr->matDPtr = common_data_ptr->mDPtr();
+  henky_common_data_ptr->matDPtr = boost::make_shared<MatrixDouble>();
+  henky_common_data_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
 
   auto add_domain_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
     pip.push_back(new OpSetBc("U", true, boundaryMarker));
 
     CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC",
-                          common_data_ptr->mDPtr(), Sev::verbose);
+                          henky_common_data_ptr->matDPtr, Sev::verbose);
 
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", common_data_ptr->mGradPtr()));
+        "U", henky_common_data_ptr->matGradPtr));
     pip.push_back(
         new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
     pip.push_back(new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
@@ -443,9 +443,9 @@ MoFEMErrorCode Contact::OPs() {
         pip, mField, "U", {time_scale}, Sev::inform);
 
     CHKERR addMatBlockOps(mField, pip, "U", "MAT_ELASTIC",
-                          common_data_ptr->mDPtr(), Sev::inform);
+                          henky_common_data_ptr->matDPtr, Sev::inform);
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", common_data_ptr->mGradPtr()));
+        "U", henky_common_data_ptr->matGradPtr));
 
     pip.push_back(
         new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
@@ -470,7 +470,7 @@ MoFEMErrorCode Contact::OPs() {
     pip.push_back(new OpMixDivURhs("SIGMA", common_data_ptr->contactDispPtr(),
                                    [](double, double, double) { return 1; }));
     pip.push_back(
-        new OpMixLambdaGradURhs("SIGMA", common_data_ptr->mGradPtr()));
+        new OpMixLambdaGradURhs("SIGMA", henky_common_data_ptr->matGradPtr));
 
     pip.push_back(new OpMixUTimesDivLambdaRhs(
         "U", common_data_ptr->contactStressDivergencePtr()));
