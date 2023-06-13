@@ -7,6 +7,9 @@
  * @copyright Copyright (c) 2023
  */
 
+/* The above code is a preprocessor directive in C++ that checks if the macro
+"EXECUTABLE_DIMENSION" has been defined. If it has not been defined, it replaces
+the " */
 #ifndef EXECUTABLE_DIMENSION
 #define EXECUTABLE_DIMENSION 3
 #endif
@@ -43,6 +46,9 @@ constexpr FieldSpace ElementsAndOps<3>::CONTACT_SPACE;
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
+/* The above code is defining an alias `EntData` for the type
+`EntitiesFieldData::EntData`. This is a C++ syntax for creating a new name for
+an existing type. */
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
