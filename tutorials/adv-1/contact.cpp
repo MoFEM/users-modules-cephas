@@ -95,6 +95,8 @@ using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
 
 namespace ContactOps {
 
+double cn = 0.1;
+
 struct DomainBCs {};
 struct BoundaryBCs {};
 
@@ -120,9 +122,7 @@ int geom_order = 1;
 double young_modulus = 100;
 double poisson_ratio = 0.25;
 double rho = 0.0;
-double cn = 0.1;
 double spring_stiffness = 0.1;
-
 double alpha_dumping = 0;
 
 #include <HenckyOps.hpp>
@@ -282,8 +282,7 @@ MoFEMErrorCode Contact::setupProblem() {
   CHKERR project_ho_geometry();
 
   MoFEMFunctionReturn(0);
-}
-//! [Set up problem]
+}//! [Set up problem]
 
 //! [Create common data]
 MoFEMErrorCode Contact::createCommonData() {
@@ -567,12 +566,12 @@ MoFEMErrorCode Contact::OPs() {
   CHKERR add_boundary_ops_rhs(pip_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule_vol = [](int, int, int approx_order) {
-    return 2 * approx_order + geom_order;
+    return 2 * approx_order + geom_order - 1;
   };
   CHKERR pip_mng->setDomainRhsIntegrationRule(integration_rule_vol);
   CHKERR pip_mng->setDomainLhsIntegrationRule(integration_rule_vol);
   auto integration_rule_boundary = [](int, int, int approx_order) {
-    return 2 * approx_order + geom_order;
+    return 2 * approx_order + geom_order - 1;
   };
   CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
   CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
