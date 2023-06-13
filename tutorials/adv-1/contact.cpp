@@ -14,7 +14,6 @@ the " */
 #define EXECUTABLE_DIMENSION 3
 #endif
 
-
 #include <MoFEM.hpp>
 #include <MatrixFunction.hpp>
 
@@ -28,7 +27,7 @@ using namespace MoFEM;
 
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType I =
-    IntegrationType::GAUSS; //< selected integration type
+    IntegrationType::GAUSS;                     //< selected integration type
 
 template <int DIM> struct ElementsAndOps {};
 
@@ -101,7 +100,7 @@ using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
 
 namespace ContactOps {
 
-double cn = 0.1;
+double cn_contact = 0.1;
 
 struct DomainBCs {};
 struct BoundaryBCs {};
@@ -124,7 +123,7 @@ MoFEMErrorCode addMatBlockOps(
 constexpr bool is_quasi_static = true;
 
 int order = 2;
-int geom_order = 1; 
+int geom_order = 1;
 double young_modulus = 100;
 double poisson_ratio = 0.25;
 double rho = 0.0;
@@ -226,7 +225,6 @@ MoFEMErrorCode Contact::setupProblem() {
                                   SPACE_DIM);
   CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
 
-
   CHKERR simple->setFieldOrder("U", order);
   // CHKERR simple->setFieldOrder("SIGMA", 0);
   CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
@@ -288,7 +286,7 @@ MoFEMErrorCode Contact::setupProblem() {
   CHKERR project_ho_geometry();
 
   MoFEMFunctionReturn(0);
-}//! [Set up problem]
+} //! [Set up problem]
 
 //! [Create common data]
 MoFEMErrorCode Contact::createCommonData() {
@@ -301,7 +299,8 @@ MoFEMErrorCode Contact::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-poisson_ratio",
                                  &poisson_ratio, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-rho", &rho, PETSC_NULL);
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn_contact", &cn_contact,
+                                 PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-spring_stiffness",
                                  &spring_stiffness, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-alpha_dumping",
@@ -310,7 +309,7 @@ MoFEMErrorCode Contact::createCommonData() {
     MOFEM_LOG("CONTACT", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("CONTACT", Sev::inform) << "Poisson_ratio " << poisson_ratio;
     MOFEM_LOG("CONTACT", Sev::inform) << "Density " << rho;
-    MOFEM_LOG("CONTACT", Sev::inform) << "cn " << cn;
+    MOFEM_LOG("CONTACT", Sev::inform) << "cn_contact " << cn_contact;
     MOFEM_LOG("CONTACT", Sev::inform)
         << "spring_stiffness " << spring_stiffness;
     MOFEM_LOG("CONTACT", Sev::inform) << "alpha_dumping " << alpha_dumping;
@@ -362,7 +361,8 @@ MoFEMErrorCode Contact::bC() {
   // corrupted.
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
-  boundaryMarker = bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE_"});
+  boundaryMarker =
+      bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE_"});
 
   MoFEMFunctionReturn(0);
 }
@@ -419,8 +419,7 @@ MoFEMErrorCode Contact::OPs() {
       };
       pip.push_back(new OpMass("U", "U", get_inertia_and_mass_dumping));
     } else if (alpha_dumping > 0) {
-      auto get_mass_dumping = [this](const double, const double,
-                                      const double) {
+      auto get_mass_dumping = [this](const double, const double, const double) {
         auto *pip_mng = mField.getInterface<PipelineManager>();
         auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
         return alpha_dumping * fe_domain_lhs->ts_a;

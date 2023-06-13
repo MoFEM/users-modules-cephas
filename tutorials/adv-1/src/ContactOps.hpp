@@ -29,9 +29,9 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
     totalTraction =
         createGhostVector(m_field.get_comm(),
 
-                               (m_field.get_comm_rank() == 0) ? 3 : 0, 3,
+                          (m_field.get_comm_rank() == 0) ? 3 : 0, 3,
 
-                               (m_field.get_comm_rank() == 0) ? 0 : 3, ghosts);
+                          (m_field.get_comm_rank() == 0) ? 0 : 3, ghosts);
     return totalTraction;
   }
 
@@ -202,9 +202,8 @@ static boost::weak_ptr<SDFPython> sdfPythonWeakPtr;
 #endif
 //! [Surface distance function from python]
 
-using SurfaceDistanceFunction = boost::function<double(double t,
-                                        double x, double y, double z,
-                                        double tx, double ty, double tz)>;
+using SurfaceDistanceFunction = boost::function<double(
+    double t, double x, double y, double z, double tx, double ty, double tz)>;
 
 using GradSurfaceDistanceFunction = boost::function<FTensor::Tensor1<double, 3>(
     double t, double x, double y, double z, double tx, double ty, double tz)>;
@@ -213,7 +212,6 @@ using HessSurfaceDistanceFunction =
     boost::function<FTensor::Tensor2_symmetric<double, 3>(
         double t, double x, double y, double z, double tx, double ty,
         double tz)>;
-
 
 inline double surface_distance_function(double t, double x, double y, double z,
                                         double tx, double ty, double tz) {
@@ -231,7 +229,7 @@ inline double surface_distance_function(double t, double x, double y, double z,
 
 inline FTensor::Tensor1<double, 3>
 grad_surface_distance_function(double t, double x, double y, double z,
-                                        double tx, double ty, double tz) {
+                               double tx, double ty, double tz) {
 #ifdef PYTHON_SFD
   if (auto sdf_ptr = sdfPythonWeakPtr.lock()) {
     std::vector<double> grad_sdf;
@@ -245,7 +243,7 @@ grad_surface_distance_function(double t, double x, double y, double z,
 
 inline FTensor::Tensor2_symmetric<double, 3>
 hess_surface_distance_function(double t, double x, double y, double z,
-                                        double tx, double ty, double tz) {
+                               double tx, double ty, double tz) {
 #ifdef PYTHON_SFD
   if (auto sdf_ptr = sdfPythonWeakPtr.lock()) {
     std::vector<double> hess_sdf;
@@ -341,23 +339,25 @@ inline double sign(double x) {
     return -1;
 };
 
-inline double w(const double sdf, const double tn) { return sdf - cn * tn; }
+inline double w(const double sdf, const double tn) {
+  return sdf - cn_contact * tn;
+}
 
 /**
  * @brief constrain function
- * 
+ *
  * return 1 if negative sdn or positive tn
- * 
+ *
  * @param sdf signed distance
  * @param tn traction
- * @return double 
+ * @return double
  */
 inline double constrain(double sdf, double tn) {
   const auto s = sign(w(sdf, tn));
   return (1 - s) / 2;
 }
 
-#ifdef __HENKY_OPS_HPP__ 
+#ifdef __HENKY_OPS_HPP__
 
 OpCalculateStressTraction::OpCalculateStressTraction(
     boost::shared_ptr<CommonData> common_data_ptr,
@@ -380,8 +380,8 @@ OpCalculateStressTraction::doWork(int side, EntityType type,
       *(henckyCommonDataPtr->getMatFirstPiolaStress()));
   for (auto gg = 0; gg != nb_integration_pts; ++gg) {
     FTensor::Tensor1<double, SPACE_DIM> t_normal;
-    t_normal(i) = t_normal_at_pts(i) /
-                  std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
+    t_normal(i) =
+        t_normal_at_pts(i) / std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
     t_traction(i) = t_P(i, j) * t_normal(j);
     ++t_P;
     ++t_traction;
@@ -449,8 +449,8 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
     FTensor::Tensor1<double, SPACE_DIM> t_normal;
-    t_normal(i) = t_normal_at_pts(i) /
-                  std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
+    t_normal(i) =
+        t_normal_at_pts(i) / std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
     auto t_nf = getFTensor1FromPtr<SPACE_DIM>(&nf[0]);
     const double alpha = t_w * getMeasure();
@@ -469,7 +469,7 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
         t_total_traction(2));
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
-    auto c = constrain(sdf, tn); 
+    auto c = constrain(sdf, tn);
 
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_cP;
     t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
@@ -479,7 +479,7 @@ OpConstrainBoundaryRhs::iNtegrate(EntitiesFieldData::EntData &data) {
     FTensor::Tensor1<double, SPACE_DIM> t_rhs;
     t_rhs(i) =
 
-        t_cQ(i, j) * (t_disp(j) - cn * t_traction(j))
+        t_cQ(i, j) * (t_disp(j) - cn_contact * t_traction(j))
 
         +
 
@@ -541,18 +541,18 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
     FTensor::Tensor1<double, SPACE_DIM> t_normal;
-    t_normal(i) = t_normal_at_pts(i) /
-                  std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
+    t_normal(i) =
+        t_normal_at_pts(i) / std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
     const double alpha = t_w * getMeasure();
 
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto sdf = surfaceDistanceFunction(
-        getTStime(), t_spatial_coords(0), t_spatial_coords(1),
-        t_spatial_coords(2), t_total_traction(0), t_total_traction(1),
-        t_total_traction(2));
+    auto sdf = surfaceDistanceFunction(getTStime(), t_spatial_coords(0),
+                                       t_spatial_coords(1), t_spatial_coords(2),
+                                       t_total_traction(0), t_total_traction(1),
+                                       t_total_traction(2));
     auto t_grad_sdf = gradSurfaceDistanceFunction(
         getTStime(), t_spatial_coords(0), t_spatial_coords(1),
         t_spatial_coords(2), t_total_traction(0), t_total_traction(1),
@@ -575,8 +575,9 @@ OpConstrainBoundaryLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
           t_spatial_coords(2), t_total_traction(0), t_total_traction(1),
           t_total_traction(2));
       t_res_dU(i, j) +=
-          (c * cn) * (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
-                      t_grad_sdf(i) * t_hess_sdf(k, j) * t_traction(k)) +
+          (c * cn_contact) *
+              (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
+               t_grad_sdf(i) * t_hess_sdf(k, j) * t_traction(k)) +
           c * sdf * t_hess_sdf(i, j);
     }
 
@@ -646,8 +647,8 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
     FTensor::Tensor1<double, SPACE_DIM> t_normal;
-    t_normal(i) = t_normal_at_pts(i) /
-                  std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
+    t_normal(i) =
+        t_normal_at_pts(i) / std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
     const double alpha = t_w * getMeasure();
 
@@ -672,7 +673,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
     t_cQ(i, j) = kronecker_delta(i, j) - t_cP(i, j);
 
     FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_res_dt;
-    t_res_dt(i, j) = -cn * t_cQ(i, j);
+    t_res_dt(i, j) = -cn_contact * t_cQ(i, j);
 
     size_t rr = 0;
     for (; rr != AssemblyBoundaryEleOp::nbRows / SPACE_DIM; ++rr) {
@@ -708,6 +709,6 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
   MoFEMFunctionReturn(0);
 }
 
-}; // namespace ContactOps
+};     // namespace ContactOps
 
 #endif // __CONTACTOPS_HPP__
