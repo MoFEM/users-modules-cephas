@@ -6,6 +6,9 @@
  *
  */
 
+/* The above code is a preprocessor directive in C++ that checks if the macro
+"EXECUTABLE_DIMENSION" has been defined. If it has not been defined, it replaces
+the " */
 #ifndef EXECUTABLE_DIMENSION
 #define EXECUTABLE_DIMENSION 3
 #endif
@@ -1111,12 +1114,13 @@ MoFEMErrorCode Example::tsSolve() {
           proc_nb_full_active =
               100 * static_cast<double>(avtive_full_elems) / avtive_elems;
 
-        MOFEM_LOG_C(
-            "EXAMPLE", Sev::inform,
-            "Iter %d nb pts %d nb avtive pts %d (%3.3f\%) nb active elements %d "
-            "(%3.3f\%) nb full active elems %d (%3.3f\%)",
-            iter, nb_points, active_points, proc_nb_points, avtive_elems,
-            proc_nb_active, avtive_full_elems, proc_nb_full_active, iter);
+        MOFEM_LOG_C("EXAMPLE", Sev::inform,
+                    "Iter %d nb pts %d nb avtive pts %d (%3.3f\%) nb active "
+                    "elements %d "
+                    "(%3.3f\%) nb full active elems %d (%3.3f\%)",
+                    iter, nb_points, active_points, proc_nb_points,
+                    avtive_elems, proc_nb_active, avtive_full_elems,
+                    proc_nb_full_active, iter);
       }
     }
 
@@ -1160,7 +1164,7 @@ MoFEMErrorCode Example::tsSolve() {
 
   MOFEM_LOG_CHANNEL("TIMER");
   MOFEM_LOG_TAG("TIMER", "timer");
-  if(set_timer)
+  if (set_timer)
     BOOST_LOG_SCOPED_THREAD_ATTR("Timeline", attrs::timer());
   MOFEM_LOG("TIMER", Sev::verbose) << "TSSetUp";
   CHKERR TSSetUp(solver);
@@ -1251,9 +1255,9 @@ private:
   SmartPetscObj<Mat> S;
 
   MoFEM::Interface &mField;
-  SmartPetscObj<DM> subDM; ///< field split sub dm
+  SmartPetscObj<DM> subDM;        ///< field split sub dm
   SmartPetscObj<IS> fieldSplitIS; ///< IS for split Schur block
-  SmartPetscObj<AO> aoUp; ///> main DM to subDM
+  SmartPetscObj<AO> aoUp;         ///> main DM to subDM
 };
 
 MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
