@@ -55,8 +55,8 @@ constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
 // material parameters
 constexpr double lambda = 1;
-constexpr double mu = 1;   ///< lame parameter
-constexpr double t = 1; ///< plate stiffness
+constexpr double mu = 1; ///< lame parameter
+constexpr double t = 1;  ///< plate stiffness
 
 FTensor::Index<'i', SPACE_DIM> i;
 FTensor::Index<'j', SPACE_DIM> j;
@@ -94,9 +94,9 @@ enum ElementSide { LEFT_SIDE = 0, RIGHT_SIDE };
 
 // data for skeleton computation
 std::array<std::vector<VectorInt>, 2>
-    indicesSideMap; ///< indices on rows for left hand-side
+    indicesSideMap;            ///< indices on rows for left hand-side
 std::array<std::vector<MatrixDouble>, 2>
-    diffBaseSideMap; // first derivative of base functions
+    diffBaseSideMap;           // first derivative of base functions
 std::array<std::vector<MatrixDouble>, 2>
     diff2BaseSideMap;          // second derivative of base functions
 std::array<double, 2> areaMap; // area/volume of elements on the side
@@ -286,7 +286,7 @@ MoFEMErrorCode Plate::assembleSystem() {
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpDomainPlateStiffness("U", "U", mat_D_ptr));
   // pipeline_mng->getOpDomainLhsPipeline().push_back(new OpDomainGradGrad(
-      // "U", "U", [](const double, const double, const double) { return 1; }));
+  // "U", "U", [](const double, const double, const double) { return 1; }));
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpDomainPlateLoad("U", source));
@@ -641,21 +641,20 @@ MoFEMErrorCode OpH1LhsSkeleton::doWork(int side, EntityType type,
 
     for (auto x0 = 0; x0 != indicesSideMap[s0].size(); ++x0) {
 
-        for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
-          const auto sense_col = senseMap[s1];
+      for (auto s1 : {LEFT_SIDE, RIGHT_SIDE}) {
+        const auto sense_col = senseMap[s1];
 
-          for (auto x1 = 0; x1 != indicesSideMap[s1].size(); ++x1) {
+        for (auto x1 = 0; x1 != indicesSideMap[s1].size(); ++x1) {
 
-            CHKERR integrate(sense_row, indicesSideMap[s0][x0],
-                             diffBaseSideMap[s0][x0], diff2BaseSideMap[s0][x0],
+          CHKERR integrate(sense_row, indicesSideMap[s0][x0],
+                           diffBaseSideMap[s0][x0], diff2BaseSideMap[s0][x0],
 
-                             sense_col, indicesSideMap[s1][x1],
-                             diffBaseSideMap[s1][x1], diff2BaseSideMap[s1][x1]
+                           sense_col, indicesSideMap[s1][x1],
+                           diffBaseSideMap[s1][x1], diff2BaseSideMap[s1][x1]
 
-            );
-          }
+          );
         }
-      
+      }
     }
   }
 
