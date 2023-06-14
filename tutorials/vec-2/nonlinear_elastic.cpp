@@ -196,58 +196,23 @@ MoFEMErrorCode Example::assembleSystem() {
   auto *simple = mField.getInterface<Simple>();
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  auto add_domain_base_ops = [&](auto &pipeline) {
-    MoFEMFunctionBegin;
-
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1});
-
-  
-
-    // pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-    //     "U", matGradPtr));
-    // pipeline.push_back(
-    //     new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
-    // pipeline.push_back(
-    //     new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
-    // pipeline.push_back(
-    //     new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
-    // pipeline.push_back(
-    //     new OpCalculateHenckyStress<SPACE_DIM>("U", commonHenckyDataPtr));
-    // pipeline.push_back(
-    //     new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
-
-    MoFEMFunctionReturn(0);
-  };
-
   auto add_domain_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
-
-    // pipeline.push_back(
-    //     new OpHenckyTangent<SPACE_DIM>("U", commonHenckyDataPtr));
-    // pipeline.push_back(new OpK("U", "U", commonHenckyDataPtr->getMatTangent()));
-
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1});
     CHKERR HenckyOps::opFactoryDomainLhs<DomainEleOp, PETSC, GAUSS>(
         mField, pip, "U", "MAT_ELASTIC", Sev::inform);
-
     MoFEMFunctionReturn(0);
   };
 
   auto add_domain_ops_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
-
+   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1});
     CHKERR HenckyOps::opFactoryDomainRhs<DomainEleOp, PETSC, GAUSS>(
         mField, pip, "U", "MAT_ELASTIC", Sev::inform);
-
-    // // Calculate internal force
-    // pipeline.push_back(new OpInternalForce(
-    //     "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
-
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
-  CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
 
   MoFEMFunctionReturn(0);
