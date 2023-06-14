@@ -67,7 +67,6 @@ private:
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  MoFEMErrorCode createCommonData();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
@@ -78,55 +77,13 @@ private:
   boost::shared_ptr<MatrixDouble> matStrainPtr;
   boost::shared_ptr<MatrixDouble> matStressPtr;
   boost::shared_ptr<MatrixDouble> matDPtr;
-  boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
 };
-
-//! [Create common data]
-MoFEMErrorCode Example::createCommonData() {
-  MoFEMFunctionBegin;
-
-  auto set_material_stiffness = [&]() {
-    FTensor::Index<'i', SPACE_DIM> i;
-    FTensor::Index<'j', SPACE_DIM> j;
-    FTensor::Index<'k', SPACE_DIM> k;
-    FTensor::Index<'l', SPACE_DIM> l;
-    MoFEMFunctionBegin;
-    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-    constexpr double A =
-        (SPACE_DIM == 2) ? 2 * shear_modulus_G /
-                               (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
-                         : 1;
-    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*matDPtr);
-    t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
-                      A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
-                          t_kd(i, j) * t_kd(k, l);
-    MoFEMFunctionReturn(0);
-  };
-
-  matGradPtr = boost::make_shared<MatrixDouble>();
-  matStrainPtr = boost::make_shared<MatrixDouble>();
-  matStressPtr = boost::make_shared<MatrixDouble>();
-  matDPtr = boost::make_shared<MatrixDouble>();
-
-  commonHenckyDataPtr = boost::make_shared<HenckyOps::CommonData>();
-  commonHenckyDataPtr->matGradPtr = matGradPtr;
-  commonHenckyDataPtr->matDPtr = matDPtr;
-
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  matDPtr->resize(size_symm * size_symm, 1);
-
-  CHKERR set_material_stiffness();
-
-  MoFEMFunctionReturn(0);
-}
-//! [Create common data]
 
 //! [Run problem]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
   CHKERR readMesh();
   CHKERR setupProblem();
-  CHKERR createCommonData();
   CHKERR boundaryCondition();
   CHKERR assembleSystem();
   CHKERR solveSystem();
@@ -243,37 +200,47 @@ MoFEMErrorCode Example::assembleSystem() {
     MoFEMFunctionBegin;
 
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1});
-    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", matGradPtr));
-    pipeline.push_back(
-        new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
-    pipeline.push_back(
-        new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
-    pipeline.push_back(
-        new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
-    pipeline.push_back(
-        new OpCalculateHenckyStress<SPACE_DIM>("U", commonHenckyDataPtr));
-    pipeline.push_back(
-        new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
+
+  
+
+    // pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+    //     "U", matGradPtr));
+    // pipeline.push_back(
+    //     new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
+    // pipeline.push_back(
+    //     new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
+    // pipeline.push_back(
+    //     new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+    // pipeline.push_back(
+    //     new OpCalculateHenckyStress<SPACE_DIM>("U", commonHenckyDataPtr));
+    // pipeline.push_back(
+    //     new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_lhs = [&](auto &pipeline) {
+  auto add_domain_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
 
-    pipeline.push_back(
-        new OpHenckyTangent<SPACE_DIM>("U", commonHenckyDataPtr));
-    pipeline.push_back(new OpK("U", "U", commonHenckyDataPtr->getMatTangent()));
+    // pipeline.push_back(
+    //     new OpHenckyTangent<SPACE_DIM>("U", commonHenckyDataPtr));
+    // pipeline.push_back(new OpK("U", "U", commonHenckyDataPtr->getMatTangent()));
+
+    CHKERR HenckyOps::opFactoryDomainLhs<DomainEleOp, PETSC, GAUSS>(
+        mField, pip, "U", "MAT_ELASTIC", Sev::inform);
 
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_rhs = [&](auto &pipeline) {
+  auto add_domain_ops_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
-    // Calculate internal force
-    pipeline.push_back(new OpInternalForce(
-        "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
+
+    CHKERR HenckyOps::opFactoryDomainRhs<DomainEleOp, PETSC, GAUSS>(
+        mField, pip, "U", "MAT_ELASTIC", Sev::inform);
+
+    // // Calculate internal force
+    // pipeline.push_back(new OpInternalForce(
+    //     "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
 
     MoFEMFunctionReturn(0);
   };
@@ -327,19 +294,26 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       post_proc_fe->getOpPtrVector(), {H1});
 
+  auto common_ptr = boost::make_shared<HenckyOps::CommonData>();
+  common_ptr->matDPtr = boost::make_shared<MatrixDouble>();
+  common_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
+
+  CHKERR addMatBlockOps(mField, post_proc_fe->getOpPtrVector(), "U",
+                        "MAT_ELASTIC", common_ptr->matDPtr, Sev::verbose);
+
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-          "U", commonHenckyDataPtr->matGradPtr));
+          "U", common_ptr->matGradPtr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
+      new OpCalculateEigenVals<SPACE_DIM>("U", common_ptr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
+      new OpCalculateLogC<SPACE_DIM>("U", common_ptr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+      new OpCalculateLogC_dC<SPACE_DIM>("U", common_ptr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateHenckyStress<SPACE_DIM>("U", commonHenckyDataPtr));
+      new OpCalculateHenckyStress<SPACE_DIM>("U", common_ptr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
+      new OpCalculatePiolaStress<SPACE_DIM>("U", common_ptr));
 
   auto u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(
@@ -357,8 +331,8 @@ MoFEMErrorCode Example::solveSystem() {
 
           {{"U", u_ptr}},
 
-          {{"GRAD", commonHenckyDataPtr->matGradPtr},
-           {"FIRST_PIOLA", commonHenckyDataPtr->getMatFirstPiolaStress()}},
+          {{"GRAD", common_ptr->matGradPtr},
+           {"FIRST_PIOLA", common_ptr->getMatFirstPiolaStress()}},
 
           {}
 

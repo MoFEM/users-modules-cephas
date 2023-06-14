@@ -50,10 +50,10 @@ struct Monitor : public FEMethod {
       CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
                             pip, {H1, HDIV}, "GEOMETRY")),
                         "Apply base transform");
-      CHK_THROW_MESSAGE(ContactOps::addMatBlockOps(
-                            *m_field_ptr, pip, "U", "MAT_ELASTIC",
-                            henky_common_data_ptr->matDPtr, Sev::inform),
-                        "Set block data");
+      CHK_THROW_MESSAGE(
+          HenckyOps::addMatBlockOps(*m_field_ptr, pip, "U", "MAT_ELASTIC",
+                                   henky_common_data_ptr->matDPtr, Sev::inform),
+          "Set block data");
       pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
           "U", henky_common_data_ptr->matGradPtr));
       pip.push_back(
