@@ -204,10 +204,14 @@ struct Monitor : public FEMethod {
       integrate_traction->getOpPtrVector().push_back(
           new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
               "SIGMA", common_data_ptr->contactTractionPtr()));
+      // We have to integrate on curved face geometry, thus integration weight
+      // have to adjusted.
+      integrate_traction->getOpPtrVector().push_back(
+          new OpSetHOWeightsOnSubDim<SPACE_DIM>());
       integrate_traction->getOpPtrVector().push_back(
           new OpAssembleTotalContactTraction(common_data_ptr));
       integrate_traction->getRuleHook = [](int, int, int approx_order) {
-        return 2 * approx_order;
+        return 2 * approx_order + geom_order - 1;
       };
       return integrate_traction;
     };
