@@ -44,6 +44,8 @@ struct Monitor : public FEMethod {
     henky_common_data_ptr->matDPtr = boost::make_shared<MatrixDouble>();
     henky_common_data_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
 
+    auto contact_stress_ptr = boost::make_shared<MatrixDouble>();
+
     auto push_domain_ops = [&](auto &pip) {
       CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
                             pip, {H1, HDIV}, "GEOMETRY")),
@@ -64,7 +66,7 @@ struct Monitor : public FEMethod {
       pip.push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
       pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-          "SIGMA", common_data_ptr->contactStressPtr()));
+          "SIGMA", contact_stress_ptr));
     };
 
     auto get_post_proc_domain_fe = [&]() {
@@ -125,7 +127,7 @@ struct Monitor : public FEMethod {
 
               {
 
-                  {"SIGMA", common_data_ptr->contactStressPtr()},
+                  {"SIGMA", contact_stress_ptr},
 
                   {"G", henky_common_data_ptr->matGradPtr},
 

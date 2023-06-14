@@ -12,14 +12,13 @@ namespace ContactOps {
 
 //! [Common data]
 struct CommonData : public boost::enable_shared_from_this<CommonData> {
-  MatrixDouble contactStress;
-  MatrixDouble contactStressDivergence;
+  // MatrixDouble contactStress;
   MatrixDouble contactTraction;
   MatrixDouble contactDisp;
   MatrixDouble stressTraction;
 
-  static SmartPetscObj<Vec> totalTraction;
-  ~CommonData() { totalTraction.reset(); }
+  static SmartPetscObj<Vec>
+      totalTraction; // User have to release and create vector when appropiate.
 
   static auto createTotalTraction(MoFEM::Interface &m_field) {
     constexpr int ghosts[] = {0, 1, 2};
@@ -46,14 +45,10 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
     }
   }
 
-  inline auto contactStressPtr() {
-    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &contactStress);
-  }
-
-  inline auto contactStressDivergencePtr() {
-    return boost::shared_ptr<MatrixDouble>(shared_from_this(),
-                                           &contactStressDivergence);
-  }
+  // inline auto contactStressPtr() {
+  //   return boost::shared_ptr<MatrixDouble>(shared_from_this(),
+  //   &contactStress);
+  // }
 
   inline auto contactTractionPtr() {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(),
@@ -697,6 +692,101 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::iNtegrate(
 
   MoFEMFunctionReturn(0);
 }
+
+template <typename DomainEleOp, AssemblyType A, IntegrationType I>
+MoFEMErrorCode opFactoryDomainLhs(
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
+    std::string sigma, std::string u) {
+  MoFEMFunctionBegin;
+
+  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
+      A>::template BiLinearForm<I>;
+
+  using OpMixDivULhs = typename B::template OpMixDivTimesVec<SPACE_DIM>;
+  using OpLambdaGraULhs = typename B::template OpMixTensorTimesGrad<SPACE_DIM>;
+
+  auto unity = []() { return 1; };
+  pip.push_back(new OpMixDivULhs(sigma, u, unity, true));
+  pip.push_back(new OpLambdaGraULhs(sigma, u, unity, true));
+
+  MoFEMFunctionReturn(0);
+}
+
+template <typename DomainEleOp, AssemblyType A, IntegrationType I>
+MoFEMErrorCode opFactoryDomainRhs(
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
+    std::string sigma, std::string u) {
+  MoFEMFunctionBegin;
+  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
+      A>::template LinearForm<I>;
+  using OpMixDivURhs =
+      typename B::template OpMixDivTimesU<3, SPACE_DIM, SPACE_DIM>;
+  using OpMixLambdaGradURhs =
+      typename B::template OpMixTensorTimesGradU<SPACE_DIM>;
+  using OpMixUTimesDivLambdaRhs =
+      typename B::template OpMixVecTimesDivLambda<SPACE_DIM>;
+  using OpMixUTimesLambdaRhs =
+      typename B::template OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+
+  auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
+  auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
+  auto div_stress_ptr = boost::make_shared<MatrixDouble>();
+  auto contact_stress_ptr = boost::make_shared<MatrixDouble>();
+
+  pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+      u, common_data_ptr->contactDispPtr()));
+  pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+      sigma, contact_stress_ptr));
+  pip.push_back(new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
+      sigma, div_stress_ptr));
+
+  pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+      u, mat_grad_ptr));
+
+  pip.push_back(
+      new OpMixDivURhs(sigma, common_data_ptr->contactDispPtr(),
+                       [](double, double, double) constexpr { return 1; }));
+  pip.push_back(new OpMixLambdaGradURhs(sigma, mat_grad_ptr));
+  pip.push_back(new OpMixUTimesDivLambdaRhs(u, div_stress_ptr));
+  pip.push_back(new OpMixUTimesLambdaRhs(u, contact_stress_ptr));
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode opFactoryBoundaryLhs(
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
+    std::string sigma, std::string u) {
+  MoFEMFunctionBegin;
+
+  auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
+
+  pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+      u, common_data_ptr->contactDispPtr()));
+  pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+      sigma, common_data_ptr->contactTractionPtr()));
+  pip.push_back(new OpConstrainBoundaryLhs_dU(sigma, u, common_data_ptr));
+  pip.push_back(
+      new OpConstrainBoundaryLhs_dTraction(sigma, sigma, common_data_ptr));
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode opFactoryBoundaryRhs(
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
+    std::string sigma, std::string u) {
+  MoFEMFunctionBegin;
+
+  auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
+
+  pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+      u, common_data_ptr->contactDispPtr()));
+  pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+      sigma, common_data_ptr->contactTractionPtr()));
+  pip.push_back(new OpConstrainBoundaryRhs(sigma, common_data_ptr));
+
+  MoFEMFunctionReturn(0);
+}
+
 
 };     // namespace ContactOps
 

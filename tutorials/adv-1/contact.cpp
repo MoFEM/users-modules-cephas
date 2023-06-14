@@ -60,18 +60,6 @@ using AssemblyBoundaryEleOp =
 constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
 
 //! [Operators used for contact]
-using OpMixDivULhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<I>::OpMixDivTimesVec<SPACE_DIM>;
-using OpLambdaGraULhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<I>::OpMixTensorTimesGrad<SPACE_DIM>;
-using OpMixDivURhs = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
-    GAUSS>::OpMixDivTimesU<3, SPACE_DIM, SPACE_DIM>;
-using OpMixLambdaGradURhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<I>::OpMixTensorTimesGradU<SPACE_DIM>;
-using OpMixUTimesDivLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<I>::OpMixVecTimesDivLambda<SPACE_DIM>;
-using OpMixUTimesLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<I>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 using OpSpringLhs = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::BiLinearForm<I>::OpMass<1, SPACE_DIM>;
 using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
@@ -383,7 +371,6 @@ MoFEMErrorCode Contact::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
   auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
   henky_common_data_ptr->matDPtr = boost::make_shared<MatrixDouble>();
   henky_common_data_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
@@ -427,9 +414,7 @@ MoFEMErrorCode Contact::OPs() {
       pip.push_back(new OpMass("U", "U", get_mass_dumping));
     }
 
-    auto unity = []() { return 1; };
-    pip.push_back(new OpMixDivULhs("SIGMA", "U", unity, true));
-    pip.push_back(new OpLambdaGraULhs("SIGMA", "U", unity, true));
+    CHKERR opFactoryDomainLhs<DomainEleOp, PETSC, I>(pip, "SIGMA", "U");
 
     pip.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -459,23 +444,7 @@ MoFEMErrorCode Contact::OPs() {
     pip.push_back(new OpInternalForcePiola(
         "U", henky_common_data_ptr->getMatFirstPiolaStress()));
 
-    pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
-        "U", common_data_ptr->contactDispPtr()));
-
-    pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-        "SIGMA", common_data_ptr->contactStressPtr()));
-    pip.push_back(new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-        "SIGMA", common_data_ptr->contactStressDivergencePtr()));
-
-    pip.push_back(new OpMixDivURhs("SIGMA", common_data_ptr->contactDispPtr(),
-                                   [](double, double, double) { return 1; }));
-    pip.push_back(
-        new OpMixLambdaGradURhs("SIGMA", henky_common_data_ptr->matGradPtr));
-
-    pip.push_back(new OpMixUTimesDivLambdaRhs(
-        "U", common_data_ptr->contactStressDivergencePtr()));
-    pip.push_back(
-        new OpMixUTimesLambdaRhs("U", common_data_ptr->contactStressPtr()));
+    CHKERR opFactoryDomainRhs<DomainEleOp, PETSC, I>(pip, "SIGMA", "U");
 
     // only in case of dynamics
     if (!is_quasi_static) {
@@ -505,11 +474,6 @@ MoFEMErrorCode Contact::OPs() {
     // We have to integrate on curved face geometry, thus integration weight
     // have to adjusted.
     pip.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
-
-    pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
-        "U", common_data_ptr->contactDispPtr()));
-    pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
-        "SIGMA", common_data_ptr->contactTractionPtr()));
     MoFEMFunctionReturn(0);
   };
 
@@ -521,9 +485,8 @@ MoFEMErrorCode Contact::OPs() {
     pip.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
         pip, mField, "U", Sev::inform);
-    pip.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", common_data_ptr));
-    pip.push_back(new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA",
-                                                       common_data_ptr));
+
+    CHKERR opFactoryBoundaryLhs(pip, "SIGMA", "U");
 
     if (spring_stiffness > 0)
       pip.push_back(new OpSpringLhs(
@@ -551,11 +514,17 @@ MoFEMErrorCode Contact::OPs() {
     pip.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
-    pip.push_back(new OpConstrainBoundaryRhs("SIGMA", common_data_ptr));
-    if (spring_stiffness > 0)
-      pip.push_back(new OpSpringRhs(
-          "U", common_data_ptr->contactDispPtr(),
-          [this](double, double, double) { return spring_stiffness; }));
+    CHKERR opFactoryBoundaryRhs(pip, "SIGMA", "U");
+
+    if (spring_stiffness > 0) {
+      auto u_disp = boost::make_shared<MatrixDouble>();
+      pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_disp));
+      pip.push_back(
+          new OpSpringRhs("U", u_disp, [this](double, double, double) {
+            return spring_stiffness;
+          }));
+    }
+
     pip.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
@@ -697,10 +666,6 @@ MoFEMErrorCode Contact::tsSolve() {
   }
 
   ContactOps::CommonData::totalTraction.reset();
-
-  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
   MoFEMFunctionReturn(0);
 }
