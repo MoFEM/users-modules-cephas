@@ -15,7 +15,7 @@ using namespace MoFEM;
 //! [Define dimension]
 constexpr int BASE_DIM = 1; //< Dimension of the base functions
 constexpr int SPACE_DIM =
-    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
+    EXECUTABLE_DIMENSION;   //< Space dimension of problem, mesh
 constexpr AssemblyType A = (SCHUR_ASSEMBLE)
                                ? AssemblyType::SCHUR
                                : AssemblyType::PETSC; //< selected assembly type
@@ -68,7 +68,6 @@ using PostProcEleDomain = PostProcEleByDim<SPACE_DIM>::PostProcEleDomain;
 using SideEle = PostProcEleByDim<SPACE_DIM>::SideEle;
 using PostProcEleBdy = PostProcEleByDim<SPACE_DIM>::PostProcEleBdy;
 
-
 #include <ElasticSpring.hpp>
 #include <CalculateTraction.hpp>
 #include <NaturalDomainBC.hpp>
@@ -100,7 +99,6 @@ private:
       boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
       std::string field_name, std::string block_name,
       boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev);
-
 };
 
 MoFEMErrorCode Example::addMatBlockOps(
@@ -156,7 +154,6 @@ MoFEMErrorCode Example::addMatBlockOps(
                      std::vector<const CubitMeshSets *> meshset_vec_ptr,
                      Sev sev) {
       MoFEMFunctionBegin;
-
 
       for (auto m : meshset_vec_ptr) {
         MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock") << *m;
@@ -343,7 +340,7 @@ MoFEMErrorCode Example::boundaryCondition() {
   };
   pip->getDomainRhsFE()->preProcessHook = get_pre_proc_hook();
 
-    MoFEMFunctionReturn(0);
+  MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
 
@@ -396,7 +393,7 @@ MoFEMErrorCode Example::assembleSystem() {
   // Add force boundary condition
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
       pip->getOpBoundaryRhsPipeline(), mField, "U", -1, Sev::inform);
-  // Add case for mix type of BCs 
+  // Add case for mix type of BCs
   CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
       pip->getOpBoundaryLhsPipeline(), mField, "U", Sev::verbose);
 
@@ -782,7 +779,6 @@ private:
   Range volEnts;
   Range subEnts;
 };
-
 
 MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
   MoFEMFunctionBegin;
