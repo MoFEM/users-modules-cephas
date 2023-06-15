@@ -111,17 +111,17 @@ struct Monitor : public FEMethod {
               {
 
                   {"U", u_ptr},
-                  {"X", X_ptr},
+                  {"GEOMETRY", X_ptr},
 
                   // Note: post-process tractions in 3d, i.e. when mesh is
                   // post-process on skin
-                  {"t_contact", (SPACE_DIM == 3)
-                                    ? common_data_ptr->contactTractionPtr()
+                  {"TRACTION_CONTACT",
+                   (SPACE_DIM == 3) ? common_data_ptr->contactTractionPtr()
                                     : nullptr},
 
-                  {"t_stress", (SPACE_DIM == 3)
-                                   ? common_data_ptr->stressTractionPtr()
-                                   : nullptr}
+                  {"TRACTION_STRESS", (SPACE_DIM == 3)
+                                          ? common_data_ptr->stressTractionPtr()
+                                          : nullptr}
 
               },
 
