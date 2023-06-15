@@ -801,10 +801,10 @@ MoFEMErrorCode opFactoryDomainLhs(Pip &pip, std::string u, std::string ep,
 
   using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
       A>::template BiLinearForm<I>;
-  // using OpKPiola =
-  //     typename B::template OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
-  // using OpKCauchy =
-  //     typename B::template OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+  using OpKPiola =
+      typename B::template OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
+  using OpKCauchy =
+      typename B::template OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
 
   auto common_plastic_ptr = OpFactory::createCommonPlasticOps();
   auto common_henky_ptr = OpFactory::createCommonHekyOps(common_plastic_ptr);

@@ -466,7 +466,7 @@ MoFEMErrorCode Example::OPs() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  auto add_domain_ops_lhs_mechanical = [&](auto &pipeline, auto m_D_ptr) {
+  auto add_domain_ops_lhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1},
@@ -474,8 +474,8 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    CHKERR PlasticOps::opFactoryDomainLhs<DomainEleOp, PETSC, G>(pipeline, "U",
-                                                                 "EP", "TAU");
+    CHKERR PlasticOps::opFactoryDomainLhs<DomainEleOp, A, G>(pipeline, "U",
+                                                             "EP", "TAU");
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -535,8 +535,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   // Domain
-  CHKERR add_domain_ops_lhs_mechanical(pip->getOpDomainLhsPipeline(),
-                                       commonPlasticDataPtr->mDPtr);
+  CHKERR add_domain_ops_lhs_mechanical(pip->getOpDomainLhsPipeline());
   CHKERR add_domain_ops_rhs_mechanical(pip->getOpDomainRhsPipeline());
   
   // Boundary
