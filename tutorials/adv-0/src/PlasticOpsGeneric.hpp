@@ -43,10 +43,9 @@ MoFEMErrorCode OpCalculatePlasticSurface::doWork(int side, EntityType type,
 }
 
 OpCalculatePlasticity::OpCalculatePlasticity(
-    const std::string field_name, MoFEM::Interface &m_field,
-    boost::shared_ptr<CommonData> common_data_ptr,
+    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr,
     boost::shared_ptr<MatrixDouble> m_D_ptr)
-    : DomainEleOp(field_name, DomainEleOp::OPROW), mField(m_field),
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);

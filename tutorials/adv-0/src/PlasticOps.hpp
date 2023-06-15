@@ -117,13 +117,12 @@ protected:
 };
 
 struct OpCalculatePlasticity : public DomainEleOp {
-  OpCalculatePlasticity(const std::string field_name, MoFEM::Interface &m_field,
+  OpCalculatePlasticity(const std::string field_name,
                         boost::shared_ptr<CommonData> common_data_ptr,
                         boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 protected:
-  MoFEM::Interface &mField;
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
@@ -611,3 +610,245 @@ static inline auto get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat,
 #include <PlasticOpsSmallStrains.hpp>
 #include <PlasticOpsLargeStrains.hpp>
 #include <PlasticOpsMonitor.hpp>
+
+namespace PlasticOps {
+
+using Pip = boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator>;
+using CommonPlasticPtr = boost::shared_ptr<PlasticOps::CommonData>;
+using CommonHenkyPtr = boost::shared_ptr<HenckyOps::CommonData>;
+
+struct OpFactory {
+
+  static CommonPlasticPtr createCommonPlasticOps();
+  static CommonHenkyPtr
+  createCommonHekyOps(CommonPlasticPtr common_plastic_ptr);
+
+  static MoFEMErrorCode addDomainBaseOps(Pip &pip,
+                                         CommonPlasticPtr common_plastoc_ptr,
+                                         CommonHenkyPtr common_henky_ptr,
+                                         std::string ep, std::string u,
+                                         std::string tau);
+};
+
+CommonPlasticPtr OpFactory::createCommonPlasticOps() {
+
+  auto common_ptr = boost::make_shared<PlasticOps::CommonData>();
+
+  auto set_common = [&]() {
+    MoFEMFunctionBegin;
+    auto make_d_mat = []() {
+      return boost::make_shared<MatrixDouble>(size_symm * size_symm, 1);
+    };
+
+    auto set_matrial_stiffness = [&]() {
+      MoFEMFunctionBegin;
+      FTensor::Index<'i', SPACE_DIM> i;
+      FTensor::Index<'j', SPACE_DIM> j;
+      FTensor::Index<'k', SPACE_DIM> k;
+      FTensor::Index<'l', SPACE_DIM> l;
+      constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+      const double bulk_modulus_K =
+          young_modulus / (3 * (1 - 2 * poisson_ratio));
+      const double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+
+      // Plane stress or when 1, plane strain or 3d
+      const double A = (SPACE_DIM == 2)
+                           ? 2 * shear_modulus_G /
+                                 (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
+                           : 1;
+
+      auto t_D =
+          getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*common_ptr->mDPtr);
+      auto t_D_axiator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+          *common_ptr->mDPtr_Axiator);
+      auto t_D_deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+          *common_ptr->mDPtr_Deviator);
+
+      constexpr double third = boost::math::constants::third<double>();
+      t_D_axiator(i, j, k, l) = A *
+                                (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
+                                t_kd(i, j) * t_kd(k, l);
+      t_D_deviator(i, j, k, l) =
+          2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
+      t_D(i, j, k, l) = t_D_axiator(i, j, k, l) + t_D_deviator(i, j, k, l);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    common_ptr = boost::make_shared<PlasticOps::CommonData>();
+    common_ptr->mDPtr = make_d_mat();
+    common_ptr->mDPtr_Axiator = make_d_mat();
+    common_ptr->mDPtr_Deviator = make_d_mat();
+    common_ptr->mGradPtr = boost::make_shared<MatrixDouble>();
+    common_ptr->mStrainPtr = boost::make_shared<MatrixDouble>();
+    common_ptr->mStressPtr = boost::make_shared<MatrixDouble>();
+
+    CHKERR set_matrial_stiffness();
+
+    MoFEMFunctionReturn(0);
+  };
+
+  CHK_THROW_MESSAGE(set_common(), "set common");
+
+  return common_ptr;
+};
+
+CommonHenkyPtr
+OpFactory::createCommonHekyOps(CommonPlasticPtr common_plastic_ptr) {
+  CommonHenkyPtr common_henky_ptr;
+
+  if (is_large_strains) {
+    common_henky_ptr = boost::make_shared<HenckyOps::CommonData>();
+    common_henky_ptr->matGradPtr = common_plastic_ptr->mGradPtr;
+    common_henky_ptr->matDPtr = common_plastic_ptr->mDPtr;
+    common_henky_ptr->matLogCPlastic =
+        common_plastic_ptr->getPlasticStrainPtr();
+    common_plastic_ptr->mStrainPtr = common_henky_ptr->getMatLogC();
+    common_plastic_ptr->mStressPtr = common_henky_ptr->getMatHenckyStress();
+  }
+
+  return common_henky_ptr;
+}
+
+MoFEMErrorCode OpFactory::addDomainBaseOps(Pip &pip,
+                                           CommonPlasticPtr common_plastic_ptr,
+                                           CommonHenkyPtr common_henky_ptr,
+                                           std::string u, std::string ep,
+                                           std::string tau) {
+  MoFEMFunctionBegin;
+
+  pip.push_back(new OpCalculateScalarFieldValuesDot(
+      tau, common_plastic_ptr->getPlasticTauDotPtr()));
+  pip.push_back(new OpCalculateScalarFieldValues(
+      tau, common_plastic_ptr->getPlasticTauPtr()));
+  pip.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
+      ep, common_plastic_ptr->getPlasticStrainPtr()));
+  pip.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<SPACE_DIM>(
+      ep, common_plastic_ptr->getPlasticStrainDotPtr()));
+  pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+      u, common_plastic_ptr->mGradPtr));
+
+  if (common_henky_ptr) {
+
+    if (common_plastic_ptr->mGradPtr != common_henky_ptr->matGradPtr)
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "Wrong pointer for grad");
+
+    using namespace HenckyOps;
+
+    pip.push_back(new OpCalculateEigenVals<SPACE_DIM>(u, common_henky_ptr));
+    pip.push_back(new OpCalculateLogC<SPACE_DIM>(u, common_henky_ptr));
+    pip.push_back(new OpCalculateLogC_dC<SPACE_DIM>(u, common_henky_ptr));
+    pip.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
+        u, common_henky_ptr, common_plastic_ptr->mDPtr));
+    pip.push_back(new OpCalculatePiolaStress<SPACE_DIM>(u, common_henky_ptr));
+
+  } else {
+    pip.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+        u, common_plastic_ptr->mGradPtr, common_plastic_ptr->mStrainPtr));
+    pip.push_back(new OpPlasticStress(u, common_plastic_ptr,
+                                      common_plastic_ptr->mDPtr, 1));
+  }
+
+  pip.push_back(new OpCalculatePlasticSurface(u, common_plastic_ptr));
+  pip.push_back(new OpCalculatePlasticity(u, common_plastic_ptr,
+                                          common_plastic_ptr->mDPtr));
+
+  MoFEMFunctionReturn(0);
+};
+
+template <typename DomainEleOp, AssemblyType A, IntegrationType I>
+MoFEMErrorCode opFactoryDomainRhs(Pip &pip, std::string u, std::string ep,
+                                  std::string tau) {
+  MoFEMFunctionBegin;
+
+  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
+      A>::template LinearForm<I>;
+  using OpInternalForceCauchy =
+      typename B::template OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+  using OpInternalForcePiola =
+      typename B::template OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+
+  auto common_plastic_ptr = OpFactory::createCommonPlasticOps();
+  auto common_henky_ptr = OpFactory::createCommonHekyOps(common_plastic_ptr);
+
+  CHKERR OpFactory::addDomainBaseOps(pip, common_plastic_ptr, common_henky_ptr,
+                                     u, ep, tau);
+
+  auto m_D_ptr = common_plastic_ptr->mDPtr;
+
+  // Calculate internal forces
+  if (common_henky_ptr) {
+    pip.push_back(new OpInternalForcePiola(
+        u, common_henky_ptr->getMatFirstPiolaStress()));
+  } else {
+    pip.push_back(new OpInternalForceCauchy(u, common_plastic_ptr->mStressPtr));
+  }
+
+  pip.push_back(
+      new OpCalculateConstraintsRhs(tau, common_plastic_ptr, m_D_ptr));
+  pip.push_back(new OpCalculatePlasticFlowRhs(ep, common_plastic_ptr, m_D_ptr));
+
+  MoFEMFunctionReturn(0);
+}
+
+template <typename DomainEleOp, AssemblyType A, IntegrationType I>
+MoFEMErrorCode opFactoryDomainLhs(Pip &pip, std::string u, std::string ep,
+                                  std::string tau) {
+  MoFEMFunctionBegin;
+
+  using namespace HenckyOps;
+
+  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
+      A>::template BiLinearForm<I>;
+  // using OpKPiola =
+  //     typename B::template OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
+  // using OpKCauchy =
+  //     typename B::template OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+
+  auto common_plastic_ptr = OpFactory::createCommonPlasticOps();
+  auto common_henky_ptr = OpFactory::createCommonHekyOps(common_plastic_ptr);
+
+  CHKERR OpFactory::addDomainBaseOps(pip, common_plastic_ptr, common_henky_ptr,
+                                     u, ep, tau);
+
+  auto m_D_ptr = common_plastic_ptr->mDPtr;
+
+  if (common_henky_ptr) {
+    pip.push_back(new OpHenckyTangent<SPACE_DIM>(u, common_henky_ptr,
+                                                 common_plastic_ptr->mDPtr));
+    pip.push_back(new OpKPiola(u, u, common_henky_ptr->getMatTangent()));
+    pip.push_back(new OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
+        u, ep, common_plastic_ptr, common_henky_ptr,
+        common_plastic_ptr->mDPtr));
+  } else {
+    pip.push_back(new OpKCauchy(u, u, m_D_ptr));
+    pip.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
+        u, ep, common_plastic_ptr, m_D_ptr));
+  }
+
+  if (common_henky_ptr) {
+    pip.push_back(new OpCalculateConstraintsLhs_LogStrain_dU(
+        tau, u, common_plastic_ptr, common_henky_ptr, m_D_ptr));
+    pip.push_back(new OpCalculatePlasticFlowLhs_LogStrain_dU(
+        ep, u, common_plastic_ptr, common_henky_ptr, m_D_ptr));
+  } else {
+    pip.push_back(
+        new OpCalculateConstraintsLhs_dU(tau, u, common_plastic_ptr, m_D_ptr));
+    pip.push_back(
+        new OpCalculatePlasticFlowLhs_dU(ep, u, common_plastic_ptr, m_D_ptr));
+  }
+
+  pip.push_back(
+      new OpCalculatePlasticFlowLhs_dEP(ep, ep, common_plastic_ptr, m_D_ptr));
+  pip.push_back(
+      new OpCalculatePlasticFlowLhs_dTAU(ep, tau, common_plastic_ptr, m_D_ptr));
+  pip.push_back(
+      new OpCalculateConstraintsLhs_dEP(tau, ep, common_plastic_ptr, m_D_ptr));
+  pip.push_back(
+      new OpCalculateConstraintsLhs_dTAU(tau, tau, common_plastic_ptr));
+
+  MoFEMFunctionReturn(0);
+}
+
+} // namespace PlasticOps
