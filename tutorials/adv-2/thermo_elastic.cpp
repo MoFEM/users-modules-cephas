@@ -484,6 +484,14 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
   auto create_post_process_element = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
 
+    /* The above code is creating and adding various post-processing operations to
+    a post-processing finite element object. These operations include
+    calculating the Jacobian matrix, inverting the Jacobian matrix, setting the
+    inverse Jacobian matrix to scalar bases, transforming contravariant Piola on
+    faces, setting the inverse Jacobian matrix to Hcurl face, calculating scalar
+    and vector field values, calculating vector field gradient, symmetrizing
+    tensor, calculating thermal stress, and mapping the post-processed data to a
+    MOAB mesh. */
     auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
     auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
     auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
@@ -563,7 +571,11 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
     MoFEMFunctionBegin;
     monitor_ptr->preProcessHook = [&]() {
       MoFEMFunctionBegin;
-      CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
+      cerr << monitor_ptr->getCacheWeakPtr().use_count() << endl;
+
+      CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(),
+                                      post_proc_fe,
+                                      monitor_ptr->getCacheWeakPtr());
       CHKERR post_proc_fe->writeFile(
           "out_" + boost::lexical_cast<std::string>(monitor_ptr->ts_step) +
           ".h5m");
@@ -606,9 +618,11 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
   auto D = createDMVector(dm);
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
+
   CHKERR set_section_monitor(solver);
-  CHKERR set_time_monitor(dm, solver);
   CHKERR set_fieldsplit_preconditioner(solver);
+  CHKERR set_time_monitor(dm, solver);
+
   CHKERR TSSetUp(solver);
   CHKERR TSSolve(solver, NULL);
 
