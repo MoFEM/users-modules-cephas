@@ -272,36 +272,9 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
 
   auto time_scale = boost::make_shared<TimeScale>();
 
-  auto add_domain_ops = [&](auto &pipeline) {
-    MoFEMFunctionBegin;
-
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    pipeline.push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
-    if constexpr (SPACE_DIM == 2) {
-      pipeline.push_back(new OpMakeHdivFromHcurl());
-      pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
-      pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacL2ForFace(inv_jac_ptr));
-    } else {
-      pipeline.push_back(
-          new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
-      pipeline.push_back(new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
-      pipeline.push_back(new OpSetInvJacL2ForFace(inv_jac_ptr));
-    }
-
-    MoFEMFunctionReturn(0);
-  };
-
   auto add_domain_rhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1, HDIV});
 
     auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
     auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
@@ -357,6 +330,8 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1, HDIV});
+
     pipeline.push_back(new OpSetBc("FLUX", true, boundary_marker));
 
     pipeline.push_back(new OpKCauchy("U", "U", mDPtr));
@@ -386,11 +361,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
   auto add_boundary_rhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    if constexpr (SPACE_DIM == 2) {
-      pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge2D());
-    } else {
-      pipeline.push_back(new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
-    }
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pipeline, {HDIV});
 
     pipeline.push_back(new OpSetBc("FLUX", true, boundary_marker));
 
@@ -418,11 +389,8 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
   auto add_boundary_lhs_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    if constexpr (SPACE_DIM == 2) {
-      pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge2D());
-    } else {
-      pipeline.push_back(new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
-    }
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pipeline, {HDIV});
+
 
     CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<GAUSS>::
         AddEssentialToPipeline<OpEssentialFluxLhs>::add(
@@ -445,10 +413,10 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
   pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
   pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
 
-  CHKERR add_domain_ops(pipeline_mng->getOpDomainRhsPipeline());
+  // CHKERR add_domain_ops(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_domain_rhs_ops(pipeline_mng->getOpDomainRhsPipeline());
 
-  CHKERR add_domain_ops(pipeline_mng->getOpDomainLhsPipeline());
+  // CHKERR add_domain_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_lhs_ops(pipeline_mng->getOpDomainLhsPipeline());
 
   CHKERR add_boundary_rhs_ops(pipeline_mng->getOpBoundaryRhsPipeline());
@@ -484,46 +452,15 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
   auto create_post_process_element = [&]() {
     auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
 
-    /* The above code is creating and adding various post-processing operations to
-    a post-processing finite element object. These operations include
-    calculating the Jacobian matrix, inverting the Jacobian matrix, setting the
-    inverse Jacobian matrix to scalar bases, transforming contravariant Piola on
-    faces, setting the inverse Jacobian matrix to Hcurl face, calculating scalar
-    and vector field values, calculating vector field gradient, symmetrizing
-    tensor, calculating thermal stress, and mapping the post-processed data to a
-    MOAB mesh. */
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        post_proc_fe->getOpPtrVector(), {H1, HDIV});
+
     auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
     auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
     auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
 
     auto vec_temp_ptr = boost::make_shared<VectorDouble>();
     auto mat_flux_ptr = boost::make_shared<MatrixDouble>();
-
-    auto det_ptr = boost::make_shared<VectorDouble>();
-    auto jac_ptr = boost::make_shared<MatrixDouble>();
-    auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
-    if constexpr (SPACE_DIM == 2) {
-      post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpSetInvJacHcurlFace(inv_jac_ptr));
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpSetInvJacL2ForFace(inv_jac_ptr));
-    } else {
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpSetHOContravariantPiolaTransform(HDIV, det_ptr, jac_ptr));
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpSetHOInvJacVectorBase(HDIV, inv_jac_ptr));
-    }
 
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("T", vec_temp_ptr));
