@@ -303,7 +303,7 @@ MoFEMErrorCode Electrostatic2DHomogeneous::outputResults() {
 
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_result.h5m");
+  CHKERR post_proc_fe->writeFile("out_result2D.h5m");
 
   MoFEMFunctionReturn(0);
 }

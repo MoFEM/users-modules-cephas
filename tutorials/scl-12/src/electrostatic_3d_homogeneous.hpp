@@ -22,19 +22,42 @@ using FaceEle = MoFEM::FaceElementForcesAndSourcesCore;                     //
 using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator; //
 
 using EntData = EntitiesFieldData::EntData;
-
+typedef boost::function<double(const double, const double, const double)>
+    ScalarFunc; // takes three double parameters (const double, const double,
+                // const double) and returns a double.
+struct VolBlockData {
+  int iD;
+  double epsPermit;
+  Range tEts; ///< constrains elements in block set
+};
+struct SurfBlockData {
+  int iD;
+  double sigma;
+  Range tRis; ///
+};
 namespace Electrostatic3DHomogeneousOperators {
 
 FTensor::Index<'i', 3> i;
 
 const double body_source = 5.;
+struct DataAtIntegrationPts {
+
+  SmartPetscObj<Vec> petscVec;
+  double blockPermittivity;
+  double chrgDens;
+  DataAtIntegrationPts(MoFEM::Interface &m_field) {
+    blockPermittivity=0;
+    chrgDens=0;
+  }
+};
+
 
 struct OpDomainLhsMatrixK : public OpVolEle {
 public:
   OpDomainLhsMatrixK(std::string row_field_name, std::string col_field_name,
-                     double rel_permit)
+                     boost::shared_ptr<DataAtIntegrationPts> common_data_ptr)
       : OpVolEle(row_field_name, col_field_name, OpVolEle::OPROWCOL),
-        relPermit(rel_permit) {
+        commonDataPtr(common_data_ptr) {
     sYmm = true;
   }
 
@@ -71,8 +94,8 @@ public:
           auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
 
           for (int cc = 0; cc != nb_col_dofs; cc++) {
-            locLhs(rr, cc) +=
-                t_row_diff_base(i) * t_col_diff_base(i) * a * relPermit;
+            locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a *
+                              commonDataPtr->blockPermittivity;
 
             // move to the derivatives of the next base functions on column
             ++t_col_diff_base;
@@ -102,13 +125,15 @@ public:
 
 private:
   MatrixDouble locLhs, transLocLhs;
-  double relPermit;
+  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
 };
 
 struct OpInterfaceRhsVectorF : public OpFaceEle {
 public:
-  OpInterfaceRhsVectorF(std::string field_name, double SrfcChrgDens)
-      : OpFaceEle(field_name, OpFaceEle::OPROW), chrgDens(SrfcChrgDens) {}
+  OpInterfaceRhsVectorF(std::string field_name,
+                        boost::shared_ptr<DataAtIntegrationPts> common_data_ptr)
+      : OpFaceEle(field_name, OpFaceEle::OPROW),
+        commonDataPtr(common_data_ptr) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -129,26 +154,18 @@ public:
 
       // get base function
       auto t_base = data.getFTensor0N();
-
       // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL VECTOR
       for (int gg = 0; gg != nb_integration_points; gg++) {
         const double a = t_w * area;
-        // double y = getGaussPts()(1, gg);
-        double y = getCoordsAtGaussPts()(gg, 1);
 
         for (int rr = 0; rr != nb_dofs; rr++) {
-          double charge_density = chrgDens;
-          if (y < 0) {
-            charge_density *= -1;
-          }
+          locRhs[rr] += t_base * a * commonDataPtr->chrgDens;
 
-          locRhs[rr] += t_base * charge_density * a;
-          // move to the next base function
           ++t_base;
         }
-
         // move to the weight of the next integration point
         ++t_w;
+        // move to the coordinates of the next integration point
       }
 
       // FILL VALUES OF LOCAL VECTOR ENTRIES TO THE GLOBAL VECTOR
@@ -163,97 +180,102 @@ public:
 
 private:
   VectorDouble locRhs;
-  double chrgDens;
+  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
 };
-// struct OpNegativeGradient: public OpVolEle {
-//   OpNegativeGradient(boost::shared_ptr<MoFEM::Types::MatrixDouble> gradU,
-//                     boost::shared_ptr<MoFEM::Types::MatrixDouble> gradUNegative)
-//       : OpVolEle(gradU(gradU), gradUNegative(gradUNegative) {}
 
-//   MoFEMErrorCode doWork(EntityType type, const EntData &data, double *row_data,
-//                         const double *col_data) {
-//     MoFEMFunctionBegin;
-//     const int nb_integration_points = getGaussPts().size2();
-//     gradUNegative->resize(nb_integration_points());
-//     gradUNegative->clear();
-
-//       for (int gg = 0; gg != nb_integration_points; gg++) {
-//       (gradUNegative)[gg] = -(gradU)[gg];
-//     }
-
-//     MoFEMFunctionReturn(0);
-//   }
-
-// private:
-//   boost::shared_ptr<MoFEM::Types::MatrixDouble> gradU;
-//   boost::shared_ptr<MoFEM::Types::MatrixDouble> gradUNegative;
-// };
-
+template <int space_dim>
 struct OpNegativeGradient : public ForcesAndSourcesCore::UserDataOperator {
-public:
-  OpNegativeGradient(boost::shared_ptr<MatrixDouble> grad_u_neg,
+  OpNegativeGradient(boost::shared_ptr<MatrixDouble> grad_u_negative,
                      boost::shared_ptr<MatrixDouble> grad_u)
       : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPLAST),
-        gradUNeg(grad_u_neg), gradU(grad_u) {}
+        gradUNegative(grad_u_negative), gradU(grad_u) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 
     const size_t nb_gauss_pts = getGaussPts().size2();
-    gradUNeg->resize(3, nb_gauss_pts, false);
-    gradUNeg->clear();
+    gradUNegative->resize(space_dim, nb_gauss_pts, false);
+    gradUNegative->clear();
 
-    for (size_t gg = 0; gg < nb_gauss_pts; gg++) {
-      for (size_t i = 0; i < 3; i++) {
-        (*gradUNeg)(i, gg) = -(*gradU)(i, gg);//gg->OpRow
-      }
+    auto t_grad_u = getFTensor1FromMat<space_dim>(*gradU);
+
+    auto t_negative_grad_u = getFTensor1FromMat<space_dim>(*gradUNegative);
+
+    FTensor::Index<'I', space_dim> I;
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      t_negative_grad_u(I) = -t_grad_u(I);
+
+      ++t_grad_u;
+      ++t_negative_grad_u;
     }
 
     MoFEMFunctionReturn(0);
   }
 
 private:
-  boost::shared_ptr<MatrixDouble> gradUNeg;
+  boost::shared_ptr<MatrixDouble> gradUNegative;
   boost::shared_ptr<MatrixDouble> gradU;
 };
-// template <int space_dim>
-// struct OpNegativeGradient
-// : public ForcesAndSourcesCore::UserDataOperator {
-//   OpNegativeGradient(boost::shared_ptr<MatrixDouble> grad_u_negative,
-//                               boost::shared_ptr<MatrixDouble> grad_u)
-//       : ForcesAndSourcesCore::UserDataOperator(),
-//         gradUNegative(grad_u_negative), gradU(grad_u) {}
+struct OpBlockChargeDensity : public OpFaceEle {
 
-//   MoFEMErrorCode doWork(int side, EntityType type,
-//                         DataForcesAndSourcesCore::EntData &data) {
-//     MoFEMFunctionBegin;
+  OpBlockChargeDensity(
+      boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
+      boost::shared_ptr<map<int, SurfBlockData>> surf_block_sets_ptr,
+      const std::string &field_name)
+      : OpFaceEle(field_name, field_name, OPROWCOL, false),
+        commonDataPtr(common_data_ptr), surfBlockSetsPtr(surf_block_sets_ptr) {
+    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+    doEntities[MBVERTEX] = true;
+  }
 
-//     const size_t nb_gauss_pts = getGaussPts().size2();
-//     gradUNegative->resize(space_dim, nb_gauss_pts, false);
-//     gradUNegative->clear();
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
+    MoFEMFunctionBegin;
+    for (auto &m : (*surfBlockSetsPtr)) {
+      if (m.second.tRis.find(getFEEntityHandle()) != m.second.tRis.end()) {
+        commonDataPtr->chrgDens = m.second.sigma;
+      }
+    }
+    MoFEMFunctionReturn(0);
+  }
 
-//     auto t_grad_u = getFTensor1FromMat<space_dim>(*gradU);
+protected:
+  boost::shared_ptr<map<int, SurfBlockData>> surfBlockSetsPtr;
+  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
+};
+struct OpBlockPermittivity : public OpVolEle {
 
-//     auto t_negative_grad_u = getFTensor1FromMat<space_dim>(*gradUNegative);
+  OpBlockPermittivity(
+      boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
+      boost::shared_ptr<map<int, VolBlockData>> vol_block_sets_ptr,
+      const std::string &field_name)
+      : OpVolEle(field_name, field_name, OPROWCOL, false),
+        commonDataPtr(common_data_ptr), volBlockSetsPtr(vol_block_sets_ptr) {
+    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+    doEntities[MBVERTEX] = true;
+  }
 
-//     FTensor::Index<'I', space_dim> I;
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
+    MoFEMFunctionBegin;
+    for (auto &m : (*volBlockSetsPtr)) {
+      if (m.second.tEts.find(getFEEntityHandle()) != m.second.tEts.end()) {
+        commonDataPtr->blockPermittivity = m.second.epsPermit;
+      }
+    }
+    MoFEMFunctionReturn(0);
+  }
 
-//     for (int gg = 0; gg != nb_gauss_pts; gg++) {
-//       t_negative_grad_u(I) = -t_grad_u(I);
-
-//       ++t_grad_u;
-//       ++t_negative_grad_u;
-//     }
-
-//     MoFEMFunctionReturn(0);
-//   }
-
-// private:
-//   boost::shared_ptr<MatrixDouble> gradUNegative;
-//   boost::shared_ptr<MatrixDouble> gradU;
-// };
-
+protected:
+  boost::shared_ptr<map<int, VolBlockData>> volBlockSetsPtr;
+  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
+};
 };     // namespace Electrostatic3DHomogeneousOperators
 
 #endif //__ELECTROSTATIC_3D_HOMOGENEOUS_HPP__
