@@ -136,10 +136,10 @@ double ref_temp = 0.0;
 double heat_conductivity =
     1; // Force / (time temperature )  or Power /
        // (length temperature) // Time unit is hour. force unit kN
-double heat_capacity = 1; // length^2/(time^2 temperature) // length is
-                          // millimeter time is hour
+double heat_capacity = 1;         // length^2/(time^2 temperature) // length is
+                                  // millimeter time is hour
 
-int order = 2; //< default approximation order
+int order = 2;                    //< default approximation order
 
 #include <ThermoElasticOps.hpp>   //< additional coupling opearyors
 using namespace ThermoElasticOps; //< name space of coupling operators
@@ -391,7 +391,6 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
 
     CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pipeline, {HDIV});
 
-
     CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::BiLinearForm<GAUSS>::
         AddEssentialToPipeline<OpEssentialFluxLhs>::add(
             mField, pipeline, simple->getProblemName(), "FLUX");
@@ -413,12 +412,8 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
   pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
   pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
 
-  // CHKERR add_domain_ops(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_domain_rhs_ops(pipeline_mng->getOpDomainRhsPipeline());
-
-  // CHKERR add_domain_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_lhs_ops(pipeline_mng->getOpDomainLhsPipeline());
-
   CHKERR add_boundary_rhs_ops(pipeline_mng->getOpBoundaryRhsPipeline());
   CHKERR add_boundary_lhs_ops(pipeline_mng->getOpBoundaryLhsPipeline());
 
