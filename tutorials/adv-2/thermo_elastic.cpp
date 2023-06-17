@@ -571,8 +571,6 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
     MoFEMFunctionBegin;
     monitor_ptr->preProcessHook = [&]() {
       MoFEMFunctionBegin;
-      cerr << monitor_ptr->getCacheWeakPtr().use_count() << endl;
-
       CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(),
                                       post_proc_fe,
                                       monitor_ptr->getCacheWeakPtr());
