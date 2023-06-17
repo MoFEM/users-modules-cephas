@@ -65,7 +65,6 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble resFlowDstrainDot;
 
   std::array<int, 5> activityData;
-  Tag thActivityMarker;
 
   inline auto getPlasticSurfacePtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &plasticSurface);
