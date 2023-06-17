@@ -14,25 +14,14 @@
 
 using namespace MoFEM;
 
-template <int DIM> struct ElementsAndOps {};
-
-template <> struct ElementsAndOps<2> {
-  using DomainEle = PipelineManager::FaceEle;
-  using BoundaryEle = PipelineManager::EdgeEle;
-};
-
-template <> struct ElementsAndOps<3> {
-  using DomainEle = PipelineManager::VolEle;
-  using BoundaryEle = PipelineManager::FaceEle;
-};
-
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 using EntData = EntitiesFieldData::EntData;
-using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
-using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
+using BoundaryEle =
+    PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
