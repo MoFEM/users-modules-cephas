@@ -12,6 +12,7 @@ constexpr auto domainField = "U";
 #include <PoissonOperators.hpp>
 #include <electrostatic_3d_homogeneous.hpp>
 
+
 using namespace MoFEM;
 using namespace Electrostatic3DHomogeneousOperators;
 
@@ -39,14 +40,14 @@ private:
 
   // MoFEM interfaces
   MoFEM::Interface &mField;
-  boost::shared_ptr<std::map<int, VolBlockData>> vol_block_sets_ptr; ///////
-  boost::shared_ptr<std::map<int, SurfBlockData>> surf_block_sets_ptr;
+  boost::shared_ptr<std::map<int, VolBlockData<SPACE_DIM>>> vol_block_sets_ptr; ///////
+  boost::shared_ptr<std::map<int, SurfBlockData<SPACE_DIM>>> surf_block_sets_ptr;
 
   /////////
   Simple *simpleInterface;
 
   boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe;
-  boost::shared_ptr<DataAtIntegrationPts> common_data_ptr;
+  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr;
   // Field name and approximation order
   std::string domainField;
   int oRder;
@@ -95,14 +96,14 @@ MoFEMErrorCode Electrostatic3DHomogeneous::setupProblem() {
 
 
   /////
-  vol_block_sets_ptr = boost::make_shared<std::map<int, VolBlockData>>();
+  vol_block_sets_ptr = boost::make_shared<std::map<int, VolBlockData<SPACE_DIM>>>();
   Range electric_tets;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 12, "MAT_ELECTRIC") == 0) {
       const int id = bit->getMeshsetId();
       auto &block_data = (*vol_block_sets_ptr)[id];
 
-      CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), 3,
+      CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM,
                                                          block_data.tEts, true);
       electric_tets.merge(block_data.tEts);
 
@@ -118,14 +119,14 @@ MoFEMErrorCode Electrostatic3DHomogeneous::setupProblem() {
     }
   }
 
-  surf_block_sets_ptr = boost::make_shared<std::map<int, SurfBlockData>>();
+  surf_block_sets_ptr = boost::make_shared<std::map<int, SurfBlockData<SPACE_DIM>>>();
   Range interface_tris;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 12, "INT_ELECTRIC") == 0) {
       const int id = bit->getMeshsetId();
       auto &block_data = (*surf_block_sets_ptr)[id];
 
-      CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), 2,
+      CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM -1,
                                                          block_data.tRis, true);
       interface_tris.merge(block_data.tRis);
 
@@ -191,8 +192,7 @@ MoFEMErrorCode Electrostatic3DHomogeneous::boundaryCondition() {
 MoFEMErrorCode Electrostatic3DHomogeneous::assembleSystem() {
   MoFEMFunctionBegin;
   auto pipeline_mng = mField.getInterface<PipelineManager>();
-  ///
-  common_data_ptr = boost::make_shared<DataAtIntegrationPts>(mField);
+  common_data_ptr = boost::make_shared<DataAtIntegrationPts<SPACE_DIM>>(mField);
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpBlockPermittivity(
@@ -201,25 +201,14 @@ MoFEMErrorCode Electrostatic3DHomogeneous::assembleSystem() {
 
   add_domain_lhs_ops(pipeline_mng->getOpDomainLhsPipeline());
 
-  ///
-
-  // auto add_domain_rhs_ops = [&](auto &pipeline) {
-  //   auto grad_u_at_gauss_pts = boost::make_shared<MatrixDouble>();
-  //   pipeline.push_back(
-  //       new OpBlockPermittivity(common_data_ptr, vol_block_sets_ptr));
-  // };
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
-    CHKERR AddHOOps<3, 3, 3>::add(pipeline_mng->getOpDomainLhsPipeline(), {H1});
-
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField, common_data_ptr));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
-
-    constexpr int space_dim = 3;
-
     auto set_values_to_bc_dofs = [&](auto &fe) {
       auto get_bc_hook = [&]() {
         EssentialPreProc<TemperatureCubitBcData> hook(mField, fe, {});
@@ -230,21 +219,21 @@ MoFEMErrorCode Electrostatic3DHomogeneous::assembleSystem() {
 
     auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
       using DomainEle =
-          PipelineManager::ElementsAndOpsByDim<space_dim>::DomainEle;
+          PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
       using DomainEleOp = DomainEle::UserDataOperator;
       using OpInternal = FormsIntegrators<DomainEleOp>::Assembly<
-          PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, space_dim>;
+          PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<BASE_DIM, FIELD_DIM, SPACE_DIM>;
 
       auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
       pipeline.push_back(
-          new OpCalculateScalarFieldGradient<space_dim>(domainField,
+          new OpCalculateScalarFieldGradient<SPACE_DIM>(domainField,
                                                         grad_u_vals_ptr));
       pipeline.push_back(
           new OpInternal(domainField, grad_u_vals_ptr,
                          [](double, double, double) constexpr { return -1; }));
     };
 
-    CHKERR AddHOOps<space_dim, space_dim, space_dim>::add(
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {H1});
     set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
     calculate_residual_from_set_values_on_bc(
@@ -255,16 +244,13 @@ MoFEMErrorCode Electrostatic3DHomogeneous::assembleSystem() {
 
     {
 
-      // push operator fwhich puts correct sigma to common data
 
       interface_rhs_fe->getOpPtrVector().push_back(new OpBlockChargeDensity(
           common_data_ptr, surf_block_sets_ptr, domainField));
 
       interface_rhs_fe->getOpPtrVector().push_back(
           new OpInterfaceRhsVectorF(domainField, common_data_ptr));
-      // double chargeDens = 2.5;
-      // pipeline_mng->getOpDomainRhsPipeline().push_back(
-      //     new OpInterfaceRhsVectorF(domainField, chargeDens));
+
     }
   }
 
@@ -330,7 +316,7 @@ MoFEMErrorCode Electrostatic3DHomogeneous::outputResults() {
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
 
-  constexpr auto SPACE_DIM = 3; // dimension of problem
+  // constexpr auto SPACE_DIM = 3; // dimension of problem
 
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
@@ -348,16 +334,11 @@ MoFEMErrorCode Electrostatic3DHomogeneous::outputResults() {
       new OpCalculateScalarFieldGradient<SPACE_DIM>(domainField, grad_u_ptr));
   using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-  // boost::shared_ptr<MatrixDouble> neg_grad_u_ptr;
-  // neg_grad_u_ptr = boost::make_shared<MatrixDouble>(*grad_u_ptr);
-  // auto negative_gradient_op =
-  // boost::make_shared<OpNegativeGradient>(neg_grad_u_ptr);
-  // post_proc_fe->getOpPtrVector().push_back(negative_gradient_op);
 
   auto neg_grad_u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(
       new OpNegativeGradient<SPACE_DIM>(neg_grad_u_ptr, grad_u_ptr));
-  // new OpNegativeGradient(neg_grad_u_ptr, grad_u_ptr));
+
 
   post_proc_fe->getOpPtrVector().push_back(
 

@@ -13,23 +13,21 @@
 
 #include <stdlib.h>
 #include <BasicFiniteElements.hpp>
+constexpr int BASE_DIM = 1;
+constexpr int FIELD_DIM = 1;
+const int SPACE_DIM = 3; 
 
-using VolEle = MoFEM::VolumeElementForcesAndSourcesCore;
-
-using OpVolEle = MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator;
-
-using FaceEle = MoFEM::FaceElementForcesAndSourcesCore;                     //
-using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator; //
-
+using OpVolEle = MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator;                
+using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator; 
 using EntData = EntitiesFieldData::EntData;
-typedef boost::function<double(const double, const double, const double)>
-    ScalarFunc; // takes three double parameters (const double, const double,
-                // const double) and returns a double.
+
+template <int SPACE_DIM>
 struct VolBlockData {
   int iD;
   double epsPermit;
   Range tEts; ///< constrains elements in block set
 };
+template <int SPACE_DIM>
 struct SurfBlockData {
   int iD;
   double sigma;
@@ -37,25 +35,24 @@ struct SurfBlockData {
 };
 namespace Electrostatic3DHomogeneousOperators {
 
-FTensor::Index<'i', 3> i;
 
-const double body_source = 5.;
+template <int SPACE_DIM>
 struct DataAtIntegrationPts {
-
   SmartPetscObj<Vec> petscVec;
   double blockPermittivity;
   double chrgDens;
-  DataAtIntegrationPts(MoFEM::Interface &m_field) {
-    blockPermittivity=0;
-    chrgDens=0;
+
+  DataAtIntegrationPts(MoFEM::Interface& m_field) {
+    blockPermittivity = 0;
+    chrgDens = 0;
   }
 };
 
-
+template <int SPACE_DIM> 
 struct OpDomainLhsMatrixK : public OpVolEle {
 public:
   OpDomainLhsMatrixK(std::string row_field_name, std::string col_field_name,
-                     boost::shared_ptr<DataAtIntegrationPts> common_data_ptr)
+                     boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr)
       : OpVolEle(row_field_name, col_field_name, OpVolEle::OPROWCOL),
         commonDataPtr(common_data_ptr) {
     sYmm = true;
@@ -68,7 +65,7 @@ public:
 
     const int nb_row_dofs = row_data.getIndices().size();
     const int nb_col_dofs = col_data.getIndices().size();
-
+    FTensor::Index<'i', SPACE_DIM> i;
     if (nb_row_dofs && nb_col_dofs) {
 
       locLhs.resize(nb_row_dofs, nb_col_dofs, false);
@@ -83,7 +80,7 @@ public:
       auto t_w = getFTensor0IntegrationWeight();
 
       // get derivatives of base functions on row
-      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+      auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
 
       // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
       for (int gg = 0; gg != nb_integration_points; gg++) {
@@ -91,7 +88,7 @@ public:
 
         for (int rr = 0; rr != nb_row_dofs; ++rr) {
           // get derivatives of base functions on column
-          auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+          auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
           for (int cc = 0; cc != nb_col_dofs; cc++) {
             locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a *
@@ -125,13 +122,13 @@ public:
 
 private:
   MatrixDouble locLhs, transLocLhs;
-  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
+  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
 };
-
+template <int SPACE_DIM>
 struct OpInterfaceRhsVectorF : public OpFaceEle {
 public:
   OpInterfaceRhsVectorF(std::string field_name,
-                        boost::shared_ptr<DataAtIntegrationPts> common_data_ptr)
+                        boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr)
       : OpFaceEle(field_name, OpFaceEle::OPROW),
         commonDataPtr(common_data_ptr) {}
 
@@ -180,10 +177,10 @@ public:
 
 private:
   VectorDouble locRhs;
-  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
+  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
 };
 
-template <int space_dim>
+template <int SPACE_DIM>
 struct OpNegativeGradient : public ForcesAndSourcesCore::UserDataOperator {
   OpNegativeGradient(boost::shared_ptr<MatrixDouble> grad_u_negative,
                      boost::shared_ptr<MatrixDouble> grad_u)
@@ -195,14 +192,14 @@ struct OpNegativeGradient : public ForcesAndSourcesCore::UserDataOperator {
     MoFEMFunctionBegin;
 
     const size_t nb_gauss_pts = getGaussPts().size2();
-    gradUNegative->resize(space_dim, nb_gauss_pts, false);
+    gradUNegative->resize(SPACE_DIM, nb_gauss_pts, false);
     gradUNegative->clear();
 
-    auto t_grad_u = getFTensor1FromMat<space_dim>(*gradU);
+    auto t_grad_u = getFTensor1FromMat<SPACE_DIM>(*gradU);
 
-    auto t_negative_grad_u = getFTensor1FromMat<space_dim>(*gradUNegative);
+    auto t_negative_grad_u = getFTensor1FromMat<SPACE_DIM>(*gradUNegative);
 
-    FTensor::Index<'I', space_dim> I;
+    FTensor::Index<'I', SPACE_DIM> I;
 
     for (int gg = 0; gg != nb_gauss_pts; gg++) {
       t_negative_grad_u(I) = -t_grad_u(I);
@@ -218,11 +215,12 @@ private:
   boost::shared_ptr<MatrixDouble> gradUNegative;
   boost::shared_ptr<MatrixDouble> gradU;
 };
+template <int SPACE_DIM>
 struct OpBlockChargeDensity : public OpFaceEle {
 
   OpBlockChargeDensity(
-      boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
-      boost::shared_ptr<map<int, SurfBlockData>> surf_block_sets_ptr,
+      boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
+      boost::shared_ptr<map<int, SurfBlockData<SPACE_DIM>>> surf_block_sets_ptr,
       const std::string &field_name)
       : OpFaceEle(field_name, field_name, OPROWCOL, false),
         commonDataPtr(common_data_ptr), surfBlockSetsPtr(surf_block_sets_ptr) {
@@ -244,14 +242,15 @@ struct OpBlockChargeDensity : public OpFaceEle {
   }
 
 protected:
-  boost::shared_ptr<map<int, SurfBlockData>> surfBlockSetsPtr;
-  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
+  boost::shared_ptr<map<int, SurfBlockData<SPACE_DIM>>> surfBlockSetsPtr;
+  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
 };
+template <int SPACE_DIM>
 struct OpBlockPermittivity : public OpVolEle {
 
   OpBlockPermittivity(
-      boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
-      boost::shared_ptr<map<int, VolBlockData>> vol_block_sets_ptr,
+      boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
+      boost::shared_ptr<map<int, VolBlockData<SPACE_DIM>>> vol_block_sets_ptr,
       const std::string &field_name)
       : OpVolEle(field_name, field_name, OPROWCOL, false),
         commonDataPtr(common_data_ptr), volBlockSetsPtr(vol_block_sets_ptr) {
@@ -273,8 +272,8 @@ struct OpBlockPermittivity : public OpVolEle {
   }
 
 protected:
-  boost::shared_ptr<map<int, VolBlockData>> volBlockSetsPtr;
-  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
+  boost::shared_ptr<map<int, VolBlockData<SPACE_DIM>>>volBlockSetsPtr;
+  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>>commonDataPtr;
 };
 };     // namespace Electrostatic3DHomogeneousOperators
 
