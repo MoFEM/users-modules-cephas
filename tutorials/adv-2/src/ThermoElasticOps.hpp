@@ -7,37 +7,43 @@
 namespace ThermoElasticOps {
 
 struct OpKCauchyThermoElasticity : public AssemblyDomainEleOp {
-  OpKCauchyThermoElasticity(const std::string row_field_name,
-                            const std::string col_field_name,
-                            boost::shared_ptr<MatrixDouble> mDptr);
+  OpKCauchyThermoElasticity(
+    const std::string row_field_name, const std::string col_field_name,
+    boost::shared_ptr<MatrixDouble> mDptr,
+    boost::shared_ptr<double> coeff_expansion_ptr);
+
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
 private:
   boost::shared_ptr<MatrixDouble> mDPtr;
+  boost::shared_ptr<double> coeffExpansionPtr;
 };
 
 struct OpStressThermal : public DomainEleOp {
   OpStressThermal(const std::string field_name,
-                         boost::shared_ptr<MatrixDouble> strain_ptr,
-                         boost::shared_ptr<VectorDouble> temp_ptr,
-                         boost::shared_ptr<MatrixDouble> m_D_ptr,
-                         boost::shared_ptr<MatrixDouble> stress_ptr);
+                  boost::shared_ptr<MatrixDouble> strain_ptr,
+                  boost::shared_ptr<VectorDouble> temp_ptr,
+                  boost::shared_ptr<MatrixDouble> m_D_ptr,
+                  boost::shared_ptr<double> coeff_expansion_ptr,
+                  boost::shared_ptr<MatrixDouble> stress_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<MatrixDouble> strainPtr;
   boost::shared_ptr<VectorDouble> tempPtr;
   boost::shared_ptr<MatrixDouble> mDPtr;
+  boost::shared_ptr<double> coeffExpansionPtr;
   boost::shared_ptr<MatrixDouble> stressPtr;
 };
 
 OpKCauchyThermoElasticity::OpKCauchyThermoElasticity(
     const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<MatrixDouble> mDptr)
+    boost::shared_ptr<MatrixDouble> mDptr,
+    boost::shared_ptr<double> coeff_expansion_ptr)
     : AssemblyDomainEleOp(row_field_name, col_field_name,
                           DomainEleOp::OPROWCOL),
-      mDPtr(mDptr) {
+      mDPtr(mDptr), coeffExpansionPtr(coeff_expansion_ptr) {
   sYmm = false;
 }
 
@@ -61,7 +67,7 @@ OpKCauchyThermoElasticity::iNtegrate(EntitiesFieldData::EntData &row_data,
   FTensor::Index<'k', SPACE_DIM> k;
   FTensor::Index<'l', SPACE_DIM> l;
   FTensor::Tensor2_symmetric<double, SPACE_DIM> t_eigen_strain;
-  t_eigen_strain(i, j) = (t_D(i, j, k, l) * t_kd(k, l)) * coeff_expansion;
+  t_eigen_strain(i, j) = (t_D(i, j, k, l) * t_kd(k, l)) * (*coeffExpansionPtr);
 
   for (auto gg = 0; gg != nb_integration_pts; ++gg) {
 
@@ -90,14 +96,16 @@ OpKCauchyThermoElasticity::iNtegrate(EntitiesFieldData::EntData &row_data,
   MoFEMFunctionReturn(0);
 }
 
-OpStressThermal::OpStressThermal(
-    const std::string field_name, boost::shared_ptr<MatrixDouble> strain_ptr,
-    boost::shared_ptr<VectorDouble> temp_ptr,
-    boost::shared_ptr<MatrixDouble> m_D_ptr,
-    boost::shared_ptr<MatrixDouble> stress_ptr)
+OpStressThermal::OpStressThermal(const std::string field_name,
+                                 boost::shared_ptr<MatrixDouble> strain_ptr,
+                                 boost::shared_ptr<VectorDouble> temp_ptr,
+                                 boost::shared_ptr<MatrixDouble> m_D_ptr,
+                                 boost::shared_ptr<double> coeff_expansion_ptr,
+                                 boost::shared_ptr<MatrixDouble> stress_ptr)
     : DomainEleOp(field_name, DomainEleOp::OPROW), strainPtr(strain_ptr),
-      tempPtr(temp_ptr), mDPtr(m_D_ptr), stressPtr(stress_ptr) {
-  // Opetor is only executed for vertices
+      tempPtr(temp_ptr), mDPtr(m_D_ptr), coeffExpansionPtr(coeff_expansion_ptr),
+      stressPtr(stress_ptr) {
+  // Operator is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
@@ -119,8 +127,8 @@ MoFEMErrorCode OpStressThermal::doWork(int side, EntityType type,
   FTensor::Index<'l', SPACE_DIM> l;
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
     t_stress(i, j) =
-        t_D(i, j, k, l) *
-        (t_strain(k, l) - t_kd(k, l) * (t_temp - ref_temp) * coeff_expansion);
+        t_D(i, j, k, l) * (t_strain(k, l) - t_kd(k, l) * (t_temp - ref_temp) *
+                                                (*coeffExpansionPtr));
     ++t_strain;
     ++t_stress;
     ++t_temp;
