@@ -275,7 +275,7 @@ MoFEMErrorCode Contact::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-poisson_ratio",
                                  &poisson_ratio, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-rho", &rho, PETSC_NULL);
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn_contact", &cn_contact,
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn_contact,
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-spring_stiffness",
                                  &spring_stiffness, PETSC_NULL);
