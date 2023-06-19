@@ -92,12 +92,14 @@ using OpBaseDivFlux = OpBaseDotT;
 //! [Thermal problem]
 
 //! [Body and heat source]
-using DomainNaturalBC =
+using DomainNaturalBCRhs =
     NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
 using OpBodyForce =
-    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
+    DomainNaturalBCRhs::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
 using OpHeatSource =
-    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, 1>;
+    DomainNaturalBCRhs::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, 1>;
+using DomainNaturalBCLhs =
+    NaturalBC<DomainEleOp>::Assembly<PETSC>::BiLinearForm<GAUSS>;
 //! [Body and heat source]
 
 //! [Natural boundary conditions]
@@ -132,6 +134,11 @@ int order = 2;                    //< default approximation order
 
 #include <ThermoElasticOps.hpp>   //< additional coupling opearyors
 using namespace ThermoElasticOps; //< name space of coupling operators
+
+using OpSetTemperatureRhs =
+    DomainNaturalBCRhs::OpFlux<SetTargetTemperature, 1, 1>;
+using OpSetTemperatureLhs =
+    DomainNaturalBCLhs::OpFlux<SetTargetTemperature, 1, 1>;
 
 struct ThermoElasticProblem {
 
@@ -569,6 +576,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
                                               const double) {
       return (1. / (*heat_conductivity_ptr));
     };
+    // negative value is consequence of symmetric system
     auto capacity = [heat_capacity_ptr](const double, const double,
                                         const double) {
       return -(*heat_capacity_ptr);
@@ -581,13 +589,15 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     pipeline.push_back(new OpBaseDivFlux("T", vec_temp_div_ptr, unity));
     pipeline.push_back(new OpBaseDotT("T", vec_temp_dot_ptr, capacity));
 
-    CHKERR DomainNaturalBC::AddFluxToPipeline<OpHeatSource>::add(
-        pipeline, mField, "T", {time_scale}, "HEAT_SOURCE", Sev::inform);
-    CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
-        pipeline_mng->getOpDomainRhsPipeline(), mField, "U", {time_scale},
-        "BODY_FORCE", Sev::inform);
-
     pipeline.push_back(new OpUnSetBc("FLUX"));
+
+    CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpHeatSource>::add(
+        pipeline, mField, "T", {time_scale}, "HEAT_SOURCE", Sev::inform);
+    CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpBodyForce>::add(
+        pipeline, mField, "U", {time_scale}, "BODY_FORCE", Sev::inform);
+    CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpSetTemperatureRhs>::add(
+        pipeline, mField, "T", vec_temp_ptr, "TARGET_TEMPERATURE", Sev::inform);
+
     MoFEMFunctionReturn(0);
   };
 
@@ -622,6 +632,13 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     pipeline.push_back(op_capacity);
 
     pipeline.push_back(new OpUnSetBc("FLUX"));
+
+    auto vec_temp_ptr = boost::make_shared<VectorDouble>();
+    pipeline.push_back(new OpCalculateScalarFieldValues("T", vec_temp_ptr));
+    CHKERR DomainNaturalBCLhs::AddFluxToPipeline<OpSetTemperatureLhs>::add(
+        pipeline, mField, "T", vec_temp_ptr, "TARGET_TEMPERATURE",
+        Sev::verbose);
+
     MoFEMFunctionReturn(0);
   };
 

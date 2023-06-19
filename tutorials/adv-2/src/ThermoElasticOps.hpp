@@ -137,4 +137,149 @@ MoFEMErrorCode OpStressThermal::doWork(int side, EntityType type,
 }
 //! [Calculate stress]
 
+struct SetTargetTemperature;
+
 } // namespace ThermoElasticOps
+
+//! [Target temperature]
+
+template <AssemblyType A, IntegrationType I, typename OpBase>
+struct MoFEM::OpFluxRhsImpl<ThermoElasticOps::SetTargetTemperature, 1, 1, A, I,
+                            OpBase>;
+
+template <AssemblyType A, IntegrationType I, typename OpBase>
+struct MoFEM::OpFluxLhsImpl<ThermoElasticOps::SetTargetTemperature, 1, 1, A, I,
+                            OpBase>;
+
+template <AssemblyType A, IntegrationType I, typename OpBase>
+struct MoFEM::AddFluxToRhsPipelineImpl<
+
+    MoFEM::OpFluxRhsImpl<ThermoElasticOps::SetTargetTemperature, 1, 1, A, I,
+                         OpBase>,
+    A, I, OpBase
+
+    > {
+
+  AddFluxToRhsPipelineImpl() = delete;
+
+  static MoFEMErrorCode add(
+
+      boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      MoFEM::Interface &m_field, const std::string field_name,
+      boost::shared_ptr<VectorDouble> temp_ptr, std::string block_name, Sev sev
+
+  ) {
+    MoFEMFunctionBegin;
+
+    using OP_SOURCE = typename FormsIntegrators<OpBase>::template Assembly<
+        A>::template LinearForm<I>::template OpSource<1, 1>;
+    using OP_TEMP = typename FormsIntegrators<OpBase>::template Assembly<
+        A>::template LinearForm<I>::template OpBaseTimesScalar<1>;
+
+    auto add_op = [&](auto &&meshset_vec_ptr) {
+      MoFEMFunctionBegin;
+      for (auto m : meshset_vec_ptr) {
+        MOFEM_TAG_AND_LOG("WORLD", sev, "SetTargetTemperature") << "Add " << *m;
+        std::vector<double> block_data;
+        m->getAttributes(block_data);
+        if (block_data.size() != 2) {
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                  "Expected two parameters");
+        }
+        double target_temperature = block_data[0];
+        double beta =
+            block_data[1]; // Set temperature parameter [ W/K * (1/m^3)]
+        auto ents_ptr = boost::make_shared<Range>();
+        CHKERR m_field.get_moab().get_entities_by_handle(m->meshset,
+                                                         *(ents_ptr), true);
+        pipeline.push_back(new OP_SOURCE(
+            field_name,
+            [target_temperature, beta](double, double, double) {
+              return target_temperature * beta;
+            },
+            ents_ptr));
+        pipeline.push_back(new OP_TEMP(
+            field_name, temp_ptr,
+            [beta](double, double, double) { return -beta; }, ents_ptr));
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR add_op(
+
+        m_field.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
+
+            (boost::format("%s(.*)") % block_name).str()
+
+                ))
+
+    );
+
+    MOFEM_LOG_CHANNEL("WORLD");
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
+template <AssemblyType A, IntegrationType I, typename OpBase>
+struct AddFluxToLhsPipelineImpl<
+
+    OpFluxLhsImpl<ThermoElasticOps::SetTargetTemperature, 1, 1, A, I, OpBase>,
+    A, I, OpBase
+
+    > {
+
+  AddFluxToLhsPipelineImpl() = delete;
+
+  static MoFEMErrorCode add(
+
+      boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      MoFEM::Interface &m_field, const std::string field_name,
+      boost::shared_ptr<VectorDouble> temp_ptr, std::string block_name, Sev sev
+
+  ) {
+    MoFEMFunctionBegin;
+
+    using OP_MASS = typename FormsIntegrators<OpBase>::template Assembly<
+        A>::template BiLinearForm<I>::template OpMass<1, 1>;
+
+    auto add_op = [&](auto &&meshset_vec_ptr) {
+      MoFEMFunctionBegin;
+      for (auto m : meshset_vec_ptr) {
+        MOFEM_TAG_AND_LOG("WORLD", sev, "SetTargetTemperature") << "Add " << *m;
+        std::vector<double> block_data;
+        m->getAttributes(block_data);
+        if (block_data.size() != 2) {
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                  "Expected two parameters");
+        }
+        double beta =
+            block_data[1]; // Set temperature parameter [ W/K * (1/m^3)]
+        auto ents_ptr = boost::make_shared<Range>();
+        CHKERR m_field.get_moab().get_entities_by_handle(m->meshset,
+                                                         *(ents_ptr), true);
+        pipeline.push_back(new OP_MASS(
+            field_name, field_name,
+            [beta](double, double, double) { return -beta; }, ents_ptr));
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR add_op(
+
+        m_field.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
+
+            (boost::format("%s(.*)") % block_name).str()
+
+                ))
+
+    );
+
+    MOFEM_LOG_CHANNEL("WORLD");
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
+//! [Target temperature]
+
