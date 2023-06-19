@@ -596,7 +596,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpBodyForce>::add(
         pipeline, mField, "U", {time_scale}, "BODY_FORCE", Sev::inform);
     CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpSetTemperatureRhs>::add(
-        pipeline, mField, "T", vec_temp_ptr, "TARGET_TEMPERATURE", Sev::inform);
+        pipeline, mField, "T", vec_temp_ptr, "SET_TEMPERATURE", Sev::inform);
 
     MoFEMFunctionReturn(0);
   };
@@ -636,8 +636,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     auto vec_temp_ptr = boost::make_shared<VectorDouble>();
     pipeline.push_back(new OpCalculateScalarFieldValues("T", vec_temp_ptr));
     CHKERR DomainNaturalBCLhs::AddFluxToPipeline<OpSetTemperatureLhs>::add(
-        pipeline, mField, "T", vec_temp_ptr, "TARGET_TEMPERATURE",
-        Sev::verbose);
+        pipeline, mField, "T", vec_temp_ptr, "SET_TEMPERATURE", Sev::verbose);
 
     MoFEMFunctionReturn(0);
   };
