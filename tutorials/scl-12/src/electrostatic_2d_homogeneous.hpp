@@ -22,25 +22,48 @@ constexpr int BASE_DIM = 1;
 constexpr int FIELD_DIM = 1;
 constexpr int SPACE_DIM = 2; 
 
+ 
 using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
 using OpEdgeEle = MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator;
 using EntData = EntitiesFieldData::EntData;
 
 // Namespace that contains necessary UDOs, will be included in the main program
 
-template <int SPACE_DIM>
-struct EdgeBlockData {
+// template <int SPACE_DIM>
+// struct EdgeBlockData {
+//   int iD;
+//   double sigma ;
+//   Range eDge; ///< constrains elements in block set
+// };
+
+// template <int SPACE_DIM>
+// struct SurfBlockData {
+//   int iD;
+//   double epsPermit;
+//   Range tRis; ///
+// };
+template <int SPACE_DIM> struct BlockData {};
+
+template <>
+struct BlockData<2> {
   int iD;
-  double sigma ;
-  Range eDge; ///< constrains elements in block set
+  double sigma;
+  Range eDge;
+  double epsPermit;
+  Range tRis;
 };
 
-template <int SPACE_DIM>
-struct SurfBlockData {
+template <>
+struct BlockData<3> {
   int iD;
+  double sigma;
+  Range eDge;
   double epsPermit;
-  Range tRis; ///
+  Range tRis;
+  Range tEts;
 };
+
+
 namespace Electrostatic2DHomogeneousOperators {
 FTensor::Index<'i', 2> i;
 template <int SPACE_DIM>
@@ -226,12 +249,15 @@ private:
   boost::shared_ptr<MatrixDouble> gradU;
 };
 
-template <int SPACE_DIM>
+
+
+
+template <int SPACE_DIM> 
 struct OpBlockChargeDensity : public OpEdgeEle {
 
   OpBlockChargeDensity(
       boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
-      boost::shared_ptr<map<int, EdgeBlockData<SPACE_DIM>>> edge_block_sets_ptr,
+      boost::shared_ptr<map<int, BlockData<SPACE_DIM>>> edge_block_sets_ptr,
       const std::string &field_name)
       : OpEdgeEle(field_name, field_name, OPROWCOL, false),
         commonDataPtr(common_data_ptr), edgeBlockSetsPtr(edge_block_sets_ptr) {
@@ -251,9 +277,9 @@ struct OpBlockChargeDensity : public OpEdgeEle {
     }
     MoFEMFunctionReturn(0);
   }
-
+                        
 protected:
-  boost::shared_ptr<map<int, EdgeBlockData<SPACE_DIM>>> edgeBlockSetsPtr;
+  boost::shared_ptr<map<int, BlockData<SPACE_DIM>>> edgeBlockSetsPtr;
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
 };
 
@@ -262,7 +288,7 @@ struct OpBlockPermittivity : public OpFaceEle {
 
   OpBlockPermittivity(
       boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
-      boost::shared_ptr<map<int, SurfBlockData<SPACE_DIM>>> surf_block_sets_ptr,
+      boost::shared_ptr<map<int, BlockData<SPACE_DIM>>> surf_block_sets_ptr,
       const std::string &field_name)
       : OpFaceEle(field_name, field_name, OPROWCOL, false),
         commonDataPtr(common_data_ptr), surfBlockSetsPtr(surf_block_sets_ptr) {
@@ -284,7 +310,7 @@ struct OpBlockPermittivity : public OpFaceEle {
   }
 
 protected:
-  boost::shared_ptr<map<int, SurfBlockData<SPACE_DIM>>> surfBlockSetsPtr;
+  boost::shared_ptr<map<int,  BlockData<SPACE_DIM>>> surfBlockSetsPtr;
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
 };
 };     // namespace Electrostatic2DHomogeneousOperators
