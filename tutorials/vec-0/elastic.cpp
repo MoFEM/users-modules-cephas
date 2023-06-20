@@ -23,16 +23,16 @@ constexpr IntegrationType I =
     IntegrationType::GAUSS; //< selected integration type
 
 using EntData = EntitiesFieldData::EntData;
-using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
+using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;// DomainEle alias for the specific instantiation of the ElementsAndOpsByDim
 using BoundaryEle =
-    PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
+    PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;// BoundaryEle alias for the specific instantiation of the ElementsAndOpsByDim
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-using OpK = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
-    I>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+using OpK = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<// choosing the linear or Bilear form for assembly
+    I>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;// declaring BASE_DIM=1, FIELD_DIM=SPACE_DIM, SPACE_DIM, S=0 and I is a tensor
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
-    I>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+    I>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>; // declaring BASE_DIM, FIELD_DIM, SPACE_DIM, S, I; I is a tensor
 
 struct DomainBCs {};
 struct BoundaryBCs {};

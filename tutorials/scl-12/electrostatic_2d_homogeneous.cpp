@@ -20,8 +20,7 @@
 using namespace MoFEM;
 using namespace Electrostatic2DHomogeneousOperators;
 
-using PostProcFaceEle =
-    PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
+using PostProcFaceEle = PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
 
 static char help[] = "...\n\n";
 
@@ -46,8 +45,8 @@ private:
   MoFEM::Interface &mField;
 
 
-  boost::shared_ptr<std::map<int, SurfBlockData<SPACE_DIM>>> surf_block_sets_ptr;
-  boost::shared_ptr<std::map<int, EdgeBlockData<SPACE_DIM>>> edge_block_sets_ptr; ///////
+  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> surf_block_sets_ptr;
+  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> edge_block_sets_ptr; ///////
   Simple *simpleInterface;
   boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe;
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr;
@@ -93,7 +92,7 @@ MoFEMErrorCode Electrostatic2DHomogeneous::setupProblem() {
   //     interface_ents.merge(ents);
   //   }
   // }
-surf_block_sets_ptr = boost::make_shared<std::map<int, SurfBlockData<SPACE_DIM>>>();
+surf_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
   Range electric_tris;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 12, "MAT_ELECTRIC") == 0) {
@@ -115,7 +114,7 @@ surf_block_sets_ptr = boost::make_shared<std::map<int, SurfBlockData<SPACE_DIM>>
       block_data.epsPermit = attributes[0];
     }
   }
-  edge_block_sets_ptr = boost::make_shared<std::map<int, EdgeBlockData<SPACE_DIM>>>();
+  edge_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
   Range interface_edges;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 12, "INT_ELECTRIC") == 0) {
@@ -275,6 +274,7 @@ MoFEMErrorCode Electrostatic2DHomogeneous::solveSystem() {
   CHKERR DMMoFEMKSPSetComputeRHS(simpleInterface->getDM(), "INTERFACE",
                                  interface_rhs_fe, null, null);
 
+  auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
   CHKERR KSPSetFromOptions(ksp_solver);
   CHKERR KSPSetUp(ksp_solver);
 
