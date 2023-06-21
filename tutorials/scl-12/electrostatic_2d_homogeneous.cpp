@@ -49,7 +49,7 @@ private:
   boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> edge_block_sets_ptr; ///////
   Simple *simpleInterface;
   boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe;
-  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr;
+  boost::shared_ptr<DataAtIntegrationPts> common_data_ptr;
 
   std::string domainField;
   int oRder;
@@ -182,9 +182,9 @@ MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
-  common_data_ptr = boost::make_shared<DataAtIntegrationPts<SPACE_DIM>>(mField);
+  common_data_ptr = boost::make_shared<DataAtIntegrationPts>(mField);
   auto add_domain_lhs_ops = [&](auto &pipeline) {
-    pipeline.push_back(new OpBlockPermittivity(
+    pipeline.push_back(new OpBlockPermittivity<2>(
         common_data_ptr, surf_block_sets_ptr, domainField));
   };
 
@@ -195,7 +195,7 @@ MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK(domainField, domainField, common_data_ptr));
+        new OpDomainLhsMatrixK<SPACE_DIM>(domainField, domainField, common_data_ptr));
   }
  { // Push operators to the Pipeline that is responsible for calculating LHS
 
@@ -233,12 +233,12 @@ MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
     interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
         new EdgeElementForcesAndSourcesCore(mField));
         {
-interface_rhs_fe->getOpPtrVector().push_back(new OpBlockChargeDensity(
-          common_data_ptr, edge_block_sets_ptr, domainField));
+interface_rhs_fe->getOpPtrVector().push_back
+(new OpBlockChargeDensity<2>(common_data_ptr, edge_block_sets_ptr, domainField));
 
       interface_rhs_fe->getOpPtrVector().push_back(
-          new OpInterfaceRhsVectorF(domainField, common_data_ptr));
-    
+          new OpInterfaceRhsVectorF<SPACE_DIM>(domainField, common_data_ptr));
+  
   }
  }
   MoFEMFunctionReturn(0);
