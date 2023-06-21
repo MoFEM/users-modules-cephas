@@ -387,7 +387,6 @@ MoFEMErrorCode ThermoElasticProblem::addMatBlockOps(
 
         blockData.push_back(
             {block_data[0], block_data[1], block_data[2], get_block_ents()});
-
       }
       MOFEM_LOG_CHANNEL("WORLD");
       MoFEMFunctionReturn(0);
