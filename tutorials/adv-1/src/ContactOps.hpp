@@ -15,7 +15,6 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   // MatrixDouble contactStress;
   MatrixDouble contactTraction;
   MatrixDouble contactDisp;
-  MatrixDouble stressTraction;
 
   static SmartPetscObj<Vec>
       totalTraction; // User have to release and create vector when appropiate.
@@ -45,11 +44,6 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
     }
   }
 
-  // inline auto contactStressPtr() {
-  //   return boost::shared_ptr<MatrixDouble>(shared_from_this(),
-  //   &contactStress);
-  // }
-
   inline auto contactTractionPtr() {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(),
                                            &contactTraction);
@@ -59,9 +53,6 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(), &contactDisp);
   }
 
-  inline auto stressTractionPtr() {
-    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &stressTraction);
-  }
 };
 
 SmartPetscObj<Vec> CommonData::totalTraction;
@@ -246,22 +237,6 @@ FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
 FTensor::Index<'l', SPACE_DIM> l;
 
-#ifdef __HENKY_OPS_HPP__
-
-struct OpCalculateStressTraction : public BoundaryEleOp {
-  OpCalculateStressTraction(
-      boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<HenckyOps::CommonData> hencky_common_data);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        EntitiesFieldData::EntData &data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-  boost::shared_ptr<HenckyOps::CommonData> henckyCommonDataPtr;
-};
-
-#endif
-
 struct OpAssembleTotalContactTraction : public BoundaryEleOp {
   OpAssembleTotalContactTraction(boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -340,41 +315,6 @@ inline double constrain(double sdf, double tn) {
   const auto s = sign(w(sdf, tn));
   return (1 - s) / 2;
 }
-
-#ifdef __HENKY_OPS_HPP__
-
-OpCalculateStressTraction::OpCalculateStressTraction(
-    boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<HenckyOps::CommonData> hencky_common_data_ptr)
-    : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE),
-      commonDataPtr(common_data_ptr),
-      henckyCommonDataPtr(hencky_common_data_ptr) {}
-
-MoFEMErrorCode
-OpCalculateStressTraction::doWork(int side, EntityType type,
-                                  EntitiesFieldData::EntData &data) {
-  MoFEMFunctionBegin;
-
-  auto t_normal_at_pts = getFTensor1NormalsAtGaussPts();
-  const auto nb_integration_pts = getGaussPts().size2();
-  auto traction_ptr = commonDataPtr->stressTractionPtr();
-  traction_ptr->resize(SPACE_DIM, nb_integration_pts, false);
-  auto t_traction = getFTensor1FromMat<SPACE_DIM>(*traction_ptr);
-  auto t_P = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(
-      *(henckyCommonDataPtr->getMatFirstPiolaStress()));
-  for (auto gg = 0; gg != nb_integration_pts; ++gg) {
-    FTensor::Tensor1<double, SPACE_DIM> t_normal;
-    t_normal(i) =
-        t_normal_at_pts(i) / std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
-    t_traction(i) = t_P(i, j) * t_normal(j);
-    ++t_P;
-    ++t_traction;
-    ++t_normal_at_pts;
-  }
-  MoFEMFunctionReturn(0);
-}
-
-#endif //__HENKY_OPS_HPP__
 
 OpAssembleTotalContactTraction::OpAssembleTotalContactTraction(
     boost::shared_ptr<CommonData> common_data_ptr)
