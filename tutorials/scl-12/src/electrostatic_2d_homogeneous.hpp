@@ -23,61 +23,19 @@ constexpr int FIELD_DIM = 1;
 constexpr int SPACE_DIM = 2; 
 
 using namespace MoFEM;
-// template <int SPACE_DIM> struct ElementsAndOps{};
-
-// template <> struct ElementsAndOps<2> {
-// using DomainEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
-// using IntEle= MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator;
-// };
-// template <> struct ElementsAndOps<3> {
-// using DomainEle =MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator;
-// using IntEle= MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
-// };
-// using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-// using IntEle = ElementsAndOps<SPACE_DIM>::IntEle;
-
 using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
 using IntEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using IntEleOp = IntEle::UserDataOperator;
-
-// using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
-// using OpEdgeEle = MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator;
 using EntData = EntitiesFieldData::EntData;
 
-
-// struct BlockDataParams {
-//   int iD;
-//   double sigma;
-//   double epsPermit;
-//   Range blockEnts;
-// };
-
-// // auto tets  = blockEnts.subset_by_dimension(SPACE_DIM-1);
-
-
-
-template <int SPACE_DIM> struct BlockData {};
-
-template <>
-struct BlockData<2> {
-  int iD;
-  double sigma;
-  Range eDge;
-  double epsPermit;
-  Range tRis;
+template <int SPACE_DIM>
+struct BlockData {
+    int iD;
+    double sigma;
+    double epsPermit;
+    Range blockEnts;
 };
-
-template <>
-struct BlockData<3> {
-  int iD;
-  double sigma;
-  Range eDge;
-  double epsPermit;
-  Range tRis;
-  Range tEts;
-};
-
 
 
 
@@ -93,7 +51,6 @@ struct DataAtIntegrationPts {
 };
 FTensor::Index<'i', SPACE_DIM> i;
 namespace Electrostatic2DHomogeneousOperators {
-template <int SPACE_DIM> 
 struct OpDomainLhsMatrixK : public DomainEleOp {
 public:
   bool sYmm;
@@ -134,7 +91,7 @@ public:
 
         for (int rr = 0; rr != nb_row_dofs; ++rr) {
           // get derivatives of base functions on column
-          auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
+          auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
 
           for (int cc = 0; cc != nb_col_dofs; cc++) {
             locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a *
@@ -171,7 +128,6 @@ private:
   boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
 };
 
-template <int SPACE_DIM>
 struct OpInterfaceRhsVectorF : public IntEleOp {
 public:
  OpInterfaceRhsVectorF(std::string field_name,
@@ -229,7 +185,6 @@ private:
   boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
 };
 
-template <int SPACE_DIM>
 struct OpNegativeGradient : public ForcesAndSourcesCore::UserDataOperator {
   OpNegativeGradient(boost::shared_ptr<MatrixDouble> grad_u_negative,
                      boost::shared_ptr<MatrixDouble> grad_u)
@@ -268,25 +223,25 @@ private:
 
 
 
-template <int SPACE_DIM>
-struct OpBlockChargeDensity : public IntEleOp {};
 
-template <>
-struct OpBlockChargeDensity<2> : public IntEleOp {
+
+
+template <int SPACE_DIM>
+struct OpBlockChargeDensity: public IntEleOp {
   OpBlockChargeDensity(
       boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
-      boost::shared_ptr<std::map<int, BlockData<2>>> edge_block_sets_ptr,
+      boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> block_sets_ptr,
       const std::string& field_name)
       : IntEleOp(field_name, field_name, OPROWCOL, false),
-        commonDataPtr(common_data_ptr), edgeBlockSetsPtr(edge_block_sets_ptr) {
+        commonDataPtr(common_data_ptr), BlockSetsPtr(block_sets_ptr) {
   }
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData& row_data,
                         EntData& col_data) {
     MoFEMFunctionBegin;
-    for (const auto& m : *edgeBlockSetsPtr) {
-      if (m.second.eDge.find(getFEEntityHandle()) != m.second.eDge.end()) {
+    for (const auto& m : *BlockSetsPtr) {
+      if (m.second.blockEnts.find(getFEEntityHandle()) != m.second.blockEnts.end()) {
         commonDataPtr->chrgDens = m.second.sigma;
       }
     }
@@ -295,48 +250,45 @@ struct OpBlockChargeDensity<2> : public IntEleOp {
 
 protected:
   boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
-  boost::shared_ptr<std::map<int, BlockData<2>>> edgeBlockSetsPtr;
+  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> BlockSetsPtr;
 };
 
-template <>
-struct OpBlockChargeDensity<3> : public IntEleOp {
-  OpBlockChargeDensity(
-      boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
-      boost::shared_ptr<std::map<int, BlockData<3>>> surf_block_sets_ptr,
-      const std::string& field_name)
-      : IntEleOp(field_name, field_name, OPROWCOL, false),
-        commonDataPtr(common_data_ptr), surfBlockSetsPtr(surf_block_sets_ptr) {
-    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-    doEntities[MBVERTEX] = true;
-  }
+// template <>
+// struct OpBlockChargeDensity<3> : public IntEleOp {
+//   OpBlockChargeDensity(
+//       boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
+//       boost::shared_ptr<std::map<int, BlockData<3>>> block_sets_ptr,
+//       const std::string& field_name)
+//       : IntEleOp(field_name, field_name, OPROWCOL, false),
+//         commonDataPtr(common_data_ptr), BlockSetsPtr(block_sets_ptr) {
+//     std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+//     doEntities[MBVERTEX] = true;
+//   }
 
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData& row_data,
-                        EntData& col_data) {
-    MoFEMFunctionBegin;
-    for (const auto& m : *surfBlockSetsPtr) {
-      if (m.second.tRis.find(getFEEntityHandle()) != m.second.tRis.end()) {
-        commonDataPtr->chrgDens = m.second.sigma;
-      }
-    }
-    MoFEMFunctionReturn(0);
-  }
+//   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+//                         EntityType col_type, EntData& row_data,
+//                         EntData& col_data) {
+//     MoFEMFunctionBegin;
+//     for (const auto& m : *BlockSetsPtr) {
+//       if (m.second.blockEnts.find(getFEEntityHandle()) != m.second.blockEnts.end()) {
+//         commonDataPtr->chrgDens = m.second.sigma;
+//       }
+//     }
+//     MoFEMFunctionReturn(0);
+//   }
 
-protected:
-  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
-  boost::shared_ptr<std::map<int, BlockData<3>>> surfBlockSetsPtr;
-};
+// protected:
+//   boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
+//   boost::shared_ptr<std::map<int, BlockData<3>>> BlockSetsPtr;
+// };
 template <int SPACE_DIM>
-struct OpBlockPermittivity : public DomainEleOp {};
-
-template <>
-struct OpBlockPermittivity<2> : public DomainEleOp {;
+struct OpBlockPermittivity: public DomainEleOp {;
   OpBlockPermittivity(
       boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
-      boost::shared_ptr<map<int, BlockData<2>>> surf_block_sets_ptr,
+      boost::shared_ptr<map<int, BlockData<SPACE_DIM>>> block_sets_ptr,
       const std::string &field_name)
       : DomainEleOp(field_name, field_name, OPROWCOL, false),
-        commonDataPtr(common_data_ptr), surfBlockSetsPtr(surf_block_sets_ptr) {
+        commonDataPtr(common_data_ptr), BlockSetsPtr(block_sets_ptr) {
     std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
     doEntities[MBVERTEX] = true;
   }
@@ -346,8 +298,8 @@ struct OpBlockPermittivity<2> : public DomainEleOp {;
                         EntitiesFieldData::EntData &row_data,
                         EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
-    for (auto &m : (*surfBlockSetsPtr)) {
-      if (m.second.tRis.find(getFEEntityHandle()) != m.second.tRis.end()) {
+    for (auto &m : (*BlockSetsPtr)) {
+      if (m.second.blockEnts.find(getFEEntityHandle()) != m.second.blockEnts.end()) {
         commonDataPtr->blockPermittivity = m.second.epsPermit;
       }
     }
@@ -355,39 +307,39 @@ struct OpBlockPermittivity<2> : public DomainEleOp {;
   }
 
 protected:
-  boost::shared_ptr<map<int,  BlockData<2>>> surfBlockSetsPtr;
+  boost::shared_ptr<map<int,  BlockData<SPACE_DIM>>> BlockSetsPtr;
   boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
 };
 
-template <>
-struct OpBlockPermittivity<3> : public DomainEleOp {;
-  OpBlockPermittivity(
-      boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
-      boost::shared_ptr<map<int, BlockData<3>>> surf_block_sets_ptr,
-      const std::string &field_name)
-      : DomainEleOp(field_name, field_name, OPROWCOL, false),
-        commonDataPtr(common_data_ptr), surfBlockSetsPtr(surf_block_sets_ptr) {
-    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-    doEntities[MBVERTEX] = true;
-  }
+// template <>
+// struct OpBlockPermittivity<3> : public DomainEleOp {;
+//   OpBlockPermittivity(
+//       boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
+//       boost::shared_ptr<map<int, BlockData<3>>> block_sets_ptr,
+//       const std::string &field_name)
+//       : DomainEleOp(field_name, field_name, OPROWCOL, false),
+//         commonDataPtr(common_data_ptr), BlockSetsPtr(block_sets_ptr) {
+//     std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+//     doEntities[MBVERTEX] = true;
+//   }
 
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        EntitiesFieldData::EntData &row_data,
-                        EntitiesFieldData::EntData &col_data) {
-    MoFEMFunctionBegin;
-    for (auto &m : (*surfBlockSetsPtr)) {
-      if (m.second.tRis.find(getFEEntityHandle()) != m.second.tRis.end()) {
-        commonDataPtr->blockPermittivity = m.second.epsPermit;
-      }
-    }
-    MoFEMFunctionReturn(0);
-  }
+//   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+//                         EntityType col_type,
+//                         EntitiesFieldData::EntData &row_data,
+//                         EntitiesFieldData::EntData &col_data) {
+//     MoFEMFunctionBegin;
+//     for (auto &m : (*BlockSetsPtr)) {
+//       if (m.second.blockEnts.find(getFEEntityHandle()) != m.second.blockEnts.end()) {
+//         commonDataPtr->blockPermittivity = m.second.epsPermit;
+//       }
+//     }
+//     MoFEMFunctionReturn(0);
+//   }
 
-protected:
-  boost::shared_ptr<map<int,  BlockData<3>>> surfBlockSetsPtr;
-  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
-};
+// protected:
+//   boost::shared_ptr<map<int,  BlockData<3>>> BlockSetsPtr;
+//   boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
+// };
 };     // namespace Electrostatic2DHomogeneousOperators
 
 #endif //__ELECTROSTATIC_2D_HOMOGENEOUS_HPP__

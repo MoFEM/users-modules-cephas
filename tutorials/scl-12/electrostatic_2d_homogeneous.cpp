@@ -57,7 +57,7 @@ private:
 
 Electrostatic2DHomogeneous::Electrostatic2DHomogeneous(
     MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field) {}
+    : domainField("POTENTIAL"), mField(m_field) {}
 
 //! [Read mesh]
 MoFEMErrorCode Electrostatic2DHomogeneous::readMesh() {
@@ -100,8 +100,8 @@ surf_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
       auto &block_data = (*surf_block_sets_ptr)[id];
 
       CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM,
-                                                         block_data.tRis, true);
-      electric_tris.merge(block_data.tRis);
+                                                         block_data.blockEnts, true);
+      electric_tris.merge(block_data.blockEnts);
 
       std::vector<double> attributes;
       bit->getAttributes(attributes);
@@ -122,8 +122,8 @@ surf_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
       auto &block_data = (*edge_block_sets_ptr)[id];
 
       CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM -1,
-                                                         block_data.eDge, true);
-      interface_edges.merge(block_data.eDge);
+                                                         block_data.blockEnts, true);
+      interface_edges.merge(block_data.blockEnts);
 
       std::vector<double> attributes;
       bit->getAttributes(attributes);
@@ -195,7 +195,7 @@ MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK<SPACE_DIM>(domainField, domainField, common_data_ptr));
+        new OpDomainLhsMatrixK(domainField, domainField, common_data_ptr));
   }
  { // Push operators to the Pipeline that is responsible for calculating LHS
 
@@ -237,7 +237,7 @@ interface_rhs_fe->getOpPtrVector().push_back
 (new OpBlockChargeDensity<2>(common_data_ptr, edge_block_sets_ptr, domainField));
 
       interface_rhs_fe->getOpPtrVector().push_back(
-          new OpInterfaceRhsVectorF<SPACE_DIM>(domainField, common_data_ptr));
+          new OpInterfaceRhsVectorF(domainField, common_data_ptr));
   
   }
  }
@@ -329,14 +329,14 @@ MoFEMErrorCode Electrostatic2DHomogeneous::outputResults() {
 
   auto neg_grad_u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(
-      new OpNegativeGradient<SPACE_DIM>(neg_grad_u_ptr, grad_u_ptr));
+      new OpNegativeGradient(neg_grad_u_ptr, grad_u_ptr));
 
   post_proc_fe->getOpPtrVector().push_back(
 
       new OpPPMap(post_proc_fe->getPostProcMesh(),
                   post_proc_fe->getMapGaussPts(),
 
-                  OpPPMap::DataMapVec{{"U", u_ptr}},
+                  OpPPMap::DataMapVec{{"POTENTIAL", u_ptr}},
 
                   OpPPMap::DataMapMat{{"ELECTRIC FILED", neg_grad_u_ptr}},
 
