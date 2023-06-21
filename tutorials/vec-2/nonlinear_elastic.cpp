@@ -259,26 +259,8 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       post_proc_fe->getOpPtrVector(), {H1});
 
-  auto common_ptr = boost::make_shared<HenckyOps::CommonData>();
-  common_ptr->matDPtr = boost::make_shared<MatrixDouble>();
-  common_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
-
-  CHKERR addMatBlockOps(mField, post_proc_fe->getOpPtrVector(), "U",
-                        "MAT_ELASTIC", common_ptr->matDPtr, Sev::verbose);
-
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-          "U", common_ptr->matGradPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateEigenVals<SPACE_DIM>("U", common_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateLogC<SPACE_DIM>("U", common_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateLogC_dC<SPACE_DIM>("U", common_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateHenckyStress<SPACE_DIM>("U", common_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculatePiolaStress<SPACE_DIM>("U", common_ptr));
+  auto common_ptr = commonDataFactory<DomainEleOp>(
+      mField, post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC", Sev::inform);
 
   auto u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(

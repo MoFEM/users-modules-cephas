@@ -110,442 +110,466 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   }
 };
 
-template <int DIM> struct OpCalculateEigenVals : public DomainEleOp {
+template <typename DomainEleOp> struct HenkyIntegrators {
 
-  OpCalculateEigenVals(const std::string field_name,
-                       boost::shared_ptr<CommonData> common_data)
-      : DomainEleOp(field_name, DomainEleOp::OPROW),
-        commonDataPtr(common_data) {
-    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
-  }
+  template <int DIM> struct OpCalculateEigenVals : public DomainEleOp {
 
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-    MoFEMFunctionBegin;
+    OpCalculateEigenVals(const std::string field_name,
+                         boost::shared_ptr<CommonData> common_data)
+        : DomainEleOp(field_name, DomainEleOp::OPROW),
+          commonDataPtr(common_data) {
+      std::fill(&DomainEleOp::doEntities[MBEDGE],
+                &DomainEleOp::doEntities[MBMAXTYPE], false);
+    }
 
-    FTensor::Index<'i', DIM> i;
-    FTensor::Index<'j', DIM> j;
-    FTensor::Index<'k', DIM> k;
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
 
-    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
-    // const size_t nb_gauss_pts = matGradPtr->size2();
-    const size_t nb_gauss_pts = getGaussPts().size2();
+      FTensor::Index<'i', DIM> i;
+      FTensor::Index<'j', DIM> j;
+      FTensor::Index<'k', DIM> k;
 
-    auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
+      constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+      // const size_t nb_gauss_pts = matGradPtr->size2();
+      const size_t nb_gauss_pts = DomainEleOp::getGaussPts().size2();
 
-    commonDataPtr->matEigVal.resize(DIM, nb_gauss_pts, false);
-    commonDataPtr->matEigVec.resize(DIM * DIM, nb_gauss_pts, false);
-    auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
-    auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
+      auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
 
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      commonDataPtr->matEigVal.resize(DIM, nb_gauss_pts, false);
+      commonDataPtr->matEigVec.resize(DIM * DIM, nb_gauss_pts, false);
+      auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
+      auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
 
-      FTensor::Tensor2<double, DIM, DIM> F;
-      FTensor::Tensor2_symmetric<double, DIM> C;
-      FTensor::Tensor1<double, DIM> eig;
-      FTensor::Tensor2<double, DIM, DIM> eigen_vec;
+      for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      F(i, j) = t_grad(i, j) + t_kd(i, j);
-      C(i, j) = F(k, i) ^ F(k, j);
+        FTensor::Tensor2<double, DIM, DIM> F;
+        FTensor::Tensor2_symmetric<double, DIM> C;
+        FTensor::Tensor1<double, DIM> eig;
+        FTensor::Tensor2<double, DIM, DIM> eigen_vec;
 
-      for (int ii = 0; ii != DIM; ii++)
-        for (int jj = 0; jj != DIM; jj++)
-          eigen_vec(ii, jj) = C(ii, jj);
+        F(i, j) = t_grad(i, j) + t_kd(i, j);
+        C(i, j) = F(k, i) ^ F(k, j);
 
-      CHKERR computeEigenValuesSymmetric<DIM>(eigen_vec, eig);
-      for(auto ii = 0;ii!=DIM;++ii)
-        eig(ii) = std::max(std::numeric_limits<double>::epsilon(), eig(ii));
+        for (int ii = 0; ii != DIM; ii++)
+          for (int jj = 0; jj != DIM; jj++)
+            eigen_vec(ii, jj) = C(ii, jj);
 
-      // rare case when two eigen values are equal
-      auto nb_uniq = get_uniq_nb<DIM>(&eig(0));
-      if constexpr (DIM == 3) {
-        if (nb_uniq == 2) {
-          sort_eigen_vals<DIM>(eig, eigen_vec);
+        CHKERR computeEigenValuesSymmetric<DIM>(eigen_vec, eig);
+        for (auto ii = 0; ii != DIM; ++ii)
+          eig(ii) = std::max(std::numeric_limits<double>::epsilon(), eig(ii));
+
+        // rare case when two eigen values are equal
+        auto nb_uniq = get_uniq_nb<DIM>(&eig(0));
+        if constexpr (DIM == 3) {
+          if (nb_uniq == 2) {
+            sort_eigen_vals<DIM>(eig, eigen_vec);
+          }
         }
+
+        t_eig_val(i) = eig(i);
+        t_eig_vec(i, j) = eigen_vec(i, j);
+
+        ++t_grad;
+        ++t_eig_val;
+        ++t_eig_vec;
       }
 
-      t_eig_val(i) = eig(i);
-      t_eig_vec(i, j) = eigen_vec(i, j);
-
-      ++t_grad;
-      ++t_eig_val;
-      ++t_eig_vec;
+      MoFEMFunctionReturn(0);
     }
 
-    MoFEMFunctionReturn(0);
-  }
+  private:
+    boost::shared_ptr<CommonData> commonDataPtr;
+  };
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
+  template <int DIM> struct OpCalculateLogC : public DomainEleOp {
 
-template <int DIM> struct OpCalculateLogC : public DomainEleOp {
-
-  OpCalculateLogC(const std::string field_name,
-                  boost::shared_ptr<CommonData> common_data)
-      : DomainEleOp(field_name, DomainEleOp::OPROW),
-        commonDataPtr(common_data) {
-    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
-  }
-
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-    MoFEMFunctionBegin;
-
-    FTensor::Index<'i', DIM> i;
-    FTensor::Index<'j', DIM> j;
-
-    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
-    // const size_t nb_gauss_pts = matGradPtr->size2();
-    const size_t nb_gauss_pts = getGaussPts().size2();
-    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
-    commonDataPtr->matLogC.resize(size_symm, nb_gauss_pts, false);
-
-    auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
-    auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
-
-    auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-      // rare case when two eigen values are equal
-      auto nb_uniq = get_uniq_nb<DIM>(&(t_eig_val(0)));
-
-      FTensor::Tensor1<double, DIM> eig;
-      FTensor::Tensor2<double, DIM, DIM> eigen_vec;
-      eig(i) = t_eig_val(i);
-      eigen_vec(i, j) = t_eig_vec(i, j);
-      auto logC = EigenMatrix::getMat(eig, eigen_vec, f);
-      t_logC(i, j) = logC(i, j);
-
-      ++t_eig_val;
-      ++t_eig_vec;
-      ++t_logC;
+    OpCalculateLogC(const std::string field_name,
+                    boost::shared_ptr<CommonData> common_data)
+        : DomainEleOp(field_name, DomainEleOp::OPROW),
+          commonDataPtr(common_data) {
+      std::fill(&DomainEleOp::doEntities[MBEDGE],
+                &DomainEleOp::doEntities[MBMAXTYPE], false);
     }
 
-    MoFEMFunctionReturn(0);
-  }
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
+      FTensor::Index<'i', DIM> i;
+      FTensor::Index<'j', DIM> j;
 
-template <int DIM> struct OpCalculateLogC_dC : public DomainEleOp {
+      constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+      // const size_t nb_gauss_pts = matGradPtr->size2();
+      const size_t nb_gauss_pts = DomainEleOp::getGaussPts().size2();
+      constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+      commonDataPtr->matLogC.resize(size_symm, nb_gauss_pts, false);
 
-  OpCalculateLogC_dC(const std::string field_name,
-                     boost::shared_ptr<CommonData> common_data)
-      : DomainEleOp(field_name, DomainEleOp::OPROW),
-        commonDataPtr(common_data) {
-    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
-  }
+      auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
+      auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
 
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-    MoFEMFunctionBegin;
+      auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
 
-    FTensor::Index<'i', DIM> i;
-    FTensor::Index<'j', DIM> j;
-    FTensor::Index<'k', DIM> k;
-    FTensor::Index<'l', DIM> l;
+      for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
-    // const size_t nb_gauss_pts = matGradPtr->size2();
-    const size_t nb_gauss_pts = getGaussPts().size2();
-    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
-    commonDataPtr->matLogCdC.resize(size_symm * size_symm, nb_gauss_pts, false);
-    auto t_logC_dC = getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->matLogCdC);
-    auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
-    auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
+        // rare case when two eigen values are equal
+        auto nb_uniq = get_uniq_nb<DIM>(&(t_eig_val(0)));
 
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+        FTensor::Tensor1<double, DIM> eig;
+        FTensor::Tensor2<double, DIM, DIM> eigen_vec;
+        eig(i) = t_eig_val(i);
+        eigen_vec(i, j) = t_eig_vec(i, j);
+        auto logC = EigenMatrix::getMat(eig, eigen_vec, f);
+        t_logC(i, j) = logC(i, j);
 
-      FTensor::Tensor1<double, DIM> eig;
-      FTensor::Tensor2<double, DIM, DIM> eigen_vec;
-      eig(i) = t_eig_val(i);
-      eigen_vec(i, j) = t_eig_vec(i, j);
+        ++t_eig_val;
+        ++t_eig_vec;
+        ++t_logC;
+      }
 
-      // rare case when two eigen values are equal
-      auto nb_uniq = get_uniq_nb<DIM>(&eig(0));
-      auto dlogC_dC = EigenMatrix::getDiffMat(eig, eigen_vec, f, d_f, nb_uniq);
-      dlogC_dC(i, j, k, l) *= 2;
-
-      t_logC_dC(i, j, k, l) = dlogC_dC(i, j, k, l);
-
-      ++t_logC_dC;
-      ++t_eig_val;
-      ++t_eig_vec;
+      MoFEMFunctionReturn(0);
     }
 
-    MoFEMFunctionReturn(0);
-  }
+  private:
+    boost::shared_ptr<CommonData> commonDataPtr;
+  };
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
+  template <int DIM> struct OpCalculateLogC_dC : public DomainEleOp {
 
-template <int DIM> struct OpCalculateHenckyStress : public DomainEleOp {
-
-  OpCalculateHenckyStress(const std::string field_name,
-                          boost::shared_ptr<CommonData> common_data)
-      : DomainEleOp(field_name, DomainEleOp::OPROW),
-        commonDataPtr(common_data) {
-    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
-  }
-
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-    MoFEMFunctionBegin;
-
-    FTensor::Index<'i', DIM> i;
-    FTensor::Index<'j', DIM> j;
-    FTensor::Index<'k', DIM> k;
-    FTensor::Index<'l', DIM> l;
-
-    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
-
-    // const size_t nb_gauss_pts = matGradPtr->size2();
-    const size_t nb_gauss_pts = getGaussPts().size2();
-    auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*commonDataPtr->matDPtr);
-    auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
-    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
-    commonDataPtr->matHenckyStress.resize(size_symm, nb_gauss_pts, false);
-    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-      t_T(i, j) = t_D(i, j, k, l) * t_logC(k, l);
-      ++t_logC;
-      ++t_T;
-      ++t_D;
+    OpCalculateLogC_dC(const std::string field_name,
+                       boost::shared_ptr<CommonData> common_data)
+        : DomainEleOp(field_name, DomainEleOp::OPROW),
+          commonDataPtr(common_data) {
+      std::fill(&DomainEleOp::doEntities[MBEDGE],
+                &DomainEleOp::doEntities[MBMAXTYPE], false);
     }
 
-    MoFEMFunctionReturn(0);
-  }
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
+      FTensor::Index<'i', DIM> i;
+      FTensor::Index<'j', DIM> j;
+      FTensor::Index<'k', DIM> k;
+      FTensor::Index<'l', DIM> l;
 
-template <int DIM> struct OpCalculateHenckyPlasticStress : public DomainEleOp {
+      const size_t nb_gauss_pts = DomainEleOp::getGaussPts().size2();
+      constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+      commonDataPtr->matLogCdC.resize(size_symm * size_symm, nb_gauss_pts,
+                                      false);
+      auto t_logC_dC =
+          getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->matLogCdC);
+      auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
+      auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
 
-  OpCalculateHenckyPlasticStress(const std::string field_name,
-                                 boost::shared_ptr<CommonData> common_data,
-                                 boost::shared_ptr<MatrixDouble> mat_D_ptr,
-                                 const double scale = 1)
-      : DomainEleOp(field_name, DomainEleOp::OPROW), commonDataPtr(common_data),
-        scaleStress(scale), matDPtr(mat_D_ptr) {
-    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+      for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
-    matLogCPlastic = commonDataPtr->matLogCPlastic;
-  }
+        FTensor::Tensor1<double, DIM> eig;
+        FTensor::Tensor2<double, DIM, DIM> eigen_vec;
+        eig(i) = t_eig_val(i);
+        eigen_vec(i, j) = t_eig_vec(i, j);
 
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-    MoFEMFunctionBegin;
+        // rare case when two eigen values are equal
+        auto nb_uniq = get_uniq_nb<DIM>(&eig(0));
+        auto dlogC_dC =
+            EigenMatrix::getDiffMat(eig, eigen_vec, f, d_f, nb_uniq);
+        dlogC_dC(i, j, k, l) *= 2;
 
-    FTensor::Index<'i', DIM> i;
-    FTensor::Index<'j', DIM> j;
-    FTensor::Index<'k', DIM> k;
-    FTensor::Index<'l', DIM> l;
+        t_logC_dC(i, j, k, l) = dlogC_dC(i, j, k, l);
 
-    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+        ++t_logC_dC;
+        ++t_eig_val;
+        ++t_eig_vec;
+      }
 
-    // const size_t nb_gauss_pts = matGradPtr->size2();
-    const size_t nb_gauss_pts = getGaussPts().size2();
-    auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*matDPtr);
-    auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
-    auto t_logCPlastic = getFTensor2SymmetricFromMat<DIM>(*matLogCPlastic);
-    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
-    commonDataPtr->matHenckyStress.resize(size_symm, nb_gauss_pts, false);
-    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-      t_T(i, j) = t_D(i, j, k, l) * (t_logC(k, l) - t_logCPlastic(k, l));
-      t_T(i, j) /= scaleStress;
-      ++t_logC;
-      ++t_T;
-      ++t_D;
-      ++t_logCPlastic;
+      MoFEMFunctionReturn(0);
     }
 
-    MoFEMFunctionReturn(0);
-  }
+  private:
+    boost::shared_ptr<CommonData> commonDataPtr;
+  };
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-  boost::shared_ptr<MatrixDouble> matDPtr;
-  boost::shared_ptr<MatrixDouble> matLogCPlastic;
-  const double scaleStress;
-};
+  template <int DIM> struct OpCalculateHenckyStress : public DomainEleOp {
 
-template <int DIM> struct OpCalculatePiolaStress : public DomainEleOp {
-
-  OpCalculatePiolaStress(const std::string field_name,
-                         boost::shared_ptr<CommonData> common_data)
-      : DomainEleOp(field_name, DomainEleOp::OPROW),
-        commonDataPtr(common_data) {
-    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
-  }
-
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-    MoFEMFunctionBegin;
-
-    FTensor::Index<'i', DIM> i;
-    FTensor::Index<'j', DIM> j;
-    FTensor::Index<'k', DIM> k;
-    FTensor::Index<'l', DIM> l;
-
-    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
-
-    // const size_t nb_gauss_pts = matGradPtr->size2();
-    const size_t nb_gauss_pts = getGaussPts().size2();
-    auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*commonDataPtr->matDPtr);
-    auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
-    auto t_logC_dC = getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->matLogCdC);
-    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
-    commonDataPtr->matFirstPiolaStress.resize(DIM * DIM, nb_gauss_pts, false);
-    commonDataPtr->matSecondPiolaStress.resize(size_symm, nb_gauss_pts, false);
-    auto t_P = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matFirstPiolaStress);
-    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
-    auto t_S =
-        getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matSecondPiolaStress);
-    auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-      FTensor::Tensor2<double, DIM, DIM> t_F;
-      t_F(i, j) = t_grad(i, j) + t_kd(i, j);
-      t_S(k, l) = t_T(i, j) * t_logC_dC(i, j, k, l);
-      t_P(i, l) = t_F(i, k) * t_S(k, l);
-
-      ++t_grad;
-      ++t_logC;
-      ++t_logC_dC;
-      ++t_P;
-      ++t_T;
-      ++t_S;
-      ++t_D;
+    OpCalculateHenckyStress(const std::string field_name,
+                            boost::shared_ptr<CommonData> common_data)
+        : DomainEleOp(field_name, DomainEleOp::OPROW),
+          commonDataPtr(common_data) {
+      std::fill(&DomainEleOp::doEntities[MBEDGE],
+                &DomainEleOp::doEntities[MBMAXTYPE], false);
     }
 
-    MoFEMFunctionReturn(0);
-  }
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
+      FTensor::Index<'i', DIM> i;
+      FTensor::Index<'j', DIM> j;
+      FTensor::Index<'k', DIM> k;
+      FTensor::Index<'l', DIM> l;
 
-template <int DIM> struct OpHenckyTangent : public DomainEleOp {
-  OpHenckyTangent(const std::string field_name,
-                  boost::shared_ptr<CommonData> common_data,
-                  boost::shared_ptr<MatrixDouble> mat_D_ptr = nullptr)
-      : DomainEleOp(field_name, DomainEleOp::OPROW),
-        commonDataPtr(common_data) {
-    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
-    if (mat_D_ptr)
-      matDPtr = mat_D_ptr;
-    else
-      matDPtr = commonDataPtr->matDPtr;
-  }
+      constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
 
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-    MoFEMFunctionBegin;
+      // const size_t nb_gauss_pts = matGradPtr->size2();
+      const size_t nb_gauss_pts = DomainEleOp::getGaussPts().size2();
+      auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*commonDataPtr->matDPtr);
+      auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
+      constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+      commonDataPtr->matHenckyStress.resize(size_symm, nb_gauss_pts, false);
+      auto t_T =
+          getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
 
-    FTensor::Index<'i', DIM> i;
-    FTensor::Index<'j', DIM> j;
-    FTensor::Index<'k', DIM> k;
-    FTensor::Index<'l', DIM> l;
-    FTensor::Index<'m', DIM> m;
-    FTensor::Index<'n', DIM> n;
-    FTensor::Index<'o', DIM> o;
-    FTensor::Index<'p', DIM> p;
+      for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+        t_T(i, j) = t_D(i, j, k, l) * t_logC(k, l);
+        ++t_logC;
+        ++t_T;
+        ++t_D;
+      }
 
-    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
-    // const size_t nb_gauss_pts = matGradPtr->size2();
-    const size_t nb_gauss_pts = getGaussPts().size2();
-    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
-    commonDataPtr->matTangent.resize(DIM * DIM * DIM * DIM, nb_gauss_pts);
-    auto dP_dF =
-        getFTensor4FromMat<DIM, DIM, DIM, DIM, 1>(commonDataPtr->matTangent);
-
-    auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*matDPtr);
-    auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
-    auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
-    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
-    auto t_S =
-        getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matSecondPiolaStress);
-    auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
-    auto t_logC_dC = getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->matLogCdC);
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-      FTensor::Tensor2<double, DIM, DIM> t_F;
-      t_F(i, j) = t_grad(i, j) + t_kd(i, j);
-
-      FTensor::Tensor1<double, DIM> eig;
-      FTensor::Tensor2<double, DIM, DIM> eigen_vec;
-      FTensor::Tensor2_symmetric<double, DIM> T;
-      eig(i) = t_eig_val(i);
-      eigen_vec(i, j) = t_eig_vec(i, j);
-      T(i, j) = t_T(i, j);
-
-      // rare case when two eigen values are equal
-      auto nb_uniq = get_uniq_nb<DIM>(&eig(0));
-
-      FTensor::Tensor4<double, DIM, DIM, DIM, DIM> dC_dF;
-      dC_dF(i, j, k, l) = (t_kd(i, l) * t_F(k, j)) + (t_kd(j, l) * t_F(k, i));
-
-      auto TL =
-          EigenMatrix::getDiffDiffMat(eig, eigen_vec, f, d_f, dd_f, T, nb_uniq);
-
-      TL(i, j, k, l) *= 4;
-      FTensor::Ddg<double, DIM, DIM> P_D_P_plus_TL;
-      P_D_P_plus_TL(i, j, k, l) =
-          TL(i, j, k, l) +
-          (t_logC_dC(i, j, o, p) * t_D(o, p, m, n)) * t_logC_dC(m, n, k, l);
-      P_D_P_plus_TL(i, j, k, l) *= 0.5;
-      dP_dF(i, j, m, n) = t_kd(i, m) * (t_kd(k, n) * t_S(k, j));
-      dP_dF(i, j, m, n) +=
-          t_F(i, k) * (P_D_P_plus_TL(k, j, o, p) * dC_dF(o, p, m, n));
-
-      ++dP_dF;
-
-      ++t_grad;
-      ++t_eig_val;
-      ++t_eig_vec;
-      ++t_logC_dC;
-      ++t_S;
-      ++t_T;
-      ++t_D;
+      MoFEMFunctionReturn(0);
     }
 
-    MoFEMFunctionReturn(0);
-  }
+  private:
+    boost::shared_ptr<CommonData> commonDataPtr;
+  };
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-  boost::shared_ptr<MatrixDouble> matDPtr;
+  template <int DIM>
+  struct OpCalculateHenckyPlasticStress : public DomainEleOp {
+
+    OpCalculateHenckyPlasticStress(const std::string field_name,
+                                   boost::shared_ptr<CommonData> common_data,
+                                   boost::shared_ptr<MatrixDouble> mat_D_ptr,
+                                   const double scale = 1)
+        : DomainEleOp(field_name, DomainEleOp::OPROW),
+          commonDataPtr(common_data), scaleStress(scale), matDPtr(mat_D_ptr) {
+      std::fill(&DomainEleOp::doEntities[MBEDGE],
+                &DomainEleOp::doEntities[MBMAXTYPE], false);
+
+      matLogCPlastic = commonDataPtr->matLogCPlastic;
+    }
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+      FTensor::Index<'i', DIM> i;
+      FTensor::Index<'j', DIM> j;
+      FTensor::Index<'k', DIM> k;
+      FTensor::Index<'l', DIM> l;
+
+      constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+
+      // const size_t nb_gauss_pts = matGradPtr->size2();
+      const size_t nb_gauss_pts = DomainEleOp::getGaussPts().size2();
+      auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*matDPtr);
+      auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
+      auto t_logCPlastic = getFTensor2SymmetricFromMat<DIM>(*matLogCPlastic);
+      constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+      commonDataPtr->matHenckyStress.resize(size_symm, nb_gauss_pts, false);
+      auto t_T =
+          getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
+
+      for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+        t_T(i, j) = t_D(i, j, k, l) * (t_logC(k, l) - t_logCPlastic(k, l));
+        t_T(i, j) /= scaleStress;
+        ++t_logC;
+        ++t_T;
+        ++t_D;
+        ++t_logCPlastic;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    boost::shared_ptr<CommonData> commonDataPtr;
+    boost::shared_ptr<MatrixDouble> matDPtr;
+    boost::shared_ptr<MatrixDouble> matLogCPlastic;
+    const double scaleStress;
+  };
+
+  template <int DIM> struct OpCalculatePiolaStress : public DomainEleOp {
+
+    OpCalculatePiolaStress(const std::string field_name,
+                           boost::shared_ptr<CommonData> common_data)
+        : DomainEleOp(field_name, DomainEleOp::OPROW),
+          commonDataPtr(common_data) {
+      std::fill(&DomainEleOp::doEntities[MBEDGE],
+                &DomainEleOp::doEntities[MBMAXTYPE], false);
+    }
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+      FTensor::Index<'i', DIM> i;
+      FTensor::Index<'j', DIM> j;
+      FTensor::Index<'k', DIM> k;
+      FTensor::Index<'l', DIM> l;
+
+      constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+
+      // const size_t nb_gauss_pts = matGradPtr->size2();
+      const size_t nb_gauss_pts = DomainEleOp::getGaussPts().size2();
+      auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*commonDataPtr->matDPtr);
+      auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
+      auto t_logC_dC =
+          getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->matLogCdC);
+      constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+      commonDataPtr->matFirstPiolaStress.resize(DIM * DIM, nb_gauss_pts, false);
+      commonDataPtr->matSecondPiolaStress.resize(size_symm, nb_gauss_pts,
+                                                 false);
+      auto t_P =
+          getFTensor2FromMat<DIM, DIM>(commonDataPtr->matFirstPiolaStress);
+      auto t_T =
+          getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
+      auto t_S =
+          getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matSecondPiolaStress);
+      auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
+
+      for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+        FTensor::Tensor2<double, DIM, DIM> t_F;
+        t_F(i, j) = t_grad(i, j) + t_kd(i, j);
+        t_S(k, l) = t_T(i, j) * t_logC_dC(i, j, k, l);
+        t_P(i, l) = t_F(i, k) * t_S(k, l);
+
+        ++t_grad;
+        ++t_logC;
+        ++t_logC_dC;
+        ++t_P;
+        ++t_T;
+        ++t_S;
+        ++t_D;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    boost::shared_ptr<CommonData> commonDataPtr;
+  };
+
+  template <int DIM> struct OpHenckyTangent : public DomainEleOp {
+    OpHenckyTangent(const std::string field_name,
+                    boost::shared_ptr<CommonData> common_data,
+                    boost::shared_ptr<MatrixDouble> mat_D_ptr = nullptr)
+        : DomainEleOp(field_name, DomainEleOp::OPROW),
+          commonDataPtr(common_data) {
+      std::fill(&DomainEleOp::doEntities[MBEDGE],
+                &DomainEleOp::doEntities[MBMAXTYPE], false);
+      if (mat_D_ptr)
+        matDPtr = mat_D_ptr;
+      else
+        matDPtr = commonDataPtr->matDPtr;
+    }
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+      FTensor::Index<'i', DIM> i;
+      FTensor::Index<'j', DIM> j;
+      FTensor::Index<'k', DIM> k;
+      FTensor::Index<'l', DIM> l;
+      FTensor::Index<'m', DIM> m;
+      FTensor::Index<'n', DIM> n;
+      FTensor::Index<'o', DIM> o;
+      FTensor::Index<'p', DIM> p;
+
+      constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+      // const size_t nb_gauss_pts = matGradPtr->size2();
+      const size_t nb_gauss_pts = DomainEleOp::getGaussPts().size2();
+      constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+      commonDataPtr->matTangent.resize(DIM * DIM * DIM * DIM, nb_gauss_pts);
+      auto dP_dF =
+          getFTensor4FromMat<DIM, DIM, DIM, DIM, 1>(commonDataPtr->matTangent);
+
+      auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*matDPtr);
+      auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
+      auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
+      auto t_T =
+          getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
+      auto t_S =
+          getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matSecondPiolaStress);
+      auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
+      auto t_logC_dC =
+          getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->matLogCdC);
+
+      for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+        FTensor::Tensor2<double, DIM, DIM> t_F;
+        t_F(i, j) = t_grad(i, j) + t_kd(i, j);
+
+        FTensor::Tensor1<double, DIM> eig;
+        FTensor::Tensor2<double, DIM, DIM> eigen_vec;
+        FTensor::Tensor2_symmetric<double, DIM> T;
+        eig(i) = t_eig_val(i);
+        eigen_vec(i, j) = t_eig_vec(i, j);
+        T(i, j) = t_T(i, j);
+
+        // rare case when two eigen values are equal
+        auto nb_uniq = get_uniq_nb<DIM>(&eig(0));
+
+        FTensor::Tensor4<double, DIM, DIM, DIM, DIM> dC_dF;
+        dC_dF(i, j, k, l) = (t_kd(i, l) * t_F(k, j)) + (t_kd(j, l) * t_F(k, i));
+
+        auto TL = EigenMatrix::getDiffDiffMat(eig, eigen_vec, f, d_f, dd_f, T,
+                                              nb_uniq);
+
+        TL(i, j, k, l) *= 4;
+        FTensor::Ddg<double, DIM, DIM> P_D_P_plus_TL;
+        P_D_P_plus_TL(i, j, k, l) =
+            TL(i, j, k, l) +
+            (t_logC_dC(i, j, o, p) * t_D(o, p, m, n)) * t_logC_dC(m, n, k, l);
+        P_D_P_plus_TL(i, j, k, l) *= 0.5;
+        dP_dF(i, j, m, n) = t_kd(i, m) * (t_kd(k, n) * t_S(k, j));
+        dP_dF(i, j, m, n) +=
+            t_F(i, k) * (P_D_P_plus_TL(k, j, o, p) * dC_dF(o, p, m, n));
+
+        ++dP_dF;
+
+        ++t_grad;
+        ++t_eig_val;
+        ++t_eig_vec;
+        ++t_logC_dC;
+        ++t_S;
+        ++t_T;
+        ++t_D;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    boost::shared_ptr<CommonData> commonDataPtr;
+    boost::shared_ptr<MatrixDouble> matDPtr;
+  };
+
+  template <int DIM> struct OpPostProcHencky : public DomainEleOp {
+    OpPostProcHencky(const std::string field_name,
+                     moab::Interface &post_proc_mesh,
+                     std::vector<EntityHandle> &map_gauss_pts,
+                     boost::shared_ptr<CommonData> common_data_ptr);
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    moab::Interface &postProcMesh;
+    std::vector<EntityHandle> &mapGaussPts;
+    boost::shared_ptr<CommonData> commonDataPtr;
+  };
 };
 
-template <int DIM> struct OpPostProcHencky : public DomainEleOp {
-  OpPostProcHencky(const std::string field_name,
-                   moab::Interface &post_proc_mesh,
-                   std::vector<EntityHandle> &map_gauss_pts,
-                   boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-private:
-  moab::Interface &postProcMesh;
-  std::vector<EntityHandle> &mapGaussPts;
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
-
+template <typename DomainEleOp>
 template <int DIM>
-OpPostProcHencky<DIM>::OpPostProcHencky(
+HenkyIntegrators<DomainEleOp>::OpPostProcHencky<DIM>::OpPostProcHencky(
     const std::string field_name, moab::Interface &post_proc_mesh,
     std::vector<EntityHandle> &map_gauss_pts,
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomainEleOp(field_name, DomainEleOp::OPROW), postProcMesh(post_proc_mesh),
       mapGaussPts(map_gauss_pts), commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
-  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  std::fill(&DomainEleOp::doEntities[MBEDGE],
+            &DomainEleOp::doEntities[MBMAXTYPE], false);
 }
 
 //! [Postprocessing]
+template <typename DomainEleOp>
 template <int DIM>
-MoFEMErrorCode OpPostProcHencky<DIM>::doWork(int side, EntityType type,
-                                             EntData &data) {
+MoFEMErrorCode HenkyIntegrators<DomainEleOp>::OpPostProcHencky<DIM>::doWork(
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   FTensor::Index<'i', DIM> i;
@@ -742,6 +766,38 @@ addMatBlockOps(MoFEM::Interface &m_field,
   MoFEMFunctionReturn(0);
 }
 
+template <typename DomainEleOp>
+auto
+commonDataFactory(MoFEM::Interface &m_field,
+                  boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
+                  std::string field_name, std::string block_name, Sev sev) {
+
+  auto common_ptr = boost::make_shared<HenckyOps::CommonData>();
+  common_ptr->matDPtr = boost::make_shared<MatrixDouble>();
+  common_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
+
+  CHK_THROW_MESSAGE(addMatBlockOps(m_field, pip, field_name, block_name,
+                                   common_ptr->matDPtr, sev),
+                    "addMatBlockOps");
+
+  using H = HenkyIntegrators<DomainEleOp>;
+
+  pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+      field_name, common_ptr->matGradPtr));
+  pip.push_back(new typename H::template OpCalculateEigenVals<SPACE_DIM>(
+      field_name, common_ptr));
+  pip.push_back(new typename H::template OpCalculateLogC<SPACE_DIM>(
+      field_name, common_ptr));
+  pip.push_back(new typename H::template OpCalculateLogC_dC<SPACE_DIM>(
+      field_name, common_ptr));
+  pip.push_back(new typename H::template OpCalculateHenckyStress<SPACE_DIM>(
+      field_name, common_ptr));
+  pip.push_back(new typename H::template OpCalculatePiolaStress<SPACE_DIM>(
+      field_name, common_ptr));
+
+  return common_ptr;
+}
+
 template <typename DomainEleOp, AssemblyType A, IntegrationType I>
 MoFEMErrorCode opFactoryDomainRhs(
     MoFEM::Interface &m_field,
@@ -754,20 +810,8 @@ MoFEMErrorCode opFactoryDomainRhs(
   using OpInternalForcePiola =
       typename B::template OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
-  auto common_ptr = boost::make_shared<HenckyOps::CommonData>();
-  common_ptr->matDPtr = boost::make_shared<MatrixDouble>();
-  common_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
-
-  CHKERR addMatBlockOps(m_field, pip, field_name, block_name,
-                        common_ptr->matDPtr, sev);
-
-  pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-      "U", common_ptr->matGradPtr));
-  pip.push_back(new OpCalculateEigenVals<SPACE_DIM>(field_name, common_ptr));
-  pip.push_back(new OpCalculateLogC<SPACE_DIM>(field_name, common_ptr));
-  pip.push_back(new OpCalculateLogC_dC<SPACE_DIM>(field_name, common_ptr));
-  pip.push_back(new OpCalculateHenckyStress<SPACE_DIM>(field_name, common_ptr));
-  pip.push_back(new OpCalculatePiolaStress<SPACE_DIM>(field_name, common_ptr));
+  auto common_ptr =
+      commonDataFactory<DomainEleOp>(m_field, pip, field_name, block_name, sev);
   pip.push_back(
       new OpInternalForcePiola("U", common_ptr->getMatFirstPiolaStress()));
 
@@ -781,35 +825,23 @@ MoFEMErrorCode opFactoryDomainLhs(
     std::string field_name, std::string block_name, Sev sev) {
   MoFEMFunctionBegin;
 
+
   using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
       A>::template BiLinearForm<I>;
   using OpKPiola =
       typename B::template OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
 
-  auto common_ptr = boost::make_shared<HenckyOps::CommonData>();
-  common_ptr->matDPtr = boost::make_shared<MatrixDouble>();
-  common_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
-
-  CHKERR addMatBlockOps(m_field, pip, field_name, block_name,
-                        common_ptr->matDPtr, sev);
-
-    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        field_name, common_ptr->matGradPtr));
-    pip.push_back(
-        new OpCalculateEigenVals<SPACE_DIM>(field_name, common_ptr));
-    pip.push_back(new OpCalculateLogC<SPACE_DIM>(field_name, common_ptr));
-    pip.push_back(
-        new OpCalculateLogC_dC<SPACE_DIM>(field_name, common_ptr));
-    pip.push_back(
-        new OpCalculateHenckyStress<SPACE_DIM>(field_name, common_ptr));
-    pip.push_back(
-        new OpCalculatePiolaStress<SPACE_DIM>(field_name, common_ptr));
-    pip.push_back(new OpHenckyTangent<SPACE_DIM>(field_name, common_ptr));
-    pip.push_back(
-        new OpKPiola(field_name, field_name, common_ptr->getMatTangent()));
+  auto common_ptr =
+      commonDataFactory<DomainEleOp>(m_field, pip, field_name, block_name, sev);
+  using H = HenkyIntegrators<DomainEleOp>;
+  pip.push_back(new typename H::template OpHenckyTangent<SPACE_DIM>(
+      field_name, common_ptr));
+  pip.push_back(
+      new OpKPiola(field_name, field_name, common_ptr->getMatTangent()));
 
   MoFEMFunctionReturn(0);
 }
+
 
 } // namespace HenckyOps
 
