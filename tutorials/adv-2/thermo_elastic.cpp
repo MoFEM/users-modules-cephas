@@ -73,7 +73,7 @@ using OpHdivFlux = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
  *
  */
 using OpHDivTemp = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpMixDivTimesU<3, 1, 2>;
+    GAUSS>::OpMixDivTimesU<3, 1, SPACE_DIM>;
 
 /**
  * @brief Integrate Rhs base of temperature time heat capacity times heat rate
