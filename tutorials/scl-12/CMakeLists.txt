@@ -36,6 +36,10 @@ tutorials_build_and_install(
 set_target_properties(
   electrostatichomogeneous_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
+  tutorials_build_and_install(
+  electrostatichomogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatichomogeneous.cpp) 
+
+
 # add_test(
 #   electrostatichomogeneous
 #   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2

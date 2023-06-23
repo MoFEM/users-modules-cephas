@@ -31,10 +31,12 @@ using EntData = EntitiesFieldData::EntData;
 
 template <int SPACE_DIM>
 struct BlockData {
-    int iD;
-    double sigma;
-    double epsPermit;
-    Range blockEnts;
+  int iD;
+  double sigma;
+  Range eDges;
+  double epsPermit;
+  Range tRis;
+  Range tEts;
 };
 
 
@@ -223,9 +225,6 @@ private:
 
 
 
-
-
-
 template <int SPACE_DIM>
 struct OpBlockChargeDensity: public IntEleOp {
   OpBlockChargeDensity(
@@ -241,7 +240,7 @@ struct OpBlockChargeDensity: public IntEleOp {
                         EntData& col_data) {
     MoFEMFunctionBegin;
     for (const auto& m : *BlockSetsPtr) {
-      if (m.second.blockEnts.find(getFEEntityHandle()) != m.second.blockEnts.end()) {
+      if (m.second.eDges.find(getFEEntityHandle()) != m.second.eDges.end()) {
         commonDataPtr->chrgDens = m.second.sigma;
       }
     }
@@ -299,7 +298,7 @@ struct OpBlockPermittivity: public DomainEleOp {;
                         EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     for (auto &m : (*BlockSetsPtr)) {
-      if (m.second.blockEnts.find(getFEEntityHandle()) != m.second.blockEnts.end()) {
+      if (m.second.tRis.find(getFEEntityHandle()) != m.second.tRis.end()) {
         commonDataPtr->blockPermittivity = m.second.epsPermit;
       }
     }

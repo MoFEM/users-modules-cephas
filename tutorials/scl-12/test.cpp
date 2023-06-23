@@ -13,14 +13,8 @@
 constexpr auto domainField = "POTENTIAL";
 constexpr int BASE_DIM = 1;
 constexpr int FIELD_DIM = 1;
-
-constexpr int SPACE_DIM = 3;
-///
-// constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;/////////working only for 3D>>CMakeList problem
-// using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
-// using IntEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
-// using DomainEleOp = DomainEle::UserDataOperator;
-// using IntEleOp = IntEle::UserDataOperator;
+// constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;
+constexpr int SPACE_DIM = 2;
 // using namespace MoFEM;
 // template <int SPACE_DIM> struct ElementsAndOps {};
 // template <> struct ElementsAndOps<2> {
@@ -31,10 +25,13 @@ constexpr int SPACE_DIM = 3;
 // using DomainEle =MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator;
 // using IntEle= MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
 // };
+
 // template <int SPACE_DIM>
 // using DomainEleOp = typename ElementsAndOps<SPACE_DIM>::DomainEleOp;
+
 // template <int SPACE_DIM>
 // using IntEleOp = typename ElementsAndOps<SPACE_DIM>::IntEleOp;
+
 // using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
 // using OpEdgeEle = MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator;
 
@@ -42,6 +39,12 @@ using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
 using IntEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using IntEleOp = IntEle::UserDataOperator;
+
+// using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
+// using IntEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
+// using DomainEleOp = DomainEle::UserDataOperator;
+// using IntEleOp = IntEle::UserDataOperator;
+
 using EntData = EntitiesFieldData::EntData;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
@@ -52,6 +55,8 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 // // template <> struct PostProcEle<3> {
 // using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 // // };
+
+static char help[] = "...\n\n";
 // template <int SPACE_DIM>
 // struct BlockData {
 //     int iD;
@@ -60,30 +65,51 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 //     Range blockEnts;
 // };
 // // auto tets  = blockEnts.subset_by_dimension(SPACE_DIM-1);
+template <int SPACE_DIM>
+// struct BlockData {
+//     struct VolBlockData {
+//         int iD;
+//         double epsPermit;
+//         Range tEts;
+//     };
 
-static char help[] = "...\n\n";
+//     struct SurfBlockData {
+//         int iD;
+//         double sigma;
+//         Range tRis;
+//     };
 
-template <int SPACE_DIM>struct BlockData {
-  int iD;
-  double sigma;
-  double epsPermit;
-  Range blockFaces; // in 2d -> edges, in 3d ->tris and quads
-  Range blockVolumes;
+//     struct EdgeBlockData {
+//         int iD;
+//         double sigma;
+//         Range eDges;
+//     };
+// };
+struct VolBlockData {
+    int iD;
+    double epsPermit;
+    Range tEts;
 };
-// template <>struct BlockData<2> {
-//   int iD;
-//   double sigma;
-//   double epsPermit;
-//   Range blockFaces; // in 2d -> edges, in 3d ->tris and quads
-//   Range blockVolumes; // in 2d -> tris and quads, in 3d ->tets or hex
-// };
-// template <>struct BlockData<3> {
-//   int iD;
-//   double sigma;
-//   double epsPermit;
-//   Range blockFaces; // in 2d that is edges, in 3d that is tris and quads
-//   Range blockVolumes; // in 2d it will be tris and quads, in 3d this is tets or hex
-// };
+
+struct SurfBlockData {
+    int iD;
+    double sigma;
+    double epsPermit;
+    Range tRis;
+};
+
+struct EdgeBlockData {
+    int iD;
+    double sigma;
+    Range eDges;
+};
+
+template <int SPACE_DIM>
+struct BlockData<2> : public EdgeBlockData , public SurfBlockData{};
+
+template <>
+struct BlockData<3> : public SurfBlockData, public VolBlockData {};
+
 template <int SPACE_DIM> struct DataAtIntegrationPts {
 
   SmartPetscObj<Vec> petscVec;
@@ -113,6 +139,7 @@ public:
 
     const int nb_row_dofs = row_data.getIndices().size();
     const int nb_col_dofs = col_data.getIndices().size();
+    // namespace ElectrostaticHomogeneousOperators {
     FTensor::Index<'i', SPACE_DIM> i;
 
     if (nb_row_dofs && nb_col_dofs) {
@@ -190,7 +217,7 @@ public:
       locRhs.clear();
 
       // get element area
-      const double volumee = getMeasure();
+      const double area = getMeasure();
 
       // get number of integration points
       const int nb_integration_points = getGaussPts().size2();
@@ -202,7 +229,7 @@ public:
 
       // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL VECTOR
       for (int gg = 0; gg != nb_integration_points; gg++) {
-        const double a = t_w * volumee;
+        const double a = t_w * area;
         // double y = getGaussPts()(1, gg);
         double y = getCoordsAtGaussPts()(gg, 1);
         for (int rr = 0; rr != nb_dofs; rr++) {
@@ -265,8 +292,7 @@ private:
   boost::shared_ptr<MatrixDouble> gradUNegative;
   boost::shared_ptr<MatrixDouble> gradU;
 };
-template <int SPACE_DIM> 
-struct OpBlockChargeDensity : public IntEleOp {
+template <int SPACE_DIM> struct OpBlockChargeDensity : public IntEleOp {
   OpBlockChargeDensity(
       boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
       boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> int_block_sets_ptr,
@@ -281,11 +307,17 @@ struct OpBlockChargeDensity : public IntEleOp {
                         EntityType col_type, EntData &row_data,
                         EntData &col_data) {
     MoFEMFunctionBegin;
-    for (const auto &m : *intBlockSetsPtr) {
-      if (m.second.blockFaces.find(getFEEntityHandle()) != m.second.blockFaces.end()) {
-        commonDataPtr->chrgDens = m.second.sigma;
-      }
-    }
+     for (const auto &m : *intBlockSetsPtr) {
+    if ( SPACE_DIM == 2){
+      if (m.second.eDges.find(getFEEntityHandle()) != m.second.eDges.end()) {
+          commonDataPtr->chrgDens = m.second.EdgeBlockData::sigma;
+      }}
+     else if  ( SPACE_DIM == 3){
+      if (m.second.eDges.find(getFEEntityHandle()) != m.second.tRis.end()) {
+          commonDataPtr->chrgDens = m.second.SurfBlockData::sigma;
+      }}
+     }
+    
     MoFEMFunctionReturn(0);
   }
 
@@ -312,18 +344,26 @@ template <int SPACE_DIM> struct OpBlockPermittivity : public DomainEleOp {
                         EntitiesFieldData::EntData &row_data,
                         EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
-    for (auto &m : (*permBlockSetsPtr)) {
-      if (m.second.blockVolumes.find(getFEEntityHandle()) != m.second.blockVolumes.end()) {
-        commonDataPtr->blockPermittivity = m.second.epsPermit;
-      }
-    }
+      for (const auto &m : *permBlockSetsPtr) {
+    if ( SPACE_DIM == 2){
+      if (m.second.eDges.find(getFEEntityHandle()) != m.second.tRis.end()) {
+          commonDataPtr->blockPermittivity = m.second.SurfBlockData::epsPermit;
+      }}
+     else if  ( SPACE_DIM == 3){
+      if (m.second.eDges.find(getFEEntityHandle()) != m.second.VolBlockData::tEts.end()) {
+          commonDataPtr->blockPermittivity = m.second.VolBlockData::epsPermit;
+      }}
+     }
     MoFEMFunctionReturn(0);
   }
+
 protected:
   boost::shared_ptr<map<int, BlockData<SPACE_DIM>>> permBlockSetsPtr;
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
 };
 
+
+// }
 struct ElectrostaticHomogeneous {
 public:
   ElectrostaticHomogeneous(MoFEM::Interface &m_field);
@@ -346,7 +386,7 @@ private:
 
   boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> perm_block_sets_ptr;
   boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>>
-int_block_sets_ptr; ///////
+      int_block_sets_ptr; ///////
   Simple *simpleInterface;
   boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe;
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr;
@@ -361,9 +401,13 @@ ElectrostaticHomogeneous::ElectrostaticHomogeneous(MoFEM::Interface &m_field)
 //! [Read mesh]
 MoFEMErrorCode ElectrostaticHomogeneous::readMesh() {
   MoFEMFunctionBegin;
+
+  //  MOFEM_LOG("ELECTROSTATICS", Sev::inform)
+  //     << "Read mesh for problem in " << 3;
   CHKERR mField.getInterface(simpleInterface);
   CHKERR simpleInterface->getOptions();
   CHKERR simpleInterface->loadFile();
+
   MoFEMFunctionReturn(0);
 }
 //! [Read mesh]
@@ -380,17 +424,28 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
 
   // using BlockSetsPtrType = boost::shared_ptr<map<int, BlockData<SPACE_DIM>>>;
-perm_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
-  Range electrIcs;
+
+  perm_block_sets_ptr =
+      boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
+  Range electric_tRis;
+  Range electric_tEts;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 12, "MAT_ELECTRIC") == 0) {
       const int id = bit->getMeshsetId();
       auto &block_data = (*perm_block_sets_ptr)[id];
+      {
 
-      CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM,
-                                                         block_data.blockVolumes, true);
-      electrIcs.merge(block_data.blockVolumes);
+        if (SPACE_DIM == 2) {
+          CHKERR mField.get_moab().get_entities_by_dimension(
+              bit->getMeshset(), SPACE_DIM, block_data.SurfBlockData::tRis, true);
+          electric_tRis.merge(block_data.SurfBlockData::tRis);
 
+        } else if (SPACE_DIM == 3) {
+          CHKERR mField.get_moab().get_entities_by_dimension(
+              bit->getMeshset(), SPACE_DIM, block_data.VolBlockData::tEts, true);
+          electric_tEts.merge(block_data.VolBlockData::tEts);
+        }
+      }
       std::vector<double> attributes;
       bit->getAttributes(attributes);
       if (attributes.size() < 1) {
@@ -398,21 +453,33 @@ perm_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
                  "should be at least 1 attributes but is %d",
                  attributes.size());
       }
+
       block_data.iD = id;
       block_data.epsPermit = attributes[0];
     }
   }
-int_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
-  Range interfIcs;
+
+  int_block_sets_ptr =
+      boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
+  Range interface_eDges;
+  Range interface_tRis;
+
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 12, "INT_ELECTRIC") == 0) {
       const int id = bit->getMeshsetId();
       auto &block_data = (*int_block_sets_ptr)[id];
+      {
 
-      CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM -1,
-                                                         block_data.blockFaces, true);
-      interfIcs.merge(block_data.blockFaces);
-
+        if (SPACE_DIM == 2) {
+          CHKERR mField.get_moab().get_entities_by_dimension(
+              bit->getMeshset(), SPACE_DIM - 1, block_data.EdgeBlockData::eDges, true);
+          interface_eDges.merge(block_data.EdgeBlockData::eDges);
+        } else if (SPACE_DIM == 3) {
+          CHKERR mField.get_moab().get_entities_by_dimension(
+              bit->getMeshset(), SPACE_DIM - 1, block_data.SurfBlockData::tRis, true);
+          interface_tRis.merge(block_data.SurfBlockData::tRis);
+        }
+      }
       std::vector<double> attributes;
       bit->getAttributes(attributes);
       if (attributes.size() < 1) {
@@ -430,10 +497,14 @@ int_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
   CHKERR mField.modify_finite_element_add_field_row("INTERFACE", domainField);
   CHKERR mField.modify_finite_element_add_field_col("INTERFACE", domainField);
   CHKERR mField.modify_finite_element_add_field_data("INTERFACE", domainField);
-  CHKERR mField.add_ents_to_finite_element_by_dim(electrIcs, SPACE_DIM,
+
+  if (SPACE_DIM == 2) {
+    CHKERR mField.add_ents_to_finite_element_by_dim(interface_eDges, MBEDGE,
                                                     "INTERFACE");
-  CHKERR mField.add_ents_to_finite_element_by_dim(interfIcs, SPACE_DIM-1,
+  } else if (SPACE_DIM == 3) {
+    CHKERR mField.add_ents_to_finite_element_by_dim(interface_tRis, MBTRI,
                                                     "INTERFACE");
+  }
 
   CHKERR simpleInterface->defineFiniteElements();
   CHKERR simpleInterface->defineProblem(PETSC_TRUE);
@@ -445,6 +516,9 @@ int_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
   CHKERR DMMoFEMAddElement(simpleInterface->getDM(), "INTERFACE");
 
   CHKERR simpleInterface->buildProblem();
+
+  // CHKERR simpleInterface->setUp();
+
   MoFEMFunctionReturn(0);
 }
 //! [Setup problem]
@@ -517,14 +591,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
     calculate_residual_from_set_values_on_bc(
         pipeline_mng->getOpDomainRhsPipeline());
 
-   if (SPACE_DIM == 2 ) {
     interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
-        new EdgeElementForcesAndSourcesCore(mField));}      
-   if (SPACE_DIM == 3){
-    interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
-        new FaceElementForcesAndSourcesCore(mField));}
-    
-
+        new EdgeElementForcesAndSourcesCore(mField));
 
     {
       interface_rhs_fe->getOpPtrVector().push_back(
@@ -534,8 +602,6 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
       interface_rhs_fe->getOpPtrVector().push_back(
           new OpInterfaceRhsVectorF<SPACE_DIM>(domainField, common_data_ptr));
     }
-
-
   }
   MoFEMFunctionReturn(0);
 }
@@ -594,12 +660,18 @@ MoFEMErrorCode ElectrostaticHomogeneous::solveSystem() {
 //! [Output results]
 MoFEMErrorCode ElectrostaticHomogeneous::outputResults() {
   MoFEMFunctionBegin;
+
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
+
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+
+  // constexpr auto SPACE_DIM = 2; // dimension of problem
+
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(

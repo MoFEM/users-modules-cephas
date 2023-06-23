@@ -100,8 +100,8 @@ surf_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
       auto &block_data = (*surf_block_sets_ptr)[id];
 
       CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM,
-                                                         block_data.blockEnts, true);
-      electric_tris.merge(block_data.blockEnts);
+                                                         block_data.tRis, true);
+      electric_tris.merge(block_data.tRis);
 
       std::vector<double> attributes;
       bit->getAttributes(attributes);
@@ -122,8 +122,8 @@ surf_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
       auto &block_data = (*edge_block_sets_ptr)[id];
 
       CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM -1,
-                                                         block_data.blockEnts, true);
-      interface_edges.merge(block_data.blockEnts);
+                                                         block_data.eDges, true);
+      interface_edges.merge(block_data.eDges);
 
       std::vector<double> attributes;
       bit->getAttributes(attributes);
@@ -184,7 +184,7 @@ MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   common_data_ptr = boost::make_shared<DataAtIntegrationPts>(mField);
   auto add_domain_lhs_ops = [&](auto &pipeline) {
-    pipeline.push_back(new OpBlockPermittivity<2>(
+    pipeline.push_back(new OpBlockPermittivity<SPACE_DIM>(
         common_data_ptr, surf_block_sets_ptr, domainField));
   };
 
@@ -234,7 +234,7 @@ MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
         new EdgeElementForcesAndSourcesCore(mField));
         {
 interface_rhs_fe->getOpPtrVector().push_back
-(new OpBlockChargeDensity<2>(common_data_ptr, edge_block_sets_ptr, domainField));
+(new OpBlockChargeDensity<SPACE_DIM>(common_data_ptr, edge_block_sets_ptr, domainField));
 
       interface_rhs_fe->getOpPtrVector().push_back(
           new OpInterfaceRhsVectorF(domainField, common_data_ptr));

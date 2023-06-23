@@ -42,12 +42,10 @@ private:
   MoFEM::Interface &mField;
   boost::shared_ptr<std::map<int, VolBlockData<SPACE_DIM>>> vol_block_sets_ptr; ///////
   boost::shared_ptr<std::map<int, SurfBlockData<SPACE_DIM>>> surf_block_sets_ptr;
-
-  /////////
   Simple *simpleInterface;
-
   boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe;
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr;
+
   // Field name and approximation order
   std::string domainField;
   int oRder;
@@ -218,8 +216,7 @@ MoFEMErrorCode Electrostatic3DHomogeneous::assembleSystem() {
     };
 
     auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
-      using DomainEle =
-          PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
+      using DomainEle =PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
       using DomainEleOp = DomainEle::UserDataOperator;
       using OpInternal = FormsIntegrators<DomainEleOp>::Assembly<
           PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<BASE_DIM, FIELD_DIM, SPACE_DIM>;
