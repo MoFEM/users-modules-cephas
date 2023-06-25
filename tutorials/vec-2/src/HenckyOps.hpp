@@ -744,6 +744,58 @@ auto commonDataFactory(
   return common_ptr;
 }
 
+template <typename DomainEleOp, IntegrationType I = GAUSS>
+auto commonDataPlasticFactory(
+    MoFEM::Interface &m_field,
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
+    std::string field_name, std::string block_name,
+    boost::shared_ptr<MatrixDouble> mat_D_ptr, double scale, Sev sev) {
+
+  auto common_ptr = boost::make_shared<HenckyOps::CommonData>();
+  common_ptr->matDPtr = boost::make_shared<MatrixDouble>();
+  common_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
+
+  CHK_THROW_MESSAGE(addMatBlockOps(m_field, pip, field_name, block_name,
+                                   common_ptr->matDPtr, sev),
+                    "addMatBlockOps");
+
+  using H = HenkyIntegrators<DomainEleOp>;
+
+  pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+      field_name, common_ptr->matGradPtr));
+  pip.push_back(new typename H::template OpCalculateEigenVals<SPACE_DIM, I>(
+      field_name, common_ptr));
+  pip.push_back(new typename H::template OpCalculateLogC<SPACE_DIM, I>(
+      field_name, common_ptr));
+  pip.push_back(new typename H::template OpCalculateLogC_dC<SPACE_DIM, I>(
+      field_name, common_ptr));
+  pip.push_back(
+      new typename H::template OpCalculateHenckyPlasticStress<SPACE_DIM, I>(
+          field_name, common_ptr, mat_D_ptr));
+  pip.push_back(new typename H::template OpCalculatePiolaStress<SPACE_DIM, I>(
+      field_name, common_ptr));
+
+  return common_ptr;
+}
+
+template <typename DomainEleOp, AssemblyType A, IntegrationType I>
+MoFEMErrorCode opFactoryDomainRhs(
+    MoFEM::Interface &m_field,
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
+    std::string field_name,
+    boost::shared_ptr<HenckyOps::CommonData> common_ptr, Sev sev) {
+  MoFEMFunctionBegin;
+
+  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
+      A>::template LinearForm<I>;
+  using OpInternalForcePiola =
+      typename B::template OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+  pip.push_back(
+      new OpInternalForcePiola("U", common_ptr->getMatFirstPiolaStress()));
+
+  MoFEMFunctionReturn(0);
+}
+
 template <typename DomainEleOp, AssemblyType A, IntegrationType I>
 MoFEMErrorCode opFactoryDomainRhs(
     MoFEM::Interface &m_field,
@@ -751,15 +803,32 @@ MoFEMErrorCode opFactoryDomainRhs(
     std::string field_name, std::string block_name, Sev sev) {
   MoFEMFunctionBegin;
 
-  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
-      A>::template LinearForm<I>;
-  using OpInternalForcePiola =
-      typename B::template OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
-
   auto common_ptr = commonDataFactory<DomainEleOp, I>(m_field, pip, field_name,
                                                       block_name, sev);
+  CHKERR opFactoryDomainRhs<DomainEleOp, A, I>(m_field, pip, field_name,
+                                               common_ptr, sev);
+
+  MoFEMFunctionReturn(0);
+}
+
+template <typename DomainEleOp, AssemblyType A, IntegrationType I>
+MoFEMErrorCode opFactoryDomainLhs(
+    MoFEM::Interface &m_field,
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
+    std::string field_name,
+    boost::shared_ptr<HenckyOps::CommonData> common_ptr, Sev sev) {
+  MoFEMFunctionBegin;
+
+  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
+      A>::template BiLinearForm<I>;
+  using OpKPiola =
+      typename B::template OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
+
+  using H = HenkyIntegrators<DomainEleOp>;
+  pip.push_back(new typename H::template OpHenckyTangent<SPACE_DIM, I>(
+      field_name, common_ptr));
   pip.push_back(
-      new OpInternalForcePiola("U", common_ptr->getMatFirstPiolaStress()));
+      new OpKPiola(field_name, field_name, common_ptr->getMatTangent()));
 
   MoFEMFunctionReturn(0);
 }
@@ -771,19 +840,10 @@ MoFEMErrorCode opFactoryDomainLhs(
     std::string field_name, std::string block_name, Sev sev) {
   MoFEMFunctionBegin;
 
-
-  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
-      A>::template BiLinearForm<I>;
-  using OpKPiola =
-      typename B::template OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
-
   auto common_ptr = commonDataFactory<DomainEleOp, I>(m_field, pip, field_name,
                                                       block_name, sev);
-  using H = HenkyIntegrators<DomainEleOp>;
-  pip.push_back(new typename H::template OpHenckyTangent<SPACE_DIM, I>(
-      field_name, common_ptr));
-  pip.push_back(
-      new OpKPiola(field_name, field_name, common_ptr->getMatTangent()));
+  CHKERR opFactoryDomainLhs<DomainEleOp, A, I>(m_field, pip, field_name,
+                                               common_ptr, sev);
 
   MoFEMFunctionReturn(0);
 }
