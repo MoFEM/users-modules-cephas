@@ -922,14 +922,39 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
     // Setup fieldsplit (block) solver - optional: yes/no
     if (is_pcfs == PETSC_TRUE) {
       auto bc_mng = mField.getInterface<BcManager>();
+      auto is_mng = mField.getInterface<ISManager>();
       auto name_prb = simple->getProblemName();
+
+      SmartPetscObj<IS> is_u;
+      CHKERR is_mng->isCreateProblemFieldAndRank(name_prb, ROW, "U", 0,
+                                                 SPACE_DIM, is_u);
+      SmartPetscObj<IS> is_flux;
+      CHKERR is_mng->isCreateProblemFieldAndRank(name_prb, ROW, "FLUX", 0, 0,
+                                                 is_flux);
+      SmartPetscObj<IS> is_T;
+      CHKERR is_mng->isCreateProblemFieldAndRank(name_prb, ROW, "T", 0, 0,
+                                                 is_T);
+      IS is_tmp;
+      CHKERR ISExpand(is_T, is_flux, &is_tmp);
+      auto is_TFlux = SmartPetscObj<IS>(is_tmp);
+
       auto is_all_bc = bc_mng->getBlockIS(name_prb, "HEATFLUX", "FLUX", 0, 0);
       int is_all_bc_size;
       CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
       MOFEM_LOG("ThermoElastic", Sev::inform)
           << "Field split block size " << is_all_bc_size;
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
-                               is_all_bc); // boundary block
+      if (is_all_bc_size) {
+        IS is_tmp2;
+        CHKERR ISDifference(is_TFlux, is_all_bc, &is_tmp2);
+        is_TFlux = SmartPetscObj<IS>(is_tmp2);
+        CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
+                                 is_all_bc); // boundary block
+      }
+
+      CHKERR ISSort(is_u);
+      CHKERR ISSort(is_TFlux);
+      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_TFlux);
+      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
     }
 
     MoFEMFunctionReturnHot(0);
