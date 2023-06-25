@@ -607,6 +607,10 @@ MoFEMErrorCode ThermoElasticProblem::bC() {
 //! [Push operators to pipeline]
 MoFEMErrorCode ThermoElasticProblem::OPs() {
   MoFEMFunctionBegin;
+
+  MOFEM_LOG("SYNC", Sev::noisy) << "OPs";
+  MOFEM_LOG_SEVERITY_SYNC(mField.get_comm(), Sev::noisy);
+
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
@@ -691,7 +695,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpBodyForce>::add(
         pipeline, mField, "U", {time_scale}, "BODY_FORCE", Sev::inform);
     CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpSetTemperatureRhs>::add(
-        pipeline, mField, "T", vec_temp_ptr, "SET_TEMPERATURE", Sev::inform);
+        pipeline, mField, "T", vec_temp_ptr, "SETTEMP", Sev::inform);
 
     MoFEMFunctionReturn(0);
   };
@@ -731,7 +735,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     auto vec_temp_ptr = boost::make_shared<VectorDouble>();
     pipeline.push_back(new OpCalculateScalarFieldValues("T", vec_temp_ptr));
     CHKERR DomainNaturalBCLhs::AddFluxToPipeline<OpSetTemperatureLhs>::add(
-        pipeline, mField, "T", vec_temp_ptr, "SET_TEMPERATURE", Sev::verbose);
+        pipeline, mField, "T", vec_temp_ptr, "SETTEMP", Sev::verbose);
 
     MoFEMFunctionReturn(0);
   };
