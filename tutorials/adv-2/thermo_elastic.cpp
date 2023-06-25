@@ -140,6 +140,15 @@ using OpSetTemperatureRhs =
 using OpSetTemperatureLhs =
     DomainNaturalBCLhs::OpFlux<SetTargetTemperature, 1, 1>;
 
+auto save_range = [](moab::Interface &moab, const std::string name,
+                     const Range r) {
+  MoFEMFunctionBegin;
+  auto out_meshset = get_temp_meshset_ptr(moab);
+  CHKERR moab.add_entities(*out_meshset, r);
+  CHKERR moab.write_file(name.c_str(), "VTK", "", out_meshset->get_ptr(), 1);
+  MoFEMFunctionReturn(0);
+};
+
 struct ThermoElasticProblem {
 
   ThermoElasticProblem(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -497,13 +506,100 @@ MoFEMErrorCode ThermoElasticProblem::createCommonData() {
 MoFEMErrorCode ThermoElasticProblem::bC() {
   MoFEMFunctionBegin;
 
+  MOFEM_LOG("SYNC", Sev::noisy) << "bC";
+  MOFEM_LOG_SEVERITY_SYNC(mField.get_comm(), Sev::noisy);
+
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
   CHKERR bc_mng->pushMarkDOFsOnEntities<HeatFluxCubitBcData>(
-      simple->getProblemName(), "FLUX");
+      simple->getProblemName(), "FLUX", false);
+
+  auto get_skin = [&]() {
+    Range body_ents;
+    CHKERR mField.get_moab().get_entities_by_dimension(0, SPACE_DIM, body_ents);
+    Skinner skin(&mField.get_moab());
+    Range skin_ents;
+    CHKERR skin.find_skin(0, body_ents, false, skin_ents);
+    return skin_ents;
+  };
+
+  auto filter_flux_blocks = [&](auto skin) {
+    auto remove_cubit_blocks = [&](auto c) {
+      MoFEMFunctionBegin;
+      for (auto m :
+
+           mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(c)
+
+      ) {
+        Range ents;
+        CHKERR mField.get_moab().get_entities_by_dimension(
+            m->getMeshset(), SPACE_DIM - 1, ents, true);
+        skin = subtract(skin, ents);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    auto remove_named_blocks = [&](auto n) {
+      MoFEMFunctionBegin;
+      for (auto m : mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
+               std::regex(
+
+                   (boost::format("%s(.*)") % n).str()
+
+                       ))
+
+      ) {
+        Range ents;
+        CHKERR mField.get_moab().get_entities_by_dimension(
+            m->getMeshset(), SPACE_DIM - 1, ents, true);
+        skin = subtract(skin, ents);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    CHK_THROW_MESSAGE(remove_cubit_blocks(NODESET | TEMPERATURESET),
+                      "remove_cubit_blocks");
+    CHK_THROW_MESSAGE(remove_cubit_blocks(SIDESET | HEATFLUXSET),
+                      "remove_cubit_blocks");
+    CHK_THROW_MESSAGE(remove_named_blocks("TEMPERATURE"),
+                      "remove_named_blocks");
+    CHK_THROW_MESSAGE(remove_named_blocks("HEATFLUX"), "remove_named_blocks");
+
+    return skin;
+  };
+
+  auto filter_true_skin = [&](auto skin) {
+    Range boundary_ents;
+    ParallelComm *pcomm =
+        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+    CHKERR pcomm->filter_pstatus(skin, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                 PSTATUS_NOT, -1, &boundary_ents);
+    return boundary_ents;
+  };
+
+  auto remove_flux_ents = filter_true_skin(filter_flux_blocks(get_skin()));
+
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+      remove_flux_ents);
+
+  MOFEM_LOG("SYNC", Sev::noisy) << remove_flux_ents << endl;
+  MOFEM_LOG_SEVERITY_SYNC(mField.get_comm(), Sev::noisy);
+
+#ifdef NDEBUG
+
+  CHKERR save_range(
+      mField.get_moab(),
+      (boost::format("flux_remove_%d.vtk") % mField.get_comm_rank()).str(),
+      remove_flux_ents);
+
+#endif
+
+  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+      simple->getProblemName(), "FLUX", remove_flux_ents);
+
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
