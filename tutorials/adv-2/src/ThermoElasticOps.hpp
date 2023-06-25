@@ -179,7 +179,6 @@ struct MoFEM::AddFluxToRhsPipelineImpl<
     auto add_op = [&](auto &&meshset_vec_ptr) {
       MoFEMFunctionBegin;
       for (auto m : meshset_vec_ptr) {
-        MOFEM_TAG_AND_LOG("WORLD", sev, "SetTargetTemperature") << "Add " << *m;
         std::vector<double> block_data;
         m->getAttributes(block_data);
         if (block_data.size() != 2) {
@@ -192,6 +191,11 @@ struct MoFEM::AddFluxToRhsPipelineImpl<
         auto ents_ptr = boost::make_shared<Range>();
         CHKERR m_field.get_moab().get_entities_by_handle(m->meshset,
                                                          *(ents_ptr), true);
+
+        MOFEM_TAG_AND_LOG("WORLD", sev, "SetTargetTemperature")
+            << "Add " << *m << " target temperature " << target_temperature
+            << " penalty " << beta;
+
         pipeline.push_back(new OP_SOURCE(
             field_name,
             [target_temperature, beta](double, double, double) {
@@ -246,7 +250,6 @@ struct AddFluxToLhsPipelineImpl<
     auto add_op = [&](auto &&meshset_vec_ptr) {
       MoFEMFunctionBegin;
       for (auto m : meshset_vec_ptr) {
-        MOFEM_TAG_AND_LOG("WORLD", sev, "SetTargetTemperature") << "Add " << *m;
         std::vector<double> block_data;
         m->getAttributes(block_data);
         if (block_data.size() != 2) {
@@ -258,6 +261,10 @@ struct AddFluxToLhsPipelineImpl<
         auto ents_ptr = boost::make_shared<Range>();
         CHKERR m_field.get_moab().get_entities_by_handle(m->meshset,
                                                          *(ents_ptr), true);
+
+        MOFEM_TAG_AND_LOG("WORLD", sev, "SetTargetTemperature")
+            << "Add " << *m << " penalty " << beta;
+
         pipeline.push_back(new OP_MASS(
             field_name, field_name,
             [beta](double, double, double) { return -beta; }, ents_ptr));
