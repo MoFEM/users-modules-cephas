@@ -11,33 +11,16 @@
 
 using namespace MoFEM;
 
-template <int DIM> struct ElementsAndOps {};
-
-template <> struct ElementsAndOps<2> {
-  using DomainEle = PipelineManager::FaceEle;
-  using BoundaryEle = PipelineManager::EdgeEle;
-};
-
-template <> struct ElementsAndOps<3> {
-  using DomainEle = VolumeElementForcesAndSourcesCore;
-  using BoundaryEle = FaceElementForcesAndSourcesCore;
-};
-
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 using EntData = EntitiesFieldData::EntData;
-using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
-using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
+using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
+using BoundaryEle =
+    PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
-
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
-
-using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
-using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
 using DomainNaturalBC =
     NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
@@ -50,8 +33,6 @@ using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
 
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.3;
-constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
-constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
@@ -73,10 +54,6 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
-  boost::shared_ptr<MatrixDouble> matGradPtr;
-  boost::shared_ptr<MatrixDouble> matStrainPtr;
-  boost::shared_ptr<MatrixDouble> matStressPtr;
-  boost::shared_ptr<MatrixDouble> matDPtr;
 };
 
 //! [Run problem]

@@ -28,24 +28,21 @@ using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
-using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
 using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
-using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
-using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpSource<1, SPACE_DIM>;
 using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
-constexpr bool is_quasi_static = false;
+using DomainNaturalBC =
+    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using OpBodyForceVector =
+    DomainNaturalBC::OpFlux<NaturalMeshsetTypeVectorScaling<BLOCKSET>, 1,
+                            SPACE_DIM>;
+
 constexpr double rho = 1;
 constexpr double omega = 2.4;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
-constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
-constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
@@ -64,69 +61,18 @@ private:
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  MoFEMErrorCode createCommonData();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
-
-  boost::shared_ptr<MatrixDouble> matGradPtr;
-  boost::shared_ptr<MatrixDouble> matStrainPtr;
-  boost::shared_ptr<MatrixDouble> matStressPtr;
-  boost::shared_ptr<MatrixDouble> matAccelerationPtr;
-  boost::shared_ptr<MatrixDouble> matInertiaPtr;
-  boost::shared_ptr<MatrixDouble> matDPtr;
-
-  boost::shared_ptr<MatrixDouble> matTangentPtr;
 };
-
-//! [Create common data]
-MoFEMErrorCode Example::createCommonData() {
-  MoFEMFunctionBegin;
-
-  auto set_matrial_stiffness = [&]() {
-    FTensor::Index<'i', SPACE_DIM> i;
-    FTensor::Index<'j', SPACE_DIM> j;
-    FTensor::Index<'k', SPACE_DIM> k;
-    FTensor::Index<'l', SPACE_DIM> l;
-    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-    MoFEMFunctionBegin;
-    constexpr double A =
-        (SPACE_DIM == 2) ? 2 * shear_modulus_G /
-                               (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
-                         : 1;
-    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*matDPtr);
-    t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
-                      A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
-                          t_kd(i, j) * t_kd(k, l);
-    MoFEMFunctionReturn(0);
-  };
-
-  matGradPtr = boost::make_shared<MatrixDouble>();
-  matStrainPtr = boost::make_shared<MatrixDouble>();
-  matStressPtr = boost::make_shared<MatrixDouble>();
-  matAccelerationPtr = boost::make_shared<MatrixDouble>();
-  matInertiaPtr = boost::make_shared<MatrixDouble>();
-  matDPtr = boost::make_shared<MatrixDouble>();
-
-  matTangentPtr = boost::make_shared<MatrixDouble>();
-
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  matDPtr->resize(size_symm * size_symm, 1);
-
-  CHKERR set_matrial_stiffness();
-
-  MoFEMFunctionReturn(0);
-}
-//! [Create common data]
 
 //! [Run problem]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
   CHKERR readMesh();
   CHKERR setupProblem();
-  CHKERR createCommonData();
   CHKERR boundaryCondition();
   CHKERR assembleSystem();
   CHKERR solveSystem();
@@ -153,10 +99,20 @@ MoFEMErrorCode Example::setupProblem() {
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
                                 SPACE_DIM);
+  CHKERR simple->addDataField("GEOMETRY", H1, AINSWORTH_LEGENDRE_BASE,
+                              SPACE_DIM);
   int order = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("GEOMETRY", order);
   CHKERR simple->setUp();
+
+  auto project_ho_geometry = [&]() {
+    Projection10NodeCoordsOnField ent_method(mField, "GEOMETRY");
+    return mField.loop_dofs("GEOMETRY", ent_method);
+  };
+  CHKERR project_ho_geometry();
+
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
@@ -170,7 +126,7 @@ MoFEMErrorCode Example::boundaryCondition() {
 
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
-      
+
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -181,96 +137,152 @@ MoFEMErrorCode Example::assembleSystem() {
   auto *simple = mField.getInterface<Simple>();
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-  auto add_base_transform = [&](auto &pipeline) {
-    pipeline.push_back(new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-    pipeline.push_back(
-        new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-    pipeline.push_back(
-        new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-    pipeline.push_back(new OpSetHOWeights(det_ptr));
-  };
-  add_base_transform(pipeline_mng->getOpDomainRhsPipeline());
-  add_base_transform(pipeline_mng->getOpDomainLhsPipeline());
-
-  // Get pointer to U_tt shift in domain element
-  auto get_rho = [this](const double, const double, const double) {
-    auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
-    return rho * fe_domain_lhs->ts_aa;
-  };
-
   auto get_body_force = [this](const double, const double, const double) {
-    auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Tensor1<double, SPACE_DIM> t_source;
     t_source(i) = 0.;
     t_source(0) = 0.1;
     t_source(1) = 1.;
-    const auto time = fe_domain_rhs->ts_t;
-    t_source(i) *= sin(time * omega * M_PI);
     return t_source;
   };
 
-  auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
-  henky_common_data_ptr->matGradPtr = matGradPtr;
-  henky_common_data_ptr->matDPtr = matDPtr;
+  auto rho_ptr = boost::make_shared<double>(rho);
 
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                               matGradPtr));
+  auto add_rho_block = [this, rho_ptr](auto &pip, auto block_name, Sev sev) {
+    MoFEMFunctionBegin;
 
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpK("U", "U", henky_common_data_ptr->getMatTangent()));
+    struct OpMatRhoBlocks : public DomainEleOp {
+      OpMatRhoBlocks(boost::shared_ptr<double> rho_ptr,
+                     MoFEM::Interface &m_field, Sev sev,
+                     std::vector<const CubitMeshSets *> meshset_vec_ptr)
+          : DomainEleOp(NOSPACE, DomainEleOp::OPSPACE), rhoPtr(rho_ptr) {
+        CHK_THROW_MESSAGE(extractRhoData(m_field, meshset_vec_ptr, sev),
+                          "Can not get data from block");
+      }
 
-  if (!is_quasi_static)
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpMass("U", "U", get_rho));
+      MoFEMErrorCode doWork(int side, EntityType type,
+                            EntitiesFieldData::EntData &data) {
 
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", get_body_force));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                               matGradPtr));
+        MoFEMFunctionBegin;
 
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+        for (auto &b : blockData) {
+          if (b.blockEnts.find(getFEEntityHandle()) != b.blockEnts.end()) {
+            *rhoPtr = b.rho;
+            MoFEMFunctionReturnHot(0);
+          }
+        }
 
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInternalForce(
-      "U", henky_common_data_ptr->getMatFirstPiolaStress()));
-  if (!is_quasi_static) {
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
-                                                          matAccelerationPtr));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpScaleMatrix("U", rho, matAccelerationPtr, matInertiaPtr));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
-        "U", matInertiaPtr, [](double, double, double) { return 1.; }));
-  }
+        *rhoPtr = rho;
+
+        MoFEMFunctionReturn(0);
+      }
+
+    private:
+      struct BlockData {
+        double rho;
+        Range blockEnts;
+      };
+
+      std::vector<BlockData> blockData;
+
+      MoFEMErrorCode
+      extractRhoData(MoFEM::Interface &m_field,
+                     std::vector<const CubitMeshSets *> meshset_vec_ptr,
+                     Sev sev) {
+        MoFEMFunctionBegin;
+
+        for (auto m : meshset_vec_ptr) {
+          MOFEM_TAG_AND_LOG("WORLD", sev, "Mat Rho Block") << *m;
+          std::vector<double> block_data;
+          CHKERR m->getAttributes(block_data);
+          if (block_data.size() < 1) {
+            SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                    "Expected that block has two attributes");
+          }
+          auto get_block_ents = [&]() {
+            Range ents;
+            CHKERR
+            m_field.get_moab().get_entities_by_handle(m->meshset, ents, true);
+            return ents;
+          };
+
+          MOFEM_TAG_AND_LOG("WORLD", sev, "Mat Rho Block")
+              << m->getName() << ": ro = " << block_data[0];
+
+          blockData.push_back({block_data[0], get_block_ents()});
+        }
+        MOFEM_LOG_CHANNEL("WORLD");
+        MOFEM_LOG_CHANNEL("WORLD");
+        MoFEMFunctionReturn(0);
+      }
+
+      boost::shared_ptr<double> rhoPtr;
+    };
+
+    pip.push_back(new OpMatRhoBlocks(
+        rho_ptr, mField, sev,
+
+        // Get blockset using regular expression
+        mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
+
+            (boost::format("%s(.*)") % block_name).str()
+
+                ))
+
+            ));
+    MoFEMFunctionReturn(0);
+  };
+
+  // Get pointer to U_tt shift in domain element
+  auto get_rho = [rho_ptr](const double, const double, const double) {
+    return *rho_ptr;
+  };
+
+  // specific time scaling
+  auto get_time_scale = [this](const double time) {
+    return sin(time * omega * M_PI);
+  };
+
+  auto apply_lhs = [&](auto &pip) {
+    MoFEMFunctionBegin;
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
+                                                          "GEOMETRY");
+    CHKERR HenckyOps::opFactoryDomainLhs<DomainEleOp, PETSC, GAUSS>(
+        mField, pip, "U", "MAT_ELASTIC", Sev::verbose);
+    CHKERR add_rho_block(pip, "MAT_RHO", Sev::verbose);
+
+    pip.push_back(new OpMass("U", "U", get_rho));
+    static_cast<OpMass &>(pip.back()).feScalingFun =
+        [](const FEMethod *fe_ptr) { return fe_ptr->ts_aa; };
+    MoFEMFunctionReturn(0);
+  };
+
+  auto apply_rhs = [&](auto &pip) {
+    MoFEMFunctionBegin;
+
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        pipeline_mng->getOpDomainRhsPipeline(), {H1}, "GEOMETRY");
+    CHKERR HenckyOps::opFactoryDomainRhs<DomainEleOp, PETSC, GAUSS>(
+        mField, pip, "U", "MAT_ELASTIC", Sev::inform);
+    CHKERR add_rho_block(pip, "MAT_RHO", Sev::inform);
+
+    auto mat_acceleration_ptr = boost::make_shared<MatrixDouble>();
+    // Apply inertia
+    pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
+        "U", mat_acceleration_ptr));
+    pip.push_back(new OpInertiaForce("U", mat_acceleration_ptr, get_rho));
+
+    CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForceVector>::add(
+        pip, mField, "U", {},
+        {boost::make_shared<TimeScaleVector<SPACE_DIM>>("-time_vector_file",
+                                                        true)},
+        "BODY_FORCE", Sev::inform);
+
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR apply_lhs(pipeline_mng->getOpDomainLhsPipeline());
+  CHKERR apply_rhs(pipeline_mng->getOpDomainRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order;
@@ -324,36 +336,21 @@ MoFEMErrorCode Example::solveSystem() {
 
   auto dm = simple->getDM();
   MoFEM::SmartPetscObj<TS> ts;
-  if (is_quasi_static)
-    ts = pipeline_mng->createTSIM();
-  else
-    ts = pipeline_mng->createTSIM2();
+  ts = pipeline_mng->createTSIM2();
 
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                               matGradPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", matStrainPtr, matStressPtr, matDPtr));
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      post_proc_fe->getOpPtrVector(), {H1});
+  auto common_ptr = commonDataFactory<DomainEleOp>(
+      mField, post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC", Sev::inform);
 
   auto u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));      
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+  auto X_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", X_ptr));
 
   using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
@@ -365,11 +362,12 @@ MoFEMErrorCode Example::solveSystem() {
 
           {},
 
-          {{"U", u_ptr}},
+          {{"U", u_ptr}, {"GEOMETRY", X_ptr}},
 
-          {},
+          {{"GRAD", common_ptr->matGradPtr},
+           {"FIRST_PIOLA", common_ptr->getMatFirstPiolaStress()}},
 
-          {{"STRAIN", matStrainPtr}, {"STRESS", matStressPtr}}
+          {}
 
           )
 
@@ -388,14 +386,9 @@ MoFEMErrorCode Example::solveSystem() {
   auto T = createDMVector(simple->getDM());
   CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                  SCATTER_FORWARD);
-  if (is_quasi_static) {
-    CHKERR TSSetSolution(ts, T);
-    CHKERR TSSetFromOptions(ts);
-  } else {
-    auto TT = vectorDuplicate(T);
-    CHKERR TS2SetSolution(ts, T, TT);
-    CHKERR TSSetFromOptions(ts);
-  }
+  auto TT = vectorDuplicate(T);
+  CHKERR TS2SetSolution(ts, T, TT);
+  CHKERR TSSetFromOptions(ts);
 
   CHKERR TSSolve(ts, NULL);
   CHKERR TSGetTime(ts, &ftime);
@@ -411,8 +404,8 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR TSGetSNESIterations(ts, &nonlinits);
   CHKERR TSGetKSPIterations(ts, &linits);
   MOFEM_LOG_C("EXAMPLE", Sev::inform,
-              "steps %D (%D rejected, %D SNES fails), ftime %g, nonlinits "
-              "%D, linits %D\n",
+              "steps %d (%d rejected, %d SNES fails), ftime %g, nonlinits "
+              "%d, linits %d\n",
               steps, rejects, snesfails, ftime, nonlinits, linits);
 
   MoFEMFunctionReturn(0);
@@ -432,10 +425,10 @@ MoFEMErrorCode Example::outputResults() {
     double nrm2;
     CHKERR VecNorm(T, NORM_2, &nrm2);
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Regression norm " << nrm2;
-    constexpr double regression_value = 1.09572;
+    constexpr double regression_value = 0.0174741;
     if (fabs(nrm2 - regression_value) > 1e-2)
       SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-              "Regression test faileed; wrong norm value.");
+              "Regression test failed; wrong norm value.");
   }
   MoFEMFunctionReturn(0);
 }
@@ -477,7 +470,7 @@ int main(int argc, char *argv[]) {
 
     //! [Create MoFEM]
     MoFEM::Core core(moab);           ///< finite element database
-    MoFEM::Interface &m_field = core; ///< finite element database insterface
+    MoFEM::Interface &m_field = core; ///< finite element database interface
     //! [Create MoFEM]
 
     //! [Example]
