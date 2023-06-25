@@ -8,6 +8,6 @@
 ~~~~
 mpirun -np 4 ./thermo_elastic_2d \
 -file_name mesh.h5m \
--ts_max_time 1 -ts_adapt_type basic \
+-ts_max_time 1 -ts_adapt_type none \
 -ts_dt 0.25 -ksp_monitor -order 6 -max_post_proc_ref_level 2
 ~~~~
