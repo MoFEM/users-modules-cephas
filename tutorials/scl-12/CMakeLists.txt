@@ -40,13 +40,11 @@ set_target_properties(
   electrostatichomogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatichomogeneous.cpp) 
 
 
-# add_test(
-#   electrostatichomogeneous
-#   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-#   ${CMAKE_CURRENT_BINARY_DIR}/electrostatichomogeneous
-#   -eps_ncv 300 
-#   -eps_krylovschur_restart 0.1
-#   -file_name fork-2-0_2parts.h5m 
-#   -order 1
-#   -log_no_color -test)
+add_test(
+  electrostatichomogeneous
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
+  ${CMAKE_CURRENT_BINARY_DIR}/electrostatichomogeneous
+  -file_name squareGD.h5m 
+  -order 1
+  -log_no_color -test)
   

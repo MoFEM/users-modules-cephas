@@ -4,6 +4,9 @@
  *  */
 // #ifndef __ELECTROSTATICHOMOGENEOUS_CPP__
 // #define __ELECTROSTATICHOMOGENEOUS_CPP__
+#ifndef EXECUTABLE_DIMENSION
+#define EXECUTABLE_DIMENSION 2
+#endif
 
 #include <stdlib.h>
 #include <BasicFiniteElements.hpp>
@@ -14,7 +17,7 @@ constexpr auto domainField = "POTENTIAL";
 constexpr int BASE_DIM = 1;
 constexpr int FIELD_DIM = 1;
 
-constexpr int SPACE_DIM = 3;
+constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;
 ///
 // constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;/////////working only for 3D>>CMakeList problem
 // using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
