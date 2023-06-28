@@ -53,7 +53,6 @@ private:
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
-
 };
 
 //! [Run problem]
@@ -176,15 +175,15 @@ MoFEMErrorCode Example::assembleSystem() {
   auto add_domain_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1});
-    CHKERR HenckyOps::opFactoryDomainLhs<DomainEleOp, PETSC, GAUSS>(
+    CHKERR HenckyOps::opFactoryDomainLhs<SPACE_DIM, PETSC, GAUSS, DomainEleOp>(
         mField, pip, "U", "MAT_ELASTIC", Sev::inform);
     MoFEMFunctionReturn(0);
   };
 
   auto add_domain_ops_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
-   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1});
-    CHKERR HenckyOps::opFactoryDomainRhs<DomainEleOp, PETSC, GAUSS>(
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1});
+    CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, PETSC, GAUSS, DomainEleOp>(
         mField, pip, "U", "MAT_ELASTIC", Sev::inform);
     MoFEMFunctionReturn(0);
   };
@@ -236,7 +235,7 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       post_proc_fe->getOpPtrVector(), {H1});
 
-  auto common_ptr = commonDataFactory<DomainEleOp>(
+  auto common_ptr = commonDataFactory<SPACE_DIM, GAUSS, DomainEleOp>(
       mField, post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC", Sev::inform);
 
   auto u_ptr = boost::make_shared<MatrixDouble>();
@@ -323,10 +322,9 @@ MoFEMErrorCode Example::outputResults() {
     case 3:
       regression_value = 1.62454;
       break;
-    
+
     default:
-      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-              "Wrong test number.");
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID, "Wrong test number.");
       break;
     }
     if (fabs(nrm2 - regression_value) > 1e-2)

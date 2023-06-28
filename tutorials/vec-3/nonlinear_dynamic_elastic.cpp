@@ -247,7 +247,7 @@ MoFEMErrorCode Example::assembleSystem() {
     MoFEMFunctionBegin;
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
                                                           "GEOMETRY");
-    CHKERR HenckyOps::opFactoryDomainLhs<DomainEleOp, PETSC, GAUSS>(
+    CHKERR HenckyOps::opFactoryDomainLhs<SPACE_DIM, PETSC, GAUSS, DomainEleOp>(
         mField, pip, "U", "MAT_ELASTIC", Sev::verbose);
     CHKERR add_rho_block(pip, "MAT_RHO", Sev::verbose);
 
@@ -262,7 +262,7 @@ MoFEMErrorCode Example::assembleSystem() {
 
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {H1}, "GEOMETRY");
-    CHKERR HenckyOps::opFactoryDomainRhs<DomainEleOp, PETSC, GAUSS>(
+    CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, PETSC, GAUSS, DomainEleOp>(
         mField, pip, "U", "MAT_ELASTIC", Sev::inform);
     CHKERR add_rho_block(pip, "MAT_RHO", Sev::inform);
 
@@ -342,7 +342,7 @@ MoFEMErrorCode Example::solveSystem() {
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       post_proc_fe->getOpPtrVector(), {H1});
-  auto common_ptr = commonDataFactory<DomainEleOp>(
+  auto common_ptr = commonDataFactory<SPACE_DIM, GAUSS, DomainEleOp>(
       mField, post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC", Sev::inform);
 
   auto u_ptr = boost::make_shared<MatrixDouble>();

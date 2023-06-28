@@ -367,9 +367,10 @@ MoFEMErrorCode Contact::OPs() {
     MoFEMFunctionBegin;
     pip.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    CHKERR HenckyOps::opFactoryDomainLhs<DomainEleOp, PETSC, I>(
+    CHKERR HenckyOps::opFactoryDomainLhs<SPACE_DIM, PETSC, I, DomainEleOp>(
         mField, pip, "U", "MAT_ELASTIC", Sev::verbose);
-    CHKERR opFactoryDomainLhs<DomainEleOp, PETSC, I>(pip, "SIGMA", "U");
+    CHKERR opFactoryDomainLhs<SPACE_DIM, PETSC, I, DomainEleOp>(pip, "SIGMA",
+                                                                "U");
 
     if (!is_quasi_static) {
       auto get_inertia_and_mass_dumping = [this](const double, const double,
@@ -388,7 +389,6 @@ MoFEMErrorCode Contact::OPs() {
       pip.push_back(new OpMass("U", "U", get_mass_dumping));
     }
 
-
     pip.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
@@ -400,10 +400,11 @@ MoFEMErrorCode Contact::OPs() {
     CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
 
-    CHKERR HenckyOps::opFactoryDomainRhs<DomainEleOp, PETSC, I>(
+    CHKERR
+    HenckyOps::opFactoryDomainRhs<SPACE_DIM, PETSC, I, DomainEleOp>(
         mField, pip, "U", "MAT_ELASTIC", Sev::inform);
-    CHKERR ContactOps::opFactoryDomainRhs<DomainEleOp, PETSC, I>(pip, "SIGMA",
-                                                                 "U");
+    CHKERR ContactOps::opFactoryDomainRhs<SPACE_DIM, PETSC, I, DomainEleOp>(
+        pip, "SIGMA", "U");
     // only in case of dynamics
     if (!is_quasi_static) {
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
@@ -443,8 +444,8 @@ MoFEMErrorCode Contact::OPs() {
     pip.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
         pip, mField, "U", Sev::inform);
-
-    CHKERR opFactoryBoundaryLhs(pip, "SIGMA", "U");
+    CHKERR opFactoryBoundaryLhs<SPACE_DIM, GAUSS, A, BoundaryEleOp>(
+        pip, "SIGMA", "U");
 
     if (spring_stiffness > 0)
       pip.push_back(new OpSpringLhs(
@@ -472,7 +473,8 @@ MoFEMErrorCode Contact::OPs() {
     pip.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
-    CHKERR opFactoryBoundaryRhs(pip, "SIGMA", "U");
+    CHKERR opFactoryBoundaryRhs<SPACE_DIM, GAUSS, A, BoundaryEleOp>(
+        pip, "SIGMA", "U");
 
     if (spring_stiffness > 0) {
       auto u_disp = boost::make_shared<MatrixDouble>();

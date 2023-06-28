@@ -43,8 +43,9 @@ struct Monitor : public FEMethod {
       CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
                             pip, {H1, HDIV}, "GEOMETRY")),
                         "Apply base transform");
-      auto henky_common_data_ptr = commonDataFactory<DomainEleOp>(
-          *m_field_ptr, pip, "U", "MAT_ELASTIC", Sev::inform);
+      auto henky_common_data_ptr =
+          commonDataFactory<SPACE_DIM, GAUSS, DomainEleOp>(
+              *m_field_ptr, pip, "U", "MAT_ELASTIC", Sev::inform);
       auto contact_stress_ptr = boost::make_shared<MatrixDouble>();
       pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
           "SIGMA", contact_stress_ptr));
@@ -181,19 +182,20 @@ struct Monitor : public FEMethod {
       CHK_THROW_MESSAGE(
           (AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
               integrate_traction->getOpPtrVector(), {HDIV}, "GEOMETRY")),
-          "Apply transfrom");
-      integrate_traction->getOpPtrVector().push_back(
-          new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
-              "SIGMA", common_data_ptr->contactTractionPtr()));
+          "Apply transform");
       // We have to integrate on curved face geometry, thus integration weight
       // have to adjusted.
       integrate_traction->getOpPtrVector().push_back(
           new OpSetHOWeightsOnSubDim<SPACE_DIM>());
-      integrate_traction->getOpPtrVector().push_back(
-          new OpAssembleTotalContactTraction(common_data_ptr));
       integrate_traction->getRuleHook = [](int, int, int approx_order) {
         return 2 * approx_order + geom_order - 1;
       };
+
+      CHK_THROW_MESSAGE(
+          (opFactoryCalculateTraction<SPACE_DIM, GAUSS, BoundaryEleOp>(
+              integrate_traction->getOpPtrVector(), "SIGMA")),
+          "push operators to calculate traction");
+
       return integrate_traction;
     };
 
@@ -205,7 +207,7 @@ struct Monitor : public FEMethod {
 
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
-
+  
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
     MoFEM::Interface *m_field_ptr;

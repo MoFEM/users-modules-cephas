@@ -204,8 +204,8 @@ private:
 template <int DIM, typename DomainEleOp>
 struct OpCalculateLogCImpl<DIM, GAUSS, DomainEleOp> : public DomainEleOp {
 
-  OpCalculateLogCImpl(
-      const std::string field_name, boost::shared_ptr<CommonData> common_data)
+  OpCalculateLogCImpl(const std::string field_name,
+                      boost::shared_ptr<CommonData> common_data)
       : DomainEleOp(field_name, DomainEleOp::OPROW),
         commonDataPtr(common_data) {
     std::fill(&DomainEleOp::doEntities[MBEDGE],
@@ -408,7 +408,7 @@ struct OpCalculatePiolaStressImpl<DIM, GAUSS, DomainEleOp>
     : public DomainEleOp {
 
   OpCalculatePiolaStressImpl(const std::string field_name,
-                         boost::shared_ptr<CommonData> common_data)
+                             boost::shared_ptr<CommonData> common_data)
       : DomainEleOp(field_name, DomainEleOp::OPROW),
         commonDataPtr(common_data) {
     std::fill(&DomainEleOp::doEntities[MBEDGE],
@@ -464,8 +464,8 @@ private:
 template <int DIM, typename DomainEleOp>
 struct OpHenckyTangentImpl<DIM, GAUSS, DomainEleOp> : public DomainEleOp {
   OpHenckyTangentImpl(const std::string field_name,
-                  boost::shared_ptr<CommonData> common_data,
-                  boost::shared_ptr<MatrixDouble> mat_D_ptr = nullptr)
+                      boost::shared_ptr<CommonData> common_data,
+                      boost::shared_ptr<MatrixDouble> mat_D_ptr = nullptr)
       : DomainEleOp(field_name, DomainEleOp::OPROW),
         commonDataPtr(common_data) {
     std::fill(&DomainEleOp::doEntities[MBEDGE],
@@ -579,9 +579,9 @@ template <typename DomainEleOp> struct HenkyIntegrators {
 
   template <int DIM, IntegrationType I>
   using OpHenckyTangent = OpHenckyTangentImpl<DIM, GAUSS, DomainEleOp>;
-
 };
 
+template <int DIM>
 MoFEMErrorCode
 addMatBlockOps(MoFEM::Interface &m_field,
                boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
@@ -672,23 +672,23 @@ addMatBlockOps(MoFEM::Interface &m_field,
       MoFEMFunctionBegin;
       //! [Calculate elasticity tensor]
       auto set_material_stiffness = [&]() {
-        FTensor::Index<'i', SPACE_DIM> i;
-        FTensor::Index<'j', SPACE_DIM> j;
-        FTensor::Index<'k', SPACE_DIM> k;
-        FTensor::Index<'l', SPACE_DIM> l;
+        FTensor::Index<'i', DIM> i;
+        FTensor::Index<'j', DIM> j;
+        FTensor::Index<'k', DIM> k;
+        FTensor::Index<'l', DIM> l;
         constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-        double A = (SPACE_DIM == 2)
+        double A = (DIM == 2)
                        ? 2 * shear_modulus_G /
                              (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                        : 1;
-        auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
+        auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*mat_D_ptr);
         t_D(i, j, k, l) =
             2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
             A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) * t_kd(i, j) *
                 t_kd(k, l);
       };
       //! [Calculate elasticity tensor]
-      constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+      constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
       mat_D_ptr->resize(size_symm * size_symm, 1);
       set_material_stiffness();
       MoFEMFunctionReturn(0);
@@ -712,7 +712,7 @@ addMatBlockOps(MoFEM::Interface &m_field,
   MoFEMFunctionReturn(0);
 }
 
-template <typename DomainEleOp, IntegrationType I = GAUSS>
+template <int DIM, IntegrationType I, typename DomainEleOp>
 auto commonDataFactory(
     MoFEM::Interface &m_field,
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
@@ -722,133 +722,96 @@ auto commonDataFactory(
   common_ptr->matDPtr = boost::make_shared<MatrixDouble>();
   common_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
 
-  CHK_THROW_MESSAGE(addMatBlockOps(m_field, pip, field_name, block_name,
-                                   common_ptr->matDPtr, sev),
+  CHK_THROW_MESSAGE(addMatBlockOps<DIM>(m_field, pip, field_name, block_name,
+                                        common_ptr->matDPtr, sev),
                     "addMatBlockOps");
 
   using H = HenkyIntegrators<DomainEleOp>;
 
-  pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+  pip.push_back(new OpCalculateVectorFieldGradient<DIM, DIM>(
       field_name, common_ptr->matGradPtr));
-  pip.push_back(new typename H::template OpCalculateEigenVals<SPACE_DIM, I>(
-      field_name, common_ptr));
-  pip.push_back(new typename H::template OpCalculateLogC<SPACE_DIM, I>(
-      field_name, common_ptr));
-  pip.push_back(new typename H::template OpCalculateLogC_dC<SPACE_DIM, I>(
-      field_name, common_ptr));
-  pip.push_back(new typename H::template OpCalculateHenckyStress<SPACE_DIM, I>(
-      field_name, common_ptr));
-  pip.push_back(new typename H::template OpCalculatePiolaStress<SPACE_DIM, I>(
-      field_name, common_ptr));
-
-  return common_ptr;
-}
-
-template <typename DomainEleOp, IntegrationType I = GAUSS>
-auto commonDataPlasticFactory(
-    MoFEM::Interface &m_field,
-    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
-    std::string field_name, std::string block_name,
-    boost::shared_ptr<MatrixDouble> mat_D_ptr, double scale, Sev sev) {
-
-  auto common_ptr = boost::make_shared<HenckyOps::CommonData>();
-  common_ptr->matDPtr = boost::make_shared<MatrixDouble>();
-  common_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
-
-  CHK_THROW_MESSAGE(addMatBlockOps(m_field, pip, field_name, block_name,
-                                   common_ptr->matDPtr, sev),
-                    "addMatBlockOps");
-
-  using H = HenkyIntegrators<DomainEleOp>;
-
-  pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-      field_name, common_ptr->matGradPtr));
-  pip.push_back(new typename H::template OpCalculateEigenVals<SPACE_DIM, I>(
-      field_name, common_ptr));
-  pip.push_back(new typename H::template OpCalculateLogC<SPACE_DIM, I>(
-      field_name, common_ptr));
-  pip.push_back(new typename H::template OpCalculateLogC_dC<SPACE_DIM, I>(
+  pip.push_back(new typename H::template OpCalculateEigenVals<DIM, I>(
       field_name, common_ptr));
   pip.push_back(
-      new typename H::template OpCalculateHenckyPlasticStress<SPACE_DIM, I>(
-          field_name, common_ptr, mat_D_ptr));
-  pip.push_back(new typename H::template OpCalculatePiolaStress<SPACE_DIM, I>(
+      new typename H::template OpCalculateLogC<DIM, I>(field_name, common_ptr));
+  pip.push_back(new typename H::template OpCalculateLogC_dC<DIM, I>(
+      field_name, common_ptr));
+  pip.push_back(new typename H::template OpCalculateHenckyStress<DIM, I>(
+      field_name, common_ptr));
+  pip.push_back(new typename H::template OpCalculatePiolaStress<DIM, I>(
       field_name, common_ptr));
 
   return common_ptr;
 }
 
-template <typename DomainEleOp, AssemblyType A, IntegrationType I>
+template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
 MoFEMErrorCode opFactoryDomainRhs(
     MoFEM::Interface &m_field,
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
-    std::string field_name,
-    boost::shared_ptr<HenckyOps::CommonData> common_ptr, Sev sev) {
+    std::string field_name, boost::shared_ptr<HenckyOps::CommonData> common_ptr,
+    Sev sev) {
   MoFEMFunctionBegin;
 
   using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
       A>::template LinearForm<I>;
   using OpInternalForcePiola =
-      typename B::template OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+      typename B::template OpGradTimesTensor<1, DIM, DIM>;
   pip.push_back(
       new OpInternalForcePiola("U", common_ptr->getMatFirstPiolaStress()));
 
   MoFEMFunctionReturn(0);
 }
 
-template <typename DomainEleOp, AssemblyType A, IntegrationType I>
+template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
 MoFEMErrorCode opFactoryDomainRhs(
     MoFEM::Interface &m_field,
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
     std::string field_name, std::string block_name, Sev sev) {
   MoFEMFunctionBegin;
 
-  auto common_ptr = commonDataFactory<DomainEleOp, I>(m_field, pip, field_name,
-                                                      block_name, sev);
-  CHKERR opFactoryDomainRhs<DomainEleOp, A, I>(m_field, pip, field_name,
-                                               common_ptr, sev);
+  auto common_ptr = commonDataFactory<DIM, I, DomainEleOp>(
+      m_field, pip, field_name, block_name, sev);
+  CHKERR opFactoryDomainRhs<DIM, A, I, DomainEleOp>(m_field, pip, field_name,
+                                                    common_ptr, sev);
 
   MoFEMFunctionReturn(0);
 }
 
-template <typename DomainEleOp, AssemblyType A, IntegrationType I>
+template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
 MoFEMErrorCode opFactoryDomainLhs(
     MoFEM::Interface &m_field,
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
-    std::string field_name,
-    boost::shared_ptr<HenckyOps::CommonData> common_ptr, Sev sev) {
+    std::string field_name, boost::shared_ptr<HenckyOps::CommonData> common_ptr,
+    Sev sev) {
   MoFEMFunctionBegin;
 
   using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
       A>::template BiLinearForm<I>;
-  using OpKPiola =
-      typename B::template OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
+  using OpKPiola = typename B::template OpGradTensorGrad<1, DIM, DIM, 1>;
 
   using H = HenkyIntegrators<DomainEleOp>;
-  pip.push_back(new typename H::template OpHenckyTangent<SPACE_DIM, I>(
-      field_name, common_ptr));
+  pip.push_back(
+      new typename H::template OpHenckyTangent<DIM, I>(field_name, common_ptr));
   pip.push_back(
       new OpKPiola(field_name, field_name, common_ptr->getMatTangent()));
 
   MoFEMFunctionReturn(0);
 }
 
-template <typename DomainEleOp, AssemblyType A, IntegrationType I>
+template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
 MoFEMErrorCode opFactoryDomainLhs(
     MoFEM::Interface &m_field,
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
     std::string field_name, std::string block_name, Sev sev) {
   MoFEMFunctionBegin;
 
-  auto common_ptr = commonDataFactory<DomainEleOp, I>(m_field, pip, field_name,
-                                                      block_name, sev);
-  CHKERR opFactoryDomainLhs<DomainEleOp, A, I>(m_field, pip, field_name,
-                                               common_ptr, sev);
+  auto common_ptr = commonDataFactory<DIM, I, DomainEleOp>(
+      m_field, pip, field_name, block_name, sev);
+  CHKERR opFactoryDomainLhs<DIM, A, I, DomainEleOp>(m_field, pip, field_name,
+                                                    common_ptr, sev);
 
   MoFEMFunctionReturn(0);
 }
-
-
 } // namespace HenckyOps
 
 #endif // __HENKY_OPS_HPP__
