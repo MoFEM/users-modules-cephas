@@ -160,11 +160,11 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
       ++t_plastic_strain_dot;
     }
 
-    int &active_points = commonDataPtr->activityData[0];
-    int &avtive_full_elems = commonDataPtr->activityData[1];
-    int &avtive_elems = commonDataPtr->activityData[2];
-    int &nb_points = commonDataPtr->activityData[3];
-    int &nb_elements = commonDataPtr->activityData[4];
+    int &active_points = PlasticOps::CommonData::activityData[0];
+    int &avtive_full_elems = PlasticOps::CommonData::activityData[1];
+    int &avtive_elems = PlasticOps::CommonData::activityData[2];
+    int &nb_points = PlasticOps::CommonData::activityData[3];
+    int &nb_elements = PlasticOps::CommonData::activityData[4];
 
     ++nb_elements;
     nb_points += nb_points_on_elem;
