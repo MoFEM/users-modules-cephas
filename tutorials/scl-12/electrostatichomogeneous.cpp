@@ -5,7 +5,7 @@
 // #ifndef __ELECTROSTATICHOMOGENEOUS_CPP__
 // #define __ELECTROSTATICHOMOGENEOUS_CPP__
 #ifndef EXECUTABLE_DIMENSION
-#define EXECUTABLE_DIMENSION 2
+#define EXECUTABLE_DIMENSION 3
 #endif
 
 #include <stdlib.h>
@@ -41,12 +41,29 @@ constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;
 // using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
 // using OpEdgeEle = MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator;
 
+// /////////////////////
+
+
+        // ///////////////////////
+
 using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
 using IntEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using IntEleOp = IntEle::UserDataOperator;
 using EntData = EntitiesFieldData::EntData;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+
+template <int SPACE_DIM> struct intPostproc {};
+
+template <> struct intPostproc<2> {
+  using intEle = MoFEM::EdgeElementForcesAndSourcesCore;
+};
+
+template <> struct intPostproc<3> {
+  using intEle = MoFEM::FaceElementForcesAndSourcesCore;
+};
+
+using intPostProcEle = intPostproc<SPACE_DIM>::intEle;
 
 // template <int SPACE_DIM> struct PostProcEle {};
 // // template <> struct PostProcEle<2> {
@@ -520,12 +537,14 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
     calculate_residual_from_set_values_on_bc(
         pipeline_mng->getOpDomainRhsPipeline());
 
-   if (SPACE_DIM == 2 ) {
-    interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
-        new EdgeElementForcesAndSourcesCore(mField));}      
-   if (SPACE_DIM == 3){
-    interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
-        new FaceElementForcesAndSourcesCore(mField));}
+  //  if (SPACE_DIM == 2 ) {
+  //   interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
+  //       new EdgeElementForcesAndSourcesCore(mField));}      
+  //  if (SPACE_DIM == 3){
+  //   interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
+  //       new FaceElementForcesAndSourcesCore(mField));}
+
+  interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(new intPostProcEle(mField));
     
 
 
