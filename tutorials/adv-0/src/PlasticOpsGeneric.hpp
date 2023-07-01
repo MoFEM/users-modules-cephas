@@ -10,7 +10,7 @@ OpCalculatePlasticSurface::OpCalculatePlasticSurface(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
     : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
-  // Opetor is only executed for vertices
+  // Operator is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 

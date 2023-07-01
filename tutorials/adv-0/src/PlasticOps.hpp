@@ -664,13 +664,15 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
       MoFEMFunctionBegin;
 
       auto getK = [](auto &p) {
-        return p[CommonData::YOUNG_MODULUS] /
-               (3 * (1 - 2 * p[CommonData::YOUNG_MODULUS]));
+        auto young_modulus = p[CommonData::YOUNG_MODULUS];
+        auto poisson_ratio = p[CommonData::POISSON_RATIO];
+        return young_modulus / (3 * (1 - 2 * poisson_ratio));
       };
 
       auto getG = [](auto &p) {
-        return p[CommonData::YOUNG_MODULUS] /
-               (2 * (1 + p[CommonData::POISSON_RATIO]));
+        auto young_modulus = p[CommonData::YOUNG_MODULUS];
+        auto poisson_ratio = p[CommonData::POISSON_RATIO];
+        return young_modulus / (2 * (1 + poisson_ratio));
       };
 
       auto scale = [this](auto &p) {
@@ -689,7 +691,7 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
 
       (*matParamsPtr) = {young_modulus, poisson_ratio, sigmaY, H,
                          visH,          Qinf,          b_iso};
-      scale(*matParamsPtr);
+      // scale(*matParamsPtr);
       CHKERR getMatDPtr(matDPtr, getK(*matParamsPtr), getG(*matParamsPtr));
 
       MoFEMFunctionReturn(0);
@@ -963,6 +965,37 @@ opFactoryDomainLhs(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
   pip.push_back(
       new OpCalculateConstraintsLhs_dTAU(tau, tau, common_plastic_ptr));
 
+  MoFEMFunctionReturn(0);
+}
+
+template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
+MoFEMErrorCode opFactoryDomainReactions(MoFEM::Interface &m_field,
+                                        std::string block_name, Pip &pip,
+                                        std::string u, std::string ep,
+                                        std::string tau) {
+  MoFEMFunctionBegin;
+
+  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
+      A>::template LinearForm<I>;
+  using OpInternalForceCauchy =
+      typename B::template OpGradTimesSymTensor<1, DIM, DIM>;
+  using OpInternalForcePiola =
+      typename B::template OpGradTimesTensor<1, DIM, DIM>;
+
+  auto [common_plastic_ptr, common_henky_ptr] =
+      createCommonPlasticOps<DIM, I, DomainEleOp>(m_field, block_name, pip, u,
+                                                  ep, tau, 1, Sev::inform);
+
+  auto m_D_ptr = common_plastic_ptr->mDPtr;
+
+  // Calculate internal forces
+  if (common_henky_ptr) {
+    pip.push_back(new OpInternalForcePiola(
+        u, common_henky_ptr->getMatFirstPiolaStress()));
+  } else {
+    pip.push_back(new OpInternalForceCauchy(u, common_plastic_ptr->mStressPtr));
+  }
+  
   MoFEMFunctionReturn(0);
 }
 
