@@ -532,8 +532,9 @@ inline double constrain_abs(double x) {
   }
 };
 
-inline double w(double eqiv, double dot_tau, double f, double sigma_y) {
-  return (f - sigma_y) / sigmaY + cn1 * (dot_tau * std::sqrt(eqiv));
+inline double w(double eqiv, double dot_tau, double f, double sigma_y,
+                double sigma_Y) {
+  return (f - sigma_y) / sigma_Y + cn1 * (dot_tau * std::sqrt(eqiv));
 };
 
 /**
@@ -548,19 +549,21 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 
  */
 inline double constraint(double eqiv, double dot_tau, double f, double sigma_y,
-                         double abs_w) {
-  return visH * dot_tau + (sigmaY / 2) * ((cn0 * (dot_tau - eqiv) +
+                         double abs_w, double vis_H, double sigma_Y) {
+  return vis_H * dot_tau + (sigma_Y / 2) * ((cn0 * (dot_tau - eqiv) +
                                            cn1 * (std::sqrt(eqiv) * dot_tau) -
-                                           (f - sigma_y) / sigmaY) -
+                                           (f - sigma_y) / sigma_Y) -
                                           abs_w);
 };
 
-inline double diff_constrain_ddot_tau(double sign, double eqiv) {
-  return visH + (sigmaY / 2) * (cn0 + cn1 * std::sqrt(eqiv) * (1 - sign));
+inline double diff_constrain_ddot_tau(double sign, double eqiv, double vis_H,
+                                      double sigma_Y) {
+  return vis_H + (sigma_Y / 2) * (cn0 + cn1 * std::sqrt(eqiv) * (1 - sign));
 };
 
-inline double diff_constrain_eqiv(double sign, double eqiv, double dot_tau) {
-  return (sigmaY / 2) *
+inline double diff_constrain_deqiv(double sign, double eqiv, double dot_tau,
+                                  double sigma_Y) {
+  return (sigma_Y / 2) *
          (-cn0 + cn1 * dot_tau * (0.5 / std::sqrt(eqiv)) * (1 - sign));
 };
 
@@ -680,18 +683,18 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
           v *= scaleVal;
       };
 
-      // for (auto &b : blockData) {
-      //   if (b.blockEnts.find(getFEEntityHandle()) != b.blockEnts.end()) {
-      //     *matParamsPtr = b.bParams;
-      //     scale(*matParamsPtr);
-      //     CHKERR getMatDPtr(matDPtr, getK(*matParamsPtr), getG(*matParamsPtr));
-      //     MoFEMFunctionReturnHot(0);
-      //   }
-      // }
+      for (auto &b : blockData) {
+        if (b.blockEnts.find(getFEEntityHandle()) != b.blockEnts.end()) {
+          *matParamsPtr = b.bParams;
+          scale(*matParamsPtr);
+          CHKERR getMatDPtr(matDPtr, getK(*matParamsPtr),
+          getG(*matParamsPtr)); MoFEMFunctionReturnHot(0);
+        }
+      }
 
       (*matParamsPtr) = {young_modulus, poisson_ratio, sigmaY, H,
                          visH,          Qinf,          b_iso};
-      // scale(*matParamsPtr);
+      scale(*matParamsPtr);
       CHKERR getMatDPtr(matDPtr, getK(*matParamsPtr), getG(*matParamsPtr));
 
       MoFEMFunctionReturn(0);
@@ -898,7 +901,6 @@ opFactoryDomainRhs(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
     pip.push_back(new OpInternalForceCauchy(u, common_plastic_ptr->mStressPtr));
   }
 
-
   pip.push_back(
       new OpCalculateConstraintsRhs(tau, common_plastic_ptr, m_D_ptr));
   pip.push_back(new OpCalculatePlasticFlowRhs(ep, common_plastic_ptr, m_D_ptr));
@@ -995,7 +997,7 @@ MoFEMErrorCode opFactoryDomainReactions(MoFEM::Interface &m_field,
   } else {
     pip.push_back(new OpInternalForceCauchy(u, common_plastic_ptr->mStressPtr));
   }
-  
+
   MoFEMFunctionReturn(0);
 }
 

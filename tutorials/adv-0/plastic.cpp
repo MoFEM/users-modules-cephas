@@ -72,6 +72,29 @@ using OpEssentialLhs = EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<
 using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<
     GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
 
+inline double hardening_exp(double tau, double b_iso) {
+  return std::exp(
+      std::max(static_cast<double>(std::numeric_limits<float>::min_exponent10),
+               -b_iso * tau));
+}
+
+inline double hardening(double tau, double H, double Qinf, double b_iso,
+                        double sigmaY) {
+  return H * tau + Qinf * (1. - hardening_exp(tau, b_iso)) + sigmaY;
+}
+
+inline double hardening_dtau(double tau, double H, double Qinf, double b_iso) {
+  auto r = [&](auto tau) {
+    return H + Qinf * b_iso * hardening_exp(tau, b_iso);
+  };
+  constexpr double eps = 1e-12;
+  return std::max(r(tau), eps * r(0));
+}
+
+inline double hardening_dtau2(double tau, double Qinf, double b_iso) {
+  return -(Qinf * (b_iso * b_iso)) * hardening_exp(tau, b_iso);
+}
+
 PetscBool is_large_strains = PETSC_TRUE;
 PetscBool set_timer = PETSC_FALSE;
 
@@ -82,36 +105,15 @@ double poisson_ratio = 0.29;
 double sigmaY = 450;
 double H = 129;
 double visH = 0;
-double cn0 = 1;
-double cn1 = 1;
 double zeta = 5e-2;
 double Qinf = 265;
 double b_iso = 16.93;
 
+double cn0 = 1;
+double cn1 = 1;
+
 int order = 2;      ///< Order if fixed.
 int geom_order = 2; ///< Order if fixed.
-
-constexpr size_t activ_history_sise = 1;
-
-inline double hardening_exp(double tau) {
-  return std::exp(
-      std::max(static_cast<double>(std::numeric_limits<float>::min_exponent10),
-               -b_iso * tau));
-}
-
-inline double hardening(double tau) {
-  return H * tau + Qinf * (1. - hardening_exp(tau)) + sigmaY;
-}
-
-inline double hardening_dtau(double tau) {
-  auto r = [](auto tau) { return H + Qinf * b_iso * hardening_exp(tau); };
-  constexpr double eps = 1e-12;
-  return std::max(r(tau), eps * r(0));
-}
-
-inline double hardening_dtau2(double tau) {
-  return -(Qinf * (b_iso * b_iso)) * hardening_exp(tau);
-}
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
@@ -284,21 +286,6 @@ MoFEMErrorCode Example::createCommonData() {
                                PETSC_NULL);
     if (is_scale) {
       scale = scale / young_modulus;
-      young_modulus *= scale;
-      sigmaY *= scale;
-      H *= scale;
-      Qinf *= scale;
-      visH *= scale;
-
-      MOFEM_LOG("EXAMPLE", Sev::inform)
-          << "Scaled Young modulus " << young_modulus;
-      MOFEM_LOG("EXAMPLE", Sev::inform)
-          << "Scaled Poisson ratio " << poisson_ratio;
-      MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Yield stress " << sigmaY;
-      MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Hardening " << H;
-      MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Viscous hardening " << visH;
-      MOFEM_LOG("EXAMPLE", Sev::inform)
-          << "Scaled Saturation yield stress " << Qinf;
     }
 
     MoFEMFunctionReturn(0);

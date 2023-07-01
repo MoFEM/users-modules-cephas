@@ -101,6 +101,8 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
   commonDataPtr->resFlowDstrain.clear();
   commonDataPtr->resFlowDstrainDot.clear();
 
+  auto &params = commonDataPtr->blockParams;
+
   auto t_res_c = getFTensor0FromVec(commonDataPtr->resC);
   auto t_res_c_dtau = getFTensor0FromVec(commonDataPtr->resCdTau);
   auto t_res_c_dstrain =
@@ -146,7 +148,11 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
 
     for (auto &f : commonDataPtr->plasticSurface) {
       auto eqiv = equivalent_strain_dot(t_plastic_strain_dot);
-      const auto ww = w(eqiv, t_tau_dot, t_f, hardening(t_tau));
+      const auto ww =
+          w(eqiv, t_tau_dot, t_f,
+            hardening(t_tau, params[CommonData::H], params[CommonData::QINF],
+                      params[CommonData::BISO], params[CommonData::SIGMA_Y]),
+            params[CommonData::SIGMA_Y]);
       const auto sign_ww = constrian_sign(ww);
 
       ++nb_points_on_elem;
@@ -192,16 +198,23 @@ MoFEMErrorCode OpCalculatePlasticity::doWork(int side, EntityType type,
     auto t_diff_eqiv = diff_equivalent_strain_dot(eqiv, t_plastic_strain_dot,
                                                   t_diff_plastic_strain);
 
-    const auto sigma_y = hardening(t_tau);
-    const auto d_sigma_y = hardening_dtau(t_tau);
+    const auto sigma_y =
+        hardening(t_tau, params[CommonData::H], params[CommonData::QINF],
+                  params[CommonData::BISO], params[CommonData::SIGMA_Y]);
+    const auto d_sigma_y =
+        hardening_dtau(t_tau, params[CommonData::H], params[CommonData::QINF],
+                       params[CommonData::BISO]);
 
-    auto ww = w(eqiv, t_tau_dot, t_f, sigma_y);
+    auto ww = w(eqiv, t_tau_dot, t_f, sigma_y, params[CommonData::SIGMA_Y]);
     auto abs_ww = constrain_abs(ww);
     auto sign_ww = constrian_sign(ww);
 
-    auto c = constraint(eqiv, t_tau_dot, t_f, sigma_y, abs_ww);
-    auto c_dot_tau = diff_constrain_ddot_tau(sign_ww, eqiv);
-    auto c_equiv = diff_constrain_eqiv(sign_ww, eqiv, t_tau_dot);
+    auto c = constraint(eqiv, t_tau_dot, t_f, sigma_y, abs_ww,
+                        params[CommonData::VIS_H], params[CommonData::SIGMA_Y]);
+    auto c_dot_tau = diff_constrain_ddot_tau(
+        sign_ww, eqiv, params[CommonData::VIS_H], params[CommonData::SIGMA_Y]);
+    auto c_equiv = diff_constrain_deqiv(sign_ww, eqiv, t_tau_dot,
+                                        params[CommonData::SIGMA_Y]);
     auto c_sigma_y = diff_constrain_dsigma_y(sign_ww);
     auto c_f = diff_constrain_df(sign_ww);
 
