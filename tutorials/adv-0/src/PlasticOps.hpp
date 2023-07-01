@@ -711,6 +711,14 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
     };
     std::vector<BlockData> blockData;
 
+    /**
+     * @brief Extract block data from meshsets
+     * 
+     * @param m_field 
+     * @param meshset_vec_ptr 
+     * @param sev 
+     * @return MoFEMErrorCode 
+     */
     MoFEMErrorCode
     extractBlockData(MoFEM::Interface &m_field,
                      std::vector<const CubitMeshSets *> meshset_vec_ptr,
@@ -754,6 +762,17 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
       MoFEMFunctionReturn(0);
     }
 
+    /** 
+     * @brief Get elasticity tensor
+     * 
+     * Calculate elasticity tensor for given material parameters
+     * 
+     * @param mat_D_ptr
+     * @param bulk_modulus_K
+     * @param shear_modulus_G
+     * @return MoFEMErrorCode
+     * 
+    */
     MoFEMErrorCode getMatDPtr(boost::shared_ptr<MatrixDouble> mat_D_ptr,
                               double bulk_modulus_K, double shear_modulus_G) {
       MoFEMFunctionBegin;
@@ -782,6 +801,7 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
     }
   };
 
+  // push operator to calculate material stiffness matrix for each block
   pip.push_back(new OpMatBlocks(
       mat_D_Ptr, mat_params_ptr, scale, m_field, sev,
 
