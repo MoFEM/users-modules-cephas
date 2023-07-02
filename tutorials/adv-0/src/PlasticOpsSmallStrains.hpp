@@ -7,6 +7,22 @@
 namespace PlasticOps {
 
 template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticInternalForceLhs_dEPImpl<DIM, GAUSS,
+                                                  AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculatePlasticInternalForceLhs_dEPImpl(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
+};
+
+template <int DIM, typename AssemblyDomainEleOp>
 OpCalculatePlasticInternalForceLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::
     OpCalculatePlasticInternalForceLhs_dEPImpl(
         const std::string row_field_name, const std::string col_field_name,
@@ -96,6 +112,21 @@ OpCalculatePlasticInternalForceLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::
 
   MoFEMFunctionReturn(0);
 }
+
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowLhs_dUImpl<DIM, GAUSS, AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculatePlasticFlowLhs_dUImpl(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
+  MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
+                           EntitiesFieldData::EntData &col_data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
+};
 
 template <int DIM, typename AssemblyDomainEleOp>
 OpCalculatePlasticFlowLhs_dUImpl<DIM, GAUSS, AssemblyDomainEleOp>::
