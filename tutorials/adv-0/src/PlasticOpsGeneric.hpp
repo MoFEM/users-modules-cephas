@@ -22,6 +22,9 @@ MoFEMErrorCode OpCalculatePlasticSurfaceImpl<DIM, GAUSS, DomainEleOp>::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+
   const size_t nb_gauss_pts = commonDataPtr->mStressPtr->size2();
   auto t_stress =
       getFTensor2SymmetricFromMat<DIM>(*(commonDataPtr->mStressPtr));
@@ -61,6 +64,13 @@ template <int DIM, typename DomainEleOp>
 MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
+
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+  FTensor::Index<'k', DIM> k;
+  FTensor::Index<'l', DIM> l;
+  FTensor::Index<'m', DIM> m;
+  FTensor::Index<'n', DIM> n;
 
   const size_t nb_gauss_pts = DomainEleOp::getGaussPts().size2();
   auto t_w = DomainEleOp::getFTensor0IntegrationWeight();
@@ -349,6 +359,8 @@ OpCalculatePlasticFlowRhsImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
   FTensor::Index<'j', DIM> j;
   FTensor::Index<'k', DIM> k;
   FTensor::Index<'l', DIM> l;
+  constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+  FTensor::Index<'L', size_symm> L;
 
   const auto nb_integration_pts = AssemblyDomainEleOp::getGaussPts().size2();
   const auto nb_base_functions = data.getN().size2();
@@ -476,6 +488,7 @@ OpCalculatePlasticFlowLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
   FTensor::Index<'l', DIM> l;
   constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
   FTensor::Index<'L', size_symm> L;
+  FTensor::Index<'O', size_symm> O;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
 

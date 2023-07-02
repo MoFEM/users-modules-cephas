@@ -112,22 +112,11 @@ std::array<int, 5> CommonData::activityData = {0, 0, 0, 0, 0};
 
 //! [Common data]
 
-FTensor::Index<'i', SPACE_DIM> i;
-FTensor::Index<'j', SPACE_DIM> j;
-FTensor::Index<'k', SPACE_DIM> k;
-FTensor::Index<'l', SPACE_DIM> l;
-FTensor::Index<'m', SPACE_DIM> m;
-FTensor::Index<'n', SPACE_DIM> n;
-FTensor::Index<'o', SPACE_DIM> o;
-FTensor::Index<'p', SPACE_DIM> p;
 
 FTensor::Index<'I', 3> I;
 FTensor::Index<'J', 3> J;
 FTensor::Index<'M', 3> M;
 FTensor::Index<'N', 3> N;
-
-FTensor::Index<'L', size_symm> L;
-FTensor::Index<'O', size_symm> O;
 
 template <int DIM, IntegrationType I, typename DomainEleOp>
 struct OpCalculatePlasticSurfaceImpl;
@@ -482,7 +471,10 @@ template <int DIM> inline auto diff_tensor(FTensor::Number<DIM>) {
 };
 
 template <int DIM> inline auto symm_L_tensor(FTensor::Number<DIM>) {
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
   constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+  FTensor::Index<'L', size_symm> L;
   FTensor::Dg<double, DIM, size_symm> t_L;
   t_L(i, j, L) = 0;
   if constexpr (DIM == 2) {
@@ -501,6 +493,12 @@ template <int DIM> inline auto symm_L_tensor(FTensor::Number<DIM>) {
 }
 
 template <int DIM> inline auto diff_symmetrize(FTensor::Number<DIM>) {
+
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+  FTensor::Index<'k', DIM> k;
+  FTensor::Index<'l', DIM> l;
+
   FTensor::Tensor4<double, DIM, DIM, DIM, DIM> t_diff;
 
   t_diff(i, j, k, l) = 0;

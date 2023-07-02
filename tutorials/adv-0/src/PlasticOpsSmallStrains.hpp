@@ -120,6 +120,9 @@ OpCalculatePlasticFlowLhs_dUImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
   FTensor::Index<'j', DIM> j;
   FTensor::Index<'k', DIM> k;
   FTensor::Index<'l', DIM> l;
+  FTensor::Index<'m', DIM> m;
+  FTensor::Index<'n', DIM> n;
+
   constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
   FTensor::Index<'L', size_symm> L;
 
