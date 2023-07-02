@@ -38,7 +38,7 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::iNtegrate(
         commonHenckyDataPtr->matLogCdC);
     auto t_grad = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(
         *(commonHenckyDataPtr->matGradPtr));
-    auto t_L = symm_L_tensor();
+    auto t_L = symm_L_tensor(FTensor::Number<SPACE_DIM>());
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_F;
@@ -140,7 +140,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::iNtegrate(
       ++t_res_diff;
     };
 
-    auto t_L = symm_L_tensor();
+    auto t_L = symm_L_tensor(FTensor::Number<SPACE_DIM>());
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
     FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
         t_diff_grad;
@@ -241,7 +241,7 @@ MoFEMErrorCode OpCalculateConstraintsLhs_LogStrain_dU::iNtegrate(
       ++t_res_diff;
     };
 
-    auto t_diff_grad_symmetrise = diff_symmetrize();
+    auto t_diff_grad_symmetrise = diff_symmetrize(FTensor::Number<SPACE_DIM>());
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_ls_dlog_c;

@@ -47,7 +47,7 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::iNtegrate(
   const size_t nb_row_base_functions = row_data.getN().size2();
 
   auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mDPtr);
-  auto t_L = symm_L_tensor();
+  auto t_L = symm_L_tensor(FTensor::Number<SPACE_DIM>());
 
   FTensor::Dg<double, SPACE_DIM, size_symm> t_DL;
   t_DL(i, j, L) = t_D(i, j, k, l) * t_L(k, l, L);
@@ -114,7 +114,7 @@ OpCalculatePlasticFlowLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
     ++t_res_flow_dstrain;
   };
 
-  auto t_L = symm_L_tensor();
+  auto t_L = symm_L_tensor(FTensor::Number<SPACE_DIM>());
   constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
   FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
       t_diff_grad;
@@ -174,7 +174,7 @@ OpCalculateConstraintsLhs_dU::iNtegrate(EntitiesFieldData::EntData &row_data,
 
   auto t_c_dstrain =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resCdStrain);
-  auto t_diff_grad_symmetrise = diff_symmetrize();
+  auto t_diff_grad_symmetrise = diff_symmetrize(FTensor::Number<SPACE_DIM>());
 
   auto next = [&]() {
     ++t_c_dstrain;
