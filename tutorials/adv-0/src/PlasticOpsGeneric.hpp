@@ -285,30 +285,38 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
   MoFEMFunctionReturn(0);
 }
 
-OpPlasticStress::OpPlasticStress(const std::string field_name,
-                                 boost::shared_ptr<CommonData> common_data_ptr,
-                                 boost::shared_ptr<MatrixDouble> m_D_ptr,
-                                 const double scale)
+template <int DIM, typename DomainEleOp>
+OpPlasticStressImpl<DIM, GAUSS, DomainEleOp>::OpPlasticStressImpl(
+    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr,
+    boost::shared_ptr<MatrixDouble> m_D_ptr, const double scale)
     : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr), scaleStress(scale), mDPtr(m_D_ptr) {
   // Operator is only executed for vertices
-  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  std::fill(&DomainEleOp::doEntities[MBEDGE],
+            &DomainEleOp::doEntities[MBMAXTYPE], false);
 }
 
 //! [Calculate stress]
-MoFEMErrorCode OpPlasticStress::doWork(int side, EntityType type,
-                                       EntData &data) {
+template <int DIM, typename DomainEleOp>
+MoFEMErrorCode
+OpPlasticStressImpl<DIM, GAUSS, DomainEleOp>::doWork(int side, EntityType type,
+                                                     EntData &data) {
   MoFEMFunctionBegin;
+
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+  FTensor::Index<'k', DIM> k;
+  FTensor::Index<'l', DIM> l;
+
   const size_t nb_gauss_pts = commonDataPtr->mStrainPtr->size2();
-  commonDataPtr->mStressPtr->resize((SPACE_DIM * (SPACE_DIM + 1)) / 2,
-                                    nb_gauss_pts);
-  auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mDPtr);
+  commonDataPtr->mStressPtr->resize((DIM * (DIM + 1)) / 2, nb_gauss_pts);
+  auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*mDPtr);
   auto t_strain =
-      getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->mStrainPtr));
+      getFTensor2SymmetricFromMat<DIM>(*(commonDataPtr->mStrainPtr));
   auto t_plastic_strain =
-      getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticStrain);
+      getFTensor2SymmetricFromMat<DIM>(commonDataPtr->plasticStrain);
   auto t_stress =
-      getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->mStressPtr));
+      getFTensor2SymmetricFromMat<DIM>(*(commonDataPtr->mStressPtr));
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
     t_stress(i, j) =
@@ -323,31 +331,39 @@ MoFEMErrorCode OpPlasticStress::doWork(int side, EntityType type,
 }
 //! [Calculate stress]
 
-OpCalculatePlasticFlowRhs::OpCalculatePlasticFlowRhs(
-    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<MatrixDouble> m_D_ptr)
-    : AssemblyDomainEleOp(field_name, field_name, DomainEleOp::OPROW),
+template <int DIM, typename AssemblyDomainEleOp>
+OpCalculatePlasticFlowRhsImpl<DIM, GAUSS, AssemblyDomainEleOp>::
+    OpCalculatePlasticFlowRhsImpl(const std::string field_name,
+                                  boost::shared_ptr<CommonData> common_data_ptr,
+                                  boost::shared_ptr<MatrixDouble> m_D_ptr)
+    : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
       commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {}
 
+template <int DIM, typename AssemblyDomainEleOp>
 MoFEMErrorCode
-OpCalculatePlasticFlowRhs::iNtegrate(EntitiesFieldData::EntData &data) {
+OpCalculatePlasticFlowRhsImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
+    EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
-  const auto nb_integration_pts = getGaussPts().size2();
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+  FTensor::Index<'k', DIM> k;
+  FTensor::Index<'l', DIM> l;
+
+  const auto nb_integration_pts = AssemblyDomainEleOp::getGaussPts().size2();
   const auto nb_base_functions = data.getN().size2();
 
-  auto t_res_flow =
-      getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resFlow);
+  auto t_res_flow = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->resFlow);
 
-  auto t_L = symm_L_tensor(FTensor::Number<SPACE_DIM>());
+  auto t_L = symm_L_tensor(FTensor::Number<DIM>());
 
   auto next = [&]() { ++t_res_flow; };
 
-  auto t_w = getFTensor0IntegrationWeight();
+  auto t_w = AssemblyDomainEleOp::getFTensor0IntegrationWeight();
   auto t_base = data.getFTensor0N();
   auto &nf = AssemblyDomainEleOp::locF;
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-    double alpha = getMeasure() * t_w;
+    double alpha = AssemblyDomainEleOp::getMeasure() * t_w;
     ++t_w;
 
     FTensor::Tensor1<double, size_symm> t_rhs;
@@ -368,28 +384,32 @@ OpCalculatePlasticFlowRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   MoFEMFunctionReturn(0);
 }
 
-OpCalculateConstraintsRhs::OpCalculateConstraintsRhs(
-    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<MatrixDouble> m_D_ptr)
-    : AssemblyDomainEleOp(field_name, field_name, DomainEleOp::OPROW),
+template <typename AssemblyDomainEleOp>
+OpCalculateConstraintsRhsImpl<GAUSS, AssemblyDomainEleOp>::
+    OpCalculateConstraintsRhsImpl(const std::string field_name,
+                                  boost::shared_ptr<CommonData> common_data_ptr,
+                                  boost::shared_ptr<MatrixDouble> m_D_ptr)
+    : AssemblyDomainEleOp(field_name, field_name, AssemblyDomainEleOp::OPROW),
       commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {}
 
+template <typename AssemblyDomainEleOp>
 MoFEMErrorCode
-OpCalculateConstraintsRhs::iNtegrate(EntitiesFieldData::EntData &data) {
+OpCalculateConstraintsRhsImpl<GAUSS, AssemblyDomainEleOp>::iNtegrate(
+    EntitiesFieldData::EntData &data) {
   MoFEMFunctionBegin;
 
-  const size_t nb_integration_pts = getGaussPts().size2();
+  const size_t nb_integration_pts = AssemblyDomainEleOp::getGaussPts().size2();
   const size_t nb_base_functions = data.getN().size2();
 
   auto t_res_c = getFTensor0FromVec(commonDataPtr->resC);
 
   auto next = [&]() { ++t_res_c; };
 
-  auto t_w = getFTensor0IntegrationWeight();
+  auto t_w = AssemblyDomainEleOp::getFTensor0IntegrationWeight();
   auto &nf = AssemblyDomainEleOp::locF;
   auto t_base = data.getFTensor0N();
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-    const double alpha = getMeasure() * t_w;
+    const double alpha = AssemblyDomainEleOp::getMeasure() * t_w;
     ++t_w;
     const auto res = alpha * t_res_c;
     next();
@@ -406,14 +426,16 @@ OpCalculateConstraintsRhs::iNtegrate(EntitiesFieldData::EntData &data) {
   MoFEMFunctionReturn(0);
 }
 
-OpCalculatePlasticFlowLhs_dEP::OpCalculatePlasticFlowLhs_dEP(
-    const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<MatrixDouble> m_D_ptr)
+template <int DIM, typename AssemblyDomainEleOp>
+OpCalculatePlasticFlowLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::
+    OpCalculatePlasticFlowLhs_dEPImpl(
+        const std::string row_field_name, const std::string col_field_name,
+        boost::shared_ptr<CommonData> common_data_ptr,
+        boost::shared_ptr<MatrixDouble> m_D_ptr)
     : AssemblyDomainEleOp(row_field_name, col_field_name,
-                          DomainEleOp::OPROWCOL),
+                          AssemblyDomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
-  sYmm = false;
+  AssemblyDomainEleOp::sYmm = false;
 }
 
 static inline auto get_mat_tensor_sym_dtensor_sym(size_t rr, MatrixDouble &mat,
@@ -441,31 +463,40 @@ static inline auto get_mat_tensor_sym_dtensor_sym(size_t rr, MatrixDouble &mat,
       &mat(6 * rr + 5, 3), &mat(6 * rr + 5, 4), &mat(6 * rr + 5, 5)};
 }
 
+template <int DIM, typename AssemblyDomainEleOp>
 MoFEMErrorCode
-OpCalculatePlasticFlowLhs_dEP::iNtegrate(EntitiesFieldData::EntData &row_data,
-                                         EntitiesFieldData::EntData &col_data) {
+OpCalculatePlasticFlowLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
+
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+  FTensor::Index<'k', DIM> k;
+  FTensor::Index<'l', DIM> l;
+  constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+  FTensor::Index<'L', size_symm> L;
 
   auto &locMat = AssemblyDomainEleOp::locMat;
 
-  const auto nb_integration_pts = getGaussPts().size2();
+  const auto nb_integration_pts = AssemblyDomainEleOp::getGaussPts().size2();
   const auto nb_row_base_functions = row_data.getN().size2();
 
-  auto t_res_flow_dstrain = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM>(
-      commonDataPtr->resFlowDstrain);
-  auto t_res_flow_dstrain_dot = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM>(
-      commonDataPtr->resFlowDstrainDot);
-  auto t_L = symm_L_tensor(FTensor::Number<SPACE_DIM>());
+  auto t_res_flow_dstrain =
+      getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->resFlowDstrain);
+  auto t_res_flow_dstrain_dot =
+      getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->resFlowDstrainDot);
+  auto t_L = symm_L_tensor(FTensor::Number<DIM>());
 
   auto next = [&]() {
     ++t_res_flow_dstrain;
     ++t_res_flow_dstrain_dot;
   };
 
-  auto t_w = getFTensor0IntegrationWeight();
+  auto t_w = AssemblyDomainEleOp::getFTensor0IntegrationWeight();
   auto t_row_base = row_data.getFTensor0N();
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-    double alpha = getMeasure() * t_w;
+    double alpha = AssemblyDomainEleOp::getMeasure() * t_w;
     ++t_w;
 
     FTensor::Tensor2<double, size_symm, size_symm> t_res_mat;
@@ -496,14 +527,16 @@ OpCalculatePlasticFlowLhs_dEP::iNtegrate(EntitiesFieldData::EntData &row_data,
   MoFEMFunctionReturn(0);
 }
 
-OpCalculatePlasticFlowLhs_dTAU::OpCalculatePlasticFlowLhs_dTAU(
-    const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<MatrixDouble> m_D_ptr)
+template <int DIM, typename AssemblyDomainEleOp>
+OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssemblyDomainEleOp>::
+    OpCalculatePlasticFlowLhs_dTAUImpl(
+        const std::string row_field_name, const std::string col_field_name,
+        boost::shared_ptr<CommonData> common_data_ptr,
+        boost::shared_ptr<MatrixDouble> m_D_ptr)
     : AssemblyDomainEleOp(row_field_name, col_field_name,
                           DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
-  sYmm = false;
+  AssemblyDomainEleOp::sYmm = false;
 }
 
 static inline auto get_mat_tensor_sym_dscalar(size_t rr, MatrixDouble &mat,
@@ -519,10 +552,17 @@ static inline auto get_mat_tensor_sym_dscalar(size_t rr, MatrixDouble &mat,
       &mat(6 * rr + 3, 0), &mat(6 * rr + 4, 0), &mat(6 * rr + 5, 0)};
 }
 
-MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::iNtegrate(
+template <int DIM, typename AssemblyDomainEleOp>
+MoFEMErrorCode
+OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
     EntitiesFieldData::EntData &row_data,
     EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
+
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+  constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+  FTensor::Index<'L', size_symm> L;
 
   const auto nb_integration_pts = getGaussPts().size2();
   const size_t nb_row_base_functions = row_data.getN().size2();
@@ -532,9 +572,9 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::iNtegrate(
   const auto nb_nodes = moab::CN::VerticesPerEntity(type);
 
   auto t_res_flow_dtau =
-      getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resFlowDtau);
+      getFTensor2SymmetricFromMat<DIM>(commonDataPtr->resFlowDtau);
 
-  auto t_L = symm_L_tensor(FTensor::Number<SPACE_DIM>());
+  auto t_L = symm_L_tensor(FTensor::Number<DIM>());
 
   auto next = [&]() { ++t_res_flow_dtau; };
 
@@ -550,7 +590,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::iNtegrate(
     size_t rr = 0;
     for (; rr != AssemblyDomainEleOp::nbRows / size_symm; ++rr) {
       auto t_mat =
-          get_mat_tensor_sym_dscalar(rr, locMat, FTensor::Number<SPACE_DIM>());
+          get_mat_tensor_sym_dscalar(rr, locMat, FTensor::Number<DIM>());
       auto t_col_base = col_data.getFTensor0N(gg, 0);
       for (size_t cc = 0; cc != AssemblyDomainEleOp::nbCols; cc++) {
         t_mat(L) += t_row_base * t_col_base * t_res_vec(L);
@@ -566,14 +606,16 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::iNtegrate(
   MoFEMFunctionReturn(0);
 }
 
-OpCalculateConstraintsLhs_dEP::OpCalculateConstraintsLhs_dEP(
-    const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<MatrixDouble> m_D_ptr)
+template <int DIM, typename AssemblyDomainEleOp>
+OpCalculateConstraintsLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::
+    OpCalculateConstraintsLhs_dEPImpl(
+        const std::string row_field_name, const std::string col_field_name,
+        boost::shared_ptr<CommonData> common_data_ptr,
+        boost::shared_ptr<MatrixDouble> m_D_ptr)
     : AssemblyDomainEleOp(row_field_name, col_field_name,
                           DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
-  sYmm = false;
+  AssemblyDomainEleOp::sYmm = false;
 }
 
 auto get_mat_scalar_dtensor_sym(MatrixDouble &mat, FTensor::Number<2>) {
@@ -586,12 +628,19 @@ auto get_mat_scalar_dtensor_sym(MatrixDouble &mat, FTensor::Number<3>) {
       &mat(0, 0), &mat(0, 1), &mat(0, 2), &mat(0, 3), &mat(0, 4), &mat(0, 5)};
 }
 
+template <int DIM, typename AssemblyDomainEleOp>
 MoFEMErrorCode
-OpCalculateConstraintsLhs_dEP::iNtegrate(EntitiesFieldData::EntData &row_data,
-                                         EntitiesFieldData::EntData &col_data) {
+OpCalculateConstraintsLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
+    EntitiesFieldData::EntData &row_data,
+    EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
-  const auto nb_integration_pts = getGaussPts().size2();
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+  constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+  FTensor::Index<'L', size_symm> L;
+
+  const auto nb_integration_pts = AssemblyDomainEleOp::getGaussPts().size2();
   const auto nb_row_base_functions = row_data.getN().size2();
 
   auto t_c_dstrain =
@@ -606,18 +655,18 @@ OpCalculateConstraintsLhs_dEP::iNtegrate(EntitiesFieldData::EntData &row_data,
 
   auto t_L = symm_L_tensor(FTensor::Number<SPACE_DIM>());
 
-  auto t_w = getFTensor0IntegrationWeight();
+  auto t_w = AssemblyDomainEleOp::getFTensor0IntegrationWeight();
   auto t_row_base = row_data.getFTensor0N();
   for (auto gg = 0; gg != nb_integration_pts; ++gg) {
-    const double alpha = getMeasure() * t_w;
+    const double alpha = AssemblyDomainEleOp::getMeasure() * t_w;
     ++t_w;
 
     FTensor::Tensor1<double, size_symm> t_res_vec;
     t_res_vec(L) = t_L(i, j, L) * (t_c_dstrain_dot(i, j) - t_c_dstrain(i, j));
     next();
 
-    auto t_mat =
-        get_mat_scalar_dtensor_sym(locMat, FTensor::Number<SPACE_DIM>());
+    auto t_mat = get_mat_scalar_dtensor_sym(AssemblyDomainEleOp::locMat,
+                                            FTensor::Number<SPACE_DIM>());
     size_t rr = 0;
     for (; rr != AssemblyDomainEleOp::nbRows; ++rr) {
       const auto row_base = alpha * t_row_base;
@@ -636,36 +685,40 @@ OpCalculateConstraintsLhs_dEP::iNtegrate(EntitiesFieldData::EntData &row_data,
   MoFEMFunctionReturn(0);
 }
 
-OpCalculateConstraintsLhs_dTAU::OpCalculateConstraintsLhs_dTAU(
-    const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> common_data_ptr)
+template <typename AssemblyDomainEleOp>
+OpCalculateConstraintsLhs_dTAUImpl<GAUSS, AssemblyDomainEleOp>::
+    OpCalculateConstraintsLhs_dTAUImpl(
+        const std::string row_field_name, const std::string col_field_name,
+        boost::shared_ptr<CommonData> common_data_ptr)
     : AssemblyDomainEleOp(row_field_name, col_field_name,
                           DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
-  sYmm = false;
+  AssemblyDomainEleOp::sYmm = false;
 }
 
-MoFEMErrorCode OpCalculateConstraintsLhs_dTAU::iNtegrate(
+template <typename AssemblyDomainEleOp>
+MoFEMErrorCode
+OpCalculateConstraintsLhs_dTAUImpl<GAUSS, AssemblyDomainEleOp>::iNtegrate(
     EntitiesFieldData::EntData &row_data,
     EntitiesFieldData::EntData &col_data) {
   MoFEMFunctionBegin;
 
-  const auto nb_integration_pts = getGaussPts().size2();
+  const auto nb_integration_pts = AssemblyDomainEleOp::getGaussPts().size2();
   const auto nb_row_base_functions = row_data.getN().size2();
 
   auto t_res_c_dtau = getFTensor0FromVec(commonDataPtr->resCdTau);
   auto next = [&]() { ++t_res_c_dtau; };
 
-  auto t_w = getFTensor0IntegrationWeight();
+  auto t_w = AssemblyDomainEleOp::getFTensor0IntegrationWeight();
   auto t_row_base = row_data.getFTensor0N();
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-    const double alpha = getMeasure() * t_w;
+    const double alpha = AssemblyDomainEleOp::getMeasure() * t_w;
     ++t_w;
 
     const auto res = alpha * (t_res_c_dtau);
     next();
 
-    auto mat_ptr = locMat.data().begin();
+    auto mat_ptr = AssemblyDomainEleOp::locMat.data().begin();
     size_t rr = 0;
     for (; rr != AssemblyDomainEleOp::nbRows; ++rr) {
       auto t_col_base = col_data.getFTensor0N(gg, 0);

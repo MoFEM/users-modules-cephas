@@ -135,6 +135,45 @@ struct OpCalculatePlasticSurfaceImpl;
 template <int DIM, IntegrationType I, typename DomainEleOp>
 struct OpCalculatePlasticityImpl;
 
+template <int DIM, IntegrationType I, typename DomainEleOp>
+struct OpPlasticStressImpl;
+
+template <int DIM, IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowRhsImpl;
+
+template <IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculateConstraintsRhsImpl;
+
+template <int DIM, IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticInternalForceLhs_dEPImpl;
+
+template <int DIM, IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticInternalForceLhs_LogStrain_dEPImpl;
+
+template <int DIM, IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowLhs_dUImpl;
+
+template <int DIM, IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowLhs_LogStrain_dUImpl;
+
+template <int DIM, IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowLhs_dEPImpl;
+
+template <int DIM, IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowLhs_dTAUImpl;
+
+template <int DIM, IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculateConstraintsLhs_dUImpl;
+
+template <int DIM, IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculateConstraintsLhs_LogStrain_dUImpl;
+
+template <int DIM, IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculateConstraintsLhs_dEPImpl;
+
+template <IntegrationType I, typename AssemblyDomainEleOp>
+struct OpCalculateConstraintsLhs_dTAUImpl;
+
 template <typename DomainEleOp> struct PlasticityIntegrators {
   template <int DIM, IntegrationType I>
   using OpCalculatePlasticSurface =
@@ -142,6 +181,65 @@ template <typename DomainEleOp> struct PlasticityIntegrators {
 
   template <int DIM, IntegrationType I>
   using OpCalculatePlasticity = OpCalculatePlasticityImpl<DIM, I, DomainEleOp>;
+
+  template <int DIM, IntegrationType I>
+  using OpPlasticStress = OpPlasticStressImpl<DIM, I, DomainEleOp>;
+
+  template <AssemblyType A> struct Assembly {
+
+    using AssemblyDomainEleOp =
+        typename FormsIntegrators<DomainEleOp>::template Assembly<A>::OpBase;
+
+    template <int DIM, IntegrationType I>
+    using OpCalculatePlasticFlowRhs =
+        OpCalculatePlasticFlowRhsImpl<DIM, I, AssemblyDomainEleOp>;
+
+    template <IntegrationType I>
+    using OpCalculateConstraintsRhs =
+        OpCalculateConstraintsRhsImpl<I, AssemblyDomainEleOp>;
+
+    template <int DIM, IntegrationType I>
+    using OpCalculatePlasticInternalForceLhs_dEP =
+        OpCalculatePlasticInternalForceLhs_dEPImpl<DIM, I, AssemblyDomainEleOp>;
+
+    template <int DIM, IntegrationType I>
+    using OpCalculatePlasticInternalForceLhs_LogStrain_dEP =
+        OpCalculatePlasticInternalForceLhs_LogStrain_dEPImpl<
+            DIM, I, AssemblyDomainEleOp>;
+
+    template <int DIM, IntegrationType I>
+    using OpCalculatePlasticFlowLhs_dU =
+        OpCalculatePlasticFlowLhs_dUImpl<DIM, I, AssemblyDomainEleOp>;
+
+    template <int DIM, IntegrationType I>
+    using OpCalculatePlasticFlowLhs_LogStrain_dU =
+        OpCalculatePlasticFlowLhs_LogStrain_dUImpl<DIM, I, AssemblyDomainEleOp>;
+
+    template <int DIM, IntegrationType I>
+    using OpCalculatePlasticFlowLhs_dEP =
+        OpCalculatePlasticFlowLhs_dEPImpl<DIM, I, AssemblyDomainEleOp>;
+
+    template <int DIM, IntegrationType I>
+    using OpCalculatePlasticFlowLhs_dTAU =
+        OpCalculatePlasticFlowLhs_dTAUImpl<DIM, I, AssemblyDomainEleOp>;
+
+    template <int DIM, IntegrationType I>
+    using OpCalculateConstraintsLhs_dU =
+        OpCalculateConstraintsLhs_dUImpl<DIM, I, AssemblyDomainEleOp>;
+
+    template <int DIM, IntegrationType I>
+    using OpCalculateConstraintsLhs_LogStrain_dU =
+        OpCalculateConstraintsLhs_LogStrain_dUImpl<DIM, I, AssemblyDomainEleOp>;
+
+    template <int DIM, IntegrationType I>
+    using OpCalculateConstraintsLhs_dEP =
+        OpCalculateConstraintsLhs_dEPImpl<DIM, I, AssemblyDomainEleOp>;
+
+    template <IntegrationType I>
+    using OpCalculateConstraintsLhs_dTAU =
+        OpCalculateConstraintsLhs_dTAUImpl<I, AssemblyDomainEleOp>;
+
+  };
 };
 
 //! [Operators definitions]
@@ -168,11 +266,12 @@ protected:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpPlasticStress : public DomainEleOp {
-  OpPlasticStress(const std::string field_name,
-                  boost::shared_ptr<CommonData> common_data_ptr,
-                  boost::shared_ptr<MatrixDouble> mDPtr,
-                  const double scale = 1);
+template <int DIM, typename DomainEleOp>
+struct OpPlasticStressImpl<DIM, GAUSS, DomainEleOp> : public DomainEleOp {
+  OpPlasticStressImpl(const std::string field_name,
+                      boost::shared_ptr<CommonData> common_data_ptr,
+                      boost::shared_ptr<MatrixDouble> mDPtr,
+                      const double scale = 1);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
@@ -181,10 +280,12 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpCalculatePlasticFlowRhs : public AssemblyDomainEleOp {
-  OpCalculatePlasticFlowRhs(const std::string field_name,
-                            boost::shared_ptr<CommonData> common_data_ptr,
-                            boost::shared_ptr<MatrixDouble> m_D_ptr);
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowRhsImpl<DIM, GAUSS, AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculatePlasticFlowRhsImpl(const std::string field_name,
+                                boost::shared_ptr<CommonData> common_data_ptr,
+                                boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data);
 
 private:
@@ -192,10 +293,12 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculateConstraintsRhs : public AssemblyDomainEleOp {
-  OpCalculateConstraintsRhs(const std::string field_name,
-                            boost::shared_ptr<CommonData> common_data_ptr,
-                            boost::shared_ptr<MatrixDouble> m_D_ptr);
+template <typename AssemblyDomainEleOp>
+struct OpCalculateConstraintsRhsImpl<GAUSS, AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculateConstraintsRhsImpl(const std::string field_name,
+                                boost::shared_ptr<CommonData> common_data_ptr,
+                                boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &data);
 
 private:
@@ -203,8 +306,11 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculatePlasticInternalForceLhs_dEP : public AssemblyDomainEleOp {
-  OpCalculatePlasticInternalForceLhs_dEP(
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticInternalForceLhs_dEPImpl<DIM, GAUSS,
+                                                  AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculatePlasticInternalForceLhs_dEPImpl(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<MatrixDouble> m_D_ptr);
@@ -216,9 +322,11 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculatePlasticInternalForceLhs_LogStrain_dEP
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticInternalForceLhs_LogStrain_dEPImpl<DIM, GAUSS,
+                                                            AssemblyDomainEleOp>
     : public AssemblyDomainEleOp {
-  OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
+  OpCalculatePlasticInternalForceLhs_LogStrain_dEPImpl(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<HenckyOps::CommonData> common_henky_data_ptr,
@@ -234,11 +342,13 @@ private:
   MatrixDouble resDiff;
 };
 
-struct OpCalculatePlasticFlowLhs_dU : public AssemblyDomainEleOp {
-  OpCalculatePlasticFlowLhs_dU(const std::string row_field_name,
-                               const std::string col_field_name,
-                               boost::shared_ptr<CommonData> common_data_ptr,
-                               boost::shared_ptr<MatrixDouble> m_D_ptr);
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowLhs_dUImpl<DIM, GAUSS, AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculatePlasticFlowLhs_dUImpl(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
@@ -247,8 +357,11 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculatePlasticFlowLhs_LogStrain_dU : public AssemblyDomainEleOp {
-  OpCalculatePlasticFlowLhs_LogStrain_dU(
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowLhs_LogStrain_dUImpl<DIM, GAUSS,
+                                                  AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculatePlasticFlowLhs_LogStrain_dUImpl(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
@@ -263,11 +376,13 @@ private:
   MatrixDouble resDiff;
 };
 
-struct OpCalculatePlasticFlowLhs_dEP : public AssemblyDomainEleOp {
-  OpCalculatePlasticFlowLhs_dEP(const std::string row_field_name,
-                                const std::string col_field_name,
-                                boost::shared_ptr<CommonData> common_data_ptr,
-                                boost::shared_ptr<MatrixDouble> m_D_ptr);
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculatePlasticFlowLhs_dEPImpl(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
@@ -276,8 +391,10 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculatePlasticFlowLhs_dTAU : public AssemblyDomainEleOp {
-  OpCalculatePlasticFlowLhs_dTAU(const std::string row_field_name,
+template <int DIM, typename AssembleDomainEleOp>
+struct OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssembleDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculatePlasticFlowLhs_dTAUImpl(const std::string row_field_name,
                                  const std::string col_field_name,
                                  boost::shared_ptr<CommonData> common_data_ptr,
                                  boost::shared_ptr<MatrixDouble> m_D_ptr);
@@ -289,11 +406,13 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculateConstraintsLhs_dU : public AssemblyDomainEleOp {
-  OpCalculateConstraintsLhs_dU(const std::string row_field_name,
-                               const std::string col_field_name,
-                               boost::shared_ptr<CommonData> common_data_ptr,
-                               boost::shared_ptr<MatrixDouble> m_D_ptr);
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculateConstraintsLhs_dUImpl<DIM, GAUSS, AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculateConstraintsLhs_dUImpl(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr,
+      boost::shared_ptr<MatrixDouble> m_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
@@ -302,8 +421,10 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculateConstraintsLhs_LogStrain_dU : public AssemblyDomainEleOp {
-  OpCalculateConstraintsLhs_LogStrain_dU(
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculateConstraintsLhs_LogStrain_dUImpl<DIM, GAUSS, AssemblyDomainEleOp> :
+ public AssemblyDomainEleOp {
+  OpCalculateConstraintsLhs_LogStrain_dUImpl(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr,
@@ -318,8 +439,10 @@ private:
   MatrixDouble resDiff;
 };
 
-struct OpCalculateConstraintsLhs_dEP : public AssemblyDomainEleOp {
-  OpCalculateConstraintsLhs_dEP(const std::string row_field_name,
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculateConstraintsLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculateConstraintsLhs_dEPImpl(const std::string row_field_name,
                                 const std::string col_field_name,
                                 boost::shared_ptr<CommonData> common_data_ptr,
                                 boost::shared_ptr<MatrixDouble> mat_D_ptr);
@@ -331,8 +454,10 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-struct OpCalculateConstraintsLhs_dTAU : public AssemblyDomainEleOp {
-  OpCalculateConstraintsLhs_dTAU(const std::string row_field_name,
+template <typename AssemblyDomainEleOp>
+struct OpCalculateConstraintsLhs_dTAUImpl<GAUSS, AssemblyDomainEleOp>
+    : public AssemblyDomainEleOp {
+  OpCalculateConstraintsLhs_dTAUImpl(const std::string row_field_name,
                                  const std::string col_field_name,
                                  boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
@@ -956,7 +1081,8 @@ auto createCommonPlasticOps(
 
     pip.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
         u, common_plastic_ptr->mGradPtr, common_plastic_ptr->mStrainPtr));
-    pip.push_back(new OpPlasticStress(u, common_plastic_ptr, m_D_ptr, 1));
+    pip.push_back(new typename P::template OpPlasticStress<DIM, I>(
+        u, common_plastic_ptr, m_D_ptr, 1));
   }
 
   pip.push_back(new typename P::template OpCalculatePlasticSurface<DIM, I>(
@@ -1002,8 +1128,12 @@ opFactoryDomainRhs(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
   }
 
   pip.push_back(
-      new OpCalculateConstraintsRhs(tau, common_plastic_ptr, m_D_ptr));
-  pip.push_back(new OpCalculatePlasticFlowRhs(ep, common_plastic_ptr, m_D_ptr));
+      new
+      typename P::template Assembly<A>::template OpCalculateConstraintsRhs<I>(
+          tau, common_plastic_ptr, m_D_ptr));
+  pip.push_back(
+      new typename P::template Assembly<A>::template OpCalculatePlasticFlowRhs<
+          DIM, I>(ep, common_plastic_ptr, m_D_ptr));
 
   MoFEMFunctionReturn(0);
 }
@@ -1041,34 +1171,53 @@ opFactoryDomainLhs(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
     pip.push_back(new typename H::template OpHenckyTangent<DIM, I>(
         u, common_henky_ptr, m_D_ptr));
     pip.push_back(new OpKPiola(u, u, common_henky_ptr->getMatTangent()));
-    pip.push_back(new OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
-        u, ep, common_plastic_ptr, common_henky_ptr, m_D_ptr));
+    pip.push_back(
+        new typename P::template Assembly<A>::
+            template OpCalculatePlasticInternalForceLhs_LogStrain_dEP<DIM, I>(
+                u, ep, common_plastic_ptr, common_henky_ptr, m_D_ptr));
   } else {
     pip.push_back(new OpKCauchy(u, u, m_D_ptr));
-    pip.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
-        u, ep, common_plastic_ptr, m_D_ptr));
+    pip.push_back(new typename P::template Assembly<A>::
+                      template OpCalculatePlasticInternalForceLhs_dEP<DIM, I>(
+                          u, ep, common_plastic_ptr, m_D_ptr));
   }
 
   if (common_henky_ptr) {
-    pip.push_back(new OpCalculateConstraintsLhs_LogStrain_dU(
-        tau, u, common_plastic_ptr, common_henky_ptr, m_D_ptr));
-    pip.push_back(new OpCalculatePlasticFlowLhs_LogStrain_dU(
-        ep, u, common_plastic_ptr, common_henky_ptr, m_D_ptr));
+    pip.push_back(
+        new typename P::template Assembly<A>::
+            template OpCalculateConstraintsLhs_LogStrain_dU<DIM, I>(
+                tau, u, common_plastic_ptr, common_henky_ptr, m_D_ptr));
+    pip.push_back(
+        new typename P::template Assembly<A>::
+            template OpCalculatePlasticFlowLhs_LogStrain_dU<DIM, I>(
+                ep, u, common_plastic_ptr, common_henky_ptr, m_D_ptr));
   } else {
     pip.push_back(
-        new OpCalculateConstraintsLhs_dU(tau, u, common_plastic_ptr, m_D_ptr));
+        new
+        typename P::template Assembly<A>::template OpCalculateConstraintsLhs_dU<
+            DIM, I>(tau, u, common_plastic_ptr, m_D_ptr));
     pip.push_back(
-        new OpCalculatePlasticFlowLhs_dU(ep, u, common_plastic_ptr, m_D_ptr));
+        new
+        typename P::template Assembly<A>::template OpCalculatePlasticFlowLhs_dU<
+            DIM, I>(ep, u, common_plastic_ptr, m_D_ptr));
   }
 
   pip.push_back(
-      new OpCalculatePlasticFlowLhs_dEP(ep, ep, common_plastic_ptr, m_D_ptr));
+      new
+      typename P::template Assembly<A>::template OpCalculatePlasticFlowLhs_dEP<
+          DIM, I>(ep, ep, common_plastic_ptr, m_D_ptr));
   pip.push_back(
-      new OpCalculatePlasticFlowLhs_dTAU(ep, tau, common_plastic_ptr, m_D_ptr));
+      new
+      typename P::template Assembly<A>::template OpCalculatePlasticFlowLhs_dTAU<
+          DIM, I>(ep, tau, common_plastic_ptr, m_D_ptr));
   pip.push_back(
-      new OpCalculateConstraintsLhs_dEP(tau, ep, common_plastic_ptr, m_D_ptr));
+      new
+      typename P::template Assembly<A>::template OpCalculateConstraintsLhs_dEP<
+          DIM, I>(tau, ep, common_plastic_ptr, m_D_ptr));
   pip.push_back(
-      new OpCalculateConstraintsLhs_dTAU(tau, tau, common_plastic_ptr));
+      new
+      typename P::template Assembly<A>::template OpCalculateConstraintsLhs_dTAU<
+          I>(tau, tau, common_plastic_ptr));
 
   MoFEMFunctionReturn(0);
 }
