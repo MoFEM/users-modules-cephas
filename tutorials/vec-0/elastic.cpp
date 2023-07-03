@@ -475,8 +475,12 @@ MoFEMErrorCode Example::solveSystem() {
         [schur_ptr, get_post_proc_hook_lhs_B, get_post_proc_hook_lhs_S]() {
           MoFEMFunctionBegin;
           CHKERR get_post_proc_hook_lhs_B()();
-          if (schur_ptr->getSchur())
+          if (schur_ptr->getSchur()) {
+            auto S = schur_ptr->getSchur();
+            CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
+            CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
             CHKERR get_post_proc_hook_lhs_S(schur_ptr)();
+          }
           if (schur_ptr)
             CHKERR schur_ptr->postProc();
           MoFEMFunctionReturn(0);
@@ -680,7 +684,7 @@ MoFEMErrorCode Example::checkResults() {
 
   auto get_post_proc_hook_rhs = [&]() {
     return EssentialPreProcRhs<DisplacementCubitBcData>(
-        mField, pip->getBoundaryRhsFE(), 0);
+        mField, pip->getBoundaryRhsFE(), 0, res);
   };
   pip->getBoundaryRhsFE()->postProcessHook = get_post_proc_hook_rhs();
 
@@ -911,10 +915,6 @@ MoFEMErrorCode SetUpSchurImpl::preProc() {
 
 MoFEMErrorCode SetUpSchurImpl::postProc() {
   MoFEMFunctionBegin;
-  if (S) {
-    CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-  }
   MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
   MoFEMFunctionReturn(0);
 }
