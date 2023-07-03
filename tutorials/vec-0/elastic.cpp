@@ -45,11 +45,6 @@ using OpBoundaryRhsBCs = BoundaryRhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<I>;
 using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 
-using OpEssentialLhs = EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<
-    GAUSS>::OpEssentialLhs<DisplacementCubitBcData, 1, SPACE_DIM>;
-using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<
-    GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
-
 template <int DIM> struct PostProcEleByDim;
 
 template <> struct PostProcEleByDim<2> {
@@ -317,7 +312,7 @@ MoFEMErrorCode Example::boundaryCondition() {
                                            "U", 2, 2);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "REMOVE_ALL", "U", 0, 3);
-  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+  CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
 
   auto integration_rule = [](int, int, int approx_order) {
@@ -339,6 +334,19 @@ MoFEMErrorCode Example::boundaryCondition() {
                                                      pip->getDomainRhsFE(), {});
   };
   pip->getDomainRhsFE()->preProcessHook = get_pre_proc_hook();
+
+
+  auto get_post_proc_hook_rhs = [&]() {
+    return EssentialPreProcRhs<DisplacementCubitBcData>(
+        mField, pip->getBoundaryRhsFE(), 1.);
+  };
+  auto get_post_proc_hook_lhs = [&]() {
+    return EssentialPreProcLhs<DisplacementCubitBcData>(
+        mField, pip->getBoundaryLhsFE(), 1.);
+  };
+
+  pip->getBoundaryRhsFE()->postProcessHook = get_post_proc_hook_rhs();
+  pip->getBoundaryLhsFE()->postProcessHook = get_post_proc_hook_lhs();
 
   MoFEMFunctionReturn(0);
 }
@@ -408,6 +416,8 @@ struct SetUpSchur {
   virtual MoFEMErrorCode setUp(SmartPetscObj<KSP> solver) = 0;
   virtual MoFEMErrorCode preProc() = 0;
   virtual MoFEMErrorCode postProc() = 0;
+  virtual SmartPetscObj<Mat> getSchur() = 0;
+  virtual SmartPetscObj<AO> getSchurAO() = 0;
 
 protected:
   SetUpSchur() = default;
@@ -443,18 +453,34 @@ MoFEMErrorCode Example::solveSystem() {
     auto schur_ptr = SetUpSchur::createSetUpSchur(mField);
     CHKERR schur_ptr->setUp(solver);
 
-    pip->getDomainLhsFE()->preProcessHook = [&]() {
+    pip->getDomainLhsFE()->preProcessHook = [schur_ptr]() {
       MoFEMFunctionBegin;
       if (schur_ptr)
         CHKERR schur_ptr->preProc();
       MoFEMFunctionReturn(0);
     };
-    pip->getBoundaryLhsFE()->postProcessHook = [&]() {
-      MoFEMFunctionBegin;
-      if (schur_ptr)
-        CHKERR schur_ptr->postProc();
-      MoFEMFunctionReturn(0);
+
+    auto get_post_proc_hook_lhs_B = [&]() {
+      return EssentialPreProcLhs<DisplacementCubitBcData>(
+          mField, pip->getBoundaryLhsFE(), 1);
     };
+
+    auto get_post_proc_hook_lhs_S = [&](auto schur_ptr) {
+      return EssentialPreProcLhs<DisplacementCubitBcData>(
+          mField, pip->getBoundaryLhsFE(), 1, schur_ptr->getSchur(),
+          schur_ptr->getSchurAO());
+    };
+
+    pip->getBoundaryLhsFE()->postProcessHook =
+        [schur_ptr, get_post_proc_hook_lhs_B, get_post_proc_hook_lhs_S]() {
+          MoFEMFunctionBegin;
+          CHKERR get_post_proc_hook_lhs_B()();
+          if (schur_ptr->getSchur())
+            CHKERR get_post_proc_hook_lhs_S(schur_ptr)();
+          if (schur_ptr)
+            CHKERR schur_ptr->postProc();
+          MoFEMFunctionReturn(0);
+        };
 
     CHKERR setup_and_solve();
   } else {
@@ -647,10 +673,16 @@ MoFEMErrorCode Example::checkResults() {
 
   auto dm = simple->getDM();
   auto res = createDMVector(dm);
-  pip->getDomainRhsFE()->ksp_f = res;
-  pip->getBoundaryRhsFE()->ksp_f = res;
+  pip->getDomainRhsFE()->f = res;
+  pip->getBoundaryRhsFE()->f = res;
 
   CHKERR VecZeroEntries(res);
+
+  auto get_post_proc_hook_rhs = [&]() {
+    return EssentialPreProcRhs<DisplacementCubitBcData>(
+        mField, pip->getBoundaryRhsFE(), 0);
+  };
+  pip->getBoundaryRhsFE()->postProcessHook = get_post_proc_hook_rhs();
 
   CHKERR mField.getInterface<FieldBlas>()->fieldScale(-1, "U");
   CHKERR pip->loopFiniteElements();
@@ -764,6 +796,10 @@ struct SetUpSchurImpl : public SetUpSchur {
   MoFEMErrorCode setUp(SmartPetscObj<KSP> solver);
   MoFEMErrorCode preProc();
   MoFEMErrorCode postProc();
+  SmartPetscObj<Mat> getSchur() { return S; }
+  SmartPetscObj<AO> getSchurAO() {
+    return createAOMappingIS(getDMSubData(subDM)->getSmartRowIs(), PETSC_NULL);
+  } 
 
 private:
   MoFEMErrorCode setEntities();

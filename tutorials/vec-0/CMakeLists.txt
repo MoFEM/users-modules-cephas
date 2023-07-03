@@ -27,7 +27,7 @@ tutorials_copy_and_install("../vec-2/beam_3D.cub" "${permissions_default}")
 tutorials_build_and_install(
   elastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/elastic.cpp)
 set_target_properties(
-  elastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1")
+  elastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=0")
 
 tutorials_build_and_install(
   elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/elastic.cpp)
