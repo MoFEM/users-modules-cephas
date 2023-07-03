@@ -51,6 +51,10 @@ double epsilon = 0.1; ///< regularization paramater
 using ScalFun =
     boost::function<double(const double, const double, const double)>;
 
+template <int SPACE_DIM>
+using VecFun = boost::function<FTensor::Tensor1<double, SPACE_DIM>(
+    const double, const double, const double)>;
+
 struct OpCurlCurl : public AssemblyDomainEleOp {
   OpCurlCurl(const std::string row_field_name, const std::string col_field_name,
              ScalFun beta)
@@ -65,6 +69,12 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
 
     MoFEMFunctionBegin;
 
+    const int nb_row_dofs = row_data.getN().size2() / 3;
+    const int nb_col_dofs = col_data.getN().size2() / 3;
+
+    locMat.resize(nb_row_dofs, nb_col_dofs, false);
+    locMat.clear();
+
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Index<'j', SPACE_DIM> j;
     FTensor::Index<'k', SPACE_DIM> k;
@@ -75,39 +85,34 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
     auto t_row_curl_base = row_data.getFTensor2DiffN<3, SPACE_DIM>();
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
-    auto get_t_vec = [&](const int rr) {
-      std::array<double *, SPACE_DIM> ptrs;
-      for (auto l = 0; l != SPACE_DIM; ++l)
-        ptrs[l] = &locMat(rr + l, l);
-      return FTensor::Tensor1<FTensor::PackPtr<double *, SPACE_DIM>, SPACE_DIM>(
-          ptrs);
-    };
+    const int nb_gauss_pts = row_data.getN().size1();
 
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+    for (int gg = 0; gg != nb_gauss_pts;
+         gg++) { // nb_gauss_pts nbIntegrationPts
 
       const double alpha =
           t_w * vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
 
       FTensor::Tensor1<double, SPACE_DIM> t_row_curl;
       int rr = 0;
-      for (; rr != nbRows / SPACE_DIM; ++rr) {
+      for (; rr != nb_row_dofs; ++rr) {
         t_row_curl(i) = FTensor::levi_civita(j, i, k) * t_row_curl_base(j, k);
 
         FTensor::Tensor1<double, SPACE_DIM> t_col_curl;
 
+        FTensor::Tensor0<double *> t_local_mat(&locMat(rr, 0), 1);
+
         auto t_col_curl_base = col_data.getFTensor2DiffN<3, SPACE_DIM>(gg, 0);
 
-        auto t_vec = get_t_vec(3 * rr);
-
         int cc = 0;
-        for (; cc != nbCols / SPACE_DIM; cc++) {
+        for (; cc != nb_col_dofs; cc++) {
           t_col_curl(i) = FTensor::levi_civita(j, i, k) * t_col_curl_base(j, k);
 
-          locMat(rr, cc) += alpha * t_row_curl(i) * t_col_curl(i);
-          // t_vec(l) += alpha * t_row_curl(i) * t_col_curl(i);
+          // locMat(rr, cc) += alpha * t_row_curl(i) * t_col_curl(i);
+          t_local_mat += alpha * t_row_curl(i) * t_col_curl(i);
 
           ++t_col_curl_base;
-          ++t_vec;
+          ++t_local_mat;
         }
         ++t_row_curl_base;
       }
@@ -138,6 +143,12 @@ struct OpStab : public AssemblyDomainEleOp {
 
     MoFEMFunctionBegin;
 
+    const int nb_row_dofs = row_data.getN().size2() / 3;
+    const int nb_col_dofs = col_data.getN().size2() / 3;
+
+    locMat.resize(nb_row_dofs, nb_col_dofs, false);
+    locMat.clear();
+
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Index<'l', SPACE_DIM> l;
     const double vol = getMeasure();
@@ -146,34 +157,29 @@ struct OpStab : public AssemblyDomainEleOp {
     auto t_row_base = row_data.getFTensor1N<3>();
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
-    auto get_t_vec = [&](const int rr) {
-      std::array<double *, SPACE_DIM> ptrs;
-      for (auto l = 0; l != SPACE_DIM; ++l)
-        ptrs[l] = &locMat(rr + l, l);
-      return FTensor::Tensor1<FTensor::PackPtr<double *, SPACE_DIM>, SPACE_DIM>(
-          ptrs);
-    };
+    const int nb_gauss_pts = row_data.getN().size1();
 
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+    for (int gg = 0; gg != nb_gauss_pts;
+         gg++) { // nb_gauss_pts nbIntegrationPts
 
       const double alpha =
           t_w * vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
 
       int rr = 0;
-      for (; rr != nbRows / SPACE_DIM; ++rr) {
+      for (; rr != nb_row_dofs; ++rr) {
 
         auto t_col_base = col_data.getFTensor1N<3>();
 
-        auto t_vec = get_t_vec(3 * rr);
+        FTensor::Tensor0<double *> t_local_mat(&locMat(rr, 0), 1);
 
         int cc = 0;
-        for (; cc != nbCols / SPACE_DIM; cc++) {
+        for (; cc != nb_col_dofs; cc++) {
 
-          locMat(rr, cc) += alpha * t_row_base(i) * t_col_base(i);
-          // t_vec(l) += alpha * t_row_base(i) * t_col_base(i);
+          // locMat(rr, cc) += alpha * t_row_base(i) * t_col_base(i);
+          t_local_mat += alpha * t_row_base(i) * t_col_base(i);
 
           ++t_col_base;
-          ++t_vec;
+          ++t_local_mat;
         }
         ++t_row_base;
       }
@@ -188,6 +194,54 @@ struct OpStab : public AssemblyDomainEleOp {
 
 private:
   ScalFun betaCoeff;
+};
+
+struct OpBoundaryRhs : public AssemblyBoundaryEleOp {
+  OpBoundaryRhs(const std::string field_name, VecFun<SPACE_DIM> source_fun,
+                boost::shared_ptr<Range> ents_ptr = nullptr)
+      : AssemblyBoundaryEleOp(field_name, field_name,
+                              AssemblyBoundaryEleOp::OPROW, ents_ptr),
+        sourceFun(source_fun) {}
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &data) {
+
+    MoFEMFunctionBegin;
+
+    FTensor::Index<'i', SPACE_DIM> i;
+
+    const int nb_row_dofs = data.getN().size2() / 3;
+    locF.resize(nb_row_dofs, false);
+    locF.clear();
+
+    size_t nb_base_functions = data.getN().size2() / 3;
+
+    const double vol = getMeasure();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
+    auto t_row_base = data.getFTensor1N<3>();
+
+    const int nb_gauss_pts = data.getN().size1();
+
+    for (int gg = 0; gg != nb_gauss_pts;
+         gg++) { // nbIntegrationPts nb_gauss_pts
+      const double alpha = t_w * vol;
+      auto t_source = sourceFun(t_coords(0), t_coords(1), t_coords(2));
+
+      int rr = 0;
+      for (; rr != nb_row_dofs; ++rr) {
+        locF[rr] += alpha * t_row_base(i) * t_source(i);
+        ++t_row_base;
+      }
+      for (; rr < nb_base_functions; ++rr)
+        ++t_row_base;
+      ++t_w;
+      ++t_coords;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  VecFun<SPACE_DIM> sourceFun;
 };
 
 struct Magnetostatics {
@@ -238,8 +292,13 @@ MoFEMErrorCode Magnetostatics::setupProblem() {
   CHKERR simpleInterface->addBoundaryField("MAGNETIC_POTENTIAL", HCURL,
                                            DEMKOWICZ_JACOBI_BASE, 1);
 
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-my_order", &order, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder("MAGNETIC_POTENTIAL", order);
+
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-mu", &mu, PETSC_NULL);
+
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-epsilon", &epsilon,
+                               PETSC_NULL);
 
   CHKERR simpleInterface->setUp();
 
@@ -314,7 +373,7 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
       pipeline_mng->getOpDomainLhsPipeline(), {HCURL});
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpCurlCurl(
       "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
-      [](const double, const double, const double) { return 1.; }));
+      [](const double, const double, const double) { return 1. / mu; }));
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpStab(
       "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
       [](const double, const double, const double) { return epsilon / mu; }));
@@ -333,6 +392,8 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
 
   // Push Boundary operators to the Pipeline that is responsible for calculating
   // RHS
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpHOSetCovariantPiolaTransformOnFace3D(HCURL));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
       new OpBoundarySourceRhs("MAGNETIC_POTENTIAL", natural_fun,
                               boost::make_shared<Range>(naturalBcRange)));
@@ -395,6 +456,8 @@ MoFEMErrorCode Magnetostatics::outputResults() {
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getDomainRhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
 
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
@@ -421,6 +484,7 @@ MoFEMErrorCode Magnetostatics::outputResults() {
 
           OpPPMap::DataMapMat{{"MAGNETIC_POTENTIAL", field_val_ptr},
                               {"MAGNETIC_INDUCTION_FIELD", induction_ptr}},
+          //  {"MAGNETIC_INDUCTION_FIELD", induction_ptr}
 
           OpPPMap::DataMapMat{},
 
