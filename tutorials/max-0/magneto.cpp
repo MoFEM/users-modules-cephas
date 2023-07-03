@@ -103,8 +103,8 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
         for (; cc != nbCols / SPACE_DIM; cc++) {
           t_col_curl(i) = FTensor::levi_civita(j, i, k) * t_col_curl_base(j, k);
 
-          // locMat(rr, cc) += alpha * t_row_curl(i) * t_col_curl(i);
-          t_vec(l) += alpha * t_row_curl(i) * t_col_curl(i);
+          locMat(rr, cc) += alpha * t_row_curl(i) * t_col_curl(i);
+          // t_vec(l) += alpha * t_row_curl(i) * t_col_curl(i);
 
           ++t_col_curl_base;
           ++t_vec;
@@ -169,8 +169,8 @@ struct OpStab : public AssemblyDomainEleOp {
         int cc = 0;
         for (; cc != nbCols / SPACE_DIM; cc++) {
 
-          // locMat(rr, cc) += alpha * t_row_curl(i) * t_col_curl(i);
-          t_vec(l) += alpha * t_row_base(i) * t_col_base(i);
+          locMat(rr, cc) += alpha * t_row_base(i) * t_col_base(i);
+          // t_vec(l) += alpha * t_row_base(i) * t_col_base(i);
 
           ++t_col_base;
           ++t_vec;
@@ -253,22 +253,33 @@ MoFEMErrorCode Magnetostatics::boundaryCondition() {
 
   auto natural_bc = [&]() {
     Range boundary_entities;
-    auto bc_mng = mField.getInterface<BcManager>();
-    CHKERR bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
-                                          "MAGNETIC_POTENTIAL",
-                                          "MAGNETIC_POTENTIAL", 0, 0);
 
-    auto &bc_map = bc_mng->getBcMapByBlockName();
-    for (auto b : bc_map) {
-      if (std::regex_match(b.first, std::regex("(.*)NATURAL(.*)"))) {
-        boundary_entities.merge(*(b.second->getBcEntsPtr()));
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 9, "NATURALBC") == 0) {
+        Range faces;
+        CHKERR mField.get_moab().get_entities_by_type(bit->meshset, MBTRI,
+                                                      faces, true);
+        CHKERR mField.get_moab().get_adjacencies(
+            faces, 1, true, boundary_entities, moab::Interface::UNION);
+        boundary_entities.merge(faces);
       }
     }
-    // Add vertices to boundary entities
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
+    // auto bc_mng = mField.getInterface<BcManager>();
+    // CHKERR bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
+    //                                       "MAGNETIC_POTENTIAL",
+    //                                       "MAGNETIC_POTENTIAL", 0, 0);
+
+    // auto &bc_map = bc_mng->getBcMapByBlockName();
+    // for (auto b : bc_map) {
+    //   if (std::regex_match(b.first, std::regex("(.*)NATURAL(.*)"))) {
+    //     boundary_entities.merge(*(b.second->getBcEntsPtr()));
+    //   }
+    // }
+    // // Add vertices to boundary entities
+    // Range boundary_vertices;
+    // CHKERR mField.get_moab().get_connectivity(boundary_entities,
+    //                                           boundary_vertices, true);
+    // boundary_entities.merge(boundary_vertices);
 
     return boundary_entities;
   };
@@ -284,6 +295,18 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
+
+  // auto det_ptr = boost::make_shared<VectorDouble>();
+  // auto jac_ptr = boost::make_shared<MatrixDouble>();
+  // auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //     new OpCalculateHOJacForFace(jac_ptr));
+  // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //     new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
+  // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //     new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
+  // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //     new OpSetInvJacHcurlFace(inv_jac_ptr));
 
   // Push Domain operators to the Pipeline that is responsible for calculating
   // LHS
@@ -333,7 +356,7 @@ MoFEMErrorCode Magnetostatics::setIntegrationRules() {
   auto boundary_rule_rhs = [](int, int, int p) -> int { return 2 * p; };
 
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(boundary_rule_lhs);
-  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(boundary_rule_rhs);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(boundary_rule_rhs);
 
   MoFEMFunctionReturn(0);
 }
