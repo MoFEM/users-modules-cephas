@@ -41,6 +41,9 @@ using AssemblyBoundaryEleOp =
 //! [Boundary Operators]
 using OpBoundarySourceRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<3, 3>;
+
+using OpMassStab = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpMass<3, 3>;
 //! [Boundary Operators]
 
 int order = 2; ///< Order
@@ -72,8 +75,8 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
     const int nb_row_dofs = row_data.getN().size2() / 3;
     const int nb_col_dofs = col_data.getN().size2() / 3;
 
-    locMat.resize(nb_row_dofs, nb_col_dofs, false);
-    locMat.clear();
+    // locMat.resize(nb_row_dofs, nb_col_dofs, false);
+    // locMat.clear();
 
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Index<'j', SPACE_DIM> j;
@@ -85,7 +88,7 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
     auto t_row_curl_base = row_data.getFTensor2DiffN<3, SPACE_DIM>();
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
-    const int nb_gauss_pts = row_data.getN().size1();
+    const int nb_gauss_pts = getGaussPts().size2();
 
     for (int gg = 0; gg != nb_gauss_pts;
          gg++) { // nb_gauss_pts nbIntegrationPts
@@ -94,25 +97,31 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
           t_w * vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
 
       FTensor::Tensor1<double, SPACE_DIM> t_row_curl;
+
+      // loop over rows base functions
+      auto a_mat_ptr = &*locMat.data().begin();
+
       int rr = 0;
-      for (; rr != nb_row_dofs; ++rr) {
+      for (; rr != nbRows; ++rr) {
         t_row_curl(i) = FTensor::levi_civita(j, i, k) * t_row_curl_base(j, k);
 
         FTensor::Tensor1<double, SPACE_DIM> t_col_curl;
 
-        FTensor::Tensor0<double *> t_local_mat(&locMat(rr, 0), 1);
+        // FTensor::Tensor0<double *> t_local_mat(&locMat(rr, 0), 1);
 
         auto t_col_curl_base = col_data.getFTensor2DiffN<3, SPACE_DIM>(gg, 0);
 
         int cc = 0;
-        for (; cc != nb_col_dofs; cc++) {
+        for (; cc != nbCols; cc++) {
           t_col_curl(i) = FTensor::levi_civita(j, i, k) * t_col_curl_base(j, k);
 
           // locMat(rr, cc) += alpha * t_row_curl(i) * t_col_curl(i);
-          t_local_mat += alpha * t_row_curl(i) * t_col_curl(i);
+          // t_local_mat += alpha * t_row_curl(i) * t_col_curl(i);
+          (*a_mat_ptr) += alpha * (t_row_curl(i) * t_col_curl(i));
 
           ++t_col_curl_base;
-          ++t_local_mat;
+          // ++t_local_mat;
+          ++a_mat_ptr;
         }
         ++t_row_curl_base;
       }
@@ -146,8 +155,8 @@ struct OpStab : public AssemblyDomainEleOp {
     const int nb_row_dofs = row_data.getN().size2() / 3;
     const int nb_col_dofs = col_data.getN().size2() / 3;
 
-    locMat.resize(nb_row_dofs, nb_col_dofs, false);
-    locMat.clear();
+    // locMat.resize(nb_row_dofs, nb_col_dofs, false);
+    // locMat.clear();
 
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Index<'l', SPACE_DIM> l;
@@ -157,7 +166,7 @@ struct OpStab : public AssemblyDomainEleOp {
     auto t_row_base = row_data.getFTensor1N<3>();
     auto t_coords = getFTensor1CoordsAtGaussPts();
 
-    const int nb_gauss_pts = row_data.getN().size1();
+    const int nb_gauss_pts = getGaussPts().size2();
 
     for (int gg = 0; gg != nb_gauss_pts;
          gg++) { // nb_gauss_pts nbIntegrationPts
@@ -165,21 +174,26 @@ struct OpStab : public AssemblyDomainEleOp {
       const double alpha =
           t_w * vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
 
+      // loop over rows base functions
+      auto a_mat_ptr = &*locMat.data().begin();
+
       int rr = 0;
-      for (; rr != nb_row_dofs; ++rr) {
+      for (; rr != nbRows; ++rr) {
 
         auto t_col_base = col_data.getFTensor1N<3>();
 
         FTensor::Tensor0<double *> t_local_mat(&locMat(rr, 0), 1);
 
         int cc = 0;
-        for (; cc != nb_col_dofs; cc++) {
+        for (; cc != nbCols; cc++) {
 
           // locMat(rr, cc) += alpha * t_row_base(i) * t_col_base(i);
-          t_local_mat += alpha * t_row_base(i) * t_col_base(i);
+          // t_local_mat += alpha * t_row_base(i) * t_col_base(i);
+          *a_mat_ptr += alpha * t_row_base(i) * t_col_base(i);
 
           ++t_col_base;
-          ++t_local_mat;
+          ++a_mat_ptr;
+          // ++t_local_mat;
         }
         ++t_row_base;
       }
@@ -219,7 +233,7 @@ struct OpBoundaryRhs : public AssemblyBoundaryEleOp {
     auto t_coords = getFTensor1CoordsAtGaussPts();
     auto t_row_base = data.getFTensor1N<3>();
 
-    const int nb_gauss_pts = data.getN().size1();
+    const int nb_gauss_pts = getGaussPts().size2();
 
     for (int gg = 0; gg != nb_gauss_pts;
          gg++) { // nbIntegrationPts nb_gauss_pts
@@ -374,7 +388,11 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpCurlCurl(
       "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
       [](const double, const double, const double) { return 1. / mu; }));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpStab(
+  // pipeline_mng->getOpDomainLhsPipeline().push_back(new OpStab(
+  //     "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
+  //     [](const double, const double, const double) { return epsilon / mu;
+  //     }));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMassStab(
       "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
       [](const double, const double, const double) { return epsilon / mu; }));
 
@@ -498,7 +516,7 @@ MoFEMErrorCode Magnetostatics::outputResults() {
   //     blockData, post_proc.getPostProcMesh(), post_proc.getMapGaussPts()));
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_result.h5m");
+  CHKERR post_proc_fe->writeFile("out_magneto_result.h5m");
 
   MoFEMFunctionReturn(0);
 }
