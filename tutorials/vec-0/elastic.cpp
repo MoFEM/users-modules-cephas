@@ -82,6 +82,18 @@ struct Example {
 private:
   MoFEM::Interface &mField;
 
+  boost::shared_ptr<FEMethod> preProcEssentialRhsPtr =
+      boost::make_shared<FEMethod>();
+  boost::shared_ptr<FEMethod> postProcEssentialRhsPtr =
+      boost::make_shared<FEMethod>();
+  boost::shared_ptr<FEMethod> postProcEssentialLhsPtr =
+      boost::make_shared<FEMethod>();
+
+  boost::shared_ptr<FEMethod> preProcSchurLhsPtr =
+      boost::make_shared<FEMethod>();
+  boost::shared_ptr<FEMethod> postProcSchurLhsPtr =
+      boost::make_shared<FEMethod>();
+
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode boundaryCondition();
@@ -330,23 +342,21 @@ MoFEMErrorCode Example::boundaryCondition() {
 
   // Essential boundary condition.
   auto get_pre_proc_hook = [&]() {
-    return EssentialPreProc<DisplacementCubitBcData>(mField,
-                                                     pip->getDomainRhsFE(), {});
+    return EssentialPreProc<DisplacementCubitBcData>(
+        mField, preProcEssentialRhsPtr, {});
   };
-  pip->getDomainRhsFE()->preProcessHook = get_pre_proc_hook();
-
+  preProcEssentialRhsPtr->preProcessHook = get_pre_proc_hook();
 
   auto get_post_proc_hook_rhs = [&]() {
     return EssentialPreProcRhs<DisplacementCubitBcData>(
-        mField, pip->getBoundaryRhsFE(), 1.);
+        mField, postProcEssentialRhsPtr, 1.);
   };
   auto get_post_proc_hook_lhs = [&]() {
     return EssentialPreProcLhs<DisplacementCubitBcData>(
-        mField, pip->getBoundaryLhsFE(), 1.);
+        mField, postProcEssentialLhsPtr, 1.);
   };
-
-  pip->getBoundaryRhsFE()->postProcessHook = get_post_proc_hook_rhs();
-  pip->getBoundaryLhsFE()->postProcessHook = get_post_proc_hook_lhs();
+  postProcEssentialRhsPtr->postProcessHook = get_post_proc_hook_rhs();
+  postProcEssentialLhsPtr->postProcessHook = get_post_proc_hook_lhs();
 
   MoFEMFunctionReturn(0);
 }
@@ -434,6 +444,22 @@ MoFEMErrorCode Example::solveSystem() {
   auto D = createDMVector(dm);
   auto F = vectorDuplicate(D);
 
+  auto add_extra_finite_elements_to_ksp_solver_pipelines = [&]() {
+    MoFEMFunctionBegin;
+    // This is low level pushing finite elements (pipelines) to solver
+    auto ksp_ctx_ptr = getDMKspCtx(simple->getDM());
+    ksp_ctx_ptr->get_preProcess_to_do_Rhs().push_front(preProcEssentialRhsPtr);
+    ksp_ctx_ptr->get_postProcess_to_do_Rhs().push_back(postProcEssentialRhsPtr);
+    ksp_ctx_ptr->get_postProcess_to_do_Mat().push_back(postProcEssentialLhsPtr);
+    // Do nothing with Schur complement, at that stage we do not now if Schur
+    // solver will be used.
+    preProcSchurLhsPtr->preProcessHook = []() { return 0; };
+    postProcSchurLhsPtr->postProcessHook = []() { return 0; };
+    ksp_ctx_ptr->get_preProcess_to_do_Mat().push_front(preProcSchurLhsPtr);
+    ksp_ctx_ptr->get_postProcess_to_do_Mat().push_back(postProcSchurLhsPtr);
+    MoFEMFunctionReturn(0);
+  };
+
   auto setup_and_solve = [&]() {
     MoFEMFunctionBegin;
     BOOST_LOG_SCOPED_THREAD_ATTR("Timeline", attrs::timer());
@@ -453,41 +479,37 @@ MoFEMErrorCode Example::solveSystem() {
     auto schur_ptr = SetUpSchur::createSetUpSchur(mField);
     CHKERR schur_ptr->setUp(solver);
 
-    pip->getDomainLhsFE()->preProcessHook = [schur_ptr]() {
+    CHKERR add_extra_finite_elements_to_ksp_solver_pipelines();
+
+    preProcSchurLhsPtr->preProcessHook = [schur_ptr]() {
       MoFEMFunctionBegin;
       if (schur_ptr)
         CHKERR schur_ptr->preProc();
       MoFEMFunctionReturn(0);
     };
 
-    auto get_post_proc_hook_lhs_B = [&]() {
-      return EssentialPreProcLhs<DisplacementCubitBcData>(
-          mField, pip->getBoundaryLhsFE(), 1);
-    };
-
     auto get_post_proc_hook_lhs_S = [&](auto schur_ptr) {
       return EssentialPreProcLhs<DisplacementCubitBcData>(
-          mField, pip->getBoundaryLhsFE(), 1, schur_ptr->getSchur(),
+          mField, postProcSchurLhsPtr, 1, schur_ptr->getSchur(),
           schur_ptr->getSchurAO());
     };
 
-    pip->getBoundaryLhsFE()->postProcessHook =
-        [schur_ptr, get_post_proc_hook_lhs_B, get_post_proc_hook_lhs_S]() {
-          MoFEMFunctionBegin;
-          CHKERR get_post_proc_hook_lhs_B()();
-          if (schur_ptr->getSchur()) {
-            auto S = schur_ptr->getSchur();
-            CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
-            CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-            CHKERR get_post_proc_hook_lhs_S(schur_ptr)();
-          }
-          if (schur_ptr)
-            CHKERR schur_ptr->postProc();
-          MoFEMFunctionReturn(0);
-        };
+    postProcSchurLhsPtr->postProcessHook = [schur_ptr,
+                                            get_post_proc_hook_lhs_S]() {
+      MoFEMFunctionBegin;
+      if (auto S = schur_ptr->getSchur()) {
+        CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
+        CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
+        CHKERR get_post_proc_hook_lhs_S(schur_ptr)();
+      }
+      if (schur_ptr)
+        CHKERR schur_ptr->postProc();
+      MoFEMFunctionReturn(0);
+    };
 
     CHKERR setup_and_solve();
   } else {
+    CHKERR add_extra_finite_elements_to_ksp_solver_pipelines();
     CHKERR setup_and_solve();
   }
 
@@ -803,7 +825,7 @@ struct SetUpSchurImpl : public SetUpSchur {
   SmartPetscObj<Mat> getSchur() { return S; }
   SmartPetscObj<AO> getSchurAO() {
     return createAOMappingIS(getDMSubData(subDM)->getSmartRowIs(), PETSC_NULL);
-  } 
+  }
 
 private:
   MoFEMErrorCode setEntities();
