@@ -46,7 +46,7 @@ struct Example {
 private:
   MoFEM::Interface &mField;
 
-  boost::shared_ptr<FEMethod> preProcEssentialRhsPtr =
+  boost::shared_ptr<FEMethod> preProcEssentialPtr =
       boost::make_shared<FEMethod>();
   boost::shared_ptr<FEMethod> postProcEssentialRhsPtr =
       boost::make_shared<FEMethod>();
@@ -151,15 +151,21 @@ MoFEMErrorCode Example::boundaryCondition() {
       "BODY_FORCE", Sev::inform);
 
   // Essential BC
-  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Y",
+                                           "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Z",
+                                           "U", 2, 2);
+  CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
 
   auto get_bc_hook_rhs = [&]() {
-    EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainRhsFE(), {time_scale}, false);
+    EssentialPreProc<DisplacementCubitBcData> hook(mField, preProcEssentialPtr,
+                                                   {time_scale}, false);
     return hook;
   };
-  preProcEssentialRhsPtr->preProcessHook = get_bc_hook_rhs();
+  preProcEssentialPtr->preProcessHook = get_bc_hook_rhs();
 
   auto get_bc_hook_lhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
@@ -177,9 +183,6 @@ MoFEMErrorCode Example::boundaryCondition() {
   };
   postProcEssentialRhsPtr->postProcessHook = get_post_proc_hook_rhs();
   postProcEssentialLhsPtr->postProcessHook = get_post_proc_hook_lhs();
-
-  pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
-  pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
 
   MoFEMFunctionReturn(0);
 }
@@ -286,6 +289,21 @@ MoFEMErrorCode Example::solveSystem() {
     return post_proc_fe;
   };
 
+  auto add_extra_finite_elements_to_ksp_solver_pipelines = [&]() {
+    MoFEMFunctionBegin;
+    // This is low level pushing finite elements (pipelines) to solver
+    auto ts_ctx_ptr = getDMTsCtx(simple->getDM());
+    ts_ctx_ptr->getPreProcessIFunction().push_front(preProcEssentialPtr);
+    ts_ctx_ptr->getPreProcessIJacobian().push_front(preProcEssentialPtr);
+    ts_ctx_ptr->getPostProcessIFunction().push_back(postProcEssentialRhsPtr);
+    ts_ctx_ptr->getPostProcessIJacobian().push_back(postProcEssentialLhsPtr);
+    MoFEMFunctionReturn(0);
+  };
+
+  // Add extra finite elements to SNES solver pipelines to resolve essential
+  // boundary conditions
+  CHKERR add_extra_finite_elements_to_ksp_solver_pipelines();
+
   auto create_monitor_fe = [dm](auto &&post_proc_fe) {
     return boost::make_shared<Monitor>(dm, post_proc_fe);
   };
@@ -295,6 +313,7 @@ MoFEMErrorCode Example::solveSystem() {
   auto monitor_ptr = create_monitor_fe(create_post_proc_fe());
   CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                              null_fe, monitor_ptr);
+
 
 
   // Set time solver
@@ -311,7 +330,7 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR TSGetTime(ts, &ftime);
 
   PetscInt steps, snesfails, rejects, nonlinits, linits;
-  CHKERR TSGetTimeStepNumber(ts, &steps);
+  CHKERR TSGetStepNumber(ts, &steps);
   CHKERR TSGetSNESFailures(ts, &snesfails);
   CHKERR TSGetStepRejections(ts, &rejects);
   CHKERR TSGetSNESIterations(ts, &nonlinits);
@@ -346,10 +365,10 @@ MoFEMErrorCode Example::outputResults() {
       regression_value = 1.02789;
       break;
     case 2:
-      regression_value = 1.62454;
+      regression_value = 1.8841e+00;
       break;
     case 3:
-      regression_value = 1.62454;
+      regression_value = 1.8841e+00;
       break;
 
     default:
@@ -357,8 +376,9 @@ MoFEMErrorCode Example::outputResults() {
       break;
     }
     if (fabs(nrm2 - regression_value) > 1e-2)
-      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-              "Regression test field; wrong norm value.");
+      SETERRQ2(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+               "Regression test field; wrong norm value. %6.4e != %6.4e", nrm2,
+               regression_value);
   }
   MoFEMFunctionReturn(0);
 }
