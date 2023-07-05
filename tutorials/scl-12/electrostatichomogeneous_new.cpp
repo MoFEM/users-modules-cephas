@@ -7,13 +7,44 @@
 #ifndef EXECUTABLE_DIMENSION
 #define EXECUTABLE_DIMENSION 3
 #endif
+
+#include <stdlib.h>
+#include <BasicFiniteElements.hpp>
+#include <PoissonOperators.hpp>
 #include <MoFEM.hpp>
 
 constexpr auto domainField = "POTENTIAL";
 constexpr int BASE_DIM = 1;
 constexpr int FIELD_DIM = 1;
+
 constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;
-using namespace MoFEM;
+///
+// constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;/////////working only for 3D>>CMakeList problem
+// using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
+// using IntEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
+// using DomainEleOp = DomainEle::UserDataOperator;
+// using IntEleOp = IntEle::UserDataOperator;
+// using namespace MoFEM;
+// template <int SPACE_DIM> struct ElementsAndOps {};
+// template <> struct ElementsAndOps<2> {
+// using DomainEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
+// using IntEle= MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator;
+// };
+// template <> struct ElementsAndOps<3> {
+// using DomainEle =MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator;
+// using IntEle= MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
+// };
+// template <int SPACE_DIM>
+// using DomainEleOp = typename ElementsAndOps<SPACE_DIM>::DomainEleOp;
+// template <int SPACE_DIM>
+// using IntEleOp = typename ElementsAndOps<SPACE_DIM>::IntEleOp;
+// using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
+// using OpEdgeEle = MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator;
+
+// /////////////////////
+
+
+        // ///////////////////////
 
 using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
 using IntEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
@@ -34,19 +65,45 @@ template <> struct intPostproc<3> {
 
 using intPostProcElementForcesAndSourcesCore = intPostproc<SPACE_DIM>::intEle;
 
-using OpDomainLhsMatrixK = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<BASE_DIM, FIELD_DIM, SPACE_DIM>;
-using OpInterfaceRhsVectorF = FormsIntegrators<IntEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, FIELD_DIM>;
+// template <int SPACE_DIM> struct PostProcEle {};
+// // template <> struct PostProcEle<2> {
+// using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+// // };
+// // template <> struct PostProcEle<3> {
+// using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+// // };
+// template <int SPACE_DIM>
+// struct BlockData {
+//     int iD;
+//     double sigma;
+//     double epsPermit;
+//     Range blockEnts;
+// };
+// // auto tets  = blockEnts.subset_by_dimension(SPACE_DIM-1);
+
 static char help[] = "...\n\n";
 
 template <int SPACE_DIM>struct BlockData {
   int iD;
   double sigma;
   double epsPermit;
-  Range blockInterfaces; 
-  Range blockDomains;
+  Range blockFaces; // in 2d -> edges, in 3d ->tris and quads
+  Range blockVolumes;
 };
+// template <>struct BlockData<2> {
+//   int iD;
+//   double sigma;
+//   double epsPermit;
+//   Range blockFaces; // in 2d -> edges, in 3d ->tris and quads
+//   Range blockVolumes; // in 2d -> tris and quads, in 3d ->tets or hex
+// };
+// template <>struct BlockData<3> {
+//   int iD;
+//   double sigma;
+//   double epsPermit;
+//   Range blockFaces; // in 2d that is edges, in 3d that is tris and quads
+//   Range blockVolumes; // in 2d it will be tris and quads, in 3d this is tets or hex
+// };
 template <int SPACE_DIM> struct DataAtIntegrationPts {
 
   SmartPetscObj<Vec> petscVec;
@@ -56,6 +113,141 @@ template <int SPACE_DIM> struct DataAtIntegrationPts {
     blockPermittivity = 0;
     chrgDens = 0;
   }
+};
+
+template <int SPACE_DIM> struct OpDomainLhsMatrixK : public DomainEleOp {
+public:
+  bool sYmm;
+  OpDomainLhsMatrixK(
+      std::string row_field_name, std::string col_field_name,
+      boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr)
+      : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
+        commonDataPtr(common_data_ptr) {
+    sYmm = true;
+  }
+
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    const int nb_row_dofs = row_data.getIndices().size();
+    const int nb_col_dofs = col_data.getIndices().size();
+    FTensor::Index<'i', SPACE_DIM> i;
+
+    if (nb_row_dofs && nb_col_dofs) {
+
+      locLhs.resize(nb_row_dofs, nb_col_dofs, false);
+      locLhs.clear();
+
+      // get element area
+      const double volume = getMeasure();
+
+      // get number of integration points
+      const int nb_integration_points = getGaussPts().size2();
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
+
+      // get derivatives of base functions on row
+      auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
+
+      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
+      for (int gg = 0; gg != nb_integration_points; gg++) {
+        const double a = t_w * volume;
+
+        for (int rr = 0; rr != nb_row_dofs; ++rr) {
+          // get derivatives of base functions on column
+          auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
+
+          for (int cc = 0; cc != nb_col_dofs; cc++) {
+            locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a *
+                              commonDataPtr->blockPermittivity;
+
+            // move to the derivatives of the next base functions on column
+            ++t_col_diff_base;
+          }
+
+          // move to the derivatives of the next base functions on row
+          ++t_row_diff_base;
+        }
+
+        // move to the weight of the next integration point
+        ++t_w;
+      }
+
+      // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
+      CHKERR MatSetValues(getKSPB(), row_data, col_data, &locLhs(0, 0),
+                          ADD_VALUES);
+      if (row_side != col_side || row_type != col_type) {
+        transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
+        noalias(transLocLhs) = trans(locLhs);
+        CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
+                            ADD_VALUES);
+      }
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  MatrixDouble locLhs, transLocLhs;
+  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
+};
+template <int SPACE_DIM> struct OpInterfaceRhsVectorF : public IntEleOp {
+public:
+  OpInterfaceRhsVectorF(
+      std::string field_name,
+      boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr)
+      : IntEleOp(field_name, IntEleOp::OPROW), commonDataPtr(common_data_ptr) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    const int nb_dofs = data.getIndices().size();
+
+    if (nb_dofs) {
+      locRhs.resize(nb_dofs, false);
+      locRhs.clear();
+
+      // get element area
+      const double volumee = getMeasure();
+
+      // get number of integration points
+      const int nb_integration_points = getGaussPts().size2();
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
+
+      // get base function
+      auto t_base = data.getFTensor0N();
+
+      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL VECTOR
+      for (int gg = 0; gg != nb_integration_points; gg++) {
+        const double a = t_w * volumee;
+        // double y = getGaussPts()(1, gg);
+        double y = getCoordsAtGaussPts()(gg, 1);
+        for (int rr = 0; rr != nb_dofs; rr++) {
+          locRhs[rr] += t_base * a * commonDataPtr->chrgDens;
+
+          ++t_base;
+        }
+
+        // move to the weight of the next integration point
+        ++t_w;
+      }
+
+      // FILL VALUES OF LOCAL VECTOR ENTRIES TO THE GLOBAL VECTOR
+
+      // Ignoring DOFs on boundary (index -1)
+      CHKERR VecSetOption(getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
+      CHKERR VecSetValues(getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  VectorDouble locRhs;
+  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
 };
 
 template <int SPACE_DIM>
@@ -110,7 +302,7 @@ struct OpBlockChargeDensity : public IntEleOp {
                         EntData &col_data) {
     MoFEMFunctionBegin;
     for (const auto &m : *intBlockSetsPtr) {
-      if (m.second.blockInterfaces.find(getFEEntityHandle()) != m.second.blockInterfaces.end()) {
+      if (m.second.blockFaces.find(getFEEntityHandle()) != m.second.blockFaces.end()) {
         commonDataPtr->chrgDens = m.second.sigma;
       }
     }
@@ -141,7 +333,7 @@ template <int SPACE_DIM> struct OpBlockPermittivity : public DomainEleOp {
                         EntitiesFieldData::EntData &col_data) {
     MoFEMFunctionBegin;
     for (auto &m : (*permBlockSetsPtr)) {
-      if (m.second.blockDomains.find(getFEEntityHandle()) != m.second.blockDomains.end()) {
+      if (m.second.blockVolumes.find(getFEEntityHandle()) != m.second.blockVolumes.end()) {
         commonDataPtr->blockPermittivity = m.second.epsPermit;
       }
     }
@@ -216,8 +408,8 @@ perm_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
       auto &block_data = (*perm_block_sets_ptr)[id];
 
       CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM,
-                                                         block_data.blockDomains, true);
-      electrIcs.merge(block_data.blockDomains);
+                                                         block_data.blockVolumes, true);
+      electrIcs.merge(block_data.blockVolumes);
 
       std::vector<double> attributes;
       bit->getAttributes(attributes);
@@ -238,8 +430,8 @@ int_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
       auto &block_data = (*int_block_sets_ptr)[id];
 
       CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM -1,
-                                                         block_data.blockInterfaces, true);
-      interfIcs.merge(block_data.blockInterfaces);
+                                                         block_data.blockFaces, true);
+      interfIcs.merge(block_data.blockFaces);
 
       std::vector<double> attributes;
       bit->getAttributes(attributes);
@@ -304,14 +496,13 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
   };
 
   add_domain_lhs_ops(pipeline_mng->getOpDomainLhsPipeline());
-  auto epsilon = [&](const double, const double, const double) { return common_data_ptr->blockPermittivity; };
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK(domainField, domainField,
-                                          epsilon));
+        new OpDomainLhsMatrixK<SPACE_DIM>(domainField, domainField,
+                                          common_data_ptr));
   }
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
@@ -324,6 +515,9 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
     };
 
     auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
+      // using DomainEle =
+      //     PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
+      // using DomainEleOp = DomainEle::UserDataOperator;
       using OpInternal =
           FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
               GAUSS>::OpGradTimesTensor<BASE_DIM, FIELD_DIM, SPACE_DIM>;
@@ -343,9 +537,16 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
     calculate_residual_from_set_values_on_bc(
         pipeline_mng->getOpDomainRhsPipeline());
 
+  //  if (SPACE_DIM == 2 ) {
+  //   interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
+  //       new EdgeElementForcesAndSourcesCore(mField));}      
+  //  if (SPACE_DIM == 3){
+  //   interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
+  //       new FaceElementForcesAndSourcesCore(mField));}
 
   interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
     new intPostProcElementForcesAndSourcesCore(mField));
+    
 
 
     {
@@ -353,10 +554,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
           new OpBlockChargeDensity<SPACE_DIM>(common_data_ptr,
                                               int_block_sets_ptr, domainField));
 
-  auto sIgma = [&](const double, const double, const double) { return common_data_ptr->chrgDens; };
-
       interface_rhs_fe->getOpPtrVector().push_back(
-          new OpInterfaceRhsVectorF(domainField, sIgma));
+          new OpInterfaceRhsVectorF<SPACE_DIM>(domainField, common_data_ptr));
     }
 
 
