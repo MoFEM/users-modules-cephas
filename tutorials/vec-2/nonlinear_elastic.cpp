@@ -46,6 +46,13 @@ struct Example {
 private:
   MoFEM::Interface &mField;
 
+  boost::shared_ptr<FEMethod> preProcEssentialRhsPtr =
+      boost::make_shared<FEMethod>();
+  boost::shared_ptr<FEMethod> postProcEssentialRhsPtr =
+      boost::make_shared<FEMethod>();
+  boost::shared_ptr<FEMethod> postProcEssentialLhsPtr =
+      boost::make_shared<FEMethod>();
+
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode boundaryCondition();
@@ -152,12 +159,24 @@ MoFEMErrorCode Example::boundaryCondition() {
         mField, pipeline_mng->getDomainRhsFE(), {time_scale}, false);
     return hook;
   };
+  preProcEssentialRhsPtr->preProcessHook = get_bc_hook_rhs();
 
   auto get_bc_hook_lhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
         mField, pipeline_mng->getDomainLhsFE(), {time_scale}, false);
     return hook;
   };
+
+  auto get_post_proc_hook_rhs = [&]() {
+    return EssentialPreProcRhs<DisplacementCubitBcData>(
+        mField, postProcEssentialRhsPtr, 1.);
+  };
+  auto get_post_proc_hook_lhs = [&]() {
+    return EssentialPreProcLhs<DisplacementCubitBcData>(
+        mField, postProcEssentialLhsPtr, 1.);
+  };
+  postProcEssentialRhsPtr->postProcessHook = get_post_proc_hook_rhs();
+  postProcEssentialLhsPtr->postProcessHook = get_post_proc_hook_lhs();
 
   pipeline_mng->getDomainRhsFE()->preProcessHook = get_bc_hook_rhs();
   pipeline_mng->getDomainLhsFE()->preProcessHook = get_bc_hook_lhs();
@@ -230,45 +249,55 @@ MoFEMErrorCode Example::solveSystem() {
   auto ts = pipeline_mng->createTSIM();
 
   // Setup postprocessing
-  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+  auto create_post_proc_fe = [dm, this]() {
+    auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
 
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      post_proc_fe->getOpPtrVector(), {H1});
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        post_proc_fe->getOpPtrVector(), {H1});
 
-  auto common_ptr = commonDataFactory<SPACE_DIM, GAUSS, DomainEleOp>(
-      mField, post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC", Sev::inform);
+    auto common_ptr = commonDataFactory<SPACE_DIM, GAUSS, DomainEleOp>(
+        mField, post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC",
+        Sev::inform);
 
-  auto u_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
-  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-  post_proc_fe->getOpPtrVector().push_back(
+    post_proc_fe->getOpPtrVector().push_back(
 
-      new OpPPMap(
+        new OpPPMap(
 
-          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-          {},
+            {},
 
-          {{"U", u_ptr}},
+            {{"U", u_ptr}},
 
-          {{"GRAD", common_ptr->matGradPtr},
-           {"FIRST_PIOLA", common_ptr->getMatFirstPiolaStress()}},
+            {{"GRAD", common_ptr->matGradPtr},
+             {"FIRST_PIOLA", common_ptr->getMatFirstPiolaStress()}},
 
-          {}
+            {}
 
-          )
+            )
 
-  );
+    );
+    return post_proc_fe;
+  };
 
-  // Add monitor to time solver
+  auto create_monitor_fe = [dm](auto &&post_proc_fe) {
+    return boost::make_shared<Monitor>(dm, post_proc_fe);
+  };
+
+  // Set monitor which postprocessing results and saves them to the hard drive
   boost::shared_ptr<FEMethod> null_fe;
-  auto monitor_ptr = boost::make_shared<Monitor>(dm, post_proc_fe);
+  auto monitor_ptr = create_monitor_fe(create_post_proc_fe());
   CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                              null_fe, monitor_ptr);
 
+
+  // Set time solver
   double ftime = 1;
   CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
