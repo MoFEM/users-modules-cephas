@@ -340,6 +340,27 @@ MoFEMErrorCode Contact::bC() {
   boundaryMarker =
       bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE_"});
 
+  // Add boundary condition scaling
+  auto time_scale = boost::make_shared<TimeScale>();
+
+  auto get_bc_hook_rhs = [&]() {
+    EssentialPreProc<DisplacementCubitBcData> hook(mField, preProcEssentialPtr,
+                                                   {time_scale}, false);
+    return hook;
+  };
+  preProcEssentialPtr->preProcessHook = get_bc_hook_rhs();
+
+  auto get_post_proc_hook_rhs = [&]() {
+    return EssentialPreProcRhs<DisplacementCubitBcData>(
+        mField, postProcEssentialRhsPtr, 1.);
+  };
+  auto get_post_proc_hook_lhs = [&]() {
+    return EssentialPreProcLhs<DisplacementCubitBcData>(
+        mField, postProcEssentialLhsPtr, 1.);
+  };
+  postProcEssentialRhsPtr->postProcessHook = get_post_proc_hook_rhs();
+  postProcEssentialLhsPtr->postProcessHook = get_post_proc_hook_lhs();
+
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -560,34 +581,14 @@ MoFEMErrorCode Contact::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  auto set_fieldsplit_preconditioner = [&](auto solver) {
+  auto add_extra_finite_elements_to_ksp_solver_pipelines = [&]() {
     MoFEMFunctionBegin;
-
-    SNES snes;
-    CHKERR TSGetSNES(solver, &snes);
-    KSP ksp;
-    CHKERR SNESGetKSP(snes, &ksp);
-    PC pc;
-    CHKERR KSPGetPC(ksp, &pc);
-    PetscBool is_pcfs = PETSC_FALSE;
-    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
-
-    // Setup fieldsplit (block) solver - optional: yes/no
-    if (is_pcfs == PETSC_TRUE) {
-      auto bc_mng = mField.getInterface<BcManager>();
-      auto name_prb = simple->getProblemName();
-      auto is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_X", "U", 0, 0);
-      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Y", "U", 1, 1, is_all_bc);
-      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Z", "U", 2, 2, is_all_bc);
-      is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_ALL", "U", 0, 2, is_all_bc);
-      int is_all_bc_size;
-      CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
-      MOFEM_LOG("CONTACT", Sev::inform)
-          << "Field split block size " << is_all_bc_size;
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
-                               is_all_bc); // boundary block
-    }
-
+    // This is low level pushing finite elements (pipelines) to solver
+    auto ts_ctx_ptr = getDMTsCtx(simple->getDM());
+    ts_ctx_ptr->getPreProcessIFunction().push_front(preProcEssentialPtr);
+    ts_ctx_ptr->getPreProcessIJacobian().push_front(preProcEssentialPtr);
+    ts_ctx_ptr->getPostProcessIFunction().push_back(postProcEssentialRhsPtr);
+    ts_ctx_ptr->getPostProcessIJacobian().push_back(postProcEssentialLhsPtr);
     MoFEMFunctionReturn(0);
   };
 
@@ -601,6 +602,10 @@ MoFEMErrorCode Contact::tsSolve() {
   if (SPACE_DIM == 3)
     uZScatter = scatter_create(D, 2);
 
+  // Add extra finite elements to SNES solver pipelines to resolve essential
+  // boundary conditions
+  CHKERR add_extra_finite_elements_to_ksp_solver_pipelines();
+
   if (is_quasi_static) {
     auto solver = pip_mng->createTSIM();
     auto D = createDMVector(dm);
@@ -608,7 +613,6 @@ MoFEMErrorCode Contact::tsSolve() {
     CHKERR set_time_monitor(dm, solver);
     CHKERR TSSetSolution(solver, D);
     CHKERR TSSetFromOptions(solver);
-    CHKERR set_fieldsplit_preconditioner(solver);
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
   } else {
@@ -620,7 +624,6 @@ MoFEMErrorCode Contact::tsSolve() {
     CHKERR set_time_monitor(dm, solver);
     CHKERR TS2SetSolution(solver, D, DD);
     CHKERR TSSetFromOptions(solver);
-    CHKERR set_fieldsplit_preconditioner(solver);
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
   }
