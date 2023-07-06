@@ -167,12 +167,6 @@ MoFEMErrorCode Example::boundaryCondition() {
   };
   preProcEssentialPtr->preProcessHook = get_bc_hook_rhs();
 
-  auto get_bc_hook_lhs = [&]() {
-    EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainLhsFE(), {time_scale}, false);
-    return hook;
-  };
-
   auto get_post_proc_hook_rhs = [&]() {
     return EssentialPreProcRhs<DisplacementCubitBcData>(
         mField, postProcEssentialRhsPtr, 1.);
