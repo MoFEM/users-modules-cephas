@@ -16,7 +16,8 @@ template <> struct ElementsAndOps<3> {
   using BoundaryEle = PipelineManager::FaceEle;
 };
 
-constexpr int SPACE_DIM = 2;
+constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;
+
 constexpr int BASE_DIM = 3;
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType I =
@@ -42,15 +43,15 @@ using OpDomainSourceRhs = FormsIntegrators<DomainEleOp>::Assembly<
 
 //! [Boundary Operators]
 using OpBoundarySourceRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, SPACE_DIM>;
+    PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, 3>;
 
 using OpMassStab = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpMass<BASE_DIM, SPACE_DIM>;
+    GAUSS>::OpMass<BASE_DIM, 3>;
 //! [Boundary Operators]
 
 int order = 3; ///< Order
 // material parameters
-double mu = 5000.;    ///< magnetic constant  N / A2; 5000 2D
+double mu = 1.;       ///< magnetic constant  N / A2; 5000 2D
 double epsilon = 0.1; ///< regularization paramater
 double currentDensity = 0.5;
 
@@ -74,10 +75,9 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
                            DataForcesAndSourcesCore::EntData &col_data) {
 
     MoFEMFunctionBegin;
-    FTensor::Index<'i', SPACE_DIM> i;
+    FTensor::Index<'i', 3> i;
     FTensor::Index<'j', SPACE_DIM> j;
     FTensor::Index<'k', SPACE_DIM> k;
-    FTensor::Index<'l', SPACE_DIM> l;
     const double vol = getMeasure();
     size_t nb_base_functions = row_data.getN().size2() / 3;
     auto t_w = getFTensor0IntegrationWeight();
@@ -89,7 +89,7 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
       const double alpha =
           t_w * vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
 
-      FTensor::Tensor1<double, SPACE_DIM> t_row_curl;
+      FTensor::Tensor1<double, 3> t_row_curl;
 
       // loop over rows base functions
       auto a_mat_ptr = &*locMat.data().begin();
@@ -98,14 +98,15 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
       for (; rr != nbRows; ++rr) {
         t_row_curl(i) = FTensor::levi_civita(j, i, k) * t_row_curl_base(j, k);
 
-        FTensor::Tensor1<double, SPACE_DIM> t_col_curl;
+        FTensor::Tensor1<double, 3> t_col_curl;
 
         auto t_col_curl_base = col_data.getFTensor2DiffN<3, SPACE_DIM>(gg, 0);
 
         int cc = 0;
         for (; cc != nbCols; cc++) {
           t_col_curl(i) = FTensor::levi_civita(j, i, k) * t_col_curl_base(j, k);
-          (*a_mat_ptr) += alpha * (t_row_curl(i) * t_col_curl(i));
+          // (*a_mat_ptr) += alpha * (t_row_curl(i) * t_col_curl(i));
+          (*a_mat_ptr) += alpha * (t_row_curl(2) * t_col_curl(2));
 
           ++t_col_curl_base;
           ++a_mat_ptr;
@@ -194,18 +195,33 @@ MoFEMErrorCode Magnetostatics::boundaryCondition() {
   auto natural_bc = [&]() {
     Range boundary_entities;
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 9, "NATURALBC") == 0) {
-        Range faces;
-        CHKERR mField.get_moab().get_entities_by_type(bit->meshset, MBTRI,
-                                                      faces, true);
-        CHKERR mField.get_moab().get_adjacencies(
-            faces, 1, true, boundary_entities, moab::Interface::UNION);
-        boundary_entities.merge(faces);
+    if (SPACE_DIM == 3)
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 9, "NATURALBC") == 0) {
+          Range faces;
+          CHKERR mField.get_moab().get_entities_by_type(bit->meshset, MBTRI,
+                                                        faces, true);
+          CHKERR mField.get_moab().get_adjacencies(
+              faces, 1, true, boundary_entities, moab::Interface::UNION);
+          boundary_entities.merge(faces);
+        }
       }
-    }
+
+    if (SPACE_DIM == 2)
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 9, "NATURALBC") == 0) {
+          Range faces;
+          CHKERR mField.get_moab().get_entities_by_type(bit->meshset, MBEDGE,
+                                                        faces, true);
+          CHKERR mField.get_moab().get_adjacencies(
+              faces, 1, true, boundary_entities, moab::Interface::UNION);
+          boundary_entities.merge(faces);
+        }
+      }
+
     // auto bc_mng = mField.getInterface<BcManager>();
-    // CHKERR bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
+    // CHKERR
+    // bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
     //                                       "MAGNETIC_POTENTIAL",
     //                                       "MAGNETIC_POTENTIAL", 0, 0);
 
@@ -252,7 +268,7 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
 
   CHKERR add_base_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_base_ops(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
+  // CHKERR add_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
 
   // Push Domain operators to the Pipeline that is responsible for calculating
   // LHS
@@ -279,8 +295,8 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
     t_source(2) = currentDensity;
     return t_source;
   };
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpDomainSourceRhs("MAGNETIC_POTENTIAL", source_fun));
+  // pipeline_mng->getOpDomainRhsPipeline().push_back(
+  //     new OpDomainSourceRhs("MAGNETIC_POTENTIAL", source_fun));
 
   boost::function<FTensor::Tensor1<double, 3>(const double, const double,
                                               const double)>
@@ -290,10 +306,10 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
       };
 
   auto boundary_fun = [&](const double, const double, const double) {
-    FTensor::Index<'i', SPACE_DIM> i;
-    FTensor::Tensor1<double, SPACE_DIM> t_source;
+    FTensor::Index<'i', 3> i;
+    FTensor::Tensor1<double, 3> t_source;
     // t_source(i) = 0.01;
-    t_source(i) = 0.;
+    t_source(0) = 0.;
     t_source(1) = 0.;
     t_source(2) = 0.01;
     return t_source;
@@ -301,12 +317,14 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
 
   // Push Boundary operators to the Pipeline that is responsible for calculating
   // RHS
-  if (SPACE_DIM == 3) {
+  if (SPACE_DIM == 3)
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpHOSetCovariantPiolaTransformOnFace3D(HCURL));
-  }
+  if (SPACE_DIM == 2)
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpSetContravariantPiolaTransformOnEdge2D());
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpBoundarySourceRhs("MAGNETIC_POTENTIAL", boundary_fun,
+      new OpBoundarySourceRhs("MAGNETIC_POTENTIAL", natural_fun,
                               boost::make_shared<Range>(naturalBcRange)));
 
   MoFEMFunctionReturn(0);
@@ -395,7 +413,8 @@ MoFEMErrorCode Magnetostatics::outputResults() {
       new OpCalculateHVecVectorField<3, SPACE_DIM>("MAGNETIC_POTENTIAL",
                                                    field_val_ptr));
   // Only implement for <3, 3>  OR <1, 2> (<BASE_DIM, SPACE_DIM>)
-  // post_proc_fe->getOpPtrVector().push_back(new OpCalculateHcurlVectorCurl<3, 3>(
+  // post_proc_fe->getOpPtrVector().push_back(new OpCalculateHcurlVectorCurl<3,
+  // 3>(
   //     "MAGNETIC_POTENTIAL", induction_ptr));
 
   using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
@@ -407,8 +426,9 @@ MoFEMErrorCode Magnetostatics::outputResults() {
 
           OpPPMap::DataMapVec{},
 
-          OpPPMap::DataMapMat{{"MAGNETIC_POTENTIAL", field_val_ptr},
-                              {"MAGNETIC_INDUCTION_FIELD", induction_ptr}},
+          // OpPPMap::DataMapMat{{"MAGNETIC_POTENTIAL", field_val_ptr},
+          //                     {"MAGNETIC_INDUCTION_FIELD", induction_ptr}},
+          OpPPMap::DataMapMat{{"MAGNETIC_POTENTIAL", field_val_ptr}},
           //  {"MAGNETIC_INDUCTION_FIELD", induction_ptr}
 
           OpPPMap::DataMapMat{},
@@ -423,7 +443,9 @@ MoFEMErrorCode Magnetostatics::outputResults() {
   //     blockData, post_proc.getPostProcMesh(), post_proc.getMapGaussPts()));
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_magneto_result.h5m");
+  CHKERR post_proc_fe->writeFile("out_magneto_result_" +
+                                 boost::lexical_cast<std::string>(SPACE_DIM) +
+                                 "D.h5m");
 
   MoFEMFunctionReturn(0);
 }

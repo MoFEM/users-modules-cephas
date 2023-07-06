@@ -5,6 +5,13 @@ tutorials_build_and_install(
 
 tutorials_build_and_install(
   magneto ${CMAKE_CURRENT_SOURCE_DIR}/magneto.cpp)
+set_target_properties(
+  magneto PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+
+tutorials_build_and_install(
+  magneto2D ${CMAKE_CURRENT_SOURCE_DIR}/magneto.cpp)
+set_target_properties(
+  magneto2D PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
 add_test(magnetostatic
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
