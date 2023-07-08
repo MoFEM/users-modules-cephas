@@ -315,10 +315,10 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
           auto &pipeline_rhs = bodyForceRhsPtr->getOpPtrVector();
           auto &pipeline_lhs = bodyForceLhsPtr->getOpPtrVector();
 
-          CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *bodyForceRhsPtr, true,
-                             false, false, false);
-          CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *bodyForceLhsPtr, true,
-                             false, false, false);
+          CHKERR addHOOpsVol(meshNodeField, *bodyForceRhsPtr, true, false,
+                             false, false);
+          CHKERR addHOOpsVol(meshNodeField, *bodyForceLhsPtr, true, false,
+                             false, false);
 
           //FIXME: fix for large strains
           pipeline_rhs.push_back(
@@ -475,7 +475,8 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
             //   CHKERR function(dm, element_name.c_str(), method, method, method);
             // };
 
-            auto set_neumann_methods = [&](auto &neumann_el, string hist_name) {
+            auto set_neumann_methods = [&](auto &neumann_el, string hist_name,
+                                           int dim) {
               MoFEMFunctionBeginHot;
               for (auto &&mit : neumann_el) {
                 if constexpr (std::is_same_v<T, SNES>)
@@ -485,19 +486,33 @@ struct BasicBoundaryConditionsInterface : public GenericElementInterface {
                   mit->second->methodsOp.push_back(
                       new TimeForceScale(getHistoryParam(hist_name), false));
                 string element_name = mit->first;
-                CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
-                                      mit->second->getLoopFe(), false, false);
-                // CHKERR push_fmethods(&mit->second->getLoopFe(), element_name);
+                switch (dim) {
+                case 2:
+                  CHKERR AddHOOps<2, 3, 3>::add(
+                      mit->second->getLoopFe().getOpPtrVector(), {},
+                      meshNodeField);
+                  break;
+                case 1:
+                  CHKERR AddHOOps<1, 2, 2>::add(
+                      mit->second->getLoopFe().getOpPtrVector(), {},
+                      meshNodeField);
+                  break;
+                case 0:
+                  break;
+                default:
+                  break;
+                }
+                // CHKERR push_fmethods(&mit->second->getLoopFe(),
+                // element_name);
                 CHKERR function(dM, element_name.c_str(),
                                 &mit->second->getLoopFe(), NULL, NULL);
               }
               MoFEMFunctionReturnHot(0);
             };
 
-            CHKERR set_neumann_methods(neumann_forces, "force");
-            CHKERR set_neumann_methods(nodal_forces, "force");
-            CHKERR set_neumann_methods(edge_forces, "force");
-
+            CHKERR set_neumann_methods(neumann_forces, "force", 2);
+            CHKERR set_neumann_methods(nodal_forces, "force", 0);
+            CHKERR set_neumann_methods(edge_forces, "force", 1);
 
             CHKERR function(dM, domainElementName.c_str(), dirichletBcPtr.get(),
                             dirichletBcPtr.get(), dirichletBcPtr.get());
