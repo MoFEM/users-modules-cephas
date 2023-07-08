@@ -416,7 +416,7 @@ MoFEMErrorCode Example::solveSystem() {
   auto D = createDMVector(dm);
   auto F = vectorDuplicate(D);
 
-  auto add_extra_finite_elements_to_ksp_solver_pipelines = [&]() {
+  auto set_essential_bc = [&]() {
     MoFEMFunctionBegin;
     // This is low level pushing finite elements (pipelines) to solver
     auto ksp_ctx_ptr = getDMKspCtx(simple->getDM());
@@ -463,14 +463,11 @@ MoFEMErrorCode Example::solveSystem() {
   MOFEM_LOG_CHANNEL("TIMER");
   MOFEM_LOG_TAG("TIMER", "timer");
 
-  CHKERR add_extra_finite_elements_to_ksp_solver_pipelines();
+  CHKERR set_essential_bc();
 
   if (A == AssemblyType::SCHUR) {
     auto schur_ptr = SetUpSchur::createSetUpSchur(mField);
     CHKERR schur_ptr->setUp(solver);
-
-
-
     CHKERR setup_and_solve();
   } else {
     CHKERR setup_and_solve();
