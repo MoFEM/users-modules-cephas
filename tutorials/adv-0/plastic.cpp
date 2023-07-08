@@ -50,13 +50,6 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
 
-//! [Only used for dynamics]
-using OpMass = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
-    GAUSS>::OpMass<1, SPACE_DIM>;
-using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<G>::OpBaseTimesVector<1, SPACE_DIM, 1>;
-//! [Only used for dynamics]
-
 //! [Essential boundary conditions]
 using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::BiLinearForm<G>::OpMass<1, SPACE_DIM>;
@@ -65,7 +58,6 @@ using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
 using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<G>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Essential boundary conditions]
-using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 
 using DomainNaturalBC = NaturalBC<DomainEleOp>::Assembly<A>::LinearForm<G>;
 using OpBodyForce =
@@ -80,47 +72,48 @@ using OpEssentialLhs = EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<
 using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<
     GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
 
-PetscBool is_large_strains = PETSC_TRUE;
-PetscBool set_timer = PETSC_FALSE;
-
-double scale = 1;
-double cn0 = 1;
-double cn1 = 1;
-double zeta = 5e-2;
-
-double young_modulus = 206913;
-double poisson_ratio = 0.29;
-double rho = 0;
-double sigmaY = 450;
-double H = 129;
-double visH = 0;
-double Qinf = 265;
-double b_iso = 16.93;
-
-int order = 2;      ///< Order if fixed.
-int geom_order = 2; ///< Order if fixed.
-
-constexpr size_t activ_history_sise = 1;
-
-inline double hardening_exp(double tau) {
+inline double hardening_exp(double tau, double b_iso) {
   return std::exp(
       std::max(static_cast<double>(std::numeric_limits<float>::min_exponent10),
                -b_iso * tau));
 }
 
-inline double hardening(double tau) {
-  return H * tau + Qinf * (1. - hardening_exp(tau)) + sigmaY;
+inline double hardening(double tau, double H, double Qinf, double b_iso,
+                        double sigmaY) {
+  return H * tau + Qinf * (1. - hardening_exp(tau, b_iso)) + sigmaY;
 }
 
-inline double hardening_dtau(double tau) {
-  auto r = [](auto tau) { return H + Qinf * b_iso * hardening_exp(tau); };
+inline double hardening_dtau(double tau, double H, double Qinf, double b_iso) {
+  auto r = [&](auto tau) {
+    return H + Qinf * b_iso * hardening_exp(tau, b_iso);
+  };
   constexpr double eps = 1e-12;
   return std::max(r(tau), eps * r(0));
 }
 
-inline double hardening_dtau2(double tau) {
-  return -(Qinf * (b_iso * b_iso)) * hardening_exp(tau);
+inline double hardening_dtau2(double tau, double Qinf, double b_iso) {
+  return -(Qinf * (b_iso * b_iso)) * hardening_exp(tau, b_iso);
 }
+
+PetscBool is_large_strains = PETSC_TRUE;
+PetscBool set_timer = PETSC_FALSE;
+
+double scale = 1.;
+
+double young_modulus = 206913;
+double poisson_ratio = 0.29;
+double sigmaY = 450;
+double H = 129;
+double visH = 0;
+double zeta = 5e-2;
+double Qinf = 265;
+double b_iso = 16.93;
+
+double cn0 = 1;
+double cn1 = 1;
+
+int order = 2;      ///< Order if fixed.
+int geom_order = 2; ///< Order if fixed.
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
@@ -251,7 +244,6 @@ MoFEMErrorCode Example::createCommonData() {
   auto get_command_line_parameters = [&]() {
     MoFEMFunctionBegin;
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-scale", &scale, PETSC_NULL);
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-rho", &rho, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-young_modulus",
                                  &young_modulus, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-poisson_ratio",
@@ -282,7 +274,6 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
-
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn0 " << cn0;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn1 " << cn1;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "zeta " << zeta;
@@ -290,28 +281,11 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "order " << order;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "geom order " << geom_order;
 
-    /// Note that young modulus has to be set, which controls global scaling
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
                                PETSC_NULL);
     if (is_scale) {
       scale = scale / young_modulus;
-      // young_modulus *= scale;
-      // rho *= scale;
-      // sigmaY *= scale;
-      // H *= scale;
-      // Qinf *= scale;
-      // visH *= scale;
-
-      // MOFEM_LOG("EXAMPLE", Sev::inform)
-      //     << "Scaled Young modulus " << young_modulus;
-      // MOFEM_LOG("EXAMPLE", Sev::inform)
-      //     << "Scaled Poisson ratio " << poisson_ratio;
-      // MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Yield stress " << sigmaY;
-      // MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Hardening " << H;
-      // MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Viscous hardening " << visH;
-      // MOFEM_LOG("EXAMPLE", Sev::inform)
-      //     << "Scaled Saturation yield stress " << Qinf;
     }
 
     MoFEMFunctionReturn(0);
@@ -393,42 +367,10 @@ MoFEMErrorCode Example::OPs() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  auto add_domain_ops_lhs_mechanical = [&](auto &pipeline) {
-    MoFEMFunctionBegin;
-
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1},
-                                                          "GEOMETRY");
-
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
-
-    CHKERR PlasticOps::opFactoryDomainLhs<SPACE_DIM, A, G, DomainEleOp>(
-        mField, "MAT_PLASTIC", pipeline, "U", "EP", "TAU");
-
-    pipeline.push_back(new OpUnSetBc("U"));
-    MoFEMFunctionReturn(0);
-  };
-
-  auto add_domain_ops_rhs_mechanical = [&](auto &pipeline) {
-    MoFEMFunctionBegin;
-
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1},
-                                                          "GEOMETRY");
-
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
-
-    CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
-        pipeline, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
-        "BODY_FORCE", Sev::inform);
-
-    CHKERR PlasticOps::opFactoryDomainRhs<SPACE_DIM, A, G, DomainEleOp>(
-        mField, "MAT_PLASTIC", pipeline, "U", "EP", "TAU");
-
-    pipeline.push_back(new OpUnSetBc("U"));
-    MoFEMFunctionReturn(0);
-  };
-
   auto add_boundary_ops_lhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
+
+    // Add essential boundary conditions
     CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<G>::
         AddEssentialToPipeline<OpEssentialLhs>::add(
             mField, pipeline, simple->getProblemName(), "U");
@@ -452,6 +394,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
 
+    // Add essential boundary conditions
     CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<G>::
         AddEssentialToPipeline<OpEssentialRhs>::add(
             mField, pipeline, simple->getProblemName(), "U", u_mat_ptr,
@@ -461,9 +404,42 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  // Domain
-  CHKERR add_domain_ops_lhs_mechanical(pip->getOpDomainLhsPipeline());
-  CHKERR add_domain_ops_rhs_mechanical(pip->getOpDomainRhsPipeline());
+  auto add_domain_ops_lhs = [this](auto &pip) {
+    MoFEMFunctionBegin;
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
+                                                          "GEOMETRY");
+
+    pip.push_back(new OpSetBc("U", true, boundaryMarker));
+
+    CHKERR PlasticOps::opFactoryDomainLhs<SPACE_DIM, A, G, DomainEleOp>(
+        mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
+
+    pip.push_back(new OpUnSetBc("U"));
+
+    MoFEMFunctionReturn(0);
+  };
+
+  auto add_domain_ops_rhs = [this](auto &pip) {
+    MoFEMFunctionBegin;
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
+                                                          "GEOMETRY");
+
+    pip.push_back(new OpSetBc("U", true, boundaryMarker));
+
+    CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
+        pip, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
+        "BODY_FORCE", Sev::inform);
+
+    CHKERR PlasticOps::opFactoryDomainRhs<SPACE_DIM, A, G, DomainEleOp>(
+        mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
+
+    pip.push_back(new OpUnSetBc("U"));
+
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR add_domain_ops_lhs(pip->getOpDomainLhsPipeline());
+  CHKERR add_domain_ops_rhs(pip->getOpDomainRhsPipeline());
 
   // Boundary
   CHKERR add_boundary_ops_lhs_mechanical(pip->getOpBoundaryLhsPipeline());
@@ -479,33 +455,16 @@ MoFEMErrorCode Example::OPs() {
   CHKERR pip->setBoundaryLhsIntegrationRule(integration_rule_bc);
   CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule_bc);
 
-  auto create_reaction_pipeline = [&](auto &pipeline) {
+  auto create_reaction_pipeline = [&](auto &pip) {
     MoFEMFunctionBegin;
 
     if (reactionMarker) {
-
-      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pipeline, {H1},
+      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
                                                             "GEOMETRY");
-      auto [common_plastic_ptr, common_henky_ptr] =
-          PlasticOps::createCommonPlasticOps<SPACE_DIM, G, DomainEleOp>(
-              mField, "MAT_PLASTIC", pipeline, "U", "EP", "TAU", 1.,
-              Sev::inform);
-
-      pipeline.push_back(new OpSetBc("U", false, reactionMarker));
-      // Calculate internal force
-      if (is_large_strains) {
-        using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
-            PETSC>::LinearForm<G>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
-        pipeline.push_back(new OpInternalForcePiola(
-            "U", common_henky_ptr->getMatFirstPiolaStress()));
-      } else {
-        using OpInternalForceCauchy =
-            FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-                G>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
-        pipeline.push_back(
-            new OpInternalForceCauchy("U", common_plastic_ptr->mStressPtr));
-      }
-      pipeline.push_back(new OpUnSetBc("U"));
+      pip.push_back(new OpSetBc("U", false, reactionMarker));
+      CHKERR PlasticOps::opFactoryDomainReactions<SPACE_DIM, A, G, DomainEleOp>(
+          mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
+      pip.push_back(new OpUnSetBc("U"));
     }
 
     MoFEMFunctionReturn(0);
@@ -879,7 +838,7 @@ MoFEMErrorCode Example::tsSolve() {
   boost::shared_ptr<SetUpSchur> schur_ptr;
   CHKERR set_fieldsplit_preconditioner(solver, schur_ptr);
 
-  // Domain element is run first by TSSolber, thus run Schur pre-proc, which
+  // Domain element is run first by TSSolver, thus run Schur pre-proc, which
   // clears Schur complement matrix
   mField.getInterface<PipelineManager>()->getDomainLhsFE()->preProcessHook =
       [&]() {
