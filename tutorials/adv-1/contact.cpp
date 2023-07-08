@@ -8,8 +8,8 @@
  */
 
 /* The above code is a preprocessor directive in C++ that checks if the macro
-"EXECUTABLE_DIMENSION" has been defined. If it has not been defined, it replaces
-the " */
+"EXECUTABLE_DIMENSION" has been defined. If it has not been defined, it is set
+to 3" */
 #ifndef EXECUTABLE_DIMENSION
 #define EXECUTABLE_DIMENSION 3
 #endif
@@ -104,7 +104,7 @@ double young_modulus = 100;
 double poisson_ratio = 0.25;
 double rho = 0.0;
 double spring_stiffness = 0.1;
-double alpha_dumping = 0;
+double alpha_damping = 0;
 
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
@@ -279,8 +279,8 @@ MoFEMErrorCode Contact::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-spring_stiffness",
                                  &spring_stiffness, PETSC_NULL);
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-alpha_dumping",
-                                 &alpha_dumping, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-alpha_damping",
+                                 &alpha_damping, PETSC_NULL);
 
     MOFEM_LOG("CONTACT", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("CONTACT", Sev::inform) << "Poisson_ratio " << poisson_ratio;
@@ -288,7 +288,7 @@ MoFEMErrorCode Contact::createCommonData() {
     MOFEM_LOG("CONTACT", Sev::inform) << "cn_contact " << cn_contact;
     MOFEM_LOG("CONTACT", Sev::inform)
         << "spring_stiffness " << spring_stiffness;
-    MOFEM_LOG("CONTACT", Sev::inform) << "alpha_dumping " << alpha_dumping;
+    MOFEM_LOG("CONTACT", Sev::inform) << "alpha_damping " << alpha_damping;
 
     MoFEMFunctionReturn(0);
   };
@@ -373,20 +373,20 @@ MoFEMErrorCode Contact::OPs() {
                                                                 "U");
 
     if (!is_quasi_static) {
-      auto get_inertia_and_mass_dumping = [this](const double, const double,
+      auto get_inertia_and_mass_damping = [this](const double, const double,
                                                  const double) {
         auto *pip_mng = mField.getInterface<PipelineManager>();
         auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
-        return rho * fe_domain_lhs->ts_aa + alpha_dumping * fe_domain_lhs->ts_a;
+        return rho * fe_domain_lhs->ts_aa + alpha_damping * fe_domain_lhs->ts_a;
       };
-      pip.push_back(new OpMass("U", "U", get_inertia_and_mass_dumping));
-    } else if (alpha_dumping > 0) {
-      auto get_mass_dumping = [this](const double, const double, const double) {
+      pip.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
+    } else if (alpha_damping > 0) {
+      auto get_mass_damping = [this](const double, const double, const double) {
         auto *pip_mng = mField.getInterface<PipelineManager>();
         auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
-        return alpha_dumping * fe_domain_lhs->ts_a;
+        return alpha_damping * fe_domain_lhs->ts_a;
       };
-      pip.push_back(new OpMass("U", "U", get_mass_dumping));
+      pip.push_back(new OpMass("U", "U", get_mass_damping));
     }
 
     pip.push_back(new OpUnSetBc("U"));
@@ -413,13 +413,13 @@ MoFEMErrorCode Contact::OPs() {
       pip.push_back(new OpInertiaForce(
           "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
-    if (alpha_dumping > 0) {
+    if (alpha_damping > 0) {
       auto mat_velocity = boost::make_shared<MatrixDouble>();
       pip.push_back(
           new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
       pip.push_back(
           new OpInertiaForce("U", mat_velocity, [](double, double, double) {
-            return alpha_dumping;
+            return alpha_damping;
           }));
     }
     pip.push_back(new OpUnSetBc("U"));
