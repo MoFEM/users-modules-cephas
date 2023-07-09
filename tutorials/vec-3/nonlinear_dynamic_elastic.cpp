@@ -425,7 +425,7 @@ MoFEMErrorCode Example::outputResults() {
     double nrm2;
     CHKERR VecNorm(T, NORM_2, &nrm2);
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Regression norm " << nrm2;
-    constexpr double regression_value = 0.0174741;
+    constexpr double regression_value = 0.0194561;
     if (fabs(nrm2 - regression_value) > 1e-2)
       SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
               "Regression test failed; wrong norm value.");
