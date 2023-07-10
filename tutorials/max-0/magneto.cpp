@@ -280,18 +280,7 @@ MoFEMErrorCode Magnetostatics::setupProblem() {
 MoFEMErrorCode Magnetostatics::boundaryCondition() {
   MoFEMFunctionBegin;
 
-<<<<<<< HEAD
-  auto simple = mField.getInterface<Simple>();
-  auto bc_mng = mField.getInterface<BcManager>();
-
-  // For 2D case - Infinite long wire
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
-                                           "MAGNETIC_POTENTIAL", 0, SPACE_DIM);
-
-  auto natural_bc = [&]() {
-=======
   auto boundary_natural_bc = [&]() {
->>>>>>> 98477450... boundary conditions and sources for 2D;
     Range boundary_entities;
 
     if (SPACE_DIM == 3)
@@ -478,17 +467,6 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
   if (SPACE_DIM == 3)
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {HCURL});
-<<<<<<< HEAD
-  if (SPACE_DIM == 2) {
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 12, "CURRENT_WIRE") == 0) {
-        pipeline_mng->getOpDomainRhsPipeline().push_back(new OpDomainSourceRhs(
-            "MAGNETIC_POTENTIAL",
-            [](const double, const double, const double) { return 5.; }));
-      }
-    }
-  }
-=======
 
   auto source_fun = [&](const double x, const double y, const double z) {
     return 5.;
@@ -497,7 +475,6 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainSourceRhs("MAGNETIC_POTENTIAL", source_fun,
                               boost::make_shared<Range>(sourceRange)));
->>>>>>> 98477450... boundary conditions and sources for 2D;
 
   boost::function<FTensor::Tensor1<double, 3>(const double, const double,
                                               const double)>
