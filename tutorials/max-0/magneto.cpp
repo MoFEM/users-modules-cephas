@@ -45,6 +45,9 @@ using OpDomainSourceRhs = FormsIntegrators<DomainEleOp>::Assembly<
 using OpBoundarySourceRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, 3>;
 
+using OpBoundarySource2DRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
+
 using OpMassStab = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<BASE_DIM, 3>;
 //! [Boundary Operators]
@@ -105,8 +108,7 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
         int cc = 0;
         for (; cc != nbCols; cc++) {
           t_col_curl(i) = FTensor::levi_civita(j, i, k) * t_col_curl_base(j, k);
-          // (*a_mat_ptr) += alpha * (t_row_curl(i) * t_col_curl(i));
-          (*a_mat_ptr) += alpha * (t_row_curl(2) * t_col_curl(2));
+          (*a_mat_ptr) += alpha * (t_row_curl(i) * t_col_curl(i));
 
           ++t_col_curl_base;
           ++a_mat_ptr;
@@ -115,6 +117,68 @@ struct OpCurlCurl : public AssemblyDomainEleOp {
       }
       for (; rr < nb_base_functions; ++rr)
         ++t_row_curl_base;
+      ++t_w;
+      ++t_coords;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  ScalFun betaCoeff;
+};
+
+struct OpCurlCurl2D : public AssemblyDomainEleOp {
+  OpCurlCurl2D(const std::string row_field_name,
+               const std::string col_field_name, ScalFun beta)
+      : AssemblyDomainEleOp(row_field_name, col_field_name,
+                            AssemblyDomainEleOp::OPROWCOL),
+        betaCoeff(beta) {
+    sYmm = true;
+  }
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                           DataForcesAndSourcesCore::EntData &col_data) {
+
+    MoFEMFunctionBegin;
+    FTensor::Index<'i', 2> i;
+    FTensor::Index<'j', 2> j;
+    const double vol = getMeasure();
+    size_t nb_base_functions = row_data.getN().size2();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_row_grad = row_data.getFTensor1DiffN<SPACE_DIM>();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
+
+    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+
+      const double alpha =
+          t_w * vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
+
+      FTensor::Tensor1<double, SPACE_DIM> t_row_curl;
+
+      // loop over rows base functions
+      auto a_mat_ptr = &*locMat.data().begin();
+
+      int rr = 0;
+      for (; rr != nbRows; ++rr) {
+        t_row_curl(i) = FTensor::levi_civita(j, i) * t_row_grad(j);
+
+        FTensor::Tensor1<double, SPACE_DIM> t_col_curl;
+
+        auto t_col_grad = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
+
+        int cc = 0;
+        for (; cc != nbCols; cc++) {
+          t_col_curl(i) = FTensor::levi_civita(j, i) * t_col_grad(j);
+          (*a_mat_ptr) += alpha * (t_row_curl(i) * t_col_curl(i));
+
+          ++t_col_grad;
+          ++a_mat_ptr;
+        }
+        ++t_row_grad;
+      }
+      for (; rr < nb_base_functions; ++rr)
+        ++t_row_grad;
       ++t_w;
       ++t_coords;
     }
@@ -169,10 +233,19 @@ MoFEMErrorCode Magnetostatics::readMesh() {
 MoFEMErrorCode Magnetostatics::setupProblem() {
   MoFEMFunctionBegin;
 
-  CHKERR simpleInterface->addDomainField("MAGNETIC_POTENTIAL", HCURL,
-                                         DEMKOWICZ_JACOBI_BASE, 1);
-  CHKERR simpleInterface->addBoundaryField("MAGNETIC_POTENTIAL", HCURL,
+  if (SPACE_DIM == 3) {
+    CHKERR simpleInterface->addDomainField("MAGNETIC_POTENTIAL", HCURL,
                                            DEMKOWICZ_JACOBI_BASE, 1);
+    CHKERR simpleInterface->addBoundaryField("MAGNETIC_POTENTIAL", HCURL,
+                                             DEMKOWICZ_JACOBI_BASE, 1);
+  }
+
+  if (SPACE_DIM == 2) {
+    CHKERR simpleInterface->addDomainField("MAGNETIC_POTENTIAL", H1,
+                                           AINSWORTH_LEGENDRE_BASE, 1);
+    CHKERR simpleInterface->addBoundaryField("MAGNETIC_POTENTIAL", H1,
+                                             AINSWORTH_LEGENDRE_BASE, 1);
+  }
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-my_order", &order, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder("MAGNETIC_POTENTIAL", order);
@@ -260,8 +333,7 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
       auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
       pipeline.push_back(new OpCalculateHOJacForFace(jac_ptr));
       pipeline.push_back(new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-      pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
-      pipeline.push_back(new OpSetInvJacHcurlFace(inv_jac_ptr));
+      pipeline.push_back(new OpSetInvJacH1ForFace(inv_jac_ptr));
     }
     MoFEMFunctionReturn(0);
   };
@@ -272,27 +344,37 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
 
   // Push Domain operators to the Pipeline that is responsible for calculating
   // LHS
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      pipeline_mng->getOpDomainLhsPipeline(), {HCURL});
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpCurlCurl(
-      "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
-      [](const double, const double, const double) { return 1. / mu; }));
-  //     }));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMassStab(
-      "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
-      [](const double, const double, const double) { return epsilon / mu; }));
+  if (SPACE_DIM == 3) {
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        pipeline_mng->getOpDomainLhsPipeline(), {HCURL});
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpCurlCurl(
+        "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
+        [](const double, const double, const double) { return 1. / mu; }));
+    //     }));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMassStab(
+        "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
+        [](const double, const double, const double) { return epsilon / mu; }));
+  }
+
+  if (SPACE_DIM == 2) {
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpCurlCurl2D(
+        "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
+        [](const double, const double, const double) { return 1. / mu; }));
+  }
 
   // Push Domain operators to the Pipeline that is responsible for calculating
   // RHS
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      pipeline_mng->getOpDomainRhsPipeline(), {HCURL});
-  auto source_fun = [&](const double, const double, const double) {
+  if (SPACE_DIM == 3)
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        pipeline_mng->getOpDomainRhsPipeline(), {HCURL});
+  auto source_fun = [&](const double x, const double y, const double z) {
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Tensor1<double, SPACE_DIM> t_source;
+    const double r = sqrt(x * x + y * y);
     // t_source(i) = currentDensity;
-    t_source(i) = 0.;
-    t_source(1) = 0.;
-    t_source(2) = currentDensity;
+    t_source(0) = (-y / r);
+    t_source(1) = (x / r);
+    // t_source(2) = 0.;
     return t_source;
   };
   // pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -305,27 +387,26 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
         return FTensor::Tensor1<double, 3>{(-y / r), (x / r), 0.};
       };
 
-  auto boundary_fun = [&](const double, const double, const double) {
-    FTensor::Index<'i', 3> i;
-    FTensor::Tensor1<double, 3> t_source;
-    // t_source(i) = 0.01;
-    t_source(0) = 0.;
-    t_source(1) = 0.;
-    t_source(2) = 0.01;
-    return t_source;
+  auto boundary_fun = [&](const double x, const double y, const double z) {
+    const double r = sqrt(y * y);
+    return (-y / r);
   };
 
   // Push Boundary operators to the Pipeline that is responsible for calculating
   // RHS
-  if (SPACE_DIM == 3)
+  if (SPACE_DIM == 3) {
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpHOSetCovariantPiolaTransformOnFace3D(HCURL));
-  if (SPACE_DIM == 2)
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpSetContravariantPiolaTransformOnEdge2D());
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpBoundarySourceRhs("MAGNETIC_POTENTIAL", natural_fun,
-                              boost::make_shared<Range>(naturalBcRange)));
+        new OpBoundarySourceRhs("MAGNETIC_POTENTIAL", natural_fun,
+                                boost::make_shared<Range>(naturalBcRange)));
+  }
+
+  if (SPACE_DIM == 2) {
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpBoundarySource2DRhs("MAGNETIC_POTENTIAL", boundary_fun,
+                                  boost::make_shared<Range>(naturalBcRange)));
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -389,8 +470,9 @@ MoFEMErrorCode Magnetostatics::outputResults() {
   pipeline_mng->getBoundaryRhsFE().reset();
 
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      post_proc_fe->getOpPtrVector(), {HCURL});
+  if (SPACE_DIM == 3)
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        post_proc_fe->getOpPtrVector(), {HCURL});
 
   if (SPACE_DIM == 2) {
     auto det_ptr = boost::make_shared<VectorDouble>();
@@ -401,46 +483,72 @@ MoFEMErrorCode Magnetostatics::outputResults() {
     post_proc_fe->getOpPtrVector().push_back(
         new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
     post_proc_fe->getOpPtrVector().push_back(
-        new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpSetInvJacHcurlFace(inv_jac_ptr));
+        new OpSetInvJacH1ForFace(inv_jac_ptr));
   }
 
   auto field_val_ptr = boost::make_shared<MatrixDouble>();
+  auto field_val_ptr_2D = boost::make_shared<VectorDouble>();
   auto induction_ptr = boost::make_shared<MatrixDouble>();
 
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateHVecVectorField<3, SPACE_DIM>("MAGNETIC_POTENTIAL",
-                                                   field_val_ptr));
+  if (SPACE_DIM == 3)
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateHVecVectorField<3, SPACE_DIM>("MAGNETIC_POTENTIAL",
+                                                     field_val_ptr));
+
+  if (SPACE_DIM == 2)
+    post_proc_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
+        "MAGNETIC_POTENTIAL", field_val_ptr_2D));
+
   // Only implement for <3, 3>  OR <1, 2> (<BASE_DIM, SPACE_DIM>)
-  // post_proc_fe->getOpPtrVector().push_back(new OpCalculateHcurlVectorCurl<3,
-  // 3>(
-  //     "MAGNETIC_POTENTIAL", induction_ptr));
+  if (SPACE_DIM == 3)
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateHcurlVectorCurl<3, 3>("MAGNETIC_POTENTIAL",
+                                             induction_ptr));
+
+  if (SPACE_DIM == 2)
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateHcurlVectorCurl<1, 2>("MAGNETIC_POTENTIAL",
+                                             induction_ptr));
 
   using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-  post_proc_fe->getOpPtrVector().push_back(
+  if (SPACE_DIM == 2)
+    post_proc_fe->getOpPtrVector().push_back(
 
-      new OpPPMap(
-          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+        new OpPPMap(
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-          OpPPMap::DataMapVec{},
+            OpPPMap::DataMapVec{{"MAGNETIC_POTENTIAL_2D", field_val_ptr_2D}},
 
-          // OpPPMap::DataMapMat{{"MAGNETIC_POTENTIAL", field_val_ptr},
-          //                     {"MAGNETIC_INDUCTION_FIELD", induction_ptr}},
-          OpPPMap::DataMapMat{{"MAGNETIC_POTENTIAL", field_val_ptr}},
-          //  {"MAGNETIC_INDUCTION_FIELD", induction_ptr}
+            OpPPMap::DataMapMat{{"MAGNETIC_INDUCTION_FIELD", induction_ptr}},
 
-          OpPPMap::DataMapMat{},
+            OpPPMap::DataMapMat{},
 
-          OpPPMap::DataMapMat{}
+            OpPPMap::DataMapMat{}
 
-          )
+            )
 
-  );
+    );
 
-  // post_proc.getOpPtrVector().push_back(new OpPostProcessCurl(
-  //     blockData, post_proc.getPostProcMesh(), post_proc.getMapGaussPts()));
+  if (SPACE_DIM == 3)
+    post_proc_fe->getOpPtrVector().push_back(
+
+        new OpPPMap(
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+            OpPPMap::DataMapVec{},
+
+            OpPPMap::DataMapMat{{"MAGNETIC_POTENTIAL", field_val_ptr},
+                                {"MAGNETIC_INDUCTION_FIELD", induction_ptr}},
+
+            OpPPMap::DataMapMat{},
+
+            OpPPMap::DataMapMat{}
+
+            )
+
+    );
+
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_magneto_result_" +
