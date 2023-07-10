@@ -157,30 +157,30 @@ auto get_skin_projection_bit = []() { return 2 * get_start_bit() + 5; };
 // FIXME: Set parameters from command line
 
 // Physical parameters
-constexpr double a0 = 980;
-constexpr double rho_m = 0.998;
-constexpr double mu_m = 0.010101 * 1e2;
-constexpr double rho_p = 0.0012;
-constexpr double mu_p = 0.000182 * 1e2;
-constexpr double lambda = 73; ///< surface tension
-constexpr double W = 0.25;
+double a0 = 980;
+double rho_m = 0.998;
+double mu_m = 0.010101 * 1e2;
+double rho_p = 0.0012;
+double mu_p = 0.000182 * 1e2;
+double lambda = 73; ///< surface tension
+double W = 0.25;
 
 // Model parameters
-constexpr double h = 0.01 / 8; // mesh size
-constexpr double eta = h;
-constexpr double eta2 = eta * eta;
+double h = 0.01 / 8; // mesh size
+double eta = h;
+double eta2 = eta * eta;
 
 // Numerical parameters
-constexpr double md = 1e-2;
-constexpr double eps = 1e-12;
-constexpr double tol = std::numeric_limits<float>::epsilon();
+double md = 1e-2; // mobility
+double eps = 1e-12;
+double tol = std::numeric_limits<float>::epsilon();
 
-constexpr double rho_ave = (rho_p + rho_m) / 2;
-constexpr double rho_diff = (rho_p - rho_m) / 2;
-constexpr double mu_ave = (mu_p + mu_m) / 2;
-constexpr double mu_diff = (mu_p - mu_m) / 2;
+double rho_ave = (rho_p + rho_m) / 2;
+double rho_diff = (rho_p - rho_m) / 2;
+double mu_ave = (mu_p + mu_m) / 2;
+double mu_diff = (mu_p - mu_m) / 2;
 
-const double kappa = (3. / (4. * std::sqrt(2. * W))) * (lambda / eta);
+double kappa = (3. / (4. * std::sqrt(2. * W))) * (lambda / eta);
 
 auto integration_rule = [](int, int, int) { return 2 * order + 1; };
 
@@ -561,12 +561,57 @@ MoFEMErrorCode FreeSurface::setupProblem() {
   CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-coords", coord_type_names,
                               LAST_COORDINATE_SYSTEM, &coord_type, PETSC_NULL);
 
-  MOFEM_LOG("FS", Sev::inform) << "order = " << order;
-  MOFEM_LOG("FS", Sev::inform) << "nb_levels = " << nb_levels;
+  MOFEM_LOG("FS", Sev::inform) << "Approximation order = " << order;
+  MOFEM_LOG("FS", Sev::inform)
+      << "Number of refinement levels nb_levels = " << nb_levels;
   nb_levels += 1;
 
   auto simple = mField.getInterface<Simple>();
   auto bit_mng = mField.getInterface<BitRefManager>();
+
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "Acceleration", "-a0", &a0, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "\"Minus\" phase density rho_m",
+                               "-rho_m", &rho_m, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "\"Minus\" phase viscosity", "-mu_m",
+                               &mu_m, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "\"Plus\" phase density", "-rho_p",
+                               &rho_p, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "\"Plus\" phase viscosity", "-mu_p",
+                               &mu_p, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "Surface tension", "-lambda",
+                               &lambda, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL,
+                               "Height of the well in energy functional", "-W",
+                               &W, PETSC_NULL);
+  rho_ave = (rho_p + rho_m) / 2;
+  rho_diff = (rho_p - rho_m) / 2;
+  mu_ave = (mu_p + mu_m) / 2;
+  mu_diff = (mu_p - mu_m) / 2;
+
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-h", &h, PETSC_NULL);
+  eta = h;
+  eta2 = eta * eta;
+  kappa = (3. / (4. * std::sqrt(2. * W))) * (lambda / eta);
+
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-md", &eta, PETSC_NULL);
+
+  MOFEM_LOG("FS", Sev::inform) << "Acceleration a0 = " << a0;
+  MOFEM_LOG("FS", Sev::inform) << "\"Minus\" phase density rho_m = " << rho_m;
+  MOFEM_LOG("FS", Sev::inform) << "\"Minus\" phase viscosity mu_m = " << mu_m;
+  MOFEM_LOG("FS", Sev::inform) << "\"Plus\" phase density rho_p = " << rho_p;
+  MOFEM_LOG("FS", Sev::inform) << "\"Plus\" phase viscosity mu_p = " << mu_p;
+  MOFEM_LOG("FS", Sev::inform) << "Surface tension lambda = " << lambda;
+  MOFEM_LOG("FS", Sev::inform)
+      << "Height of the well in energy functional W = " << W;
+  MOFEM_LOG("FS", Sev::inform) << "Characteristic mesh size h = " << h;
+  MOFEM_LOG("FS", Sev::inform) << "Mobility md = " << md;
+
+  MOFEM_LOG("FS", Sev::inform) << "Average density rho_ave = " << rho_ave;
+  MOFEM_LOG("FS", Sev::inform) << "Difference density rho_diff = " << rho_diff;
+  MOFEM_LOG("FS", Sev::inform) << "Average viscosity mu_ave = " << mu_ave;
+  MOFEM_LOG("FS", Sev::inform) << "Difference viscosity mu_diff = " << mu_diff;
+  MOFEM_LOG("FS", Sev::inform) << "kappa = " << kappa;
+
 
   // Fields on domain
 
