@@ -31,6 +31,9 @@ using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
+// constexpr FieldSpace potential_velocity_space = SPACE_DIM == 2 ? H1 : HCURL;
+// constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
+
 using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
 using AssemblyBoundaryEleOp =
     FormsIntegrators<BoundaryEleOp>::Assembly<A>::OpBase;
@@ -38,7 +41,7 @@ using AssemblyBoundaryEleOp =
 //! [Domain Operators]
 // OpCurlCurl - Once moved to Bilinear Forms in Core.
 using OpDomainSourceRhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, SPACE_DIM>;
+    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 //! [Domain Operators]
 
 //! [Boundary Operators]
@@ -56,7 +59,7 @@ int order = 3; ///< Order
 // material parameters
 double mu = 1.;       ///< magnetic constant  N / A2; 5000 2D
 double epsilon = 0.1; ///< regularization paramater
-double currentDensity = 0.5;
+double currentDensity = 5.;
 
 using ScalFun =
     boost::function<double(const double, const double, const double)>;
@@ -254,6 +257,8 @@ MoFEMErrorCode Magnetostatics::setupProblem() {
 
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-epsilon", &epsilon,
                                PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-current", &currentDensity,
+                               PETSC_NULL);
 
   CHKERR simpleInterface->setUp();
 
@@ -264,6 +269,13 @@ MoFEMErrorCode Magnetostatics::setupProblem() {
 //! [Boundary condition]
 MoFEMErrorCode Magnetostatics::boundaryCondition() {
   MoFEMFunctionBegin;
+
+  auto simple = mField.getInterface<Simple>();
+  auto bc_mng = mField.getInterface<BcManager>();
+
+  // For 2D case - Infinite long wire
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
+                                           "MAGNETIC_POTENTIAL", 0, SPACE_DIM);
 
   auto natural_bc = [&]() {
     Range boundary_entities;
@@ -367,18 +379,15 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
   if (SPACE_DIM == 3)
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {HCURL});
-  auto source_fun = [&](const double x, const double y, const double z) {
-    FTensor::Index<'i', SPACE_DIM> i;
-    FTensor::Tensor1<double, SPACE_DIM> t_source;
-    const double r = sqrt(x * x + y * y);
-    // t_source(i) = currentDensity;
-    t_source(0) = (-y / r);
-    t_source(1) = (x / r);
-    // t_source(2) = 0.;
-    return t_source;
-  };
-  // pipeline_mng->getOpDomainRhsPipeline().push_back(
-  //     new OpDomainSourceRhs("MAGNETIC_POTENTIAL", source_fun));
+  if (SPACE_DIM == 2) {
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 12, "CURRENT_WIRE") == 0) {
+        pipeline_mng->getOpDomainRhsPipeline().push_back(new OpDomainSourceRhs(
+            "MAGNETIC_POTENTIAL",
+            [](const double, const double, const double) { return 5.; }));
+      }
+    }
+  }
 
   boost::function<FTensor::Tensor1<double, 3>(const double, const double,
                                               const double)>
@@ -392,8 +401,8 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
     return (-y / r);
   };
 
-  // Push Boundary operators to the Pipeline that is responsible for calculating
-  // RHS
+  // Push Boundary operators to the Pipeline that is responsible for
+  // calculating RHS
   if (SPACE_DIM == 3) {
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpHOSetCovariantPiolaTransformOnFace3D(HCURL));
@@ -403,9 +412,9 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
   }
 
   if (SPACE_DIM == 2) {
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpBoundarySource2DRhs("MAGNETIC_POTENTIAL", boundary_fun,
-                                  boost::make_shared<Range>(naturalBcRange)));
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+    //     new OpBoundarySource2DRhs("MAGNETIC_POTENTIAL", boundary_fun,
+    //                               boost::make_shared<Range>(naturalBcRange)));
   }
 
   MoFEMFunctionReturn(0);
