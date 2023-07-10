@@ -278,8 +278,9 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn1 " << cn1;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "zeta " << zeta;
 
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "order " << order;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "geom order " << geom_order;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Approximation order " << order;
+    MOFEM_LOG("EXAMPLE", Sev::inform)
+        << "Geometry approximation order " << geom_order;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
