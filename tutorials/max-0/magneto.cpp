@@ -18,6 +18,9 @@ template <> struct ElementsAndOps<3> {
 
 constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;
 
+// constexpr FieldSpace potential_velocity_space = SPACE_DIM == 2 ? H1 : HCURL;
+// constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
+
 constexpr int BASE_DIM = 3;
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType I =
@@ -40,6 +43,8 @@ using AssemblyBoundaryEleOp =
 
 //! [Domain Operators]
 // OpCurlCurl - Once moved to Bilinear Forms in Core.
+// using OpDomainSourceRhs = FormsIntegrators<DomainEleOp>::Assembly<
+//     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, SPACE_DIM>;
 using OpDomainSourceRhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 //! [Domain Operators]
@@ -53,6 +58,9 @@ using OpBoundarySource2DRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
 
 using OpMassStab = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<BASE_DIM, 3>;
+
+using OpMassStab2D = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
 //! [Boundary Operators]
 
 int order = 3; ///< Order
@@ -216,6 +224,8 @@ private:
 
   // boundary condition ranges
   Range naturalBcRange;
+  Range essentialBcRange;
+  Range sourceRange;
 };
 
 Magnetostatics::Magnetostatics(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -270,6 +280,7 @@ MoFEMErrorCode Magnetostatics::setupProblem() {
 MoFEMErrorCode Magnetostatics::boundaryCondition() {
   MoFEMFunctionBegin;
 
+<<<<<<< HEAD
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
@@ -278,6 +289,9 @@ MoFEMErrorCode Magnetostatics::boundaryCondition() {
                                            "MAGNETIC_POTENTIAL", 0, SPACE_DIM);
 
   auto natural_bc = [&]() {
+=======
+  auto boundary_natural_bc = [&]() {
+>>>>>>> 98477450... boundary conditions and sources for 2D;
     Range boundary_entities;
 
     if (SPACE_DIM == 3)
@@ -304,28 +318,107 @@ MoFEMErrorCode Magnetostatics::boundaryCondition() {
         }
       }
 
-    // auto bc_mng = mField.getInterface<BcManager>();
-    // CHKERR
-    // bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
-    //                                       "MAGNETIC_POTENTIAL",
-    //                                       "MAGNETIC_POTENTIAL", 0, 0);
+    return boundary_entities;
+  };
 
-    // auto &bc_map = bc_mng->getBcMapByBlockName();
-    // for (auto b : bc_map) {
-    //   if (std::regex_match(b.first, std::regex("(.*)NATURAL(.*)"))) {
-    //     boundary_entities.merge(*(b.second->getBcEntsPtr()));
-    //   }
-    // }
-    // // Add vertices to boundary entities
-    // Range boundary_vertices;
-    // CHKERR mField.get_moab().get_connectivity(boundary_entities,
-    //                                           boundary_vertices, true);
-    // boundary_entities.merge(boundary_vertices);
+  auto boundary_essential_bc = [&]() {
+    Range boundary_entities;
+
+    if (SPACE_DIM == 3)
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 11, "ESSENTIALBC") == 0) {
+          Range faces;
+          CHKERR mField.get_moab().get_entities_by_type(bit->meshset, MBTRI,
+                                                        faces, true);
+          CHKERR mField.get_moab().get_adjacencies(
+              faces, 1, true, boundary_entities, moab::Interface::UNION);
+          boundary_entities.merge(faces);
+        }
+      }
+
+    if (SPACE_DIM == 2)
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 11, "ESSENTIALBC") == 0) {
+          Range faces;
+          CHKERR mField.get_moab().get_entities_by_type(bit->meshset, MBEDGE,
+                                                        faces, true);
+          CHKERR mField.get_moab().get_adjacencies(
+              faces, 1, true, boundary_entities, moab::Interface::UNION);
+          boundary_entities.merge(faces);
+        }
+      }
 
     return boundary_entities;
   };
 
-  naturalBcRange = natural_bc();
+  auto source_bc = [&]() {
+    Range boundary_entities;
+
+    if (SPACE_DIM == 3)
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 8, "SOURCE_J") == 0) {
+          Range faces;
+          CHKERR mField.get_moab().get_entities_by_type(bit->meshset, MBTET,
+                                                        faces, true);
+          CHKERR mField.get_moab().get_adjacencies(
+              faces, 1, true, boundary_entities, moab::Interface::UNION);
+          boundary_entities.merge(faces);
+        }
+      }
+
+    if (SPACE_DIM == 2)
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 8, "SOURCE_J") == 0) {
+          Range faces;
+          CHKERR mField.get_moab().get_entities_by_type(bit->meshset, MBTRI,
+                                                        faces, true);
+          CHKERR mField.get_moab().get_adjacencies(
+              faces, 1, true, boundary_entities, moab::Interface::UNION);
+          boundary_entities.merge(faces);
+        }
+      }
+
+    return boundary_entities;
+  };
+
+  naturalBcRange = boundary_natural_bc();
+  essentialBcRange = boundary_essential_bc();
+  sourceRange = source_bc();
+
+  ParallelComm *pcomm =
+      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+  if (SPACE_DIM == 3)
+    if (essentialBcRange.empty()) {
+      Range tets;
+      CHKERR mField.get_moab().get_entities_by_type(0, MBTET, tets);
+      Skinner skin(&mField.get_moab());
+      Range skin_faces; // skin faces from 3d ents
+      CHKERR skin.find_skin(0, tets, false, skin_faces);
+      skin_faces = subtract(skin_faces, naturalBcRange);
+      Range proc_skin;
+      CHKERR pcomm->filter_pstatus(skin_faces,
+                                   PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                   PSTATUS_NOT, -1, &proc_skin);
+      CHKERR mField.get_moab().get_adjacencies(
+          proc_skin, 1, true, essentialBcRange, moab::Interface::UNION);
+      essentialBcRange.merge(proc_skin);
+    }
+  if (SPACE_DIM == 2)
+    if (essentialBcRange.empty()) {
+      Range faces;
+      CHKERR mField.get_moab().get_entities_by_type(0, MBTRI, faces);
+      Skinner skin(&mField.get_moab());
+      Range skin_edges; // skin faces from 3d ents
+      CHKERR skin.find_skin(0, faces, false, skin_edges);
+      skin_edges = subtract(skin_edges, naturalBcRange);
+      Range proc_skin;
+      CHKERR pcomm->filter_pstatus(skin_edges,
+                                   PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                   PSTATUS_NOT, -1, &proc_skin);
+      CHKERR mField.get_moab().get_adjacencies(
+          proc_skin, 1, true, essentialBcRange, moab::Interface::UNION);
+      essentialBcRange.merge(proc_skin);
+    }
 
   MoFEMFunctionReturn(0);
 }
@@ -336,6 +429,10 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
+
+  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+      simpleInterface->getProblemName(), "MAGNETIC_POTENTIAL",
+      essentialBcRange);
 
   auto add_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
@@ -352,7 +449,6 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
 
   CHKERR add_base_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_base_ops(pipeline_mng->getOpDomainRhsPipeline());
-  // CHKERR add_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
 
   // Push Domain operators to the Pipeline that is responsible for calculating
   // LHS
@@ -372,6 +468,9 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
     pipeline_mng->getOpDomainLhsPipeline().push_back(new OpCurlCurl2D(
         "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
         [](const double, const double, const double) { return 1. / mu; }));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMassStab2D(
+        "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
+        [](const double, const double, const double) { return epsilon / mu; }));
   }
 
   // Push Domain operators to the Pipeline that is responsible for calculating
@@ -379,6 +478,7 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
   if (SPACE_DIM == 3)
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {HCURL});
+<<<<<<< HEAD
   if (SPACE_DIM == 2) {
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 12, "CURRENT_WIRE") == 0) {
@@ -388,6 +488,16 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
       }
     }
   }
+=======
+
+  auto source_fun = [&](const double x, const double y, const double z) {
+    return 5.;
+  };
+  if (SPACE_DIM == 2)
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpDomainSourceRhs("MAGNETIC_POTENTIAL", source_fun,
+                              boost::make_shared<Range>(sourceRange)));
+>>>>>>> 98477450... boundary conditions and sources for 2D;
 
   boost::function<FTensor::Tensor1<double, 3>(const double, const double,
                                               const double)>
@@ -397,8 +507,7 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
       };
 
   auto boundary_fun = [&](const double x, const double y, const double z) {
-    const double r = sqrt(y * y);
-    return (-y / r);
+    return 0.;
   };
 
   // Push Boundary operators to the Pipeline that is responsible for
