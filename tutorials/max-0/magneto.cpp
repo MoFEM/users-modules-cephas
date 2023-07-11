@@ -172,7 +172,7 @@ struct OpCurlCurl2D : public AssemblyDomainEleOp {
 
       int rr = 0;
       for (; rr != nbRows; ++rr) {
-        t_row_curl(i) = FTensor::levi_civita(j, i) * t_row_grad(j);
+        t_row_curl(i) = FTensor::levi_civita(i, j) * t_row_grad(j);
 
         FTensor::Tensor1<double, SPACE_DIM> t_col_curl;
 
@@ -180,7 +180,7 @@ struct OpCurlCurl2D : public AssemblyDomainEleOp {
 
         int cc = 0;
         for (; cc != nbCols; cc++) {
-          t_col_curl(i) = FTensor::levi_civita(j, i) * t_col_grad(j);
+          t_col_curl(i) = FTensor::levi_civita(i, j) * t_col_grad(j);
           (*a_mat_ptr) += alpha * (t_row_curl(i) * t_col_curl(i));
 
           ++t_col_grad;
@@ -312,30 +312,23 @@ MoFEMErrorCode Magnetostatics::boundaryCondition() {
 
   auto boundary_essential_bc = [&]() {
     Range boundary_entities;
+    auto bc_mng = mField.getInterface<BcManager>();
+    CHKERR bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
+                                          "ESSENTIAL", "MAGNETIC_POTENTIAL", 0,
+                                          0);
 
-    if (SPACE_DIM == 3)
-      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-        if (bit->getName().compare(0, 11, "ESSENTIALBC") == 0) {
-          Range faces;
-          CHKERR mField.get_moab().get_entities_by_type(bit->meshset, MBTRI,
-                                                        faces, true);
-          CHKERR mField.get_moab().get_adjacencies(
-              faces, 1, true, boundary_entities, moab::Interface::UNION);
-          boundary_entities.merge(faces);
-        }
+    auto &bc_map = bc_mng->getBcMapByBlockName();
+    // boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
+    for (auto b : bc_map) {
+      if (std::regex_match(b.first, std::regex("(.*)ESSENTIAL(.*)"))) {
+        boundary_entities.merge(*(b.second->getBcEntsPtr()));
       }
-
-    if (SPACE_DIM == 2)
-      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-        if (bit->getName().compare(0, 11, "ESSENTIALBC") == 0) {
-          Range faces;
-          CHKERR mField.get_moab().get_entities_by_type(bit->meshset, MBEDGE,
-                                                        faces, true);
-          CHKERR mField.get_moab().get_adjacencies(
-              faces, 1, true, boundary_entities, moab::Interface::UNION);
-          boundary_entities.merge(faces);
-        }
-      }
+    }
+    // Add vertices to boundary entities
+    Range boundary_vertices;
+    CHKERR mField.get_moab().get_connectivity(boundary_entities,
+                                              boundary_vertices, true);
+    boundary_entities.merge(boundary_vertices);
 
     return boundary_entities;
   };
@@ -457,9 +450,6 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
     pipeline_mng->getOpDomainLhsPipeline().push_back(new OpCurlCurl2D(
         "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
         [](const double, const double, const double) { return 1. / mu; }));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMassStab2D(
-        "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
-        [](const double, const double, const double) { return epsilon / mu; }));
   }
 
   // Push Domain operators to the Pipeline that is responsible for calculating
