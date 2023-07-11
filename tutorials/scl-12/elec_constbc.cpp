@@ -46,17 +46,18 @@ template <int SPACE_DIM>struct BlockData {
   double epsPermit;
   Range blockInterfaces; 
   Range blockDomains;
-  Range blockConstBC
+  Range blockconstBC;
 };
 template <int SPACE_DIM> struct DataAtIntegrationPts {
 
   SmartPetscObj<Vec> petscVec;
   double blockPermittivity;
   double chrgDens;
-  double constPontential
+  double constPotential;
   DataAtIntegrationPts(MoFEM::Interface &m_field) {
     blockPermittivity = 0;
     chrgDens = 0;
+    constPotential =0;
   }
 };
 
@@ -154,61 +155,32 @@ protected:
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
 };
 
-template <int SPACE_DIM> struct OpConstantBC : public IntEleOp {
-public:
-  OpConstantBC(
-      std::string field_name,
-      boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr)
-      : IntEleOp(field_name, IntEleOp::OPROW), commonDataPtr(common_data_ptr) {}
+struct OpConstBC : public IntEleOp {
+  OpConstBC(
+      boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
+      boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> const_potential_block_sets_ptr,
+      const std::string &field_name)
+      : IntEleOp(field_name, field_name, OPROWCOL, false),
+        commonDataPtr(common_data_ptr), constBCBlockSetptr(const_potential_block_sets_ptr) {
+    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+    doEntities[MBVERTEX] = true;
+  }
 
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data) {
     MoFEMFunctionBegin;
-
-    const int nb_dofs = data.getIndices().size();
-
-    if (nb_dofs) {
-      locRhs.resize(nb_dofs, false);
-      locRhs.clear();
-
-      // get element area
-      const double volumee = getMeasure();
-
-      // get number of integration points
-      const int nb_integration_points = getGaussPts().size2();
-      // get integration weights
-      auto t_w = getFTensor0IntegrationWeight();
-
-      // get base function
-      auto t_base = data.getFTensor0N();
-
-      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL VECTOR
-      for (int gg = 0; gg != nb_integration_points; gg++) {
-        const double a = t_w * volumee;
-        // double y = getGaussPts()(1, gg);
-        double y = getCoordsAtGaussPts()(gg, 1);
-        for (int rr = 0; rr != nb_dofs; rr++) {
-          locRhs[rr] += t_base * a * commonDataPtr->constPontential;
-
-          ++t_base;
-        }
-
-        // move to the weight of the next integration point
-        ++t_w;
+    for (const auto &m : *constBCBlockSetptr) {
+      if (m.second.blockconstBC.find(getFEEntityHandle()) != m.second.blockconstBC.end()) {
+        commonDataPtr->constPotential = m.second.sigma;
       }
-
-      // FILL VALUES OF LOCAL VECTOR ENTRIES TO THE GLOBAL VECTOR
-
-      // Ignoring DOFs on boundary (index -1)
-      CHKERR VecSetOption(getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-      CHKERR VecSetValues(getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
     }
-
     MoFEMFunctionReturn(0);
   }
 
-private:
-  VectorDouble locRhs;
+protected:
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
+  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> constBCBlockSetptr;
 };
 struct ElectrostaticHomogeneous {
 public:
@@ -231,14 +203,14 @@ private:
   MoFEM::Interface &mField;
 
   boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> perm_block_sets_ptr;
-  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>>
-int_block_sets_ptr; ///////
+  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>>int_block_sets_ptr; ///////
   Simple *simpleInterface;
   boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe;
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr;
 
   std::string domainField;
   int oRder;
+  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>>const_potential_block_sets_ptr;
 };
 
 ElectrostaticHomogeneous::ElectrostaticHomogeneous(MoFEM::Interface &m_field)
@@ -311,7 +283,30 @@ int_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
       block_data.sigma = attributes[0];
     }
   }
+const_potential_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
+Range constbcics;
 
+for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+  if (bit->getName().compare(0, 12, "CONSTANT_BC") == 0) {
+    const int id = bit->getMeshsetId();
+    auto &block_data = (*const_potential_block_sets_ptr)[id];
+
+    CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM - 1,
+                                                       block_data.blockconstBC, true);
+    constbcics.merge(block_data.blockconstBC);
+
+    std::vector<double> attributes;
+    bit->getAttributes(attributes);
+    if (attributes.size() < 1) {
+      SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+               "should be at least 1 attribute but is %d",
+               attributes.size());
+    }
+
+    block_data.iD = id;
+    block_data.sigma = attributes[0];
+  }
+}
   CHKERR mField.add_finite_element("INTERFACE");
   CHKERR mField.modify_finite_element_add_field_row("INTERFACE", domainField);
   CHKERR mField.modify_finite_element_add_field_col("INTERFACE", domainField);
@@ -346,6 +341,39 @@ MoFEMErrorCode ElectrostaticHomogeneous::boundaryCondition() {
       simpleInterface->getProblemName(), "BOUNDARY_CONDITION",
       std::string(domainField), true);
 
+
+//   auto get_entities_on_mesh = [&]() {
+//     Range boundary_entities;
+//     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+//       std::string entity_name = it->getName();
+//       if (entity_name.compare(0, 18, "CONSTANT_BC") == 0) {
+//         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+//                                                    boundary_entities, true);
+//       }
+//     }
+//     // Add vertices to boundary entities
+//     Range boundary_vertices;
+//     CHKERR mField.get_moab().get_connectivity(boundary_entities,
+//                                               boundary_vertices, true);
+//     boundary_entities.merge(boundary_vertices);
+
+    // Store entities for fieldsplit (block) solver
+
+//     return boundary_entities;
+//   };
+
+//   auto mark_boundary_dofs = [&](Range &&skin_edges) {
+//     auto problem_manager = mField.getInterface<ProblemsManager>();
+//     auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
+//     problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
+//                               skin_edges, *marker_ptr);
+//     return marker_ptr;
+//   };
+
+//   // Get global local vector of marked DOFs. Is global, since is set for all
+//   // DOFs on processor. Is local since only DOFs on processor are in the
+//   // vector. To access DOFs use local indices.
+//   boundaryMarker = mark_boundary_dofs(get_entities_on_mesh());
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -393,6 +421,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpInternal(domainField, grad_u_vals_ptr,
                          [](double, double, double) constexpr { return -1; }));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpConstBC(common_data_ptr, const_potential_block_sets_ptr, domainField));
     };
 
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
@@ -407,14 +437,18 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
 
 
     {
-      interface_rhs_fe->getOpPtrVector().push_back(
+    interface_rhs_fe->getOpPtrVector().push_back(
           new OpBlockChargeDensity<SPACE_DIM>(common_data_ptr,
                                               int_block_sets_ptr, domainField));
 
-  auto sIgma = [&](const double, const double, const double) { return common_data_ptr->chrgDens; };
-
+     interface_rhs_fe->getOpPtrVector().push_back(
+          new OpConstBC(common_data_ptr, const_potential_block_sets_ptr, domainField));
+          
+    auto sIgma = [&](const double, const double, const double) 
+  { return common_data_ptr->chrgDens; };
       interface_rhs_fe->getOpPtrVector().push_back(
           new OpInterfaceRhsVectorF(domainField, sIgma));
+     
     }
 
 

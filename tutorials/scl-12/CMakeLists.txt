@@ -26,26 +26,31 @@ tutorials_build_and_install(
 tutorials_build_and_install(
   electrostatic_3d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatic_3d_homogeneous.cpp)
 
-tutorials_build_and_install(
-  electrostatichomogeneous_3d ${CMAKE_CURRENT_SOURCE_DIR}/electrostatichomogeneous.cpp)
-set_target_properties(
-  electrostatichomogeneous_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
 
-tutorials_build_and_install(
-  electrostatichomogeneous_2d ${CMAKE_CURRENT_SOURCE_DIR}/electrostatichomogeneous.cpp) 
-set_target_properties(
-  electrostatichomogeneous_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
+# tutorials_build_and_install(
+#   electrostatichomogeneous_3d ${CMAKE_CURRENT_SOURCE_DIR}/electrostatichomogeneous.cpp)
+# set_target_properties(
+#   electrostatichomogeneous_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+
+# tutorials_build_and_install(
+#   electrostatichomogeneous_2d ${CMAKE_CURRENT_SOURCE_DIR}/electrostatichomogeneous.cpp) 
+# set_target_properties(
+#   electrostatichomogeneous_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
   tutorials_build_and_install(
   electrostatichomogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatichomogeneous.cpp) 
+  tutorials_build_and_install(
+    elec_constbc ${CMAKE_CURRENT_SOURCE_DIR}/elec_constbc.cpp) 
+
+
   
 
 
-add_test(
-  electrostatichomogeneous
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-  ${CMAKE_CURRENT_BINARY_DIR}/electrostatichomogeneous
-  -file_name squareGD.h5m 
-  -order 1
-  -log_no_color -test)
+# add_test(
+#   electrostatichomogeneous
+#   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
+#   ${CMAKE_CURRENT_BINARY_DIR}/electrostatichomogeneous
+#   -file_name squareGD.h5m 
+#   -order 1
+#   -log_no_color -test)
   
