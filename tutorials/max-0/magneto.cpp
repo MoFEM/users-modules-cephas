@@ -18,8 +18,10 @@ template <> struct ElementsAndOps<3> {
 
 constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;
 
-// constexpr FieldSpace potential_velocity_space = SPACE_DIM == 2 ? H1 : HCURL;
-// constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
+constexpr FieldSpace potential_space = SPACE_DIM == 2 ? H1 : HCURL;
+constexpr size_t potential_field_dim = SPACE_DIM == 2 ? 1 : 3;
+constexpr FieldApproximationBase approximation_base =
+    SPACE_DIM == 2 ? AINSWORTH_LEGENDRE_BASE : DEMKOWICZ_JACOBI_BASE;
 
 constexpr int BASE_DIM = 3;
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
@@ -33,9 +35,6 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
-
-// constexpr FieldSpace potential_velocity_space = SPACE_DIM == 2 ? H1 : HCURL;
-// constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
 
 using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
 using AssemblyBoundaryEleOp =
@@ -65,8 +64,8 @@ using OpMassStab2D = FormsIntegrators<DomainEleOp>::Assembly<
 
 int order = 3; ///< Order
 // material parameters
-double mu = 1.;       ///< magnetic constant  N / A2; 5000 2D
-double epsilon = 0.1; ///< regularization paramater
+double mu = M_PI * 4e-7; ///< magnetic constant  N / A2; M_PI * 4e-7
+double epsilon = 0.1;    ///< regularization paramater
 double currentDensity = 5.;
 
 using ScalFun =
@@ -246,19 +245,10 @@ MoFEMErrorCode Magnetostatics::readMesh() {
 MoFEMErrorCode Magnetostatics::setupProblem() {
   MoFEMFunctionBegin;
 
-  if (SPACE_DIM == 3) {
-    CHKERR simpleInterface->addDomainField("MAGNETIC_POTENTIAL", HCURL,
-                                           DEMKOWICZ_JACOBI_BASE, 1);
-    CHKERR simpleInterface->addBoundaryField("MAGNETIC_POTENTIAL", HCURL,
-                                             DEMKOWICZ_JACOBI_BASE, 1);
-  }
-
-  if (SPACE_DIM == 2) {
-    CHKERR simpleInterface->addDomainField("MAGNETIC_POTENTIAL", H1,
-                                           AINSWORTH_LEGENDRE_BASE, 1);
-    CHKERR simpleInterface->addBoundaryField("MAGNETIC_POTENTIAL", H1,
-                                             AINSWORTH_LEGENDRE_BASE, 1);
-  }
+  CHKERR simpleInterface->addDomainField("MAGNETIC_POTENTIAL", potential_space,
+                                         approximation_base, 1);
+  CHKERR simpleInterface->addBoundaryField(
+      "MAGNETIC_POTENTIAL", potential_space, approximation_base, 1);
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-my_order", &order, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder("MAGNETIC_POTENTIAL", order);
@@ -584,16 +574,9 @@ MoFEMErrorCode Magnetostatics::outputResults() {
     post_proc_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         "MAGNETIC_POTENTIAL", field_val_ptr_2D));
 
-  // Only implement for <3, 3>  OR <1, 2> (<BASE_DIM, SPACE_DIM>)
-  if (SPACE_DIM == 3)
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHcurlVectorCurl<3, 3>("MAGNETIC_POTENTIAL",
-                                             induction_ptr));
-
-  if (SPACE_DIM == 2)
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateHcurlVectorCurl<1, 2>("MAGNETIC_POTENTIAL",
-                                             induction_ptr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateHcurlVectorCurl<potential_field_dim, SPACE_DIM>(
+          "MAGNETIC_POTENTIAL", induction_ptr));
 
   using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
