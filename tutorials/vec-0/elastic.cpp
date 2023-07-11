@@ -862,6 +862,7 @@ MoFEMErrorCode SetUpSchurImpl::setUpSubDM() {
 MoFEMErrorCode SetUpSchurImpl::setOperator() {
   MoFEMFunctionBegin;
   auto pip = mField.getInterface<PipelineManager>();
+  
   // Boundary
   auto dm_is = getDMSubData(subDM)->getSmartRowIs();
   auto ao_up = createAOMappingIS(dm_is, PETSC_NULL);
@@ -890,11 +891,9 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
   post_proc_schur_lhs_ptr->postProcessHook = [this,
                                               get_post_proc_hook_lhs_S]() {
     MoFEMFunctionBegin;
-    if (auto S = getSchur()) {
-      CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
-      CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-      CHKERR get_post_proc_hook_lhs_S()();
-    }
+    CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
+    CHKERR get_post_proc_hook_lhs_S()();
     CHKERR postProc();
     MoFEMFunctionReturn(0);
   };
