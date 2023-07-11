@@ -64,7 +64,8 @@ using OpMassStab2D = FormsIntegrators<DomainEleOp>::Assembly<
 
 int order = 3; ///< Order
 // material parameters
-double mu = M_PI * 4e-7; ///< magnetic constant  N / A2; M_PI * 4e-7
+double mu = 1.;
+double mu_0 = M_PI * 4e-7; ///< magnetic constant  N / A2; M_PI * 4e-7
 double epsilon = 0.1;    ///< regularization paramater
 double currentDensity = 5.;
 
