@@ -1,0 +1,27 @@
+reset 
+
+create Cylinder height 10 radius 5 
+create Cylinder height 10 radius 1
+
+subtract volume 2 from volume 1 keep_tool 
+
+imprint all
+merge all
+
+block 1 add surface 1 
+block 1 name "ESSENTIALBC"
+
+block 2 add volume 2 
+block 2 name "SOURCE_J"
+block 2 attribute count 3
+block 2 attribute index 1 1 name 'Attribute 1'
+block 2 attribute index 2 1 name 'Attribute 2'
+block 2 attribute index 3 5 name 'Attribute 3'
+
+#volume all sizing function type skeleton scale 8 time_accuracy_level 4
+#volume all sizing function type skeleton  
+volume all size auto factor 6   
+volume all scheme Tetmesh    
+mesh volume all   
+
+save as "/Users/adriana/Documents/Meshes_for_DD/RA/middle_current_3D.cub" overwrite

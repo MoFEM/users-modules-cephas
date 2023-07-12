@@ -233,7 +233,8 @@ private:
   Range sourceRange;
 
   // using OpBodyForce =
-  //     DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, potential_field_dim,
+  //     DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>,
+  //     potential_field_dim,
   //                             potential_field_dim>;
 };
 
@@ -465,13 +466,12 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
                                               const double)>
       source_fun_3D = [](double x, double y, double z) {
         const double r = sqrt(x * x + y * y);
-        return FTensor::Tensor1<double, 3>{0., 5., 0.};
+        return FTensor::Tensor1<double, 3>{0., 0., 5.};
       };
   if (SPACE_DIM == 3)
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainSource3DRhs("MAGNETIC_POTENTIAL", source_fun_3D,
                                 boost::make_shared<Range>(sourceRange)));
-
 
   // CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
   //     pipeline_mng->getOpDomainRhsPipeline(), mField, "MAGNETIC_POTENTIAL",
@@ -500,7 +500,7 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
   if (SPACE_DIM == 2)
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpBoundarySource2DRhs("MAGNETIC_POTENTIAL", boundary_fun,
-                                boost::make_shared<Range>(naturalBcRange)));
+                                  boost::make_shared<Range>(naturalBcRange)));
 
   MoFEMFunctionReturn(0);
 }

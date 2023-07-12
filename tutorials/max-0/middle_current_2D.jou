@@ -1,0 +1,24 @@
+reset
+
+# create circles
+create surface circle radius 5 zplane 
+create surface circle radius 1 zplane
+
+imprint all
+merge all
+
+block 1 add curve 1
+block 1 name 'ESSENTIALBC'  
+
+block 2 add surface 2
+block 2 name 'SOURCE_J'
+block 2 attribute count 1
+block 2 attribute index 1 5
+
+# mesh
+surf all scheme tri
+surf all sizing function type skeleton scale 1
+#surf all size 1
+mesh surf all
+
+save as "/Users/adriana/Documents/Meshes_for_DD/RA/middle_current.cub" overwrite
