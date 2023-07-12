@@ -154,34 +154,106 @@ protected:
   boost::shared_ptr<map<int, BlockData<SPACE_DIM>>> permBlockSetsPtr;
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
 };
-
 struct OpConstBC : public IntEleOp {
-  OpConstBC(
-      boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
-      boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> const_potential_block_sets_ptr,
-      const std::string &field_name)
-      : IntEleOp(field_name, field_name, OPROWCOL, false),
-        commonDataPtr(common_data_ptr), constBCBlockSetptr(const_potential_block_sets_ptr) {
-    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-    doEntities[MBVERTEX] = true;
+public:
+  bool sYmm;
+  OpConstBC(std::string row_field_name, std::string col_field_name)
+      : IntEleOp(row_field_name, col_field_name, IntEleOp::OPROWCOL){
+    sYmm = false;
   }
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data) {
     MoFEMFunctionBegin;
-    for (const auto &m : *constBCBlockSetptr) {
-      if (m.second.blockconstBC.find(getFEEntityHandle()) != m.second.blockconstBC.end()) {
-        commonDataPtr->constPotential = m.second.sigma;
+
+    FTensor::Index<'i', SPACE_DIM> i;
+
+    const int nb_row_dofs = row_data.getIndices().size();
+    const int nb_col_dofs = col_data.getIndices().size();
+
+    if (nb_row_dofs && nb_col_dofs) {
+
+      locLhs.resize(nb_row_dofs, nb_col_dofs, false);
+      locLhs.clear();
+
+      // get element area
+      const double area = getMeasure();
+
+      // get number of integration points
+      const int nb_integration_points = getGaussPts().size2();
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
+
+      // get derivatives of base functions on row
+      auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
+
+        //    auto t_normal = getFTensor1NormalsAtGaussPts();
+
+          auto t_normal = FTensor::Tensor1<double, 2>{0, 1};
+
+      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
+      for (int gg = 0; gg != nb_integration_points; gg++) {
+        const double a = t_w * area;
+
+        for (int rr = 0; rr != nb_row_dofs; ++rr) {
+          // get derivatives of base functions on column
+        //   auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
+           auto t_col_base = col_data.getFTensor0N(gg, 0);
+
+          for (int cc = 0; cc != nb_col_dofs; cc++) {
+            locLhs(rr, cc) += t_row_diff_base(i) * t_normal(i) * t_col_base * a;
+
+            // move to the derivatives of the next base functions on column
+            ++t_col_base;
+          }
+
+          // move to the derivatives of the next base functions on row
+          ++t_row_diff_base;
+        }
+
+        // move to the weight of the next integration point
+        ++t_w;
       }
+
+      // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
+      CHKERR MatSetValues<EssentialBcStorage>(getKSPB(), row_data, col_data, &locLhs(0, 0),
+                          ADD_VALUES);
     }
+
     MoFEMFunctionReturn(0);
   }
 
-protected:
-  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
-  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> constBCBlockSetptr;
+private:
+  MatrixDouble locLhs;
 };
+// struct OpConstBC : public IntEleOp {
+//   OpConstBC(
+//       boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
+//       boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> const_potential_block_sets_ptr,
+//       const std::string &field_name)
+//       : IntEleOp(field_name, field_name, OPROWCOL, false),
+//         commonDataPtr(common_data_ptr), constBCBlockSetptr(const_potential_block_sets_ptr) {
+//     std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+//     doEntities[MBVERTEX] = true;
+//   }
+
+//   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+//                         EntityType col_type, EntData &row_data,
+//                         EntData &col_data) {
+//     MoFEMFunctionBegin;
+//     for (const auto &m : *constBCBlockSetptr) {
+//       if (m.second.blockconstBC.find(getFEEntityHandle()) != m.second.blockconstBC.end()) {
+//         commonDataPtr->constPotential = m.second.sigma;
+//       }
+//     }
+//     MoFEMFunctionReturn(0);
+//   }
+
+// protected:
+//   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
+//   boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> constBCBlockSetptr;
+// };
 struct ElectrostaticHomogeneous {
 public:
   ElectrostaticHomogeneous(MoFEM::Interface &m_field);
@@ -210,7 +282,7 @@ private:
 
   std::string domainField;
   int oRder;
-  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>>const_potential_block_sets_ptr;
+ boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 };
 
 ElectrostaticHomogeneous::ElectrostaticHomogeneous(MoFEM::Interface &m_field)
@@ -232,6 +304,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
 
   CHKERR simpleInterface->addDomainField(domainField, H1,
                                          AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simpleInterface->addBoundaryField(domainField, H1,
+                                         AINSWORTH_LEGENDRE_BASE, 1);
 
   int oRder = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
@@ -241,7 +315,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
 perm_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
   Range electrIcs;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-    if (bit->getName().compare(0, 12, "MAT_ELECTRIC") == 0) {
+    if (bit->getName().compare(0, 13, "MAT_ELECTRIC") == 0) {
       const int id = bit->getMeshsetId();
       auto &block_data = (*perm_block_sets_ptr)[id];
 
@@ -263,7 +337,7 @@ perm_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
 int_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
   Range interfIcs;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-    if (bit->getName().compare(0, 12, "INT_ELECTRIC") == 0) {
+    if (bit->getName().compare(0, 13, "INT_ELECTRIC") == 0) {
       const int id = bit->getMeshsetId();
       auto &block_data = (*int_block_sets_ptr)[id];
 
@@ -283,30 +357,30 @@ int_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
       block_data.sigma = attributes[0];
     }
   }
-const_potential_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
-Range constbcics;
+// const_potential_block_sets_ptr = boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
+// Range constbcics;
 
-for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-  if (bit->getName().compare(0, 12, "CONSTANT_BC") == 0) {
-    const int id = bit->getMeshsetId();
-    auto &block_data = (*const_potential_block_sets_ptr)[id];
+// for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+//   if (bit->getName().compare(0, 12, "CONSTANT_BC") == 0) {
+//     const int id = bit->getMeshsetId();
+//     auto &block_data = (*const_potential_block_sets_ptr)[id];
 
-    CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM - 1,
-                                                       block_data.blockconstBC, true);
-    constbcics.merge(block_data.blockconstBC);
+//     CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), SPACE_DIM - 1,
+//                                                        block_data.blockconstBC, true);
+//     constbcics.merge(block_data.blockconstBC);
 
-    std::vector<double> attributes;
-    bit->getAttributes(attributes);
-    if (attributes.size() < 1) {
-      SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-               "should be at least 1 attribute but is %d",
-               attributes.size());
-    }
+//     std::vector<double> attributes;
+//     bit->getAttributes(attributes);
+//     if (attributes.size() < 1) {
+//       SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+//                "should be at least 1 attribute but is %d",
+//                attributes.size());
+//     }
 
-    block_data.iD = id;
-    block_data.sigma = attributes[0];
-  }
-}
+//     block_data.iD = id;
+//     block_data.sigma = attributes[0];
+//   }
+// }
   CHKERR mField.add_finite_element("INTERFACE");
   CHKERR mField.modify_finite_element_add_field_row("INTERFACE", domainField);
   CHKERR mField.modify_finite_element_add_field_col("INTERFACE", domainField);
@@ -342,38 +416,38 @@ MoFEMErrorCode ElectrostaticHomogeneous::boundaryCondition() {
       std::string(domainField), true);
 
 
-//   auto get_entities_on_mesh = [&]() {
-//     Range boundary_entities;
-//     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-//       std::string entity_name = it->getName();
-//       if (entity_name.compare(0, 18, "CONSTANT_BC") == 0) {
-//         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-//                                                    boundary_entities, true);
-//       }
-//     }
-//     // Add vertices to boundary entities
-//     Range boundary_vertices;
-//     CHKERR mField.get_moab().get_connectivity(boundary_entities,
-//                                               boundary_vertices, true);
-//     boundary_entities.merge(boundary_vertices);
+auto get_entities_on_mesh = [&]() {
+    Range boundary_entities;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      std::string entity_name = it->getName();
+      if (entity_name.compare(0, 12, "CONSTANT_BC") == 0) {
+        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+                                                   boundary_entities, true);
+      }
+    }
+    // Add vertices to boundary entities
+    Range boundary_vertices;
+    CHKERR mField.get_moab().get_connectivity(boundary_entities,
+                                              boundary_vertices, true);
+    boundary_entities.merge(boundary_vertices);
 
     // Store entities for fieldsplit (block) solver
 
-//     return boundary_entities;
-//   };
+    return boundary_entities;
+  };
 
-//   auto mark_boundary_dofs = [&](Range &&skin_edges) {
-//     auto problem_manager = mField.getInterface<ProblemsManager>();
-//     auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
-//     problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
-//                               skin_edges, *marker_ptr);
-//     return marker_ptr;
-//   };
+  auto mark_boundary_dofs = [&](Range &&skin_edges) {
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
+    problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
+                              skin_edges, *marker_ptr);
+    return marker_ptr;
+  };
 
-//   // Get global local vector of marked DOFs. Is global, since is set for all
-//   // DOFs on processor. Is local since only DOFs on processor are in the
-//   // vector. To access DOFs use local indices.
-//   boundaryMarker = mark_boundary_dofs(get_entities_on_mesh());
+  // Get global local vector of marked DOFs. Is global, since is set for all
+  // DOFs on processor. Is local since only DOFs on processor are in the
+  // vector. To access DOFs use local indices.
+  boundaryMarker = mark_boundary_dofs(get_entities_on_mesh());
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -395,24 +469,39 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
   { // Push operators to the Pipeline that is responsible for calculating LHS
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {H1});
+     pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetBc(domainField, true, boundaryMarker));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField,
                                           epsilon));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpUnSetBc(domainField));
   }
+  
+     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpSetBc(domainField, false, boundaryMarker));
+      pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+          new OpConstBC(domainField, domainField));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpUnSetBc(domainField));
+
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
-    auto set_values_to_bc_dofs = [&](auto &fe) {
-      auto get_bc_hook = [&]() {
-        EssentialPreProc<TemperatureCubitBcData> hook(mField, fe, {});
-        return hook;
-      };
-      fe->preProcessHook = get_bc_hook();
-    };
+    // auto set_values_to_bc_dofs = [&](auto &fe) {
+    //   auto get_bc_hook = [&]() {
+    //     EssentialPreProc<TemperatureCubitBcData> hook(mField, fe, {});
+    //     return hook;
+    //   };
+    //   fe->preProcessHook = get_bc_hook();
+    // };
 
     auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
       using OpInternal =
           FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
               GAUSS>::OpGradTimesTensor<BASE_DIM, FIELD_DIM, SPACE_DIM>;
+
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpSetBc(domainField, true, boundaryMarker));
 
       auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -421,17 +510,20 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpInternal(domainField, grad_u_vals_ptr,
                          [](double, double, double) constexpr { return -1; }));
-      pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpConstBC(common_data_ptr, const_potential_block_sets_ptr, domainField));
+    //   pipeline_mng->getOpDomainRhsPipeline().push_back(
+    //       new OpConstBC(common_data_ptr, const_potential_block_sets_ptr, domainField));
+
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpUnSetBc(domainField));
     };
 
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {H1});
-    set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
+    // set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
     calculate_residual_from_set_values_on_bc(
         pipeline_mng->getOpDomainRhsPipeline());
 
-
+  
   interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
     new intPostProcElementForcesAndSourcesCore(mField));
 
@@ -441,9 +533,9 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
           new OpBlockChargeDensity<SPACE_DIM>(common_data_ptr,
                                               int_block_sets_ptr, domainField));
 
-     interface_rhs_fe->getOpPtrVector().push_back(
-          new OpConstBC(common_data_ptr, const_potential_block_sets_ptr, domainField));
-          
+    //  interface_rhs_fe->getOpPtrVector().push_back(
+    //       new OpConstBC(common_data_ptr, const_potential_block_sets_ptr, domainField));
+
     auto sIgma = [&](const double, const double, const double) 
   { return common_data_ptr->chrgDens; };
       interface_rhs_fe->getOpPtrVector().push_back(
@@ -511,7 +603,9 @@ MoFEMErrorCode ElectrostaticHomogeneous::solveSystem() {
 MoFEMErrorCode ElectrostaticHomogeneous::outputResults() {
   MoFEMFunctionBegin;
   auto pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getDomainLhsFE().reset();
+   pipeline_mng->getBoundaryLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
