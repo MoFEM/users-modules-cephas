@@ -6,6 +6,8 @@ static char help[] = "...\n\n";
 
 template <int DIM> struct ElementsAndOps {};
 
+template <int FIELD_DIM, int SPACE_DIM> struct OpCurlCurl {};
+
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
   using BoundaryEle = PipelineManager::EdgeEle;
@@ -40,16 +42,22 @@ using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
 using AssemblyBoundaryEleOp =
     FormsIntegrators<BoundaryEleOp>::Assembly<A>::OpBase;
 
+// using DomainNaturalBC =
+//     NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+
 //! [Domain Operators]
 // OpCurlCurl - Once moved to Bilinear Forms in Core.
 // using OpDomainSourceRhs = FormsIntegrators<DomainEleOp>::Assembly<
 //     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, SPACE_DIM>;
-using OpDomainSourceRhs = FormsIntegrators<DomainEleOp>::Assembly<
+using OpDomainSource2DRhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
+
+using OpDomainSource3DRhs = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<3, 3>;
 //! [Domain Operators]
 
 //! [Boundary Operators]
-using OpBoundarySourceRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
+using OpBoundarySource3DRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, 3>;
 
 using OpBoundarySource2DRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
@@ -57,16 +65,13 @@ using OpBoundarySource2DRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
 
 using OpMassStab = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<BASE_DIM, 3>;
-
-using OpMassStab2D = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
 //! [Boundary Operators]
 
 int order = 3; ///< Order
 // material parameters
 double mu = 1.;
 double mu_0 = M_PI * 4e-7; ///< magnetic constant  N / A2; M_PI * 4e-7
-double epsilon = 0.1;    ///< regularization paramater
+double epsilon = 0.1;      ///< regularization paramater
 double currentDensity = 5.;
 
 using ScalFun =
@@ -76,7 +81,7 @@ template <int SPACE_DIM>
 using VecFun = boost::function<FTensor::Tensor1<double, SPACE_DIM>(
     const double, const double, const double)>;
 
-struct OpCurlCurl : public AssemblyDomainEleOp {
+template <> struct OpCurlCurl<3, 3> : public AssemblyDomainEleOp {
   OpCurlCurl(const std::string row_field_name, const std::string col_field_name,
              ScalFun beta)
       : AssemblyDomainEleOp(row_field_name, col_field_name,
@@ -139,9 +144,9 @@ private:
   ScalFun betaCoeff;
 };
 
-struct OpCurlCurl2D : public AssemblyDomainEleOp {
-  OpCurlCurl2D(const std::string row_field_name,
-               const std::string col_field_name, ScalFun beta)
+template <> struct OpCurlCurl<1, 2> : public AssemblyDomainEleOp {
+  OpCurlCurl(const std::string row_field_name, const std::string col_field_name,
+             ScalFun beta)
       : AssemblyDomainEleOp(row_field_name, col_field_name,
                             AssemblyDomainEleOp::OPROWCOL),
         betaCoeff(beta) {
@@ -226,6 +231,10 @@ private:
   Range naturalBcRange;
   Range essentialBcRange;
   Range sourceRange;
+
+  // using OpBodyForce =
+  //     DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, potential_field_dim,
+  //                             potential_field_dim>;
 };
 
 Magnetostatics::Magnetostatics(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -428,20 +437,15 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
   if (SPACE_DIM == 3) {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {HCURL});
-    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpCurlCurl(
-        "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
-        [](const double, const double, const double) { return 1. / mu; }));
-    //     }));
     pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMassStab(
         "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
         [](const double, const double, const double) { return epsilon / mu; }));
   }
 
-  if (SPACE_DIM == 2) {
-    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpCurlCurl2D(
-        "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
-        [](const double, const double, const double) { return 1. / mu; }));
-  }
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpCurlCurl<potential_field_dim, SPACE_DIM>(
+          "MAGNETIC_POTENTIAL", "MAGNETIC_POTENTIAL",
+          [](const double, const double, const double) { return 1. / mu; }));
 
   // Push Domain operators to the Pipeline that is responsible for calculating
   // RHS
@@ -449,14 +453,32 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {HCURL});
 
-  auto source_fun = [&](const double x, const double y, const double z) {
+  auto source_fun_2D = [&](const double x, const double y, const double z) {
     return 5.;
   };
+
   if (SPACE_DIM == 2)
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDomainSourceRhs("MAGNETIC_POTENTIAL", source_fun,
-                              boost::make_shared<Range>(sourceRange)));
+        new OpDomainSource2DRhs("MAGNETIC_POTENTIAL", source_fun_2D,
+                                boost::make_shared<Range>(sourceRange)));
+  boost::function<FTensor::Tensor1<double, 3>(const double, const double,
+                                              const double)>
+      source_fun_3D = [](double x, double y, double z) {
+        const double r = sqrt(x * x + y * y);
+        return FTensor::Tensor1<double, 3>{0., 5., 0.};
+      };
+  if (SPACE_DIM == 3)
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpDomainSource3DRhs("MAGNETIC_POTENTIAL", source_fun_3D,
+                                boost::make_shared<Range>(sourceRange)));
 
+
+  // CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
+  //     pipeline_mng->getOpDomainRhsPipeline(), mField, "MAGNETIC_POTENTIAL",
+  //     {}, "BODY_FORCE", Sev::inform);
+
+  // Push Boundary operators to the Pipeline that is responsible for
+  // calculating RHS
   boost::function<FTensor::Tensor1<double, 3>(const double, const double,
                                               const double)>
       natural_fun = [](double x, double y, double z) {
@@ -464,25 +486,21 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
         return FTensor::Tensor1<double, 3>{(-y / r), (x / r), 0.};
       };
 
-  auto boundary_fun = [&](const double x, const double y, const double z) {
-    return 0.;
-  };
-
-  // Push Boundary operators to the Pipeline that is responsible for
-  // calculating RHS
   if (SPACE_DIM == 3) {
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpHOSetCovariantPiolaTransformOnFace3D(HCURL));
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpBoundarySourceRhs("MAGNETIC_POTENTIAL", natural_fun,
-                                boost::make_shared<Range>(naturalBcRange)));
+        new OpBoundarySource3DRhs("MAGNETIC_POTENTIAL", natural_fun,
+                                  boost::make_shared<Range>(naturalBcRange)));
   }
 
-  if (SPACE_DIM == 2) {
-    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-    //     new OpBoundarySource2DRhs("MAGNETIC_POTENTIAL", boundary_fun,
-    //                               boost::make_shared<Range>(naturalBcRange)));
-  }
+  auto boundary_fun = [&](const double x, const double y, const double z) {
+    return 0.;
+  };
+  if (SPACE_DIM == 2)
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpBoundarySource2DRhs("MAGNETIC_POTENTIAL", boundary_fun,
+                                boost::make_shared<Range>(naturalBcRange)));
 
   MoFEMFunctionReturn(0);
 }
