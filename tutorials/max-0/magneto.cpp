@@ -42,18 +42,11 @@ using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
 using AssemblyBoundaryEleOp =
     FormsIntegrators<BoundaryEleOp>::Assembly<A>::OpBase;
 
-// using DomainNaturalBC =
-//     NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using DomainNaturalBC =
+    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
 
 //! [Domain Operators]
 // OpCurlCurl - Once moved to Bilinear Forms in Core.
-// using OpDomainSourceRhs = FormsIntegrators<DomainEleOp>::Assembly<
-//     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, SPACE_DIM>;
-using OpDomainSource2DRhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
-
-using OpDomainSource3DRhs = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpSource<3, 3>;
 //! [Domain Operators]
 
 //! [Boundary Operators]
@@ -232,10 +225,10 @@ private:
   Range essentialBcRange;
   Range sourceRange;
 
-  // using OpBodyForce =
-  //     DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>,
-  //     potential_field_dim,
-  //                             potential_field_dim>;
+  using OpBodyForce =
+      DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>,
+                              potential_field_dim * potential_field_dim,
+                              potential_field_dim>;
 };
 
 Magnetostatics::Magnetostatics(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -454,37 +447,16 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {HCURL});
 
-  auto source_fun_2D = [&](const double x, const double y, const double z) {
-    return 5.;
-  };
-
-  if (SPACE_DIM == 2)
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDomainSource2DRhs("MAGNETIC_POTENTIAL", source_fun_2D,
-                                boost::make_shared<Range>(sourceRange)));
-  boost::function<FTensor::Tensor1<double, 3>(const double, const double,
-                                              const double)>
-      source_fun_3D = [](double x, double y, double z) {
-        const double r = sqrt(x * x + y * y);
-        return FTensor::Tensor1<double, 3>{0., 0., 5.};
-      };
-  if (SPACE_DIM == 3)
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDomainSource3DRhs("MAGNETIC_POTENTIAL", source_fun_3D,
-                                boost::make_shared<Range>(sourceRange)));
-
-  // CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
-  //     pipeline_mng->getOpDomainRhsPipeline(), mField, "MAGNETIC_POTENTIAL",
-  //     {}, "BODY_FORCE", Sev::inform);
+  CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
+      pipeline_mng->getOpDomainRhsPipeline(), mField, "MAGNETIC_POTENTIAL", {},
+      "SOURCE_J", Sev::inform);
 
   // Push Boundary operators to the Pipeline that is responsible for
   // calculating RHS
-  boost::function<FTensor::Tensor1<double, 3>(const double, const double,
-                                              const double)>
-      natural_fun = [](double x, double y, double z) {
-        const double r = sqrt(x * x + y * y);
-        return FTensor::Tensor1<double, 3>{(-y / r), (x / r), 0.};
-      };
+  VecFun<3> natural_fun = [](double x, double y, double z) {
+    const double r = sqrt(x * x + y * y);
+    return FTensor::Tensor1<double, 3>{(-y / r), (x / r), 0.};
+  };
 
   if (SPACE_DIM == 3) {
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
@@ -493,14 +465,6 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
         new OpBoundarySource3DRhs("MAGNETIC_POTENTIAL", natural_fun,
                                   boost::make_shared<Range>(naturalBcRange)));
   }
-
-  auto boundary_fun = [&](const double x, const double y, const double z) {
-    return 0.;
-  };
-  if (SPACE_DIM == 2)
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpBoundarySource2DRhs("MAGNETIC_POTENTIAL", boundary_fun,
-                                  boost::make_shared<Range>(naturalBcRange)));
 
   MoFEMFunctionReturn(0);
 }
