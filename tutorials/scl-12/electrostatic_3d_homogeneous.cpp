@@ -240,8 +240,6 @@ MoFEMErrorCode Electrostatic3DHomogeneous::assembleSystem() {
         new FaceElementForcesAndSourcesCore(mField));
 
     {
-
-
       interface_rhs_fe->getOpPtrVector().push_back(new OpBlockChargeDensity(
           common_data_ptr, surf_block_sets_ptr, domainField));
 
