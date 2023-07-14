@@ -892,9 +892,6 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
 
     *post_proc_schur_lhs_ptr->matAssembleSwitch = false;
 
-    // CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
-    //     mField, post_proc_schur_lhs_ptr, 1)();
-
     CHKERR MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
     CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
@@ -903,8 +900,6 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
     CHKERR MatAssemblyBegin(P, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(P, MAT_FINAL_ASSEMBLY);
     CHKERR MatAXPY(P, 1, A, SAME_NONZERO_PATTERN);
-    // CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
-    //     mField, post_proc_schur_lhs_ptr, 1, P)();
 
     CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
