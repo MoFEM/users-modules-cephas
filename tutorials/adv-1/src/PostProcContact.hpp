@@ -71,8 +71,10 @@ struct Monitor : public FEMethod {
     auto get_domain_pip = [&](auto &pip)
         -> boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> & {
       if constexpr (SPACE_DIM == 3) {
-        auto op_loop_side =
-            new OpLoopSide<SideEle>(*m_field_ptr, "dFE", SPACE_DIM);
+        auto op_loop_side = new OpLoopSide<SideEle>(
+            *m_field_ptr, "dFE", SPACE_DIM, Sev::noisy,
+            boost::make_shared<
+                ForcesAndSourcesCore::UserDataOperator::AdjCache>());
         pip.push_back(op_loop_side);
         return op_loop_side->getOpPtrVector();
       } else {
@@ -142,8 +144,10 @@ struct Monitor : public FEMethod {
 
       auto common_data_ptr = push_bdy_ops(pip, SPACE_DIM);
       // create OP which run element on side
-      auto op_loop_side =
-          new OpLoopSide<SideEle>(*m_field_ptr, "dFE", SPACE_DIM);
+      auto op_loop_side = new OpLoopSide<SideEle>(
+          *m_field_ptr, "dFE", SPACE_DIM, Sev::noisy,
+          boost::make_shared<
+              ForcesAndSourcesCore::UserDataOperator::AdjCache>());
       pip.push_back(op_loop_side);
 
       auto [henky_common_data_ptr, contact_stress_ptr] =

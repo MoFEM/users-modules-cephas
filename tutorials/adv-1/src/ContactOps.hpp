@@ -758,7 +758,9 @@ MoFEMErrorCode opFactoryBoundaryToDomainLhs(
     std::string fe_domain_name, std::string sigma, std::string u,
     std::string geom, ForcesAndSourcesCore::RuleHookFun rule) {
   MoFEMFunctionBegin;
-  auto op_loop_side = new OpLoopSide<DomainEle>(m_field, fe_domain_name, DIM);
+  auto op_loop_side = new OpLoopSide<DomainEle>(
+      m_field, fe_domain_name, DIM, Sev::noisy,
+      boost::make_shared<ForcesAndSourcesCore::UserDataOperator::AdjCache>());
   pip.push_back(op_loop_side);
 
   CHKERR AddHOOps<DIM, DIM, DIM>::add(op_loop_side->getOpPtrVector(),
@@ -778,23 +780,6 @@ MoFEMErrorCode opFactoryBoundaryToDomainLhs(
   op_loop_side->getOpPtrVector().push_back(
       new OpLambdaGraULhsSide(sigma, u, unity, true));
 
-  op_loop_side->getSideFEPtr()->getRuleHook = rule;
-  MoFEMFunctionReturn(0);
-}
-
-template <int DIM, AssemblyType A, IntegrationType I, typename DomainEle>
-MoFEMErrorCode opFactoryBoundaryToDomainRhs(
-    MoFEM::Interface &m_field,
-    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
-    std::string fe_domain_name, std::string sigma, std::string u,
-    std::string geom, ForcesAndSourcesCore::RuleHookFun rule) {
-  MoFEMFunctionBegin;
-  auto op_loop_side = new OpLoopSide<DomainEle>(m_field, fe_domain_name, DIM);
-  pip.push_back(op_loop_side);
-  CHKERR AddHOOps<DIM, DIM, DIM>::add(op_loop_side->getOpPtrVector(),
-                                      {H1, HDIV}, geom);
-  CHKERR opFactoryDomainRhs<DIM, A, I, DomainEleOp>(
-      op_loop_side->getOpPtrVector(), sigma, u);
   op_loop_side->getSideFEPtr()->getRuleHook = rule;
   MoFEMFunctionReturn(0);
 }
