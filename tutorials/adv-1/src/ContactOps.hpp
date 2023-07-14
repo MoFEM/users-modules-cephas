@@ -696,25 +696,6 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
 }
 
 template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
-MoFEMErrorCode opFactoryDomainLhs(
-    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
-    std::string sigma, std::string u) {
-  MoFEMFunctionBegin;
-
-  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
-      A>::template BiLinearForm<I>;
-
-  using OpMixDivULhs = typename B::template OpMixDivTimesVec<DIM>;
-  using OpLambdaGraULhs = typename B::template OpMixTensorTimesGrad<DIM>;
-
-  auto unity = []() { return 1; };
-  pip.push_back(new OpMixDivULhs(sigma, u, unity, true));
-  pip.push_back(new OpLambdaGraULhs(sigma, u, unity, true));
-
-  MoFEMFunctionReturn(0);
-}
-
-template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
 MoFEMErrorCode opFactoryDomainRhs(
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
     std::string sigma, std::string u) {
@@ -761,6 +742,7 @@ template <typename OpMixLhs> struct OpMixLhsSide : public OpMixLhs {
     MoFEMFunctionBegin;
     auto side_fe_entity = OpMixLhs::getSidePtrFE()->getFEEntityHandle();
     auto side_fe_data = OpMixLhs::getSideEntity(row_side, row_type);
+    // Only assemble side which correspond to edge entity on boundary
     if (side_fe_entity == side_fe_data) {
       CHKERR OpMixLhs::doWork(row_side, col_side, row_type, col_type, row_data,
                               col_data);
@@ -811,7 +793,7 @@ MoFEMErrorCode opFactoryBoundaryToDomainRhs(
   pip.push_back(op_loop_side);
   CHKERR AddHOOps<DIM, DIM, DIM>::add(op_loop_side->getOpPtrVector(),
                                       {H1, HDIV}, geom);
-  CHKERR opFactoryDomainRhs<DIM, PETSC, I, DomainEleOp>(
+  CHKERR opFactoryDomainRhs<DIM, A, I, DomainEleOp>(
       op_loop_side->getOpPtrVector(), sigma, u);
   op_loop_side->getSideFEPtr()->getRuleHook = rule;
   MoFEMFunctionReturn(0);
