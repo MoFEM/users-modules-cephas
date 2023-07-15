@@ -54,6 +54,40 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
+template <>
+typename MoFEM::OpBaseImpl<A, DomainEleOp>::MatSetValuesHook
+    MoFEM::OpBaseImpl<A, DomainEleOp>::matSetValuesHook =
+        [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
+           const EntitiesFieldData::EntData &row_data,
+           const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
+          return MatSetValues<AssemblyTypeSelector<A>>(
+              op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
+        };
+
+template <>
+typename MoFEM::OpBaseImpl<A, BoundaryEleOp>::MatSetValuesHook
+    MoFEM::OpBaseImpl<A, BoundaryEleOp>::matSetValuesHook =
+        [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
+           const EntitiesFieldData::EntData &row_data,
+           const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
+          return MatSetValues<AssemblyTypeSelector<A>>(
+              op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
+        };
+
+struct BoundaryEleOpStab : public BoundaryEleOp {
+  using BoundaryEleOp::BoundaryEleOp;
+};
+
+template <>
+typename MoFEM::OpBaseImpl<A, BoundaryEleOpStab>::MatSetValuesHook
+    MoFEM::OpBaseImpl<A, BoundaryEleOpStab>::matSetValuesHook =
+        [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
+           const EntitiesFieldData::EntData &row_data,
+           const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
+          return MatSetValues<AssemblyTypeSelector<A>>(
+              op_ptr->getKSPB(), row_data, col_data, m, ADD_VALUES);
+        };
+
 constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
 
 //! [Operators used for contact]
@@ -119,7 +153,6 @@ private:
   MoFEMErrorCode bC();
   MoFEMErrorCode OPs();
   MoFEMErrorCode tsSolve();
-  MoFEMErrorCode postProcess();
   MoFEMErrorCode checkResults();
 
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
@@ -141,7 +174,6 @@ MoFEMErrorCode Contact::runProblem() {
   CHKERR bC();
   CHKERR OPs();
   CHKERR tsSolve();
-  CHKERR postProcess();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
@@ -570,12 +602,12 @@ MoFEMErrorCode Contact::tsSolve() {
           mField, post_proc_lhs_ptr, 1.);
     };
     post_proc_rhs_ptr->postProcessHook = get_post_proc_hook_rhs();
-    post_proc_lhs_ptr->postProcessHook = get_post_proc_hook_lhs();
 
     ts_ctx_ptr->getPreProcessIFunction().push_front(pre_proc_ptr);
     ts_ctx_ptr->getPreProcessIJacobian().push_front(pre_proc_ptr);
     ts_ctx_ptr->getPostProcessIFunction().push_back(post_proc_rhs_ptr);
     if (A != AssemblyType::SCHUR) {
+      post_proc_lhs_ptr->postProcessHook = get_post_proc_hook_lhs();
       ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_lhs_ptr);
     }
     MoFEMFunctionReturn(0);
@@ -637,10 +669,6 @@ MoFEMErrorCode Contact::tsSolve() {
   MoFEMFunctionReturn(0);
 }
 //! [Solve]
-
-//! [Postprocess results]
-MoFEMErrorCode Contact::postProcess() { return 0; }
-//! [Postprocess results]
 
 //! [Check]
 MoFEMErrorCode Contact::checkResults() { return 0; }
@@ -762,8 +790,11 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
 
     A = createDMMatrix(dm);
     P = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
+    CHKERR MatSetBlockSize(A, SPACE_DIM);
+    CHKERR MatSetBlockSize(P, SPACE_DIM);
     subDM = createSubDM();
     S = createDMMatrix(subDM);
+    CHKERR MatSetBlockSize(S, SPACE_DIM);
 
     auto ts_ctx_ptr = getDMTsCtx(dm);
     CHKERR TSSetIJacobian(solver, A, P, TsSetIJacobian, ts_ctx_ptr.get());
@@ -812,40 +843,6 @@ SmartPetscObj<DM> SetUpSchurImpl::createSubDM() {
   return sub_dm;
 }
 
-template <>
-typename MoFEM::OpBaseImpl<A, DomainEleOp>::MatSetValuesHook
-    MoFEM::OpBaseImpl<A, DomainEleOp>::matSetValuesHook =
-        [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
-           const EntitiesFieldData::EntData &row_data,
-           const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
-          return MatSetValues<AssemblyTypeSelector<A>>(
-              op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
-        };
-
-template <>
-typename MoFEM::OpBaseImpl<A, BoundaryEleOp>::MatSetValuesHook
-    MoFEM::OpBaseImpl<A, BoundaryEleOp>::matSetValuesHook =
-        [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
-           const EntitiesFieldData::EntData &row_data,
-           const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
-          return MatSetValues<AssemblyTypeSelector<A>>(
-              op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
-        };
-
-struct BoundaryEleOpStab : public BoundaryEleOp {
-  using BoundaryEleOp::BoundaryEleOp;
-};
-
-template <>
-typename MoFEM::OpBaseImpl<A, BoundaryEleOpStab>::MatSetValuesHook
-    MoFEM::OpBaseImpl<A, BoundaryEleOpStab>::matSetValuesHook =
-        [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
-           const EntitiesFieldData::EntData &row_data,
-           const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
-          return MatSetValues<AssemblyTypeSelector<A>>(
-              op_ptr->getKSPB(), row_data, col_data, m, ADD_VALUES);
-        };
-
 MoFEMErrorCode SetUpSchurImpl::setOperator() {
   MoFEMFunctionBegin;
 
@@ -867,12 +864,12 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
       new OpMassStab("SIGMA", "SIGMA",
                      [eps_stab](double, double, double) { return eps_stab; }));
   pip->getOpBoundaryLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DGESV>(
-      {"SIGMA"}, {nullptr}, {ao_up}, {S}, {true}));
+      {"SIGMA"}, {nullptr}, {ao_up}, {S}, {false}, false));
 
   // Domain
   pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
   pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DGESV>(
-      {"SIGMA"}, {nullptr}, {ao_up}, {S}, {true}));
+      {"SIGMA"}, {nullptr}, {ao_up}, {S}, {false}, false));
 
   auto pre_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
   auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
@@ -882,13 +879,13 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
     CHKERR MatZeroEntries(A);
     CHKERR MatZeroEntries(P);
     CHKERR MatZeroEntries(S);
-    MOFEM_LOG("CONTACT", Sev::inform) << "Lhs Assemble Begin";
+    MOFEM_LOG("CONTACT", Sev::verbose) << "Lhs Assemble Begin";
     MoFEMFunctionReturn(0);
   };
 
   post_proc_schur_lhs_ptr->postProcessHook = [this, post_proc_schur_lhs_ptr]() {
     MoFEMFunctionBegin;
-    MOFEM_LOG("CONTACT", Sev::inform) << "Lhs Assemble End";
+    MOFEM_LOG("CONTACT", Sev::verbose) << "Lhs Assemble End";
 
     *post_proc_schur_lhs_ptr->matAssembleSwitch = false;
 
@@ -900,16 +897,17 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
     CHKERR MatAssemblyBegin(P, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(P, MAT_FINAL_ASSEMBLY);
     CHKERR MatAXPY(P, 1, A, SAME_NONZERO_PATTERN);
+    // CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+    //     mField, post_proc_schur_lhs_ptr, 1, P)();
 
     CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-
     auto ao =
         createAOMappingIS(getDMSubData(subDM)->getSmartRowIs(), PETSC_NULL);
     CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
         mField, post_proc_schur_lhs_ptr, 1, S, ao)();
 
-    MOFEM_LOG("CONTACT", Sev::inform) << "Lhs Assemble Finish";
+    MOFEM_LOG("CONTACT", Sev::verbose) << "Lhs Assemble Finish";
     MoFEMFunctionReturn(0);
   };
 
