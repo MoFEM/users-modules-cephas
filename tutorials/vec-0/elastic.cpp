@@ -396,10 +396,6 @@ struct SetUpSchur {
   static boost::shared_ptr<SetUpSchur>
   createSetUpSchur(MoFEM::Interface &m_field);
   virtual MoFEMErrorCode setUp(SmartPetscObj<KSP> solver) = 0;
-  virtual MoFEMErrorCode preProc() = 0;
-  virtual MoFEMErrorCode postProc() = 0;
-  virtual SmartPetscObj<Mat> getSchur() = 0;
-  virtual SmartPetscObj<AO> getSchurAO() = 0;
 
 protected:
   SetUpSchur() = default;
@@ -664,12 +660,6 @@ MoFEMErrorCode Example::checkResults() {
 
   CHKERR VecZeroEntries(res);
 
-  auto get_post_proc_hook_rhs = [&]() {
-    return EssentialPreProcRhs<DisplacementCubitBcData>(
-        mField, pip->getBoundaryRhsFE(), 0, res);
-  };
-  pip->getBoundaryRhsFE()->postProcessHook = get_post_proc_hook_rhs();
-
   CHKERR mField.getInterface<FieldBlas>()->fieldScale(-1, "U");
   CHKERR pip->loopFiniteElements();
   CHKERR mField.getInterface<FieldBlas>()->fieldScale(-1, "U");
@@ -678,6 +668,20 @@ MoFEMErrorCode Example::checkResults() {
   CHKERR VecGhostUpdateEnd(res, ADD_VALUES, SCATTER_REVERSE);
   CHKERR VecAssemblyBegin(res);
   CHKERR VecAssemblyEnd(res);
+
+  auto zero_residual_at_constrains = [&]() {
+    MoFEMFunctionBegin;
+    FEMethod fe_post_proc;
+    auto get_post_proc_hook_rhs = [&]() {
+      return EssentialPreProcRhs<DisplacementCubitBcData>(
+          mField, pip->getBoundaryRhsFE(), 0, res);
+    };
+    fe_post_proc.postProcessHook = get_post_proc_hook_rhs();
+    CHKERR DMoFEMPostProcessFiniteElements(dm, &fe_post_proc);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR zero_residual_at_constrains();
 
   double nrm2;
   CHKERR VecNorm(res, NORM_2, &nrm2);
@@ -780,12 +784,6 @@ struct SetUpSchurImpl : public SetUpSchur {
   virtual ~SetUpSchurImpl() { S.reset(); }
 
   MoFEMErrorCode setUp(SmartPetscObj<KSP> solver);
-  MoFEMErrorCode preProc();
-  MoFEMErrorCode postProc();
-  SmartPetscObj<Mat> getSchur() { return S; }
-  SmartPetscObj<AO> getSchurAO() {
-    return createAOMappingIS(getDMSubData(subDM)->getSmartRowIs(), PETSC_NULL);
-  }
 
 private:
   MoFEMErrorCode setEntities();
@@ -819,8 +817,8 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
     CHKERR setEntities();
     CHKERR setUpSubDM();
     S = createDMMatrix(subDM);
-    // CHKERR MatSetBlockSize(S, SPACE_DIM);
-    // CHKERR MatSetOption(S, MAT_SYMMETRIC, PETSC_TRUE);
+    CHKERR MatSetBlockSize(S, SPACE_DIM);
+    CHKERR MatSetOption(S, MAT_SYMMETRIC, PETSC_TRUE);
     CHKERR setOperator();
     CHKERR setPC(pc);
   } else {
@@ -879,22 +877,21 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
 
   pre_proc_schur_lhs_ptr->preProcessHook = [this]() {
     MoFEMFunctionBegin;
-    CHKERR preProc();
+    if (S) {
+      CHKERR MatZeroEntries(S);
+    }
+    MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble Begin";
     MoFEMFunctionReturn(0);
   };
 
-  auto get_post_proc_hook_lhs_S = [this, post_proc_schur_lhs_ptr]() {
-    return EssentialPreProcLhs<DisplacementCubitBcData>(
-        mField, post_proc_schur_lhs_ptr, 1, getSchur(), getSchurAO());
-  };
-
-  post_proc_schur_lhs_ptr->postProcessHook = [this,
-                                              get_post_proc_hook_lhs_S]() {
+  post_proc_schur_lhs_ptr->postProcessHook = [this, post_proc_schur_lhs_ptr,
+                                              ao_up]() {
     MoFEMFunctionBegin;
     CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-    CHKERR get_post_proc_hook_lhs_S()();
-    CHKERR postProc();
+    CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+        mField, post_proc_schur_lhs_ptr, 1, S, ao_up)();
+    MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
     MoFEMFunctionReturn(0);
   };
 
@@ -915,21 +912,6 @@ MoFEMErrorCode SetUpSchurImpl::setPC(PC pc) {
       simple->getProblemName(), ROW, "U", 0, SPACE_DIM, vol_is, &volEnts);
   CHKERR PCFieldSplitSetIS(pc, NULL, vol_is);
   CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode SetUpSchurImpl::preProc() {
-  MoFEMFunctionBegin;
-  if (S) {
-    CHKERR MatZeroEntries(S);
-    MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble Begin";
-  }
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode SetUpSchurImpl::postProc() {
-  MoFEMFunctionBegin;
-  MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
   MoFEMFunctionReturn(0);
 }
 
