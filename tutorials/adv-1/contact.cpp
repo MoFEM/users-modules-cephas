@@ -883,11 +883,20 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
     MoFEMFunctionReturn(0);
   };
 
-  post_proc_schur_lhs_ptr->postProcessHook = [this, post_proc_schur_lhs_ptr]() {
+  post_proc_schur_lhs_ptr->postProcessHook = [this, ao_up,
+                                              post_proc_schur_lhs_ptr]() {
     MoFEMFunctionBegin;
     MOFEM_LOG("CONTACT", Sev::verbose) << "Lhs Assemble End";
 
     *post_proc_schur_lhs_ptr->matAssembleSwitch = false;
+
+    auto print_mat_norm = [this](auto a, std::string prefix) {
+      MoFEMFunctionBegin;
+      double nrm;
+      CHKERR MatNorm(a, NORM_FROBENIUS, &nrm);
+      MOFEM_LOG("CONTACT", Sev::noisy) << prefix << " norm = " << nrm;
+      MoFEMFunctionReturn(0);
+    };
 
     CHKERR MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
@@ -897,15 +906,18 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
     CHKERR MatAssemblyBegin(P, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(P, MAT_FINAL_ASSEMBLY);
     CHKERR MatAXPY(P, 1, A, SAME_NONZERO_PATTERN);
-    // CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
-    //     mField, post_proc_schur_lhs_ptr, 1, P)();
 
     CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-    auto ao =
-        createAOMappingIS(getDMSubData(subDM)->getSmartRowIs(), PETSC_NULL);
+
     CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
-        mField, post_proc_schur_lhs_ptr, 1, S, ao)();
+        mField, post_proc_schur_lhs_ptr, 1, S, ao_up)();
+
+#ifndef NDEBUG
+    CHKERR print_mat_norm(A, "A");
+    CHKERR print_mat_norm(P, "P");
+    CHKERR print_mat_norm(S, "S");
+#endif  // NDEBUG
 
     MOFEM_LOG("CONTACT", Sev::verbose) << "Lhs Assemble Finish";
     MoFEMFunctionReturn(0);
