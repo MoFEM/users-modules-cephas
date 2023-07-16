@@ -696,25 +696,6 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
 }
 
 template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
-MoFEMErrorCode opFactoryDomainLhs(
-    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
-    std::string sigma, std::string u) {
-  MoFEMFunctionBegin;
-
-  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
-      A>::template BiLinearForm<I>;
-
-  using OpMixDivULhs = typename B::template OpMixDivTimesVec<DIM>;
-  using OpLambdaGraULhs = typename B::template OpMixTensorTimesGrad<DIM>;
-
-  auto unity = []() { return 1; };
-  pip.push_back(new OpMixDivULhs(sigma, u, unity, true));
-  pip.push_back(new OpLambdaGraULhs(sigma, u, unity, true));
-
-  MoFEMFunctionReturn(0);
-}
-
-template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
 MoFEMErrorCode opFactoryDomainRhs(
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
     std::string sigma, std::string u) {
@@ -724,7 +705,7 @@ MoFEMErrorCode opFactoryDomainRhs(
   using OpMixDivURhs = typename B::template OpMixDivTimesU<3, DIM, DIM>;
   using OpMixLambdaGradURhs = typename B::template OpMixTensorTimesGradU<DIM>;
   using OpMixUTimesDivLambdaRhs =
-      typename B::template OpMixVecTimesDivLambda<DIM>;
+      typename B::template OpMixVecTimesDivLambda<SPACE_DIM>;
   using OpMixUTimesLambdaRhs =
       typename B::template OpGradTimesTensor<1, DIM, DIM>;
 
@@ -752,7 +733,58 @@ MoFEMErrorCode opFactoryDomainRhs(
   MoFEMFunctionReturn(0);
 }
 
-template <int DIM, IntegrationType I, AssemblyType A, typename BoundaryEleOp>
+template <typename OpMixLhs> struct OpMixLhsSide : public OpMixLhs {
+  using OpMixLhs::OpMixLhs;
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        EntitiesFieldData::EntData &row_data,
+                        EntitiesFieldData::EntData &col_data) {
+    MoFEMFunctionBegin;
+    auto side_fe_entity = OpMixLhs::getSidePtrFE()->getFEEntityHandle();
+    auto side_fe_data = OpMixLhs::getSideEntity(row_side, row_type);
+    // Only assemble side which correspond to edge entity on boundary
+    if (side_fe_entity == side_fe_data) {
+      CHKERR OpMixLhs::doWork(row_side, col_side, row_type, col_type, row_data,
+                              col_data);
+    }
+    MoFEMFunctionReturn(0);
+  }
+};
+
+template <int DIM, AssemblyType A, IntegrationType I, typename DomainEle>
+MoFEMErrorCode opFactoryBoundaryToDomainLhs(
+    MoFEM::Interface &m_field,
+    boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
+    std::string fe_domain_name, std::string sigma, std::string u,
+    std::string geom, ForcesAndSourcesCore::RuleHookFun rule) {
+  MoFEMFunctionBegin;
+  auto op_loop_side = new OpLoopSide<DomainEle>(
+      m_field, fe_domain_name, DIM, Sev::noisy,
+      boost::make_shared<ForcesAndSourcesCore::UserDataOperator::AdjCache>());
+  pip.push_back(op_loop_side);
+
+  CHKERR AddHOOps<DIM, DIM, DIM>::add(op_loop_side->getOpPtrVector(),
+                                      {H1, HDIV}, geom);
+
+  using B = typename FormsIntegrators<DomainEleOp>::template Assembly<
+      A>::template BiLinearForm<I>;
+
+  using OpMixDivULhs = typename B::template OpMixDivTimesVec<DIM>;
+  using OpLambdaGraULhs = typename B::template OpMixTensorTimesGrad<DIM>;
+  using OpMixDivULhsSide = OpMixLhsSide<OpMixDivULhs>;
+  using OpLambdaGraULhsSide = OpMixLhsSide<OpLambdaGraULhs>;
+
+  auto unity = []() { return 1; };
+  op_loop_side->getOpPtrVector().push_back(
+      new OpMixDivULhsSide(sigma, u, unity, true));
+  op_loop_side->getOpPtrVector().push_back(
+      new OpLambdaGraULhsSide(sigma, u, unity, true));
+
+  op_loop_side->getSideFEPtr()->getRuleHook = rule;
+  MoFEMFunctionReturn(0);
+}
+
+template <int DIM, AssemblyType A, IntegrationType I, typename BoundaryEleOp>
 MoFEMErrorCode opFactoryBoundaryLhs(
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
     std::string sigma, std::string u) {
@@ -776,7 +808,7 @@ MoFEMErrorCode opFactoryBoundaryLhs(
   MoFEMFunctionReturn(0);
 }
 
-template <int DIM, IntegrationType I, AssemblyType A, typename BoundaryEleOp>
+template <int DIM, AssemblyType A, IntegrationType I, typename BoundaryEleOp>
 MoFEMErrorCode opFactoryBoundaryRhs(
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
     std::string sigma, std::string u) {

@@ -2,40 +2,36 @@ import math
 
 # SDF Indenter
 
-r = 1
+# Negative level set represents interior of the indenter. 
+# This normal points outside of the indenter.
 
-#xc = (-58.9 + 12.5)/2
-#zc = (-70.5 + 0.9)/2
-#yc = -58.9 - r
+r = 1
 
 
 def sdf(t, x, y, z, tx, ty, tz):
-	#return Sphere.sDF(r, xc, yc, zc, x, y, z)
 	return CylinderZ.sDF(r, 0, -0.5-r, x, y)
 
 
 def grad_sdf(t, x, y, z, tx, ty, tz):
-	#return Sphere.gradSdf(xc, yc, zc, x, y, z)
 	return CylinderZ.gradSdf(0, -0.5-r, x, y)
 
 
 def hess_sdf(t, x, y, z, tx, ty, tz):
-	#return Sphere.hessSdf(xc, yc, zc, x, y, z)
 	return CylinderZ.hessSdf(0, -0.5-r, x, y)
 
 # Indenters
 
 class yPlane:
-	def sDF(shift, xc, yc, x, y):
-		return y-shiftl
+	def sDF(shift, y):
+		return y - shift
 
-	def gradSdf(xc, yc, x, y):
-		# x, y, z
-		return [0, 0, 0]
+	def gradSdf():
+		# nx, ny, nz
+		return [0, 1, 0]
 	
-	def hessSdf(xc, yc, x, y):
+	def hessSdf():
 		# xx, yx, zx, yy, zy, zz
-		return [0, 0, 0, 0, 0]
+		return [0, 0, 0, 0, 0, 0]
 
 
 class CylinderZ:
