@@ -671,13 +671,17 @@ MoFEMErrorCode Example::checkResults() {
 
   auto zero_residual_at_constrains = [&]() {
     MoFEMFunctionBegin;
-    FEMethod fe_post_proc;
-    auto get_post_proc_hook_rhs = [&]() {
-      return EssentialPreProcRhs<DisplacementCubitBcData>(
-          mField, pip->getBoundaryRhsFE(), 0, res);
+    auto  fe_post_proc_ptr = boost::make_shared<FEMethod>();
+    auto get_post_proc_hook_rhs = [this, fe_post_proc_ptr, res]() {
+      MoFEMFunctionBegin;
+      CHKERR EssentialPreProcReaction<DisplacementCubitBcData>(
+          mField, fe_post_proc_ptr, res)();
+      CHKERR EssentialPreProcRhs<DisplacementCubitBcData>(
+          mField, fe_post_proc_ptr, 0, res)();
+      MoFEMFunctionReturn(0);
     };
-    fe_post_proc.postProcessHook = get_post_proc_hook_rhs();
-    CHKERR DMoFEMPostProcessFiniteElements(dm, &fe_post_proc);
+    fe_post_proc_ptr->postProcessHook = get_post_proc_hook_rhs;
+    CHKERR DMoFEMPostProcessFiniteElements(dm, fe_post_proc_ptr.get());
     MoFEMFunctionReturn(0);
   };
 
