@@ -691,7 +691,7 @@ int main(int argc, char *argv[]) {
   core_log->add_sink(
       LogManager::createSink(LogManager::getStrmWorld(), "CONTACT"));
   LogManager::setLog("CONTACT");
-  MOFEM_LOG_TAG("CONTACT", "indent");
+  MOFEM_LOG_TAG("CONTACT", "Indent");
 
   try {
 

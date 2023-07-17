@@ -249,6 +249,90 @@ struct Monitor : public FEMethod {
       MoFEMFunctionReturn(0);
     };
 
+    auto calculate_reactions = [&]() {
+      MoFEMFunctionBegin;
+      
+      auto res = createDMVector(dM);
+
+      auto assemble_domain = [&]() {
+        MoFEMFunctionBegin;
+        auto fe_rhs = boost::make_shared<DomainEle>(*m_field_ptr);
+        auto &pip = fe_rhs->getOpPtrVector();
+        fe_rhs->f = res;
+
+        auto integration_rule = [](int, int, int approx_order) {
+          return 2 * approx_order + geom_order - 1;
+        };
+        fe_rhs->getRuleHook = integration_rule;
+
+        // only in case of dynamics
+        if (!is_quasi_static) {
+          auto mat_acceleration = boost::make_shared<MatrixDouble>();
+          pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
+              "U", mat_acceleration));
+          pip.push_back(
+              new OpInertiaForce("U", mat_acceleration,
+                                 [](double, double, double) { return rho; }));
+        }
+        if (alpha_damping > 0) {
+          auto mat_velocity = boost::make_shared<MatrixDouble>();
+          pip.push_back(new OpCalculateVectorFieldValuesDot<SPACE_DIM>(
+              "U", mat_velocity));
+          pip.push_back(
+              new OpInertiaForce("U", mat_velocity, [](double, double, double) {
+                return alpha_damping;
+              }));
+        }
+
+        CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, PETSC, I, DomainEleOp>(
+            *m_field_ptr, pip, "U", "MAT_ELASTIC", Sev::inform);
+        CHKERR DMoFEMLoopFiniteElements(dM, "dFE", fe_rhs);
+        MoFEMFunctionReturn(0);
+      };
+
+      auto assemble_boundary = [&]() {
+        MoFEMFunctionBegin;
+        auto fe_rhs = boost::make_shared<BoundaryEle>(*m_field_ptr);
+        auto &pip = fe_rhs->getOpPtrVector();
+        fe_rhs->f = res;
+
+        auto integration_rule = [](int, int, int approx_order) {
+          return 2 * approx_order + geom_order - 1;
+        };
+        fe_rhs->getRuleHook = integration_rule;
+
+        CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV},
+                                                                  "GEOMETRY");
+        // We have to integrate on curved face geometry, thus integration weight
+        // have to adjusted.
+        pip.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
+
+        auto u_disp = boost::make_shared<MatrixDouble>();
+        pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_disp));
+        pip.push_back(
+            new OpSpringRhs("U", u_disp, [this](double, double, double) {
+              return spring_stiffness;
+            }));
+
+        MoFEMFunctionReturn(0);
+      };
+
+      CHKERR assemble_domain();
+
+      auto fe_post_proc_ptr = boost::make_shared<FEMethod>();
+      auto get_post_proc_hook_rhs = [this, fe_post_proc_ptr, res,
+                                     m_field_ptr]() {
+        MoFEMFunctionBegin;
+        CHKERR EssentialPreProcReaction<DisplacementCubitBcData>(
+            *m_field_ptr, fe_post_proc_ptr, res)();
+        MoFEMFunctionReturn(0);
+      };
+      fe_post_proc_ptr->postProcessHook = get_post_proc_hook_rhs;
+      CHKERR DMoFEMPostProcessFiniteElements(dM, fe_post_proc_ptr.get());
+
+      MoFEMFunctionReturn(0);
+    };
+
     auto print_max_min = [&](auto &tuple, const std::string msg) {
       MoFEMFunctionBegin;
       CHKERR VecScatterBegin(std::get<1>(tuple), ts_u, std::get<0>(tuple),
@@ -282,12 +366,13 @@ struct Monitor : public FEMethod {
 
     CHKERR post_proc();
     CHKERR calculate_traction();
+    CHKERR calculate_reactions();
 
     CHKERR print_max_min(uXScatter, "Ux");
     CHKERR print_max_min(uYScatter, "Uy");
     if (SPACE_DIM == 3)
       CHKERR print_max_min(uZScatter, "Uz");
-    CHKERR print_traction("Force");
+    CHKERR print_traction("Contact force");
 
     ++sTEP;
 
