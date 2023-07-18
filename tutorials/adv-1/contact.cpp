@@ -735,7 +735,7 @@ struct SetUpSchurImpl : public SetUpSchur {
   SetUpSchurImpl(MoFEM::Interface &m_field) : SetUpSchur(), mField(m_field) {}
 
   virtual ~SetUpSchurImpl() {
-    AT.reset();
+    A.reset();
     P.reset();
     S.reset();
   }
@@ -749,7 +749,7 @@ private:
 
   SmartPetscObj<DM> createSubDM();
 
-  SmartPetscObj<Mat> AT;
+  SmartPetscObj<Mat> A;
   SmartPetscObj<Mat> P;
   SmartPetscObj<Mat> S;
 
@@ -779,23 +779,23 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
 
     MOFEM_LOG("CONTACT", Sev::inform) << "Setup Schur pc";
 
-    if (AT || P || S) {
+    if (A || P || S) {
       CHK_THROW_MESSAGE(
           MOFEM_DATA_INCONSISTENCY,
           "Is expected that schur matrix is not allocated. This is "
           "possible only is PC is set up twice");
     }
 
-    AT = createDMMatrix(dm);
-    P = matDuplicate(AT, MAT_DO_NOT_COPY_VALUES);
-    CHKERR MatSetBlockSize(AT, SPACE_DIM);
+    A = createDMMatrix(dm);
+    P = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
+    CHKERR MatSetBlockSize(A, SPACE_DIM);
     CHKERR MatSetBlockSize(P, SPACE_DIM);
     subDM = createSubDM();
     S = createDMMatrix(subDM);
     CHKERR MatSetBlockSize(S, SPACE_DIM);
 
     auto ts_ctx_ptr = getDMTsCtx(dm);
-    CHKERR TSSetIJacobian(solver, AT, P, TsSetIJacobian, ts_ctx_ptr.get());
+    CHKERR TSSetIJacobian(solver, A, P, TsSetIJacobian, ts_ctx_ptr.get());
 
     CHKERR setOperator();
     CHKERR setPC(pc);
@@ -873,7 +873,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
 
   pre_proc_schur_lhs_ptr->preProcessHook = [this]() {
     MoFEMFunctionBegin;
-    CHKERR MatZeroEntries(AT);
+    CHKERR MatZeroEntries(A);
     CHKERR MatZeroEntries(P);
     CHKERR MatZeroEntries(S);
     MOFEM_LOG("CONTACT", Sev::verbose) << "Lhs Assemble Begin";
@@ -895,14 +895,14 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
       MoFEMFunctionReturn(0);
     };
 
-    CHKERR MatAssemblyBegin(AT, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAssemblyEnd(AT, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
     CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
-        mField, post_proc_schur_lhs_ptr, 1, AT)();
+        mField, post_proc_schur_lhs_ptr, 1, A)();
 
     CHKERR MatAssemblyBegin(P, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(P, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAXPY(P, 1, AT, SAME_NONZERO_PATTERN);
+    CHKERR MatAXPY(P, 1, A, SAME_NONZERO_PATTERN);
 
     CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
@@ -911,7 +911,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
         mField, post_proc_schur_lhs_ptr, 1, S, ao_up)();
 
 #ifndef NDEBUG
-    CHKERR print_mat_norm(AT, "AT");
+    CHKERR print_mat_norm(A, "A");
     CHKERR print_mat_norm(P, "P");
     CHKERR print_mat_norm(S, "S");
 #endif // NDEBUG
