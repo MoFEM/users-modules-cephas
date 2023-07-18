@@ -25,9 +25,9 @@ namespace bp = boost::python;
 
 using namespace MoFEM;
 
-constexpr AssemblyType A = AssemblyType::SCHUR; //< selected assembly type
-constexpr IntegrationType I =
-    IntegrationType::GAUSS;                     //< selected integration type
+constexpr AssemblyType AT = AssemblyType::SCHUR; //< selected assembly type
+constexpr IntegrationType IT =
+    IntegrationType::GAUSS;                      //< selected integration type
 
 template <int DIM> struct ElementsAndOps;
 
@@ -55,22 +55,22 @@ using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 template <>
-typename MoFEM::OpBaseImpl<A, DomainEleOp>::MatSetValuesHook
-    MoFEM::OpBaseImpl<A, DomainEleOp>::matSetValuesHook =
+typename MoFEM::OpBaseImpl<AT, DomainEleOp>::MatSetValuesHook
+    MoFEM::OpBaseImpl<AT, DomainEleOp>::matSetValuesHook =
         [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
            const EntitiesFieldData::EntData &row_data,
            const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
-          return MatSetValues<AssemblyTypeSelector<A>>(
+          return MatSetValues<AssemblyTypeSelector<AT>>(
               op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
         };
 
 template <>
-typename MoFEM::OpBaseImpl<A, BoundaryEleOp>::MatSetValuesHook
-    MoFEM::OpBaseImpl<A, BoundaryEleOp>::matSetValuesHook =
+typename MoFEM::OpBaseImpl<AT, BoundaryEleOp>::MatSetValuesHook
+    MoFEM::OpBaseImpl<AT, BoundaryEleOp>::matSetValuesHook =
         [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
            const EntitiesFieldData::EntData &row_data,
            const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
-          return MatSetValues<AssemblyTypeSelector<A>>(
+          return MatSetValues<AssemblyTypeSelector<AT>>(
               op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
         };
 
@@ -79,29 +79,29 @@ struct BoundaryEleOpStab : public BoundaryEleOp {
 };
 
 template <>
-typename MoFEM::OpBaseImpl<A, BoundaryEleOpStab>::MatSetValuesHook
-    MoFEM::OpBaseImpl<A, BoundaryEleOpStab>::matSetValuesHook =
+typename MoFEM::OpBaseImpl<AT, BoundaryEleOpStab>::MatSetValuesHook
+    MoFEM::OpBaseImpl<AT, BoundaryEleOpStab>::matSetValuesHook =
         [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
            const EntitiesFieldData::EntData &row_data,
            const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
-          return MatSetValues<AssemblyTypeSelector<A>>(
+          return MatSetValues<AssemblyTypeSelector<AT>>(
               op_ptr->getKSPB(), row_data, col_data, m, ADD_VALUES);
         };
 
 constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
 
 //! [Operators used for contact]
-using OpSpringLhs = FormsIntegrators<BoundaryEleOp>::Assembly<A>::BiLinearForm<
-    I>::OpMass<1, SPACE_DIM>;
-using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<A>::LinearForm<
-    I>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+using OpSpringLhs = FormsIntegrators<BoundaryEleOp>::Assembly<AT>::BiLinearForm<
+    IT>::OpMass<1, SPACE_DIM>;
+using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<AT>::LinearForm<
+    IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Operators used for contact]
 
 //! [Only used for dynamics]
-using OpMass = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
+using OpMass = FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
-using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
-    I>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<AT>::LinearForm<
+    IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Only used for dynamics]
 
 namespace ContactOps {
@@ -111,11 +111,11 @@ double cn_contact = 0.1;
 struct DomainBCs {};
 struct BoundaryBCs {};
 
-using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<A>::LinearForm<I>;
+using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<AT>::LinearForm<IT>;
 using OpDomainRhsBCs = DomainRhsBCs::OpFlux<DomainBCs, 1, SPACE_DIM>;
-using BoundaryRhsBCs = NaturalBC<BoundaryEleOp>::Assembly<A>::LinearForm<I>;
+using BoundaryRhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::LinearForm<IT>;
 using OpBoundaryRhsBCs = BoundaryRhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
-using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<I>;
+using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::BiLinearForm<IT>;
 using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 
 }; // namespace ContactOps
@@ -163,7 +163,6 @@ private:
 #ifdef PYTHON_SFD
   boost::shared_ptr<SDFPython> sdfPythonPtr;
 #endif
-
 };
 
 //! [Run problem]
@@ -381,7 +380,6 @@ MoFEMErrorCode Contact::OPs() {
     return 2 * approx_order + geom_order - 1;
   };
 
-
   auto add_domain_base_ops = [&](auto &pip) {
     MoFEMFunctionBegin;
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
@@ -412,7 +410,7 @@ MoFEMErrorCode Contact::OPs() {
       };
     }
 
-    CHKERR HenckyOps::opFactoryDomainLhs<SPACE_DIM, A, I, DomainEleOp>(
+    CHKERR HenckyOps::opFactoryDomainLhs<SPACE_DIM, AT, IT, DomainEleOp>(
         mField, pip, "U", "MAT_ELASTIC", Sev::verbose);
 
     MoFEMFunctionReturn(0);
@@ -443,10 +441,10 @@ MoFEMErrorCode Contact::OPs() {
     }
 
     CHKERR
-    HenckyOps::opFactoryDomainRhs<SPACE_DIM, A, I, DomainEleOp>(
+    HenckyOps::opFactoryDomainRhs<SPACE_DIM, AT, IT, DomainEleOp>(
         mField, pip, "U", "MAT_ELASTIC", Sev::inform);
 
-    CHKERR ContactOps::opFactoryDomainRhs<SPACE_DIM, A, I, DomainEleOp>(
+    CHKERR ContactOps::opFactoryDomainRhs<SPACE_DIM, AT, IT, DomainEleOp>(
         pip, "SIGMA", "U");
 
     MoFEMFunctionReturn(0);
@@ -473,9 +471,9 @@ MoFEMErrorCode Contact::OPs() {
 
           ));
 
-    CHKERR ContactOps::opFactoryBoundaryLhs<SPACE_DIM, A, GAUSS, BoundaryEleOp>(
-        pip, "SIGMA", "U");
-    CHKERR ContactOps::opFactoryBoundaryToDomainLhs<SPACE_DIM, A, GAUSS,
+    CHKERR ContactOps::opFactoryBoundaryLhs<SPACE_DIM, AT, GAUSS,
+                                            BoundaryEleOp>(pip, "SIGMA", "U");
+    CHKERR ContactOps::opFactoryBoundaryToDomainLhs<SPACE_DIM, AT, GAUSS,
                                                     DomainEle>(
         mField, pip, simple->getDomainFEName(), "SIGMA", "U", "GEOMETRY",
         integration_rule_vol);
@@ -495,8 +493,8 @@ MoFEMErrorCode Contact::OPs() {
           }));
     }
 
-    CHKERR ContactOps::opFactoryBoundaryRhs<SPACE_DIM, A, GAUSS, BoundaryEleOp>(
-        pip, "SIGMA", "U");
+    CHKERR ContactOps::opFactoryBoundaryRhs<SPACE_DIM, AT, GAUSS,
+                                            BoundaryEleOp>(pip, "SIGMA", "U");
 
     MoFEMFunctionReturn(0);
   };
@@ -606,7 +604,7 @@ MoFEMErrorCode Contact::tsSolve() {
     ts_ctx_ptr->getPreProcessIFunction().push_front(pre_proc_ptr);
     ts_ctx_ptr->getPreProcessIJacobian().push_front(pre_proc_ptr);
     ts_ctx_ptr->getPostProcessIFunction().push_back(post_proc_rhs_ptr);
-    if (A != AssemblyType::SCHUR) {
+    if (AT != AssemblyType::SCHUR) {
       post_proc_lhs_ptr->postProcessHook = get_post_proc_hook_lhs();
       ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_lhs_ptr);
     }
@@ -615,7 +613,7 @@ MoFEMErrorCode Contact::tsSolve() {
 
   auto set_schur_pc = [&](auto solver) {
     boost::shared_ptr<SetUpSchur> schur_ptr;
-    if (A == AssemblyType::SCHUR) {
+    if (AT == AssemblyType::SCHUR) {
       schur_ptr = SetUpSchur::createSetUpSchur(mField);
       CHKERR schur_ptr->setUp(solver);
     }
@@ -737,7 +735,7 @@ struct SetUpSchurImpl : public SetUpSchur {
   SetUpSchurImpl(MoFEM::Interface &m_field) : SetUpSchur(), mField(m_field) {}
 
   virtual ~SetUpSchurImpl() {
-    A.reset();
+    AT.reset();
     P.reset();
     S.reset();
   }
@@ -751,7 +749,7 @@ private:
 
   SmartPetscObj<DM> createSubDM();
 
-  SmartPetscObj<Mat> A;
+  SmartPetscObj<Mat> AT;
   SmartPetscObj<Mat> P;
   SmartPetscObj<Mat> S;
 
@@ -781,23 +779,23 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
 
     MOFEM_LOG("CONTACT", Sev::inform) << "Setup Schur pc";
 
-    if (A || P || S) {
+    if (AT || P || S) {
       CHK_THROW_MESSAGE(
           MOFEM_DATA_INCONSISTENCY,
           "Is expected that schur matrix is not allocated. This is "
           "possible only is PC is set up twice");
     }
 
-    A = createDMMatrix(dm);
-    P = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
-    CHKERR MatSetBlockSize(A, SPACE_DIM);
+    AT = createDMMatrix(dm);
+    P = matDuplicate(AT, MAT_DO_NOT_COPY_VALUES);
+    CHKERR MatSetBlockSize(AT, SPACE_DIM);
     CHKERR MatSetBlockSize(P, SPACE_DIM);
     subDM = createSubDM();
     S = createDMMatrix(subDM);
     CHKERR MatSetBlockSize(S, SPACE_DIM);
 
     auto ts_ctx_ptr = getDMTsCtx(dm);
-    CHKERR TSSetIJacobian(solver, A, P, TsSetIJacobian, ts_ctx_ptr.get());
+    CHKERR TSSetIJacobian(solver, AT, P, TsSetIJacobian, ts_ctx_ptr.get());
 
     CHKERR setOperator();
     CHKERR setPC(pc);
@@ -812,17 +810,16 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
     pip->getOpDomainLhsPipeline().push_back(
         new OpSchurAssembleEnd<SCHUR_DGESV>({}, {}, {}, {}, {}));
 
-     auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
-     post_proc_schur_lhs_ptr->postProcessHook = [this,
-                                                 post_proc_schur_lhs_ptr]() {
-       MoFEMFunctionBegin;
-       CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
-           mField, post_proc_schur_lhs_ptr, 1.)();
-       MoFEMFunctionReturn(0);
-     };
-     auto ts_ctx_ptr = getDMTsCtx(dm);
-     ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_schur_lhs_ptr);
-
+    auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
+    post_proc_schur_lhs_ptr->postProcessHook = [this,
+                                                post_proc_schur_lhs_ptr]() {
+      MoFEMFunctionBegin;
+      CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+          mField, post_proc_schur_lhs_ptr, 1.)();
+      MoFEMFunctionReturn(0);
+    };
+    auto ts_ctx_ptr = getDMTsCtx(dm);
+    ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_schur_lhs_ptr);
   }
   MoFEMFunctionReturn(0);
 }
@@ -851,7 +848,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
                                PETSC_NULL);
 
   using B =
-      FormsIntegrators<BoundaryEleOpStab>::Assembly<SCHUR>::BiLinearForm<I>;
+      FormsIntegrators<BoundaryEleOpStab>::Assembly<SCHUR>::BiLinearForm<IT>;
   using OpMassStab = B::OpMass<3, SPACE_DIM * SPACE_DIM>;
 
   auto pip = mField.getInterface<PipelineManager>();
@@ -876,7 +873,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
 
   pre_proc_schur_lhs_ptr->preProcessHook = [this]() {
     MoFEMFunctionBegin;
-    CHKERR MatZeroEntries(A);
+    CHKERR MatZeroEntries(AT);
     CHKERR MatZeroEntries(P);
     CHKERR MatZeroEntries(S);
     MOFEM_LOG("CONTACT", Sev::verbose) << "Lhs Assemble Begin";
@@ -898,14 +895,14 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
       MoFEMFunctionReturn(0);
     };
 
-    CHKERR MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyBegin(AT, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyEnd(AT, MAT_FINAL_ASSEMBLY);
     CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
-        mField, post_proc_schur_lhs_ptr, 1, A)();
+        mField, post_proc_schur_lhs_ptr, 1, AT)();
 
     CHKERR MatAssemblyBegin(P, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(P, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAXPY(P, 1, A, SAME_NONZERO_PATTERN);
+    CHKERR MatAXPY(P, 1, AT, SAME_NONZERO_PATTERN);
 
     CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
@@ -914,10 +911,10 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
         mField, post_proc_schur_lhs_ptr, 1, S, ao_up)();
 
 #ifndef NDEBUG
-    CHKERR print_mat_norm(A, "A");
+    CHKERR print_mat_norm(AT, "AT");
     CHKERR print_mat_norm(P, "P");
     CHKERR print_mat_norm(S, "S");
-#endif  // NDEBUG
+#endif // NDEBUG
 
     MOFEM_LOG("CONTACT", Sev::verbose) << "Lhs Assemble Finish";
     MoFEMFunctionReturn(0);

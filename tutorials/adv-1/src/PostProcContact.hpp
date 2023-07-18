@@ -284,7 +284,7 @@ struct Monitor : public FEMethod {
               }));
         }
 
-        CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, PETSC, I, DomainEleOp>(
+        CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, PETSC, IT, DomainEleOp>(
             *m_field_ptr, pip, "U", "MAT_ELASTIC", Sev::inform);
         CHKERR DMoFEMLoopFiniteElements(dM, "dFE", fe_rhs);
         MoFEMFunctionReturn(0);
