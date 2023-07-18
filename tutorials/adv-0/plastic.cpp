@@ -623,9 +623,8 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  auto set_fieldsplit_preconditioner = [&](auto solver,
-                                           boost::shared_ptr<SetUpSchur>
-                                               &schur_ptr) {
+  auto set_schur_pc = [&](auto solver,
+                          boost::shared_ptr<SetUpSchur> &schur_ptr) {
     MoFEMFunctionBeginHot;
 
     SNES snes;
@@ -837,7 +836,7 @@ MoFEMErrorCode Example::tsSolve() {
   CHKERR TSSetFromOptions(solver);
 
   boost::shared_ptr<SetUpSchur> schur_ptr;
-  CHKERR set_fieldsplit_preconditioner(solver, schur_ptr);
+  CHKERR set_schur_pc(solver, schur_ptr);
 
   // Domain element is run first by TSSolver, thus run Schur pre-proc, which
   // clears Schur complement matrix
