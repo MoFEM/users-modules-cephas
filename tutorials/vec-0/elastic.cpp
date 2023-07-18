@@ -438,9 +438,9 @@ MoFEMErrorCode Example::solveSystem() {
     post_proc_rhs->postProcessHook = get_post_proc_hook_rhs();
     post_proc_lhs->postProcessHook = get_post_proc_hook_lhs();
 
-    ksp_ctx_ptr->get_preProcess_to_do_Rhs().push_front(pre_proc_rhs);
-    ksp_ctx_ptr->get_postProcess_to_do_Rhs().push_back(post_proc_rhs);
-    ksp_ctx_ptr->get_postProcess_to_do_Mat().push_back(post_proc_lhs);
+    ksp_ctx_ptr->getPreProcComputeRhs().push_front(pre_proc_rhs);
+    ksp_ctx_ptr->getPostProcComputeRhs().push_back(post_proc_rhs);
+    ksp_ctx_ptr->getPostProcSetOperators().push_back(post_proc_lhs);
     MoFEMFunctionReturn(0);
   };
 
@@ -902,8 +902,8 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
   auto simple = mField.getInterface<Simple>();
   auto ksp_ctx_ptr = getDMKspCtx(simple->getDM());
 
-  ksp_ctx_ptr->get_preProcess_to_do_Mat().push_front(pre_proc_schur_lhs_ptr);
-  ksp_ctx_ptr->get_postProcess_to_do_Mat().push_back(post_proc_schur_lhs_ptr);
+  ksp_ctx_ptr->getPreProcSetOperators().push_front(pre_proc_schur_lhs_ptr);
+  ksp_ctx_ptr->getPostProcSetOperators().push_back(post_proc_schur_lhs_ptr);
 
   MoFEMFunctionReturn(0);
 }

@@ -839,18 +839,18 @@ int main(int argc, char *argv[]) {
                                               PETSC_NULL, D, F);
 
       SnesCtx::FEMethodsSequence &loops_to_do_Rhs =
-          snes_ctx.get_loops_to_do_Rhs();
-      snes_ctx.get_preProcess_to_do_Rhs().push_back(&my_dirichlet_bc);
+          snes_ctx.getComputeRhs();
+      snes_ctx.getPreProcComputeRhs().push_back(&my_dirichlet_bc);
       fluid_pressure_fe.getLoopFe().ts_t = 0;
       CHKERR add_static_rhs(loops_to_do_Rhs);
-      snes_ctx.get_postProcess_to_do_Rhs().push_back(&my_dirichlet_bc);
+      snes_ctx.getPostProcComputeRhs().push_back(&my_dirichlet_bc);
 
       SnesCtx::FEMethodsSequence &loops_to_do_Mat =
-          snes_ctx.get_loops_to_do_Mat();
-      snes_ctx.get_preProcess_to_do_Mat().push_back(&my_dirichlet_bc);
+          snes_ctx.getSetOperators();
+      snes_ctx.getPreProcSetOperators().push_back(&my_dirichlet_bc);
       loops_to_do_Mat.push_back(
           SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeLhs()));
-      snes_ctx.get_postProcess_to_do_Mat().push_back(&my_dirichlet_bc);
+      snes_ctx.getPostProcSetOperators().push_back(&my_dirichlet_bc);
 
       CHKERR m_field.getInterface<FieldBlas>()->fieldScale(0, "VELOCITY");
       CHKERR m_field.getInterface<FieldBlas>()->fieldScale(0,
