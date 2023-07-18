@@ -500,9 +500,6 @@ struct SetUpSchur {
   );
   virtual MoFEMErrorCode setUp(KSP solver) = 0;
 
-  virtual MoFEMErrorCode preProc() = 0;
-  virtual MoFEMErrorCode postProc() = 0;
-
 protected:
   SetUpSchur() = default;
 };
@@ -843,8 +840,6 @@ MoFEMErrorCode Example::tsSolve() {
   mField.getInterface<PipelineManager>()->getDomainLhsFE()->preProcessHook =
       [&]() {
         MoFEMFunctionBegin;
-        if (schur_ptr)
-          CHKERR schur_ptr->preProc();
         CHKERR active_pre_lhs();
         MoFEMFunctionReturn(0);
       };
@@ -853,14 +848,6 @@ MoFEMErrorCode Example::tsSolve() {
       [&]() {
         MoFEMFunctionBegin;
         CHKERR active_post_lhs();
-        MoFEMFunctionReturn(0);
-      };
-  // Assemble matrices in post-proc of boundary pipeline
-  mField.getInterface<PipelineManager>()->getBoundaryLhsFE()->postProcessHook =
-      [&]() {
-        MoFEMFunctionBegin;
-        if (schur_ptr)
-          CHKERR schur_ptr->postProc();
         MoFEMFunctionReturn(0);
       };
 
@@ -964,6 +951,7 @@ private:
 
 MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
   MoFEMFunctionBegin;
+  auto simple = mField.getInterface<Simple>();
   auto pip = mField.getInterface<PipelineManager>();
   PC pc;
   CHKERR KSPSetFromOptions(solver);
@@ -1003,6 +991,29 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
       MoFEMFunctionReturn(0);
     };
 
+    auto set_assemble_elems = [&]() {
+      MoFEMFunctionBegin;
+      auto schur_asmb_pre_proc = boost::make_shared<FEMethod>();
+      schur_asmb_pre_proc->preProcessHook = [this]() {
+        MoFEMFunctionBegin;
+        CHKERR MatZeroEntries(S);
+        MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble Begin";
+        MoFEMFunctionReturn(0);
+      };
+      auto schur_asmb_post_proc = boost::make_shared<FEMethod>();
+      schur_asmb_post_proc->postProcessHook = [this]() {
+        MoFEMFunctionBegin;
+        MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble End";
+        CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
+        CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
+        MoFEMFunctionReturn(0);
+      };
+      auto ts_ctx_ptr = getDMTsCtx(simple->getDM());
+      ts_ctx_ptr->getPreProcessIJacobian().push_front(schur_asmb_pre_proc);
+      ts_ctx_ptr->getPostProcessIJacobian().push_front(schur_asmb_post_proc);
+      MoFEMFunctionReturn(0);
+    };
+
     auto set_pc = [&]() {
       MoFEMFunctionBegin;
       CHKERR PCFieldSplitSetIS(pc, NULL, fieldSplitIS);
@@ -1012,6 +1023,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
 
     CHKERR set_ops();
     CHKERR set_pc();
+    CHKERR set_assemble_elems();
 
   } else {
     pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
@@ -1026,25 +1038,6 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
   subDM.reset();
   fieldSplitIS.reset();
   aoUp.reset();
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode SetUpSchurImpl::preProc() {
-  MoFEMFunctionBegin;
-  if (SetUpSchurImpl::S) {
-    CHKERR MatZeroEntries(S);
-  }
-  MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble Begin";
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode SetUpSchurImpl::postProc() {
-  MoFEMFunctionBegin;
-  MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble End";
-  if (S) {
-    CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-  }
   MoFEMFunctionReturn(0);
 }
 
