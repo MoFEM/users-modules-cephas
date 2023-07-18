@@ -141,7 +141,6 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
-  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<std::vector<unsigned char>> reactionMarker;
 
   struct PlasticityTimeScale : public MoFEM::TimeScale {
@@ -319,9 +318,6 @@ MoFEMErrorCode Example::bC() {
       simple->getProblemName(), "U");
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
-  boundaryMarker =
-      bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE_"});
-
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
 
@@ -384,12 +380,9 @@ MoFEMErrorCode Example::OPs() {
     CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
         pipeline, {NOSPACE}, "GEOMETRY");
 
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
         pipeline, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
         "FORCE", Sev::inform);
-
-    pipeline.push_back(new OpUnSetBc("U"));
 
     auto u_mat_ptr = boost::make_shared<MatrixDouble>();
     pipeline.push_back(
@@ -410,12 +403,8 @@ MoFEMErrorCode Example::OPs() {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
                                                           "GEOMETRY");
 
-    pip.push_back(new OpSetBc("U", true, boundaryMarker));
-
     CHKERR PlasticOps::opFactoryDomainLhs<SPACE_DIM, A, G, DomainEleOp>(
         mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
-
-    pip.push_back(new OpUnSetBc("U"));
 
     MoFEMFunctionReturn(0);
   };
@@ -425,16 +414,12 @@ MoFEMErrorCode Example::OPs() {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
                                                           "GEOMETRY");
 
-    pip.push_back(new OpSetBc("U", true, boundaryMarker));
-
     CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
         pip, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
         "BODY_FORCE", Sev::inform);
 
     CHKERR PlasticOps::opFactoryDomainRhs<SPACE_DIM, A, G, DomainEleOp>(
         mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
-
-    pip.push_back(new OpUnSetBc("U"));
 
     MoFEMFunctionReturn(0);
   };
@@ -462,10 +447,8 @@ MoFEMErrorCode Example::OPs() {
     if (reactionMarker) {
       CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
                                                             "GEOMETRY");
-      pip.push_back(new OpSetBc("U", false, reactionMarker));
       CHKERR PlasticOps::opFactoryDomainReactions<SPACE_DIM, A, G, DomainEleOp>(
           mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
-      pip.push_back(new OpUnSetBc("U"));
     }
 
     MoFEMFunctionReturn(0);
@@ -526,7 +509,8 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto create_post_process_element = [&]() {
     auto pp_fe = boost::make_shared<PostProcEle>(mField);
-    auto pip = pp_fe->getOpPtrVector();
+    auto &pip = pp_fe->getOpPtrVector();
+
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
@@ -639,46 +623,6 @@ MoFEMErrorCode Example::tsSolve() {
       auto bc_mng = mField.getInterface<BcManager>();
       auto name_prb = simple->getProblemName();
 
-      // create sub dm to handle boundary conditions (least square)
-      auto create_sub_bc_dm = [&](SmartPetscObj<DM> base_dm,
-                                  SmartPetscObj<DM> &dm_sub,
-                                  SmartPetscObj<IS> &is_sub,
-                                  SmartPetscObj<AO> &ao_sub) {
-        MoFEMFunctionBegin;
-
-        dm_sub = createDM(mField.get_comm(), "DMMOFEM");
-        CHKERR DMMoFEMCreateSubDM(dm_sub, base_dm, "SUB_BC");
-        CHKERR DMMoFEMSetSquareProblem(dm_sub, PETSC_TRUE);
-        CHKERR DMMoFEMAddElement(dm_sub, simple->getDomainFEName());
-        CHKERR DMMoFEMAddElement(dm_sub, simple->getBoundaryFEName());
-        for (auto f : {"U", "EP", "TAU"}) {
-          CHKERR DMMoFEMAddSubFieldRow(dm_sub, f);
-          CHKERR DMMoFEMAddSubFieldCol(dm_sub, f);
-        }
-        CHKERR DMSetUp(dm_sub);
-
-        CHKERR bc_mng->removeBlockDOFsOnEntities("SUB_BC", "FIX_X", "U", 0, 0);
-        CHKERR bc_mng->removeBlockDOFsOnEntities("SUB_BC", "FIX_Y", "U", 1, 1);
-        CHKERR bc_mng->removeBlockDOFsOnEntities("SUB_BC", "FIX_Z", "U", 2, 2);
-        CHKERR bc_mng->removeBlockDOFsOnEntities("SUB_BC", "FIX_ALL", "U", 0,
-                                                 2);
-
-        auto *prb_ptr = getProblemPtr(dm_sub);
-        if (auto sub_data = prb_ptr->getSubData()) {
-          is_sub = sub_data->getSmartRowIs();
-          ao_sub = sub_data->getSmartRowMap();
-          int is_sub_size;
-          CHKERR ISGetSize(is_sub, &is_sub_size);
-          MOFEM_LOG("EXAMPLE", Sev::inform)
-              << "Field split second block size " << is_sub_size;
-
-        } else {
-          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "No sub data");
-        }
-
-        MoFEMFunctionReturn(0);
-      };
-
       // create sub dm for Schur complement
       auto create_sub_u_dm = [&](SmartPetscObj<DM> base_dm,
                                  SmartPetscObj<DM> &dm_sub) {
@@ -697,63 +641,31 @@ MoFEMErrorCode Example::tsSolve() {
         MoFEMFunctionReturn(0);
       };
 
-      // get IS for all boundary conditions
-      auto create_all_bc_is = [&](SmartPetscObj<IS> &is_all_bc) {
-        MoFEMFunctionBegin;
-        is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_X", "U", 0, 0);
-        is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Y", "U", 1, 1, is_all_bc);
-        is_all_bc = bc_mng->getBlockIS(name_prb, "FIX_Z", "U", 2, 2, is_all_bc);
-        is_all_bc =
-            bc_mng->getBlockIS(name_prb, "FIX_ALL", "U", 0, 2, is_all_bc);
-        int is_all_bc_size;
-        CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
-        MOFEM_LOG("EXAMPLE", Sev::inform)
-            << "Field split first block size " << is_all_bc_size;
-        MoFEMFunctionReturn(0);
-      };
-
-      SmartPetscObj<IS> is_all_bc;
-      SmartPetscObj<DM> dm_bc_sub;
-      SmartPetscObj<IS> is_bc_sub;
-      SmartPetscObj<AO> ao_bc_sub;
-
-      CHKERR create_all_bc_is(is_all_bc);
-      // note that Schur dm is sub dm for boundary conditions, i.e. is nested.
-      CHKERR create_sub_bc_dm(simple->getDM(), dm_bc_sub, is_bc_sub, ao_bc_sub);
-
-      // Create field split for boundary conditions
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
-                               is_all_bc); // boundary block
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_bc_sub);
-
       // Create nested (sub BC) Schur DM
       if constexpr (A == AssemblyType::SCHUR) {
 
         SmartPetscObj<IS> is_epp;
         CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-            "SUB_BC", ROW, "EP", 0, MAX_DOFS_ON_ENTITY, is_epp);
+            simple->getProblemName(), ROW, "EP", 0, MAX_DOFS_ON_ENTITY, is_epp);
         SmartPetscObj<IS> is_tau;
         CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-            "SUB_BC", ROW, "TAU", 0, MAX_DOFS_ON_ENTITY, is_tau);
+            simple->getProblemName(), ROW, "TAU", 0, MAX_DOFS_ON_ENTITY,
+            is_tau);
         IS is_union_raw;
         CHKERR ISExpand(is_epp, is_tau, &is_union_raw);
         SmartPetscObj<IS> is_union(is_union_raw);
 
         SmartPetscObj<DM> dm_u_sub;
-        CHKERR create_sub_u_dm(dm_bc_sub, dm_u_sub);
+        CHKERR create_sub_u_dm(simple->getDM(), dm_u_sub);
 
         // Indices has to be map fro very to level, while assembling Schur
         // complement.
         auto is_up = getDMSubData(dm_u_sub)->getSmartRowIs();
-        CHKERR AOPetscToApplicationIS(ao_bc_sub, is_up);
         auto ao_up = createAOMappingIS(is_up, PETSC_NULL);
         schur_ptr =
             SetUpSchur::createSetUpSchur(mField, dm_u_sub, is_union, ao_up);
-        PetscInt n;
-        KSP *ksps;
-        CHKERR PCFieldSplitGetSubKSP(pc, &n, &ksps);
-        CHKERR schur_ptr->setUp(
-            ksps[1]); // note that FS is applied in second block of boundary BC
+
+        CHKERR schur_ptr->setUp(ksp);
       }
     }
 
@@ -838,12 +750,53 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
+  auto set_essential_bc = [&](auto dm) {
+    MoFEMFunctionBegin;
+    // This is low level pushing finite elements (pipelines) to solver
+
+    auto pre_proc_ptr = boost::make_shared<FEMethod>();
+    auto post_proc_rhs_ptr = boost::make_shared<FEMethod>();
+    auto post_proc_lhs_ptr = boost::make_shared<FEMethod>();
+
+    // Add boundary condition scaling
+    auto time_scale = boost::make_shared<TimeScale>();
+
+    auto get_bc_hook_rhs = [&]() {
+      EssentialPreProc<DisplacementCubitBcData> hook(mField, pre_proc_ptr,
+                                                     {time_scale}, false);
+      return hook;
+    };
+    pre_proc_ptr->preProcessHook = get_bc_hook_rhs();
+
+    auto get_post_proc_hook_rhs = [&]() {
+      return EssentialPreProcRhs<DisplacementCubitBcData>(
+          mField, post_proc_rhs_ptr, 1.);
+    };
+    auto get_post_proc_hook_lhs = [&]() {
+      return EssentialPreProcLhs<DisplacementCubitBcData>(
+          mField, post_proc_lhs_ptr, 1.);
+    };
+    post_proc_rhs_ptr->postProcessHook = get_post_proc_hook_rhs();
+
+    auto ts_ctx_ptr = getDMTsCtx(dm);
+    ts_ctx_ptr->getPreProcessIFunction().push_front(pre_proc_ptr);
+    ts_ctx_ptr->getPreProcessIJacobian().push_front(pre_proc_ptr);
+    ts_ctx_ptr->getPostProcessIFunction().push_back(post_proc_rhs_ptr);
+    if (A != AssemblyType::SCHUR) {
+      post_proc_lhs_ptr->postProcessHook = get_post_proc_hook_lhs();
+      ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_lhs_ptr);
+    }
+    MoFEMFunctionReturn(0);
+  };
+
   CHKERR TSSetSolution(solver, D);
   CHKERR set_section_monitor(solver);
   CHKERR set_time_monitor(dm, solver);
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
+  CHKERR TSSetUp(solver);
 
+  CHKERR set_essential_bc(dm);
   CHKERR add_active_dofs_elem(dm);
   boost::shared_ptr<SetUpSchur> schur_ptr;
   CHKERR set_schur_pc(solver, schur_ptr);
@@ -879,7 +832,7 @@ int main(int argc, char *argv[]) {
       LogManager::createSink(LogManager::getStrmWorld(), "TIMER"));
   LogManager::setLog("EXAMPLE");
 
-  MOFEM_LOG_TAG("EXAMPLE", "example");
+  MOFEM_LOG_TAG("EXAMPLE", "Plasticity");
 
   try {
 
@@ -994,11 +947,19 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
         MoFEMFunctionReturn(0);
       };
       auto schur_asmb_post_proc = boost::make_shared<FEMethod>();
-      schur_asmb_post_proc->postProcessHook = [this]() {
+      schur_asmb_post_proc->postProcessHook = [this, schur_asmb_post_proc]() {
         MoFEMFunctionBegin;
+
+        CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+            mField, schur_asmb_post_proc, 1)();
+
         MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble End";
         CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
         CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
+
+        CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+            mField, schur_asmb_post_proc, 1, S, aoUp)();
+
         MoFEMFunctionReturn(0);
       };
       auto ts_ctx_ptr = getDMTsCtx(simple->getDM());
@@ -1025,12 +986,23 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
     pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
     pip->getOpDomainLhsPipeline().push_back(
         new OpSchurAssembleEnd<SCHUR_DGESV>({}, {}, {}, {}, {}));
+
+    auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
+    post_proc_schur_lhs_ptr->postProcessHook = [this,
+                                                post_proc_schur_lhs_ptr]() {
+      MoFEMFunctionBegin;
+      CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+          mField, post_proc_schur_lhs_ptr, 1.)();
+      MoFEMFunctionReturn(0);
+    };
+    auto ts_ctx_ptr = getDMTsCtx(simple->getDM());
+    ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_schur_lhs_ptr);
   }
 
   // we do not those anymore
   subDM.reset();
   fieldSplitIS.reset();
-  aoUp.reset();
+  // aoUp.reset();
   MoFEMFunctionReturn(0);
 }
 

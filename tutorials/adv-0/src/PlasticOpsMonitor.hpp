@@ -8,7 +8,7 @@ namespace PlasticOps {
 
 struct Monitor : public FEMethod {
 
-  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<PostProcEle> post_proc_fe,
+  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc_fe,
           boost::shared_ptr<DomainEle> reaction_fe,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
@@ -35,7 +35,7 @@ struct Monitor : public FEMethod {
       auto r = createDMVector(dM);
       reactionFe->f = r;
       CHKERR VecZeroEntries(r);
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", reactionFe);
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", reactionFe, getCacheWeakPtr());
       CHKERR VecGhostUpdateBegin(r, ADD_VALUES, SCATTER_REVERSE);
       CHKERR VecGhostUpdateEnd(r, ADD_VALUES, SCATTER_REVERSE);
       CHKERR VecAssemblyBegin(r);
