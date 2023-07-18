@@ -769,7 +769,7 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto solver = pip->createTSIM();
 
-  auto active_pre_lhs = [&]() {
+  auto active_pre_lhs = []() {
     MoFEMFunctionBegin;
     std::fill(PlasticOps::CommonData::activityData.begin(),
               PlasticOps::CommonData::activityData.end(), 0);
@@ -826,30 +826,27 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
+  auto add_active_dofs_elem = [&](auto dm) {
+    MoFEMFunctionBegin;
+    auto fe_pre_proc = boost::make_shared<FEMethod>();
+    fe_pre_proc->preProcessHook = active_pre_lhs;
+    auto fe_post_proc = boost::make_shared<FEMethod>();
+    fe_post_proc->postProcessHook = active_post_lhs;
+    auto ts_ctx_ptr = getDMTsCtx(dm);
+    ts_ctx_ptr->getPreProcessIJacobian().push_front(fe_pre_proc);
+    ts_ctx_ptr->getPostProcessIJacobian().push_back(fe_post_proc);
+    MoFEMFunctionReturn(0);
+  };
+
   CHKERR TSSetSolution(solver, D);
   CHKERR set_section_monitor(solver);
   CHKERR set_time_monitor(dm, solver);
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
 
+  CHKERR add_active_dofs_elem(dm);
   boost::shared_ptr<SetUpSchur> schur_ptr;
   CHKERR set_schur_pc(solver, schur_ptr);
-
-  // Domain element is run first by TSSolver, thus run Schur pre-proc, which
-  // clears Schur complement matrix
-  mField.getInterface<PipelineManager>()->getDomainLhsFE()->preProcessHook =
-      [&]() {
-        MoFEMFunctionBegin;
-        CHKERR active_pre_lhs();
-        MoFEMFunctionReturn(0);
-      };
-  // Do nothing, assemble after integrating boundary
-  mField.getInterface<PipelineManager>()->getDomainLhsFE()->postProcessHook =
-      [&]() {
-        MoFEMFunctionBegin;
-        CHKERR active_post_lhs();
-        MoFEMFunctionReturn(0);
-      };
 
   MOFEM_LOG_CHANNEL("TIMER");
   MOFEM_LOG_TAG("TIMER", "timer");
@@ -861,10 +858,6 @@ MoFEMErrorCode Example::tsSolve() {
   MOFEM_LOG("TIMER", Sev::verbose) << "TSSolve";
   CHKERR TSSolve(solver, NULL);
   MOFEM_LOG("TIMER", Sev::verbose) << "TSSolve <= done";
-
-  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
   MoFEMFunctionReturn(0);
 }
