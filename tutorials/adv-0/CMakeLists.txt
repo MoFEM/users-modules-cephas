@@ -1,6 +1,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-2/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../adv-1/src)
 
 include_directories(${MoFEM_INSTALL_DIR}/third_party/phg-quadrule)
 
@@ -47,7 +48,7 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   plastic_3d 
   -file_name necking_3D_p2.h5m
-  -ts_dt 0.02
+  -ts_dt 0.01
   -ts_max_time 1.2
   -ts_max_steps 1
   -ts_type theta

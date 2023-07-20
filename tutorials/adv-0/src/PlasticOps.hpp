@@ -513,6 +513,13 @@ opFactoryDomainRhs(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
 
   auto m_D_ptr = common_plastic_ptr->mDPtr;
 
+  pip.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<DIM>(
+      ep, common_plastic_ptr->getPlasticStrainDotPtr()));
+  pip.push_back(new OpCalculateScalarFieldValuesDot(
+      tau, common_plastic_ptr->getPlasticTauDotPtr()));
+  pip.push_back(new typename P::template OpCalculatePlasticity<DIM, I>(
+      u, common_plastic_ptr, m_D_ptr));
+
   // Calculate internal forces
   if (common_henky_ptr) {
     pip.push_back(new OpInternalForcePiola(
@@ -520,13 +527,6 @@ opFactoryDomainRhs(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
   } else {
     pip.push_back(new OpInternalForceCauchy(u, common_plastic_ptr->mStressPtr));
   }
-
-  pip.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<DIM>(
-      ep, common_plastic_ptr->getPlasticStrainDotPtr()));
-  pip.push_back(new OpCalculateScalarFieldValuesDot(
-      tau, common_plastic_ptr->getPlasticTauDotPtr()));
-  pip.push_back(new typename P::template OpCalculatePlasticity<DIM, I>(
-      u, common_plastic_ptr, m_D_ptr));
 
   pip.push_back(
       new

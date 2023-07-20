@@ -318,22 +318,34 @@ MoFEMErrorCode Example::OPs() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  auto add_boundary_ops_rhs_mechanical = [&](auto &pipeline) {
+  auto add_boundary_ops_lhs_mechanical = [&](auto &pip) {
     MoFEMFunctionBegin;
 
-    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-        pipeline, {NOSPACE}, "GEOMETRY");
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV},
+                                                              "GEOMETRY");
+    pip.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
+
+    MoFEMFunctionReturn(0);
+  };
+
+  auto add_boundary_ops_rhs_mechanical = [&](auto &pip) {
+    MoFEMFunctionBegin;
+
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV},
+                                                              "GEOMETRY");
+    pip.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
 
     CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
-        pipeline, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
-        "FORCE", Sev::inform);
+        pip, mField, "U", {boost::make_shared<PlasticityTimeScale>()}, "FORCE",
+        Sev::inform);
+
 
     MoFEMFunctionReturn(0);
   };
 
   auto add_domain_ops_lhs = [this](auto &pip) {
     MoFEMFunctionBegin;
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
                                                           "GEOMETRY");
 
     CHKERR PlasticOps::opFactoryDomainLhs<SPACE_DIM, A, G, DomainEleOp>(
@@ -344,7 +356,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_rhs = [this](auto &pip) {
     MoFEMFunctionBegin;
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
                                                           "GEOMETRY");
 
     CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
@@ -361,6 +373,7 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_domain_ops_rhs(pip->getOpDomainRhsPipeline());
 
   // Boundary
+  CHKERR add_boundary_ops_lhs_mechanical(pip->getOpBoundaryLhsPipeline());
   CHKERR add_boundary_ops_rhs_mechanical(pip->getOpBoundaryRhsPipeline());
 
   auto integration_rule_bc = [](int, int, int ao) { return 2 * ao; };
