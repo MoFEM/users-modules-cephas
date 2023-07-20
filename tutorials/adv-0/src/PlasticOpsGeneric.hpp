@@ -266,7 +266,7 @@ inline double constrain_abs(double x) {
 
 inline double w(double eqiv, double dot_tau, double f, double sigma_y,
                 double sigma_Y) {
-  return (f - sigma_y) / sigma_Y + cn1 * (dot_tau * std::sqrt(eqiv));
+  return (f - sigma_y) / sigma_Y + cn1 * (constrian_sign(dot_tau) * eqiv);
 };
 
 /**
@@ -282,21 +282,22 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
  */
 inline double constraint(double eqiv, double dot_tau, double f, double sigma_y,
                          double abs_w, double vis_H, double sigma_Y) {
-  return vis_H * dot_tau + (sigma_Y / 2) * ((cn0 * (dot_tau - eqiv) +
-                                             cn1 * (std::sqrt(eqiv) * dot_tau) -
-                                             (f - sigma_y) / sigma_Y) -
-                                            abs_w);
+  return vis_H * dot_tau +
+         (sigma_Y / 2) *
+             ((cn0 * (dot_tau - eqiv) + cn1 * (constrian_sign(dot_tau) * eqiv) -
+               (f - sigma_y) / sigma_Y) -
+              abs_w);
 };
 
-inline double diff_constrain_ddot_tau(double sign, double eqiv, double vis_H,
-                                      double sigma_Y) {
-  return vis_H + (sigma_Y / 2) * (cn0 + cn1 * std::sqrt(eqiv) * (1 - sign));
+inline double diff_constrain_ddot_tau(double sign, double eqiv, double dot_tau,
+                                      double vis_H, double sigma_Y) {
+  return vis_H + (sigma_Y / 2) * (cn0 + cn1 * constrain_diff_sign(dot_tau) *
+                                            eqiv * (1 - sign));
 };
 
 inline double diff_constrain_deqiv(double sign, double eqiv, double dot_tau,
                                    double sigma_Y) {
-  return (sigma_Y / 2) *
-         (-cn0 + cn1 * dot_tau * (0.5 / std::sqrt(eqiv)) * (1 - sign));
+  return (sigma_Y / 2) * (-cn0 + cn1 * constrian_sign(dot_tau) * (1 - sign));
 };
 
 inline auto diff_constrain_df(double sign) { return (-1 - sign) / 2; };
@@ -618,8 +619,9 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
 
     auto c = constraint(eqiv, t_tau_dot, t_f, sigma_y, abs_ww,
                         params[CommonData::VIS_H], params[CommonData::SIGMA_Y]);
-    auto c_dot_tau = diff_constrain_ddot_tau(
-        sign_ww, eqiv, params[CommonData::VIS_H], params[CommonData::SIGMA_Y]);
+    auto c_dot_tau = diff_constrain_ddot_tau(sign_ww, eqiv, t_tau_dot,
+                                             params[CommonData::VIS_H],
+                                             params[CommonData::SIGMA_Y]);
     auto c_equiv = diff_constrain_deqiv(sign_ww, eqiv, t_tau_dot,
                                         params[CommonData::SIGMA_Y]);
     auto c_sigma_y = diff_constrain_dsigma_y(sign_ww);
