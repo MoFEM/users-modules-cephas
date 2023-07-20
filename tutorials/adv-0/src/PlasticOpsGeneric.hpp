@@ -691,22 +691,20 @@ template <int DIM, typename DomainEleOp>
 struct OpPlasticStressImpl<DIM, GAUSS, DomainEleOp> : public DomainEleOp {
   OpPlasticStressImpl(const std::string field_name,
                       boost::shared_ptr<CommonData> common_data_ptr,
-                      boost::shared_ptr<MatrixDouble> mDPtr,
-                      const double scale = 1);
+                      boost::shared_ptr<MatrixDouble> mDPtr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<MatrixDouble> mDPtr;
-  const double scaleStress;
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
 template <int DIM, typename DomainEleOp>
 OpPlasticStressImpl<DIM, GAUSS, DomainEleOp>::OpPlasticStressImpl(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<MatrixDouble> m_D_ptr, const double scale)
+    boost::shared_ptr<MatrixDouble> m_D_ptr)
     : DomainEleOp(field_name, DomainEleOp::OPROW),
-      commonDataPtr(common_data_ptr), scaleStress(scale), mDPtr(m_D_ptr) {
+      commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
   // Operator is only executed for vertices
   std::fill(&DomainEleOp::doEntities[MBEDGE],
             &DomainEleOp::doEntities[MBMAXTYPE], false);
@@ -737,7 +735,6 @@ OpPlasticStressImpl<DIM, GAUSS, DomainEleOp>::doWork(int side, EntityType type,
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
     t_stress(i, j) =
         t_D(i, j, k, l) * (t_strain(k, l) - t_plastic_strain(k, l));
-    t_stress(i, j) /= scaleStress;
     ++t_strain;
     ++t_plastic_strain;
     ++t_stress;

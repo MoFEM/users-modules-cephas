@@ -314,10 +314,13 @@ struct Monitor : public FEMethod {
               return spring_stiffness;
             }));
 
+        CHKERR DMoFEMLoopFiniteElements(dM, "bFE", fe_rhs);
+
         MoFEMFunctionReturn(0);
       };
 
       CHKERR assemble_domain();
+      CHKERR assemble_boundary();
 
       auto fe_post_proc_ptr = boost::make_shared<FEMethod>();
       auto get_post_proc_hook_rhs = [this, fe_post_proc_ptr, res,

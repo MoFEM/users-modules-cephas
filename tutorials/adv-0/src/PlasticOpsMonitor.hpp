@@ -22,6 +22,9 @@ struct Monitor : public FEMethod {
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
 
+    MoFEM::Interface *m_field_ptr;
+    CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
+
     auto make_vtk = [&]() {
       MoFEMFunctionBegin;
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe, getCacheWeakPtr());
@@ -32,19 +35,49 @@ struct Monitor : public FEMethod {
 
     auto calculate_reaction = [&]() {
       MoFEMFunctionBegin;
+
+      CHKERR reactionFe->copyBasicMethod(*this);
+      CHKERR reactionFe->copyPetscData(*this);
+      CHKERR reactionFe->copyKsp(*this);
+      CHKERR reactionFe->copySnes(*this);
+      CHKERR reactionFe->copyTs(*this);
+
       auto r = createDMVector(dM);
       reactionFe->f = r;
       CHKERR VecZeroEntries(r);
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", reactionFe, getCacheWeakPtr());
-      CHKERR VecGhostUpdateBegin(r, ADD_VALUES, SCATTER_REVERSE);
-      CHKERR VecGhostUpdateEnd(r, ADD_VALUES, SCATTER_REVERSE);
-      CHKERR VecAssemblyBegin(r);
-      CHKERR VecAssemblyEnd(r);
 
-      double sum;
-      CHKERR VecSum(r, &sum);
-      MOFEM_LOG_C("EXAMPLE", Sev::inform, "reaction time %3.4e %3.4e", ts_t,
-                  sum);
+#ifndef NDEBUG
+      auto post_proc_residual = [&](auto dm, auto f_res, auto out_name) {
+        MoFEMFunctionBegin;
+        auto post_proc_fe =
+            boost::make_shared<PostProcBrokenMeshInMoab<DomainEle>>(
+                *m_field_ptr);
+        using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+        auto u_vec = boost::make_shared<MatrixDouble>();
+        post_proc_fe->getOpPtrVector().push_back(
+            new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_vec, f_res));
+        post_proc_fe->getOpPtrVector().push_back(
+
+            new OpPPMap(
+
+                post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+                {},
+
+                {{"RES", u_vec}},
+
+                {}, {})
+
+        );
+
+        CHKERR DMoFEMLoopFiniteElements(dM, "dFE", post_proc_fe);
+        post_proc_fe->writeFile("res.h5m");
+        MoFEMFunctionReturn(0);
+      };
+
+      CHKERR post_proc_residual(dM, r, "reaction");
+#endif // NDEBUG
 
       MoFEMFunctionReturn(0);
     };

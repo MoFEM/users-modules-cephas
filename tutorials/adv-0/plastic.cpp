@@ -50,15 +50,6 @@ using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
 using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
 
-//! [Essential boundary conditions]
-using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::BiLinearForm<G>::OpMass<1, SPACE_DIM>;
-using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<G>::OpBaseTimesVector<1, SPACE_DIM, 0>;
-using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<G>::OpBaseTimesVector<1, SPACE_DIM, 1>;
-//! [Essential boundary conditions]
-
 using DomainNaturalBC = NaturalBC<DomainEleOp>::Assembly<A>::LinearForm<G>;
 using OpBodyForce =
     DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
@@ -66,11 +57,6 @@ using OpBodyForce =
 using BoundaryNaturalBC = NaturalBC<BoundaryEleOp>::Assembly<A>::LinearForm<G>;
 using OpForce =
     BoundaryNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
-
-using OpEssentialLhs = EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<
-    GAUSS>::OpEssentialLhs<DisplacementCubitBcData, 1, SPACE_DIM>;
-using OpEssentialRhs = EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<
-    GAUSS>::OpEssentialRhs<DisplacementCubitBcData, 1, SPACE_DIM>;
 
 inline double hardening_exp(double tau, double b_iso) {
   return std::exp(
@@ -140,8 +126,6 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
-
-  boost::shared_ptr<std::vector<unsigned char>> reactionMarker;
 
   struct PlasticityTimeScale : public MoFEM::TimeScale {
     using MoFEM::TimeScale::TimeScale;
@@ -285,8 +269,10 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
                                PETSC_NULL);
     if (is_scale) {
-      scale = scale / young_modulus;
+      scale /= young_modulus;
     }
+
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Scale " << scale;
 
     MoFEMFunctionReturn(0);
   };
@@ -318,40 +304,8 @@ MoFEMErrorCode Example::bC() {
       simple->getProblemName(), "U");
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
-                                        "U", 0, 3);
-
   for (auto bc : bc_map)
     MOFEM_LOG("EXAMPLE", Sev::verbose) << "Marker " << bc.first;
-
-  // OK. We have problem with GMesh, it adding empty characters at the end of
-  // block. So first block is search by regexp. popMarkDOFsOnEntities should
-  // work with regexp.
-  std::string reaction_block_set;
-  for (auto bc : bc_map) {
-    if (bc_mng->checkBlock(bc, "REACTION")) {
-      reaction_block_set = bc.first;
-      break;
-    }
-  }
-
-  if (auto bc = bc_mng->popMarkDOFsOnEntities(reaction_block_set)) {
-    reactionMarker = bc->getBcMarkersPtr();
-
-    // Only take reaction from nodes
-    Range nodes;
-    CHKERR mField.get_moab().get_entities_by_type(0, MBVERTEX, nodes, true);
-    CHKERR prb_mng->markDofs(simple->getProblemName(), ROW,
-                             ProblemsManager::MarkOP::AND, nodes,
-                             *reactionMarker);
-
-  } else {
-    MOFEM_LOG("EXAMPLE", Sev::warning) << "REACTION blockset does not exist";
-  }
-
-  if (!reactionMarker) {
-    MOFEM_LOG("EXAMPLE", Sev::warning) << "REACTION blockset does not exist";
-  }
 
   MoFEMFunctionReturn(0);
 }
@@ -364,16 +318,6 @@ MoFEMErrorCode Example::OPs() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  auto add_boundary_ops_lhs_mechanical = [&](auto &pipeline) {
-    MoFEMFunctionBegin;
-
-    // Add essential boundary conditions
-    CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::BiLinearForm<G>::
-        AddEssentialToPipeline<OpEssentialLhs>::add(
-            mField, pipeline, simple->getProblemName(), "U");
-    MoFEMFunctionReturn(0);
-  };
-
   auto add_boundary_ops_rhs_mechanical = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
@@ -383,17 +327,6 @@ MoFEMErrorCode Example::OPs() {
     CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
         pipeline, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
         "FORCE", Sev::inform);
-
-    auto u_mat_ptr = boost::make_shared<MatrixDouble>();
-    pipeline.push_back(
-        new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
-
-    // Add essential boundary conditions
-    CHKERR EssentialBC<BoundaryEleOp>::Assembly<A>::LinearForm<G>::
-        AddEssentialToPipeline<OpEssentialRhs>::add(
-            mField, pipeline, simple->getProblemName(), "U", u_mat_ptr,
-            {boost::make_shared<TimeScale>()}); // note displacements have no
-                                                // scaling
 
     MoFEMFunctionReturn(0);
   };
@@ -428,7 +361,6 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_domain_ops_rhs(pip->getOpDomainRhsPipeline());
 
   // Boundary
-  CHKERR add_boundary_ops_lhs_mechanical(pip->getOpBoundaryLhsPipeline());
   CHKERR add_boundary_ops_rhs_mechanical(pip->getOpBoundaryRhsPipeline());
 
   auto integration_rule_bc = [](int, int, int ao) { return 2 * ao; };
@@ -443,21 +375,21 @@ MoFEMErrorCode Example::OPs() {
 
   auto create_reaction_pipeline = [&](auto &pip) {
     MoFEMFunctionBegin;
-
-    if (reactionMarker) {
-      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
-                                                            "GEOMETRY");
-      CHKERR PlasticOps::opFactoryDomainReactions<SPACE_DIM, A, G, DomainEleOp>(
-          mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
-    }
-
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
+                                                          "GEOMETRY");
+    CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
+        pip, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
+        "BODY_FORCE", Sev::inform);
+    CHKERR PlasticOps::opFactoryDomainReactions<SPACE_DIM, A, G, DomainEleOp>(
+        mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
     MoFEMFunctionReturn(0);
   };
 
   reactionFe = boost::make_shared<DomainEle>(mField);
   reactionFe->getRuleHook = vol_rule;
-
   CHKERR create_reaction_pipeline(reactionFe->getOpPtrVector());
+  reactionFe->postProcessHook =
+      EssentialPreProcReaction<DisplacementCubitBcData>(mField, reactionFe);
 
   MoFEMFunctionReturn(0);
 }
@@ -608,65 +540,55 @@ MoFEMErrorCode Example::tsSolve() {
                           boost::shared_ptr<SetUpSchur> &schur_ptr) {
     MoFEMFunctionBeginHot;
 
-    SNES snes;
-    CHKERR TSGetSNES(solver, &snes);
-    KSP ksp;
-    CHKERR SNESGetKSP(snes, &ksp);
-    PC pc;
-    CHKERR KSPGetPC(ksp, &pc);
-    PetscBool is_pcfs = PETSC_FALSE;
-    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+    auto bc_mng = mField.getInterface<BcManager>();
+    auto name_prb = simple->getProblemName();
 
-    // Setup fieldsplit (block) solver - optional: yes/no
-    if (is_pcfs == PETSC_TRUE) {
-
-      auto bc_mng = mField.getInterface<BcManager>();
-      auto name_prb = simple->getProblemName();
-
-      // create sub dm for Schur complement
-      auto create_sub_u_dm = [&](SmartPetscObj<DM> base_dm,
-                                 SmartPetscObj<DM> &dm_sub) {
-        MoFEMFunctionBegin;
-        dm_sub = createDM(mField.get_comm(), "DMMOFEM");
-        CHKERR DMMoFEMCreateSubDM(dm_sub, base_dm, "SUB_U");
-        CHKERR DMMoFEMSetSquareProblem(dm_sub, PETSC_TRUE);
-        CHKERR DMMoFEMAddElement(dm_sub, simple->getDomainFEName());
-        CHKERR DMMoFEMAddElement(dm_sub, simple->getBoundaryFEName());
-        for (auto f : {"U"}) {
-          CHKERR DMMoFEMAddSubFieldRow(dm_sub, f);
-          CHKERR DMMoFEMAddSubFieldCol(dm_sub, f);
-        }
-        CHKERR DMSetUp(dm_sub);
-
-        MoFEMFunctionReturn(0);
-      };
-
-      // Create nested (sub BC) Schur DM
-      if constexpr (A == AssemblyType::SCHUR) {
-
-        SmartPetscObj<IS> is_epp;
-        CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-            simple->getProblemName(), ROW, "EP", 0, MAX_DOFS_ON_ENTITY, is_epp);
-        SmartPetscObj<IS> is_tau;
-        CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-            simple->getProblemName(), ROW, "TAU", 0, MAX_DOFS_ON_ENTITY,
-            is_tau);
-        IS is_union_raw;
-        CHKERR ISExpand(is_epp, is_tau, &is_union_raw);
-        SmartPetscObj<IS> is_union(is_union_raw);
-
-        SmartPetscObj<DM> dm_u_sub;
-        CHKERR create_sub_u_dm(simple->getDM(), dm_u_sub);
-
-        // Indices has to be map fro very to level, while assembling Schur
-        // complement.
-        auto is_up = getDMSubData(dm_u_sub)->getSmartRowIs();
-        auto ao_up = createAOMappingIS(is_up, PETSC_NULL);
-        schur_ptr =
-            SetUpSchur::createSetUpSchur(mField, dm_u_sub, is_union, ao_up);
-
-        CHKERR schur_ptr->setUp(ksp);
+    // create sub dm for Schur complement
+    auto create_sub_u_dm = [&](SmartPetscObj<DM> base_dm,
+                               SmartPetscObj<DM> &dm_sub) {
+      MoFEMFunctionBegin;
+      dm_sub = createDM(mField.get_comm(), "DMMOFEM");
+      CHKERR DMMoFEMCreateSubDM(dm_sub, base_dm, "SUB_U");
+      CHKERR DMMoFEMSetSquareProblem(dm_sub, PETSC_TRUE);
+      CHKERR DMMoFEMAddElement(dm_sub, simple->getDomainFEName());
+      CHKERR DMMoFEMAddElement(dm_sub, simple->getBoundaryFEName());
+      for (auto f : {"U"}) {
+        CHKERR DMMoFEMAddSubFieldRow(dm_sub, f);
+        CHKERR DMMoFEMAddSubFieldCol(dm_sub, f);
       }
+      CHKERR DMSetUp(dm_sub);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    // Create nested (sub BC) Schur DM
+    if constexpr (A == AssemblyType::SCHUR) {
+      SmartPetscObj<IS> is_epp;
+      CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+          simple->getProblemName(), ROW, "EP", 0, MAX_DOFS_ON_ENTITY, is_epp);
+      SmartPetscObj<IS> is_tau;
+      CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+          simple->getProblemName(), ROW, "TAU", 0, MAX_DOFS_ON_ENTITY, is_tau);
+      IS is_union_raw;
+      CHKERR ISExpand(is_epp, is_tau, &is_union_raw);
+      SmartPetscObj<IS> is_union(is_union_raw);
+
+      SmartPetscObj<DM> dm_u_sub;
+      CHKERR create_sub_u_dm(simple->getDM(), dm_u_sub);
+
+      // Indices has to be map fro very to level, while assembling Schur
+      // complement.
+      auto is_up = getDMSubData(dm_u_sub)->getSmartRowIs();
+      auto ao_up = createAOMappingIS(is_up, PETSC_NULL);
+      schur_ptr =
+          SetUpSchur::createSetUpSchur(mField, dm_u_sub, is_union, ao_up);
+
+      SNES snes;
+      CHKERR TSGetSNES(solver, &snes);
+      KSP ksp;
+      CHKERR SNESGetKSP(snes, &ksp);
+
+      CHKERR schur_ptr->setUp(ksp);
     }
 
     MoFEMFunctionReturnHot(0);
@@ -750,7 +672,7 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  auto set_essential_bc = [&](auto dm) {
+  auto set_essential_bc = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
     // This is low level pushing finite elements (pipelines) to solver
 
@@ -759,30 +681,44 @@ MoFEMErrorCode Example::tsSolve() {
     auto post_proc_lhs_ptr = boost::make_shared<FEMethod>();
 
     // Add boundary condition scaling
-    auto time_scale = boost::make_shared<TimeScale>();
+    auto disp_time_scale = boost::make_shared<TimeScale>();
 
-    auto get_bc_hook_rhs = [&]() {
+    auto get_bc_hook_rhs = [this, pre_proc_ptr, disp_time_scale]() {
       EssentialPreProc<DisplacementCubitBcData> hook(mField, pre_proc_ptr,
-                                                     {time_scale}, false);
+                                                     {disp_time_scale}, false);
       return hook;
     };
     pre_proc_ptr->preProcessHook = get_bc_hook_rhs();
 
-    auto get_post_proc_hook_rhs = [&]() {
-      return EssentialPreProcRhs<DisplacementCubitBcData>(
-          mField, post_proc_rhs_ptr, 1.);
+    auto get_post_proc_hook_rhs = [this, post_proc_rhs_ptr]() {
+      MoFEMFunctionBegin;
+      CHKERR EssentialPreProcReaction<DisplacementCubitBcData>(
+          mField, post_proc_rhs_ptr, nullptr, Sev::verbose)();
+      CHKERR EssentialPreProcRhs<DisplacementCubitBcData>(
+          mField, post_proc_rhs_ptr, 1.)();
+      MoFEMFunctionReturn(0);
     };
-    auto get_post_proc_hook_lhs = [&]() {
+    auto get_post_proc_hook_lhs = [this, post_proc_lhs_ptr]() {
       return EssentialPreProcLhs<DisplacementCubitBcData>(
           mField, post_proc_lhs_ptr, 1.);
     };
-    post_proc_rhs_ptr->postProcessHook = get_post_proc_hook_rhs();
+    post_proc_rhs_ptr->postProcessHook = get_post_proc_hook_rhs;
 
     auto ts_ctx_ptr = getDMTsCtx(dm);
     ts_ctx_ptr->getPreProcessIFunction().push_front(pre_proc_ptr);
     ts_ctx_ptr->getPreProcessIJacobian().push_front(pre_proc_ptr);
     ts_ctx_ptr->getPostProcessIFunction().push_back(post_proc_rhs_ptr);
-    if (A != AssemblyType::SCHUR) {
+
+    SNES snes;
+    CHKERR TSGetSNES(solver, &snes);
+    KSP ksp;
+    CHKERR SNESGetKSP(snes, &ksp);
+    PC pc;
+    CHKERR KSPGetPC(ksp, &pc);
+    PetscBool is_pcfs = PETSC_FALSE;
+    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+
+    if (is_pcfs == PETSC_FALSE) {
       post_proc_lhs_ptr->postProcessHook = get_post_proc_hook_lhs();
       ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_lhs_ptr);
     }
@@ -796,10 +732,10 @@ MoFEMErrorCode Example::tsSolve() {
   CHKERR TSSetFromOptions(solver);
   CHKERR TSSetUp(solver);
 
-  CHKERR set_essential_bc(dm);
   CHKERR add_active_dofs_elem(dm);
   boost::shared_ptr<SetUpSchur> schur_ptr;
   CHKERR set_schur_pc(solver, schur_ptr);
+  CHKERR set_essential_bc(dm, solver);
 
   MOFEM_LOG_CHANNEL("TIMER");
   MOFEM_LOG_TAG("TIMER", "timer");
@@ -986,17 +922,6 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
     pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
     pip->getOpDomainLhsPipeline().push_back(
         new OpSchurAssembleEnd<SCHUR_DGESV>({}, {}, {}, {}, {}));
-
-    auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
-    post_proc_schur_lhs_ptr->postProcessHook = [this,
-                                                post_proc_schur_lhs_ptr]() {
-      MoFEMFunctionBegin;
-      CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
-          mField, post_proc_schur_lhs_ptr, 1.)();
-      MoFEMFunctionReturn(0);
-    };
-    auto ts_ctx_ptr = getDMTsCtx(simple->getDM());
-    ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_schur_lhs_ptr);
   }
 
   // we do not those anymore

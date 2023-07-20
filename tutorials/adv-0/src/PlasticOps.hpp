@@ -62,8 +62,6 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
 
   //! [Common data set externally]
   boost::shared_ptr<MatrixDouble> mDPtr;
-  boost::shared_ptr<MatrixDouble> mDPtr_Axiator;
-  boost::shared_ptr<MatrixDouble> mDPtr_Deviator;
   boost::shared_ptr<MatrixDouble> mGradPtr;
   boost::shared_ptr<MatrixDouble> mStrainPtr;
   boost::shared_ptr<MatrixDouble> mStressPtr;
@@ -249,16 +247,16 @@ MoFEMErrorCode
 addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
                boost::shared_ptr<MatrixDouble> mat_D_Ptr,
                boost::shared_ptr<CommonData::BlockParams> mat_params_ptr,
-               double scale, Sev sev) {
+               double scale_value, Sev sev) {
   MoFEMFunctionBegin;
 
   struct OpMatBlocks : public DomainEleOp {
     OpMatBlocks(boost::shared_ptr<MatrixDouble> m_D_ptr,
                 boost::shared_ptr<CommonData::BlockParams> mat_params_ptr,
-                double scale, MoFEM::Interface &m_field, Sev sev,
+                double scale_value, MoFEM::Interface &m_field, Sev sev,
                 std::vector<const CubitMeshSets *> meshset_vec_ptr)
         : DomainEleOp(NOSPACE, DomainEleOp::OPSPACE), matDPtr(m_D_ptr),
-          matParamsPtr(mat_params_ptr), scaleVal(scale) {
+          matParamsPtr(mat_params_ptr), scaleVal(scale_value) {
       CHK_THROW_MESSAGE(extractBlockData(m_field, meshset_vec_ptr, sev),
                         "Can not get data from block");
     }
@@ -279,15 +277,18 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
         return young_modulus / (2 * (1 + poisson_ratio));
       };
 
-      auto scale = [this](auto &p) {
-        for (auto &v : p)
-          v *= scaleVal;
+      auto scale_fun = [this](auto &p) {
+        p[CommonData::YOUNG_MODULUS] *= scaleVal;
+        p[CommonData::SIGMA_Y] *= scaleVal;
+        p[CommonData::H] *= scaleVal;
+        p[CommonData::VIS_H] *= scaleVal;
+        p[CommonData::QINF] *= scaleVal;
       };
 
       for (auto &b : blockData) {
         if (b.blockEnts.find(getFEEntityHandle()) != b.blockEnts.end()) {
           *matParamsPtr = b.bParams;
-          scale(*matParamsPtr);
+          scale_fun(*matParamsPtr);
           CHKERR getMatDPtr(matDPtr, getK(*matParamsPtr), getG(*matParamsPtr));
           MoFEMFunctionReturnHot(0);
         }
@@ -295,7 +296,7 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
 
       (*matParamsPtr) = {young_modulus, poisson_ratio, sigmaY, H,
                          visH,          Qinf,          b_iso};
-      scale(*matParamsPtr);
+      scale_fun(*matParamsPtr);
       CHKERR getMatDPtr(matDPtr, getK(*matParamsPtr), getG(*matParamsPtr));
 
       MoFEMFunctionReturn(0);
@@ -304,7 +305,7 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
   private:
     boost::shared_ptr<MatrixDouble> matDPtr;
     boost::shared_ptr<CommonData::BlockParams> matParamsPtr;
-    double scaleVal;
+    const double scaleVal;
 
     struct BlockData {
       std::array<double, CommonData::LAST_PARAM> bParams;
@@ -332,7 +333,7 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
         CHKERR m->getAttributes(block_data);
         if (block_data.size() != 2 + CommonData::LAST_PARAM) {
           SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                  "Wron number of block attribute");
+                  "Wrong number of block attribute");
         }
         auto get_block_ents = [&]() {
           Range ents;
@@ -404,7 +405,7 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
 
   // push operator to calculate material stiffness matrix for each block
   pip.push_back(new OpMatBlocks(
-      mat_D_Ptr, mat_params_ptr, scale, m_field, sev,
+      mat_D_Ptr, mat_params_ptr, scale_value, m_field, sev,
 
       // Get blockset using regular expression
       m_field.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
@@ -435,8 +436,6 @@ auto createCommonPlasticOps(
   };
 
   common_plastic_ptr->mDPtr = make_d_mat();
-  common_plastic_ptr->mDPtr_Axiator = make_d_mat();
-  common_plastic_ptr->mDPtr_Deviator = make_d_mat();
   common_plastic_ptr->mGradPtr = boost::make_shared<MatrixDouble>();
   common_plastic_ptr->mStrainPtr = boost::make_shared<MatrixDouble>();
   common_plastic_ptr->mStressPtr = boost::make_shared<MatrixDouble>();
@@ -484,7 +483,7 @@ auto createCommonPlasticOps(
     pip.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
         u, common_plastic_ptr->mGradPtr, common_plastic_ptr->mStrainPtr));
     pip.push_back(new typename P::template OpPlasticStress<DIM, I>(
-        u, common_plastic_ptr, m_D_ptr, 1));
+        u, common_plastic_ptr, m_D_ptr));
   }
 
   pip.push_back(new typename P::template OpCalculatePlasticSurface<DIM, I>(
@@ -514,13 +513,6 @@ opFactoryDomainRhs(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
 
   auto m_D_ptr = common_plastic_ptr->mDPtr;
 
-  pip.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<DIM>(
-      ep, common_plastic_ptr->getPlasticStrainDotPtr()));
-  pip.push_back(new OpCalculateScalarFieldValuesDot(
-      tau, common_plastic_ptr->getPlasticTauDotPtr()));
-  pip.push_back(new typename P::template OpCalculatePlasticity<DIM, I>(
-      u, common_plastic_ptr, m_D_ptr));
-
   // Calculate internal forces
   if (common_henky_ptr) {
     pip.push_back(new OpInternalForcePiola(
@@ -528,6 +520,13 @@ opFactoryDomainRhs(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
   } else {
     pip.push_back(new OpInternalForceCauchy(u, common_plastic_ptr->mStressPtr));
   }
+
+  pip.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<DIM>(
+      ep, common_plastic_ptr->getPlasticStrainDotPtr()));
+  pip.push_back(new OpCalculateScalarFieldValuesDot(
+      tau, common_plastic_ptr->getPlasticTauDotPtr()));
+  pip.push_back(new typename P::template OpCalculatePlasticity<DIM, I>(
+      u, common_plastic_ptr, m_D_ptr));
 
   pip.push_back(
       new
@@ -640,9 +639,7 @@ MoFEMErrorCode opFactoryDomainReactions(MoFEM::Interface &m_field,
 
   auto [common_plastic_ptr, common_henky_ptr] =
       createCommonPlasticOps<DIM, I, DomainEleOp>(m_field, block_name, pip, u,
-                                                  ep, tau, 1, Sev::inform);
-
-  auto m_D_ptr = common_plastic_ptr->mDPtr;
+                                                  ep, tau, 1., Sev::inform);
 
   // Calculate internal forces
   if (common_henky_ptr) {
