@@ -46,13 +46,6 @@ struct Example {
 private:
   MoFEM::Interface &mField;
 
-  boost::shared_ptr<FEMethod> preProcEssentialPtr =
-      boost::make_shared<FEMethod>();
-  boost::shared_ptr<FEMethod> postProcEssentialRhsPtr =
-      boost::make_shared<FEMethod>();
-  boost::shared_ptr<FEMethod> postProcEssentialLhsPtr =
-      boost::make_shared<FEMethod>();
-
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode boundaryCondition();
@@ -159,24 +152,6 @@ MoFEMErrorCode Example::boundaryCondition() {
                                            "U", 2, 2);
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
-
-  auto get_bc_hook_rhs = [&]() {
-    EssentialPreProc<DisplacementCubitBcData> hook(mField, preProcEssentialPtr,
-                                                   {time_scale}, false);
-    return hook;
-  };
-  preProcEssentialPtr->preProcessHook = get_bc_hook_rhs();
-
-  auto get_post_proc_hook_rhs = [&]() {
-    return EssentialPreProcRhs<DisplacementCubitBcData>(
-        mField, postProcEssentialRhsPtr, 1.);
-  };
-  auto get_post_proc_hook_lhs = [&]() {
-    return EssentialPreProcLhs<DisplacementCubitBcData>(
-        mField, postProcEssentialLhsPtr, 1.);
-  };
-  postProcEssentialRhsPtr->postProcessHook = get_post_proc_hook_rhs();
-  postProcEssentialLhsPtr->postProcessHook = get_post_proc_hook_lhs();
 
   MoFEMFunctionReturn(0);
 }
@@ -285,12 +260,41 @@ MoFEMErrorCode Example::solveSystem() {
 
   auto add_extra_finite_elements_to_ksp_solver_pipelines = [&]() {
     MoFEMFunctionBegin;
+
+    auto pre_proc_ptr = boost::make_shared<FEMethod>();
+    auto post_proc_rhs_ptr = boost::make_shared<FEMethod>();
+    auto post_proc_lhs_ptr = boost::make_shared<FEMethod>();
+
+    auto time_scale = boost::make_shared<TimeScale>();
+
+    auto get_bc_hook_rhs = [this, pre_proc_ptr, time_scale]() {
+      EssentialPreProc<DisplacementCubitBcData> hook(mField, pre_proc_ptr,
+                                                     {time_scale}, false);
+      return hook;
+    };
+    pre_proc_ptr->preProcessHook = get_bc_hook_rhs();
+
+    auto get_post_proc_hook_rhs = [this, post_proc_rhs_ptr]() {
+      MoFEMFunctionBegin;
+      CHKERR EssentialPreProcReaction<DisplacementCubitBcData>(
+          mField, post_proc_rhs_ptr, nullptr, Sev::verbose)();
+      CHKERR EssentialPreProcRhs<DisplacementCubitBcData>(
+          mField, post_proc_rhs_ptr, 1.)();
+      MoFEMFunctionReturn(0);
+    };
+    auto get_post_proc_hook_lhs = [this, post_proc_lhs_ptr]() {
+      return EssentialPreProcLhs<DisplacementCubitBcData>(
+          mField, post_proc_lhs_ptr, 1.);
+    };
+    post_proc_rhs_ptr->postProcessHook = get_post_proc_hook_rhs;
+    post_proc_lhs_ptr->postProcessHook = get_post_proc_hook_lhs();
+
     // This is low level pushing finite elements (pipelines) to solver
     auto ts_ctx_ptr = getDMTsCtx(simple->getDM());
-    ts_ctx_ptr->getPreProcessIFunction().push_front(preProcEssentialPtr);
-    ts_ctx_ptr->getPreProcessIJacobian().push_front(preProcEssentialPtr);
-    ts_ctx_ptr->getPostProcessIFunction().push_back(postProcEssentialRhsPtr);
-    ts_ctx_ptr->getPostProcessIJacobian().push_back(postProcEssentialLhsPtr);
+    ts_ctx_ptr->getPreProcessIFunction().push_front(pre_proc_ptr);
+    ts_ctx_ptr->getPreProcessIJacobian().push_front(pre_proc_ptr);
+    ts_ctx_ptr->getPostProcessIFunction().push_back(post_proc_rhs_ptr);
+    ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_lhs_ptr);
     MoFEMFunctionReturn(0);
   };
 
@@ -307,8 +311,6 @@ MoFEMErrorCode Example::solveSystem() {
   auto monitor_ptr = create_monitor_fe(create_post_proc_fe());
   CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                              null_fe, monitor_ptr);
-
-
 
   // Set time solver
   double ftime = 1;
