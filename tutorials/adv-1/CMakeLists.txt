@@ -45,7 +45,6 @@ if(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
   target_link_libraries(contact_3d 
     ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
 
-
 else (Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
 
   tutorials_build_and_install(
