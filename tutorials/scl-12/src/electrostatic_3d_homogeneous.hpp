@@ -93,6 +93,7 @@ public:
           for (int cc = 0; cc != nb_col_dofs; cc++) {
             locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a *
                               commonDataPtr->blockPermittivity;
+                
 
             // move to the derivatives of the next base functions on column
             ++t_col_diff_base;
