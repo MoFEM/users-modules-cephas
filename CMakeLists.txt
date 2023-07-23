@@ -116,17 +116,25 @@ if(MoFEM_CBLAS_INCLUDE_DIR)
 endif(MoFEM_CBLAS_INCLUDE_DIR)
 add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
 
-# python
-find_package(Python COMPONENTS Interpreter Development)
-
+# Find python
 find_library(
   BOOST_PYTHON_LIBRARAY
   NAMES boost_python3
-  PATHS 
-  ${MoFEM_BOOST_DIR}/lib
 )
 
+if (PETSCVAR_PYTHON)
+  set(Python_EXECUTABLE ${PETSCVAR_PYTHON})
+endif(PETSCVAR_PYTHON)
+find_package(Python COMPONENTS Interpreter Development)
+
 message(STATUS "Boost_PYTHON_LIBRARY_RELEASE ${Boost_PYTHON_LIBRARY_RELEASE}")
+message(STATUS "Python_EXECUTABLE ${Python_EXECUTABLE}")
+
+# dirt fix
+if (_Python_LIBRARY_RELEASE AND NOT Python_LIBRARY)
+  set(Python_LIBRARY ${_Python_LIBRARY_RELEASE})
+endif (_Python_LIBRARY_RELEASE AND NOT Python_LIBRARY)
+
 message(STATUS "Python_LIBRARY ${Python_LIBRARY}")
 
 link_directories(${MoFEM_INSTALL_DIR}/lib)
