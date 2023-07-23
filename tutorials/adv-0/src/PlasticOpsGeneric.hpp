@@ -1098,10 +1098,10 @@ OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
 template <int DIM, typename AssemblyDomainEleOp>
 struct OpCalculateConstraintsLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>
     : public AssemblyDomainEleOp {
-  OpCalculateConstraintsLhs_dEPImpl(const std::string row_field_name,
-                                const std::string col_field_name,
-                                boost::shared_ptr<CommonData> common_data_ptr,
-                                boost::shared_ptr<MatrixDouble> mat_D_ptr);
+  OpCalculateConstraintsLhs_dEPImpl(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr,
+      boost::shared_ptr<MatrixDouble> mat_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
@@ -1192,9 +1192,9 @@ OpCalculateConstraintsLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
 template <typename AssemblyDomainEleOp>
 struct OpCalculateConstraintsLhs_dTAUImpl<GAUSS, AssemblyDomainEleOp>
     : public AssemblyDomainEleOp {
-  OpCalculateConstraintsLhs_dTAUImpl(const std::string row_field_name,
-                                 const std::string col_field_name,
-                                 boost::shared_ptr<CommonData> common_data_ptr);
+  OpCalculateConstraintsLhs_dTAUImpl(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
