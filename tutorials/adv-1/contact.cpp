@@ -54,6 +54,11 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
+//! [Specialisation for assembly]
+
+// Assemble to A matrix, by default, however, some terms are assembled only to
+// preconditioning. 
+
 template <>
 typename MoFEM::OpBaseImpl<AT, DomainEleOp>::MatSetValuesHook
     MoFEM::OpBaseImpl<AT, DomainEleOp>::matSetValuesHook =
@@ -74,10 +79,19 @@ typename MoFEM::OpBaseImpl<AT, BoundaryEleOp>::MatSetValuesHook
               op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
         };
 
+/**
+ * @brief Element used to specialise assembly
+ * 
+ */
 struct BoundaryEleOpStab : public BoundaryEleOp {
   using BoundaryEleOp::BoundaryEleOp;
 };
 
+/**
+ * @brief Specialise assembly for Stabilised matrix
+ *
+ * @tparam
+ */
 template <>
 typename MoFEM::OpBaseImpl<AT, BoundaryEleOpStab>::MatSetValuesHook
     MoFEM::OpBaseImpl<AT, BoundaryEleOpStab>::matSetValuesHook =
@@ -87,6 +101,7 @@ typename MoFEM::OpBaseImpl<AT, BoundaryEleOpStab>::MatSetValuesHook
           return MatSetValues<AssemblyTypeSelector<AT>>(
               op_ptr->getKSPB(), row_data, col_data, m, ADD_VALUES);
         };
+//! [Specialisation for assembly]
 
 constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
 
@@ -158,7 +173,6 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
-  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
 #ifdef PYTHON_SFD
   boost::shared_ptr<SDFPython> sdfPythonPtr;
@@ -358,8 +372,6 @@ MoFEMErrorCode Contact::bC() {
   // corrupted.
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
-  boundaryMarker =
-      bc_mng->getMergedBlocksMarker(vector<string>{"FIX_", "ROTATE_"});
 
   MoFEMFunctionReturn(0);
 }
