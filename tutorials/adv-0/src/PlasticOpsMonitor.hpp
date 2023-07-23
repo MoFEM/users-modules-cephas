@@ -35,13 +35,6 @@ struct Monitor : public FEMethod {
 
     auto calculate_reaction = [&]() {
       MoFEMFunctionBegin;
-
-      CHKERR reactionFe->copyBasicMethod(*this);
-      CHKERR reactionFe->copyPetscData(*this);
-      CHKERR reactionFe->copyKsp(*this);
-      CHKERR reactionFe->copySnes(*this);
-      CHKERR reactionFe->copyTs(*this);
-
       auto r = createDMVector(dM);
       reactionFe->f = r;
       CHKERR VecZeroEntries(r);
@@ -91,7 +84,7 @@ struct Monitor : public FEMethod {
       double max, min;
       CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
       CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
-      MOFEM_LOG_C("EXAMPLE", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
+      MOFEM_LOG_C("PLASTICITY", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
                   msg.c_str(), ts_t, min, max);
       MoFEMFunctionReturn(0);
     };
