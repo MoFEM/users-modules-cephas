@@ -65,9 +65,7 @@ template <int SPACE_DIM> struct DataAtIntegrationPts {
   double chrgDens;
   VectorDouble fieldValue;
   MatrixDouble fieldGrad;
-  boost::shared_ptr<VectorDouble> mValPtr;
-  boost::shared_ptr<MatrixDouble> mGradPtr;
-  boost::shared_ptr<VectorDouble> vProjGradPtr;
+
   DataAtIntegrationPts(MoFEM::Interface &m_field) {
     blockPermittivity = 0;
     chrgDens = 0;
@@ -133,11 +131,7 @@ public:
       alphaPtr->clear();
       auto t_field_grad = getFTensor1FromMat<SPACE_DIM>(*(gradPtr));
       auto t_normal = getFTensor1NormalsAtGaussPts();
-      // t_normal.normalize();
 
-      // auto alphaPtr = getFTensor0FromVec();
-      // FTensor::Tensor1<double, 2> t_normal{0.,1.};
-      // get coordinates of the integration point
       auto t_coords = getFTensor1CoordsAtGaussPts();
       // FTensor::Index<'I', SPACE_DIM> i;
       for (const auto& entity : *entsPtr) {
@@ -146,21 +140,18 @@ public:
           // get coordinates of the integration point
           for (int gg = 0; gg != nb_gauss_pts; gg++) {
               FTensor::Tensor1<double, SPACE_DIM> t_r;
-               t_r(i) = t_normal(i);
+               t_r(i) = t_normal(i);       
              t_r.normalize();
             (*alphaPtr)[gg] += -(t_field_grad(i) * t_r(i));
             //  std::cout << "coords: " << t_coords << std::endl;
             // std::cout << (*alphaPtr)[gg] << std::endl;
             // std::cout << "t_r: " << t_r << std::endl;
-            *alphaPart += -t_field_grad(i) * t_r(i);
+            *alphaPart += t_field_grad(i) * t_r(i);
         // std::cout << "alphaPart: " << *alphaPart << std::endl;
             // std::cout << "coords: " << t_coords << std::endl;
             ++t_field_grad;
             ++t_normal;
             ++t_coords;
-            
-          double sumAlpha = std::accumulate(alphaPtr->begin(), alphaPtr->end(), 0.0);
-                  // std::cout << "Sum of alpha values: " << sumAlpha << std::endl;
           }
         }
       } 
@@ -335,7 +326,7 @@ double alphaPart = 0.;
   Range blockconstBC;
   Range FloatingblockconstBC;
  
-  int phi_Dirch[2] = {1, 0};
+  int phi_Dirch[2] = {0, 1};
 };
 
 ElectrostaticHomogeneous::ElectrostaticHomogeneous(MoFEM::Interface &m_field)
@@ -366,12 +357,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
 
   // initialise shared pointer in common data
   common_data_ptr = boost::make_shared<DataAtIntegrationPts<SPACE_DIM>>(mField);
-  common_data_ptr->mGradPtr = boost::make_shared<MatrixDouble>();
-  common_data_ptr->mValPtr = boost::make_shared<VectorDouble>();
-  common_data_ptr->vProjGradPtr = boost::make_shared<VectorDouble>();
-  // mValPtr;
 
-  // using BlockSetsPtrType = boost::shared_ptr<map<int, BlockData<SPACE_DIM>>>;
+ 
   perm_block_sets_ptr =
       boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
   Range electrIcs;
@@ -720,12 +707,12 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
   //     new OpCalculateAlpha(
   //         domainField,  Alpha, data_ptr->AlphaA,  data_ptr->AlphaB));
 
-  auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order;
-  };
+  // auto integration_rule = [](int, int, int approx_order) {
+  //   return 2 * approx_order;
+  // };
 
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
+  // CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+  // CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
 
   CHKERR pipeline_mng->loopFiniteElements();
 
@@ -832,14 +819,26 @@ MoFEMErrorCode ElectrostaticHomogeneous::runProgram() {
   std::cout << "alphaPart: " << alphaPart << std::endl;
 
 
-auto u_ptr = boost::make_shared<VectorDouble>();
-cout <<"u_ptr:"<< *u_ptr<<endl;
-auto scale = [u_ptr](const double alphaPart) { return u_ptr * alphaPart; };
-  CHKERR fieldLambdaOnValues(scale, domainField);
+// auto u_ptr = boost::make_shared<VectorDouble>();
+// cout <<"u_ptr:"<< *u_ptr<<endl;
+// auto scale = [u_ptr](const double alphaPart) { return u_ptr * alphaPart; };
+//   CHKERR fieldLambdaOnValues(scale, domainField);
 
 
-// CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnValues(scale_field_lambda, "POTENTIAL");
-CHKERR outputResults();
+// // CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnValues(scale_field_lambda, "POTENTIAL");
+// auto vector_plus_scalar_field = [&](boost::shared_ptr<VectorDouble> u_ptr, alphaPart) {
+//    MoFEMFunctionBeginHot;
+//    auto data = u_ptr->getEntFieldData();
+//    const auto size_data = data.size(); // scalar
+ 
+//    for ( int dd = 0; dd != size_data; ++dd)
+//      data[dd] += alphaPart;
+ 
+//    MoFEMFunctionReturnHot(0);
+//  };
+ 
+// CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnValues(vector_plus_scalar_field, "U");
+// CHKERR outputResults();
 
 
   MoFEMFunctionReturn(0);
