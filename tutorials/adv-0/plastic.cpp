@@ -13,33 +13,41 @@ the " */
 #define EXECUTABLE_DIMENSION 3
 #endif
 
+#define ADD_CONTACT
+
 #include <MoFEM.hpp>
 #include <MatrixFunction.hpp>
 #include <IntegrationRules.hpp>
 
 using namespace MoFEM;
 
-template <int DIM> struct ElementsAndOps {};
+template <int DIM> struct ElementsAndOps;
 
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
   using BoundaryEle = PipelineManager::EdgeEle;
+  static constexpr FieldSpace CONTACT_SPACE = HCURL;
 };
 
 template <> struct ElementsAndOps<3> {
   using DomainEle = PipelineManager::VolEle;
   using BoundaryEle = PipelineManager::FaceEle;
+  static constexpr FieldSpace CONTACT_SPACE = HDIV;
 };
 
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
 
-constexpr AssemblyType A = (SCHUR_ASSEMBLE)
-                               ? AssemblyType::SCHUR
-                               : AssemblyType::PETSC; //< selected assembly type
-constexpr IntegrationType G =
-    IntegrationType::GAUSS; //< selected integration type
+constexpr AssemblyType AT =
+    (SCHUR_ASSEMBLE) ? AssemblyType::SCHUR
+                     : AssemblyType::PETSC; //< selected assembly type
+constexpr IntegrationType IT =
+    IntegrationType::GAUSS;                 //< selected integration type
+
+constexpr FieldSpace ElementsAndOps<2>::CONTACT_SPACE;
+constexpr FieldSpace ElementsAndOps<3>::CONTACT_SPACE;
+constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
 
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -48,13 +56,64 @@ using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
-using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<A>::OpBase;
+#ifdef ADD_CONTACT
+//! [Specialisation for assembly]
 
-using DomainNaturalBC = NaturalBC<DomainEleOp>::Assembly<A>::LinearForm<G>;
+// Assemble to A matrix, by default, however, some terms are assembled only to
+// preconditioning.
+
+template <>
+typename MoFEM::OpBaseImpl<AT, DomainEleOp>::MatSetValuesHook
+    MoFEM::OpBaseImpl<AT, DomainEleOp>::matSetValuesHook =
+        [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
+           const EntitiesFieldData::EntData &row_data,
+           const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
+          return MatSetValues<AssemblyTypeSelector<AT>>(
+              op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
+        };
+
+template <>
+typename MoFEM::OpBaseImpl<AT, BoundaryEleOp>::MatSetValuesHook
+    MoFEM::OpBaseImpl<AT, BoundaryEleOp>::matSetValuesHook =
+        [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
+           const EntitiesFieldData::EntData &row_data,
+           const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
+          return MatSetValues<AssemblyTypeSelector<AT>>(
+              op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
+        };
+
+/**
+ * @brief Element used to specialise assembly
+ *
+ */
+struct BoundaryEleOpStab : public BoundaryEleOp {
+  using BoundaryEleOp::BoundaryEleOp;
+};
+
+/**
+ * @brief Specialise assembly for Stabilised matrix
+ *
+ * @tparam
+ */
+template <>
+typename MoFEM::OpBaseImpl<AT, BoundaryEleOpStab>::MatSetValuesHook
+    MoFEM::OpBaseImpl<AT, BoundaryEleOpStab>::matSetValuesHook =
+        [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
+           const EntitiesFieldData::EntData &row_data,
+           const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
+          return MatSetValues<AssemblyTypeSelector<AT>>(
+              op_ptr->getKSPB(), row_data, col_data, m, ADD_VALUES);
+        };
+//! [Specialisation for assembly]
+#endif // ADD_CONTACT
+
+using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<AT>::OpBase;
+using DomainNaturalBC = NaturalBC<DomainEleOp>::Assembly<AT>::LinearForm<IT>;
 using OpBodyForce =
     DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
 
-using BoundaryNaturalBC = NaturalBC<BoundaryEleOp>::Assembly<A>::LinearForm<G>;
+using BoundaryNaturalBC =
+    NaturalBC<BoundaryEleOp>::Assembly<AT>::LinearForm<IT>;
 using OpForce =
     BoundaryNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
 
@@ -101,8 +160,27 @@ double cn1 = 1;
 int order = 2;      ///< Order if fixed.
 int geom_order = 2; ///< Order if fixed.
 
+constexpr bool is_quasi_static = true;
+double rho = 0.0;
+double alpha_damping = 0;
+
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
+#ifdef ADD_CONTACT
+#ifdef PYTHON_SFD
+#include <boost/python.hpp>
+#include <boost/python/def.hpp>
+namespace bp = boost::python;
+#endif
+
+namespace ContactOps {
+
+double cn_contact = 0.1;
+
+}; // namespace ContactOps
+
+#include <ContactOps.hpp>
+#endif
 
 using namespace PlasticOps;
 using namespace HenckyOps;
@@ -133,6 +211,12 @@ private:
       return scale * MoFEM::TimeScale::getScale(time);
     };
   };
+
+#ifdef ADD_CONTACT
+#ifdef PYTHON_SFD
+  boost::shared_ptr<ContactOps::SDFPython> sdfPythonPtr;
+#endif
+#endif // ADD_CONTACT
 };
 
 //! [Run problem]
@@ -198,14 +282,69 @@ MoFEMErrorCode Example::setupProblem() {
 
   CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
 
-  auto ents = get_ents_by_dim(0);
-  ents.merge(get_ents_by_dim(1));
+  // auto ents = get_ents_by_dim(0);
+  // ents.merge(get_ents_by_dim(1));
   // ents.merge(get_ents_by_dim(2));
-  CHKERR simple->setFieldOrder("U", order, &ents);
+  CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("EP", order - 1);
   CHKERR simple->setFieldOrder("TAU", order - 2);
 
   CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
+
+#ifdef ADD_CONTACT
+  CHKERR simple->addDomainField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
+                                SPACE_DIM);
+  CHKERR simple->addBoundaryField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
+                                  SPACE_DIM);
+
+  auto get_skin = [&]() {
+    Range body_ents;
+    CHKERR mField.get_moab().get_entities_by_dimension(0, SPACE_DIM, body_ents);
+    Skinner skin(&mField.get_moab());
+    Range skin_ents;
+    CHKERR skin.find_skin(0, body_ents, false, skin_ents);
+    return skin_ents;
+  };
+
+  auto filter_blocks = [&](auto skin) {
+    Range contact_range;
+    for (auto m :
+         mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
+
+             (boost::format("%s(.*)") % "CONTACT").str()
+
+                 ))
+
+    ) {
+      MOFEM_LOG("CONTACT", Sev::inform)
+          << "Find contact block set:  " << m->getName();
+      auto meshset = m->getMeshset();
+      CHKERR mField.get_moab().get_entities_by_dimension(meshset, SPACE_DIM - 1,
+                                                         contact_range, true);
+
+      MOFEM_LOG("SYNC", Sev::inform)
+          << "Nb entities in contact surface: " << contact_range.size();
+      MOFEM_LOG_SYNCHRONISE(mField.get_comm());
+      CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+          contact_range);
+      skin = intersect(skin, contact_range);
+    }
+    return skin;
+  };
+
+  auto filter_true_skin = [&](auto skin) {
+    Range boundary_ents;
+    ParallelComm *pcomm =
+        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+    CHKERR pcomm->filter_pstatus(skin, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                 PSTATUS_NOT, -1, &boundary_ents);
+    return boundary_ents;
+  };
+
+  auto boundary_ents = filter_true_skin(filter_blocks(get_skin()));
+  CHKERR simple->setFieldOrder("SIGMA", 0);
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
+#endif
 
   CHKERR simple->setUp();
   CHKERR simple->addFieldToEmptyFieldBlocks("U", "TAU");
@@ -250,20 +389,27 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-geom_order", &geom_order,
                               PETSC_NULL);
 
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " << sigmaY;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Hardening " << H;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "cn0 " << cn0;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "cn1 " << cn1;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "zeta " << zeta;
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-rho", &rho, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-alpha_damping",
+                                 &alpha_damping, PETSC_NULL);
 
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Approximation order " << order;
-    MOFEM_LOG("EXAMPLE", Sev::inform)
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Young modulus " << young_modulus;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Poisson ratio " << poisson_ratio;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Yield stress " << sigmaY;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Hardening " << H;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Viscous hardening " << visH;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Saturation yield stress " << Qinf;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Saturation exponent " << b_iso;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "cn0 " << cn0;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "cn1 " << cn1;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "zeta " << zeta;
+
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Approximation order " << order;
+    MOFEM_LOG("PLASTICITY", Sev::inform)
         << "Geometry approximation order " << geom_order;
+
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Density " << rho;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "alpha_damping " << alpha_damping;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
@@ -272,12 +418,27 @@ MoFEMErrorCode Example::createCommonData() {
       scale /= young_modulus;
     }
 
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Scale " << scale;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Scale " << scale;
+
+#ifdef ADD_CONTACT
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn_contact",
+                                 &ContactOps::cn_contact, PETSC_NULL);
+    MOFEM_LOG("CONTACT", Sev::inform)
+        << "cn_contact " << ContactOps::cn_contact;
+#endif // ADD_CONTACT
 
     MoFEMFunctionReturn(0);
   };
 
   CHKERR get_command_line_parameters();
+
+#ifdef ADD_CONTACT
+#ifdef PYTHON_SFD
+  sdfPythonPtr = boost::make_shared<ContactOps::SDFPython>();
+  CHKERR sdfPythonPtr->sdfInit("sdf.py");
+  ContactOps::sdfPythonWeakPtr = sdfPythonPtr;
+#endif
+#endif // ADD_CONTACT
 
   MoFEMFunctionReturn(0);
 }
@@ -300,12 +461,29 @@ MoFEMErrorCode Example::bC() {
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "REMOVE_ALL", "U", 0, 3);
 
+#ifdef ADD_CONTACT
+  for (auto b : {"FIX_X", "REMOVE_X"})
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), b,
+                                             "SIGMA", 0, 0, false, true);
+  for (auto b : {"FIX_Y", "REMOVE_Y"})
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), b,
+                                             "SIGMA", 1, 1, false, true);
+  for (auto b : {"FIX_Z", "REMOVE_Z"})
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), b,
+                                             "SIGMA", 2, 2, false, true);
+  for (auto b : {"FIX_ALL", "REMOVE_ALL"})
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), b,
+                                             "SIGMA", 0, 3, false, true);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(
+      simple->getProblemName(), "NO_CONTACT", "SIGMA", 0, 3, false, true);
+#endif
+
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
   for (auto bc : bc_map)
-    MOFEM_LOG("EXAMPLE", Sev::verbose) << "Marker " << bc.first;
+    MOFEM_LOG("PLASTICITY", Sev::verbose) << "Marker " << bc.first;
 
   MoFEMFunctionReturn(0);
 }
@@ -318,12 +496,25 @@ MoFEMErrorCode Example::OPs() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
+  auto integration_rule_bc = [](int, int, int ao) { return 2 * ao; };
+
+  auto vol_rule = [](int, int, int ao) { return 2 * ao + geom_order - 1; };
+
   auto add_boundary_ops_lhs_mechanical = [&](auto &pip) {
     MoFEMFunctionBegin;
 
     CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV},
                                                               "GEOMETRY");
     pip.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
+
+#ifdef ADD_CONTACT
+    CHKERR ContactOps::opFactoryBoundaryLhs<SPACE_DIM, AT, GAUSS,
+                                            BoundaryEleOp>(pip, "SIGMA", "U");
+    CHKERR
+    ContactOps::opFactoryBoundaryToDomainLhs<SPACE_DIM, AT, IT, DomainEle>(
+        mField, pip, simple->getDomainFEName(), "SIGMA", "U", "GEOMETRY",
+        vol_rule);
+#endif // ADD_CONTACT
 
     MoFEMFunctionReturn(0);
   };
@@ -339,6 +530,10 @@ MoFEMErrorCode Example::OPs() {
         pip, mField, "U", {boost::make_shared<PlasticityTimeScale>()}, "FORCE",
         Sev::inform);
 
+#ifdef ADD_CONTACT
+    CHKERR ContactOps::opFactoryBoundaryRhs<SPACE_DIM, AT, IT, BoundaryEleOp>(
+        pip, "SIGMA", "U");
+#endif // ADD_CONTACT
 
     MoFEMFunctionReturn(0);
   };
@@ -348,7 +543,23 @@ MoFEMErrorCode Example::OPs() {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
                                                           "GEOMETRY");
 
-    CHKERR PlasticOps::opFactoryDomainLhs<SPACE_DIM, A, G, DomainEleOp>(
+    if (!is_quasi_static) {
+
+      //! [Only used for dynamics]
+      using OpMass = FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
+          GAUSS>::OpMass<1, SPACE_DIM>;
+      //! [Only used for dynamics]
+
+      auto get_inertia_and_mass_damping = [this](const double, const double,
+                                                 const double) {
+        auto *pip_mng = mField.getInterface<PipelineManager>();
+        auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
+        return rho * fe_domain_lhs->ts_aa + alpha_damping * fe_domain_lhs->ts_a;
+      };
+      pip.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
+    }
+
+    CHKERR PlasticOps::opFactoryDomainLhs<SPACE_DIM, AT, IT, DomainEleOp>(
         mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
 
     MoFEMFunctionReturn(0);
@@ -356,6 +567,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_rhs = [this](auto &pip) {
     MoFEMFunctionBegin;
+
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
                                                           "GEOMETRY");
 
@@ -363,8 +575,37 @@ MoFEMErrorCode Example::OPs() {
         pip, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
         "BODY_FORCE", Sev::inform);
 
-    CHKERR PlasticOps::opFactoryDomainRhs<SPACE_DIM, A, G, DomainEleOp>(
+    // only in case of dynamics
+    if (!is_quasi_static) {
+
+      //! [Only used for dynamics]
+      using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
+          AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+      //! [Only used for dynamics]
+
+      auto mat_acceleration = boost::make_shared<MatrixDouble>();
+      pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
+          "U", mat_acceleration));
+      pip.push_back(new OpInertiaForce(
+          "U", mat_acceleration, [](double, double, double) { return rho; }));
+      if (alpha_damping > 0) {
+        auto mat_velocity = boost::make_shared<MatrixDouble>();
+        pip.push_back(
+            new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
+        pip.push_back(
+            new OpInertiaForce("U", mat_velocity, [](double, double, double) {
+              return alpha_damping;
+            }));
+      }
+    }
+
+    CHKERR PlasticOps::opFactoryDomainRhs<SPACE_DIM, AT, IT, DomainEleOp>(
         mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
+
+#ifdef ADD_CONTACT
+    CHKERR ContactOps::opFactoryDomainRhs<SPACE_DIM, AT, IT, DomainEleOp>(
+        pip, "SIGMA", "U");
+#endif // ADD_CONTACT
 
     MoFEMFunctionReturn(0);
   };
@@ -375,10 +616,6 @@ MoFEMErrorCode Example::OPs() {
   // Boundary
   CHKERR add_boundary_ops_lhs_mechanical(pip->getOpBoundaryLhsPipeline());
   CHKERR add_boundary_ops_rhs_mechanical(pip->getOpBoundaryRhsPipeline());
-
-  auto integration_rule_bc = [](int, int, int ao) { return 2 * ao; };
-
-  auto vol_rule = [](int, int, int ao) { return 2 * ao + geom_order - 1; };
 
   CHKERR pip->setDomainRhsIntegrationRule(vol_rule);
   CHKERR pip->setDomainLhsIntegrationRule(vol_rule);
@@ -393,7 +630,31 @@ MoFEMErrorCode Example::OPs() {
     CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
         pip, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
         "BODY_FORCE", Sev::inform);
-    CHKERR PlasticOps::opFactoryDomainReactions<SPACE_DIM, A, G, DomainEleOp>(
+
+    if (!is_quasi_static) {
+
+      //! [Only used for dynamics]
+      using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
+          AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+      //! [Only used for dynamics]
+
+      auto mat_acceleration = boost::make_shared<MatrixDouble>();
+      pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
+          "U", mat_acceleration));
+      pip.push_back(new OpInertiaForce(
+          "U", mat_acceleration, [](double, double, double) { return rho; }));
+      if (alpha_damping > 0) {
+        auto mat_velocity = boost::make_shared<MatrixDouble>();
+        pip.push_back(
+            new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
+        pip.push_back(
+            new OpInertiaForce("U", mat_velocity, [](double, double, double) {
+              return alpha_damping;
+            }));
+      }
+    }
+
+    CHKERR PlasticOps::opFactoryDomainReactions<SPACE_DIM, AT, IT, DomainEleOp>(
         mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
     MoFEMFunctionReturn(0);
   };
@@ -426,7 +687,7 @@ struct SetUpSchur {
       SmartPetscObj<IS> field_split_it, SmartPetscObj<AO> ao_map
 
   );
-  virtual MoFEMErrorCode setUp(KSP solver) = 0;
+  virtual MoFEMErrorCode setUp(TS solver) = 0;
 
 protected:
   SetUpSchur() = default;
@@ -462,7 +723,7 @@ MoFEMErrorCode Example::tsSolve() {
                                                           "GEOMETRY");
 
     auto [common_plastic_ptr, common_henky_ptr] =
-        PlasticOps::createCommonPlasticOps<SPACE_DIM, G, DomainEleOp>(
+        PlasticOps::createCommonPlasticOps<SPACE_DIM, IT, DomainEleOp>(
             mField, "MAT_PLASTIC", pip, "U", "EP", "TAU", 1., Sev::inform);
 
     auto x_ptr = boost::make_shared<MatrixDouble>();
@@ -575,16 +836,37 @@ MoFEMErrorCode Example::tsSolve() {
     };
 
     // Create nested (sub BC) Schur DM
-    if constexpr (A == AssemblyType::SCHUR) {
+    if constexpr (AT == AssemblyType::SCHUR) {
       SmartPetscObj<IS> is_epp;
       CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
           simple->getProblemName(), ROW, "EP", 0, MAX_DOFS_ON_ENTITY, is_epp);
       SmartPetscObj<IS> is_tau;
       CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
           simple->getProblemName(), ROW, "TAU", 0, MAX_DOFS_ON_ENTITY, is_tau);
+
       IS is_union_raw;
       CHKERR ISExpand(is_epp, is_tau, &is_union_raw);
       SmartPetscObj<IS> is_union(is_union_raw);
+
+#ifdef ADD_CONTACT
+      auto add_sigma_to_is = [&](auto is_union) {
+        SmartPetscObj<IS> is_union_sigma;
+        auto add_sigma_to_is_impl = [&]() {
+          MoFEMFunctionBegin;
+          SmartPetscObj<IS> is_sigma;
+          CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+              simple->getProblemName(), ROW, "SIGMA", 0, MAX_DOFS_ON_ENTITY,
+              is_sigma);
+          IS is_union_raw_sigma;
+          CHKERR ISExpand(is_union, is_sigma, &is_union_raw_sigma);
+          is_union_sigma = SmartPetscObj<IS>(is_union_raw_sigma);
+          MoFEMFunctionReturn(0);
+        };
+        CHK_THROW_MESSAGE(add_sigma_to_is_impl(), "Can not add sigma to IS");
+        return is_union_sigma;
+      };
+      is_union = add_sigma_to_is(is_union);
+#endif // ADD_CONTACT
 
       SmartPetscObj<DM> dm_u_sub;
       CHKERR create_sub_u_dm(simple->getDM(), dm_u_sub);
@@ -595,13 +877,7 @@ MoFEMErrorCode Example::tsSolve() {
       auto ao_up = createAOMappingIS(is_up, PETSC_NULL);
       schur_ptr =
           SetUpSchur::createSetUpSchur(mField, dm_u_sub, is_union, ao_up);
-
-      SNES snes;
-      CHKERR TSGetSNES(solver, &snes);
-      KSP ksp;
-      CHKERR SNESGetKSP(snes, &ksp);
-
-      CHKERR schur_ptr->setUp(ksp);
+      CHKERR schur_ptr->setUp(solver);
     }
 
     MoFEMFunctionReturnHot(0);
@@ -660,7 +936,7 @@ MoFEMErrorCode Example::tsSolve() {
           proc_nb_full_active =
               100 * static_cast<double>(avtive_full_elems) / avtive_elems;
 
-        MOFEM_LOG_C("EXAMPLE", Sev::inform,
+        MOFEM_LOG_C("PLASTICITY", Sev::inform,
                     "Iter %d nb pts %d nb avtive pts %d (%3.3f\%) nb active "
                     "elements %d "
                     "(%3.3f\%) nb full active elems %d (%3.3f\%)",
@@ -769,6 +1045,12 @@ static char help[] = "...\n\n";
 
 int main(int argc, char *argv[]) {
 
+#ifdef ADD_CONTACT
+#ifdef PYTHON_SFD
+  Py_Initialize();
+#endif
+#endif // ADD_CONTACT
+
   // Initialisation of MoFEM/PETSc and MOAB data structures
   const char param_file[] = "param_file.petsc";
   MoFEM::Core::Initialize(&argc, &argv, param_file, help);
@@ -776,12 +1058,18 @@ int main(int argc, char *argv[]) {
   // Add logging channel for example
   auto core_log = logging::core::get();
   core_log->add_sink(
-      LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
+      LogManager::createSink(LogManager::getStrmWorld(), "PLASTICITY"));
   core_log->add_sink(
       LogManager::createSink(LogManager::getStrmWorld(), "TIMER"));
-  LogManager::setLog("EXAMPLE");
+  LogManager::setLog("PLASTICITY");
+  MOFEM_LOG_TAG("PLASTICITY", "Plasticity");
 
-  MOFEM_LOG_TAG("EXAMPLE", "Plasticity");
+#ifdef ADD_CONTACT
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "CONTACT"));
+  LogManager::setLog("CONTACT");
+  MOFEM_LOG_TAG("CONTACT", "Contact");
+#endif // ADD_CONTACT
 
   try {
 
@@ -814,6 +1102,16 @@ int main(int argc, char *argv[]) {
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
+
+#ifdef ADD_CONTACT
+#ifdef PYTHON_SFD
+  if (Py_FinalizeEx() < 0) {
+    exit(120);
+  }
+#endif
+#endif // ADD_CONTACT
+
+  return 0;
 }
 
 struct SetUpSchurImpl : public SetUpSchur {
@@ -829,13 +1127,23 @@ struct SetUpSchurImpl : public SetUpSchur {
           "possible only is PC is set up twice");
     }
   }
-  virtual ~SetUpSchurImpl() { S.reset(); }
+  virtual ~SetUpSchurImpl() {
+#ifdef ADD_CONTACT
+    A.reset();
+    P.reset();
+#endif // ADD_CONTACT
+    S.reset();
+  }
 
-  MoFEMErrorCode setUp(KSP solver);
+  MoFEMErrorCode setUp(TS solver);
   MoFEMErrorCode preProc();
   MoFEMErrorCode postProc();
 
 private:
+#ifdef ADD_CONTACT
+  SmartPetscObj<Mat> A;
+  SmartPetscObj<Mat> P;
+#endif // ADD_CONTACT
   SmartPetscObj<Mat> S;
 
   MoFEM::Interface &mField;
@@ -844,13 +1152,20 @@ private:
   SmartPetscObj<AO> aoUp;         ///> main DM to subDM
 };
 
-MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
+MoFEMErrorCode SetUpSchurImpl::setUp(TS solver) {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
   auto pip = mField.getInterface<PipelineManager>();
+
+  SNES snes;
+  CHKERR TSGetSNES(solver, &snes);
+  KSP ksp;
+  CHKERR SNESGetKSP(snes, &ksp);
+  CHKERR KSPSetFromOptions(ksp);
+
   PC pc;
-  CHKERR KSPSetFromOptions(solver);
-  CHKERR KSPGetPC(solver, &pc);
+  CHKERR KSPSetFromOptions(ksp);
+  CHKERR KSPGetPC(ksp, &pc);
   PetscBool is_pcfs = PETSC_FALSE;
   PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
   if (is_pcfs) {
@@ -860,11 +1175,21 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
           "Is expected that schur matrix is not allocated. This is "
           "possible only is PC is set up twice");
     }
+
+#ifdef ADD_CONTACT
+    auto ts_ctx_ptr = getDMTsCtx(simple->getDM());
+    A = createDMMatrix(simple->getDM());
+    P = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
+    CHKERR TSSetIJacobian(solver, A, P, TsSetIJacobian, ts_ctx_ptr.get());
+#endif // ADD_CONTACT
     S = createDMMatrix(subDM);
+    CHKERR MatSetBlockSize(S, SPACE_DIM);
 
     auto set_ops = [&]() {
       MoFEMFunctionBegin;
       auto pip = mField.getInterface<PipelineManager>();
+
+#ifndef ADD_CONTACT
       // Boundary
       pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
       pip->getOpBoundaryLhsPipeline().push_back(
@@ -883,6 +1208,43 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
               {SmartPetscObj<Mat>(), S}, {false, false}
 
               ));
+#else
+
+      double eps_stab = 1e-4;
+      CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-eps_stab", &eps_stab,
+                                   PETSC_NULL);
+
+      using B = FormsIntegrators<BoundaryEleOpStab>::Assembly<
+          SCHUR>::BiLinearForm<IT>;
+      using OpMassStab = B::OpMass<3, SPACE_DIM * SPACE_DIM>;
+
+      // Boundary
+      pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
+      pip->getOpBoundaryLhsPipeline().push_back(
+          new OpMassStab("SIGMA", "SIGMA", [eps_stab](double, double, double) {
+            return eps_stab;
+          }));
+      pip->getOpBoundaryLhsPipeline().push_back(
+          new OpSchurAssembleEnd<SCHUR_DGESV>(
+
+              {"SIGMA", "EP", "TAU"}, {nullptr, nullptr, nullptr},
+              {SmartPetscObj<AO>(), SmartPetscObj<AO>(), aoUp},
+              {SmartPetscObj<Mat>(), SmartPetscObj<Mat>(), S},
+              {false, false, false}
+
+              ));
+      // Domain
+      pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
+      pip->getOpDomainLhsPipeline().push_back(
+          new OpSchurAssembleEnd<SCHUR_DGESV>(
+
+              {"SIGMA", "EP", "TAU"}, {nullptr, nullptr, nullptr},
+              {SmartPetscObj<AO>(), SmartPetscObj<AO>(), aoUp},
+              {SmartPetscObj<Mat>(), SmartPetscObj<Mat>(), S},
+              {false, false, false}
+
+              ));
+#endif // ADD_CONTACT
       MoFEMFunctionReturn(0);
     };
 
@@ -891,21 +1253,37 @@ MoFEMErrorCode SetUpSchurImpl::setUp(KSP solver) {
       auto schur_asmb_pre_proc = boost::make_shared<FEMethod>();
       schur_asmb_pre_proc->preProcessHook = [this]() {
         MoFEMFunctionBegin;
+#ifdef ADD_CONTACT
+        CHKERR MatZeroEntries(A);
+        CHKERR MatZeroEntries(P);
+#endif // ADD_CONTACT
         CHKERR MatZeroEntries(S);
         MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble Begin";
         MoFEMFunctionReturn(0);
       };
       auto schur_asmb_post_proc = boost::make_shared<FEMethod>();
+
       schur_asmb_post_proc->postProcessHook = [this, schur_asmb_post_proc]() {
         MoFEMFunctionBegin;
+        MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble End";
 
+#ifndef ADD_CONTACT
         CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
             mField, schur_asmb_post_proc, 1)();
+#else // ADD_CONTACT
+        CHKERR MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
+        CHKERR MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+        // Apply essential constrains to A matrix
+        CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+            mField, schur_asmb_post_proc, 1, A)();
+        CHKERR MatAssemblyBegin(P, MAT_FINAL_ASSEMBLY);
+        CHKERR MatAssemblyEnd(P, MAT_FINAL_ASSEMBLY);
+        CHKERR MatAXPY(P, 1, A, SAME_NONZERO_PATTERN);
+#endif // ADD_CONTACT
 
-        MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble End";
+        // Apply essential constrains to Schur complement
         CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
         CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-
         CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
             mField, schur_asmb_post_proc, 1, S, aoUp)();
 

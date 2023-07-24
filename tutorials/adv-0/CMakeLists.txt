@@ -31,17 +31,42 @@ tutorials_copy_and_install("*.cfg" "${permissions_execute}")
 tutorials_copy_and_install("*.jou" "${permissions_execute}")
 tutorials_copy_and_install("meshes/*" "${permissions_execute}")
 
-tutorials_build_and_install(
-  plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
-
-set_target_properties(
-  plastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1")
-
-tutorials_build_and_install(
-  plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+if(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE) 
   
-set_target_properties(
-  plastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1")
+  include_directories(${_Python_INCLUDE_DIR})
+
+  tutorials_build_and_install(
+    plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+  tutorials_build_and_install(
+    plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+
+  set_target_properties(
+    plastic_3d PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1 -DPYTHON_SFD")
+  set_target_properties(
+    plastic_2d PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1 -DPYTHON_SFD")
+
+  target_link_libraries(plastic_2d 
+    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
+  target_link_libraries(plastic_3d 
+    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
+
+else (Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
+
+  tutorials_build_and_install(
+    plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+  tutorials_build_and_install(
+    plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+
+  set_target_properties(
+    plastic_3d PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1")
+  set_target_properties(
+    plastic_2d PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1")
+
+endif(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
 
 add_test(
   plastic_3d_necking

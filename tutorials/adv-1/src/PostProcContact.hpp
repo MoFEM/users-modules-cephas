@@ -265,6 +265,11 @@ struct Monitor : public FEMethod {
         };
         fe_rhs->getRuleHook = integration_rule;
 
+        //! [Only used for dynamics]
+        using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
+            AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+        //! [Only used for dynamics]
+
         // only in case of dynamics
         if (!is_quasi_static) {
           auto mat_acceleration = boost::make_shared<MatrixDouble>();
@@ -273,15 +278,6 @@ struct Monitor : public FEMethod {
           pip.push_back(
               new OpInertiaForce("U", mat_acceleration,
                                  [](double, double, double) { return rho; }));
-        }
-        if (alpha_damping > 0) {
-          auto mat_velocity = boost::make_shared<MatrixDouble>();
-          pip.push_back(new OpCalculateVectorFieldValuesDot<SPACE_DIM>(
-              "U", mat_velocity));
-          pip.push_back(
-              new OpInertiaForce("U", mat_velocity, [](double, double, double) {
-                return alpha_damping;
-              }));
         }
 
         CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, PETSC, IT, DomainEleOp>(

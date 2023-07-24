@@ -112,13 +112,6 @@ using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<AT>::LinearForm<
     IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Operators used for contact]
 
-//! [Only used for dynamics]
-using OpMass = FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
-    GAUSS>::OpMass<1, SPACE_DIM>;
-using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<AT>::LinearForm<
-    IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
-//! [Only used for dynamics]
-
 namespace ContactOps {
 
 double cn_contact = 0.1;
@@ -407,6 +400,12 @@ MoFEMErrorCode Contact::OPs() {
     MoFEMFunctionBegin;
 
     if (!is_quasi_static) {
+
+      //! [Only used for dynamics]
+      using OpMass = FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
+          GAUSS>::OpMass<1, SPACE_DIM>;
+      //! [Only used for dynamics]
+
       auto get_inertia_and_mass_damping = [this](const double, const double,
                                                  const double) {
         auto *pip_mng = mField.getInterface<PipelineManager>();
@@ -414,13 +413,7 @@ MoFEMErrorCode Contact::OPs() {
         return rho * fe_domain_lhs->ts_aa + alpha_damping * fe_domain_lhs->ts_a;
       };
       pip.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
-    } else if (alpha_damping > 0) {
-      auto get_mass_damping = [this](const double, const double, const double) {
-        auto *pip_mng = mField.getInterface<PipelineManager>();
-        auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
-        return alpha_damping * fe_domain_lhs->ts_a;
-      };
-    }
+    } 
 
     CHKERR HenckyOps::opFactoryDomainLhs<SPACE_DIM, AT, IT, DomainEleOp>(
         mField, pip, "U", "MAT_ELASTIC", Sev::verbose);
@@ -436,20 +429,26 @@ MoFEMErrorCode Contact::OPs() {
 
     // only in case of dynamics
     if (!is_quasi_static) {
+
+      //! [Only used for dynamics]
+      using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
+          AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+      //! [Only used for dynamics]
+
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
       pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
           "U", mat_acceleration));
       pip.push_back(new OpInertiaForce(
           "U", mat_acceleration, [](double, double, double) { return rho; }));
-    }
-    if (alpha_damping > 0) {
-      auto mat_velocity = boost::make_shared<MatrixDouble>();
-      pip.push_back(
-          new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
-      pip.push_back(
-          new OpInertiaForce("U", mat_velocity, [](double, double, double) {
-            return alpha_damping;
-          }));
+      if (alpha_damping > 0) {
+        auto mat_velocity = boost::make_shared<MatrixDouble>();
+        pip.push_back(
+            new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
+        pip.push_back(
+            new OpInertiaForce("U", mat_velocity, [](double, double, double) {
+              return alpha_damping;
+            }));
+      }
     }
 
     CHKERR
@@ -475,6 +474,11 @@ MoFEMErrorCode Contact::OPs() {
   auto add_boundary_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
 
+    //! [Operators used for contact]
+    using OpSpringLhs = FormsIntegrators<BoundaryEleOp>::Assembly<
+        AT>::BiLinearForm<IT>::OpMass<1, SPACE_DIM>;
+    //! [Operators used for contact]
+
     if (spring_stiffness > 0)
       pip.push_back(new OpSpringLhs(
           "U", "U",
@@ -495,6 +499,11 @@ MoFEMErrorCode Contact::OPs() {
 
   auto add_boundary_ops_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
+
+    //! [Operators used for contact]
+    using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
+        AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+    //! [Operators used for contact]
 
     if (spring_stiffness > 0) {
       auto u_disp = boost::make_shared<MatrixDouble>();
@@ -740,6 +749,8 @@ int main(int argc, char *argv[]) {
     exit(120);
   }
 #endif
+
+  return 0;
 }
 
 struct SetUpSchurImpl : public SetUpSchur {
@@ -800,8 +811,6 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
 
     A = createDMMatrix(dm);
     P = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
-    CHKERR MatSetBlockSize(A, SPACE_DIM);
-    CHKERR MatSetBlockSize(P, SPACE_DIM);
     subDM = createSubDM();
     S = createDMMatrix(subDM);
     CHKERR MatSetBlockSize(S, SPACE_DIM);
