@@ -586,17 +586,19 @@ MoFEMErrorCode
 addMatBlockOps(MoFEM::Interface &m_field,
                boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
                std::string field_name, std::string block_name,
-               boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev) {
+               boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev,
+               double scale = 1) {
   MoFEMFunctionBegin;
 
   struct OpMatBlocks : public DomainEleOp {
     OpMatBlocks(std::string field_name, boost::shared_ptr<MatrixDouble> m,
                 double bulk_modulus_K, double shear_modulus_G,
                 MoFEM::Interface &m_field, Sev sev,
-                std::vector<const CubitMeshSets *> meshset_vec_ptr)
+                std::vector<const CubitMeshSets *> meshset_vec_ptr,
+                double scale)
         : DomainEleOp(field_name, DomainEleOp::OPROW), matDPtr(m),
           bulkModulusKDefault(bulk_modulus_K),
-          shearModulusGDefault(shear_modulus_G) {
+          shearModulusGDefault(shear_modulus_G), scaleYoungModulus(scale) {
       std::fill(&(doEntities[MBEDGE]), &(doEntities[MBMAXTYPE]), false);
       CHK_THROW_MESSAGE(extractBlockData(m_field, meshset_vec_ptr, sev),
                         "Can not get data from block");
@@ -609,17 +611,20 @@ addMatBlockOps(MoFEM::Interface &m_field,
       for (auto &b : blockData) {
 
         if (b.blockEnts.find(getFEEntityHandle()) != b.blockEnts.end()) {
-          CHKERR getMatDPtr(matDPtr, b.bulkModulusK, b.shearModulusG);
+          CHKERR getMatDPtr(matDPtr, b.bulkModulusK / scaleYoungModulus,
+                            b.shearModulusG / scaleYoungModulus);
           MoFEMFunctionReturnHot(0);
         }
       }
 
-      CHKERR getMatDPtr(matDPtr, bulkModulusKDefault, shearModulusGDefault);
+      CHKERR getMatDPtr(matDPtr, bulkModulusKDefault / scaleYoungModulus,
+                        shearModulusGDefault / scaleYoungModulus);
       MoFEMFunctionReturn(0);
     }
 
   private:
     boost::shared_ptr<MatrixDouble> matDPtr;
+    const double scaleYoungModulus;
 
     struct BlockData {
       double bulkModulusK;
@@ -705,9 +710,10 @@ addMatBlockOps(MoFEM::Interface &m_field,
 
           (boost::format("%s(.*)") % block_name).str()
 
-              ))
+              )),
+      scale
 
-          ));
+      ));
 
   MoFEMFunctionReturn(0);
 }
@@ -716,14 +722,14 @@ template <int DIM, IntegrationType I, typename DomainEleOp>
 auto commonDataFactory(
     MoFEM::Interface &m_field,
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
-    std::string field_name, std::string block_name, Sev sev) {
+    std::string field_name, std::string block_name, Sev sev, double scale = 1) {
 
   auto common_ptr = boost::make_shared<HenckyOps::CommonData>();
   common_ptr->matDPtr = boost::make_shared<MatrixDouble>();
   common_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
 
   CHK_THROW_MESSAGE(addMatBlockOps<DIM>(m_field, pip, field_name, block_name,
-                                        common_ptr->matDPtr, sev),
+                                        common_ptr->matDPtr, sev, scale),
                     "addMatBlockOps");
 
   using H = HenkyIntegrators<DomainEleOp>;
@@ -766,11 +772,11 @@ template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
 MoFEMErrorCode opFactoryDomainRhs(
     MoFEM::Interface &m_field,
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
-    std::string field_name, std::string block_name, Sev sev) {
+    std::string field_name, std::string block_name, Sev sev, double scale = 1) {
   MoFEMFunctionBegin;
 
   auto common_ptr = commonDataFactory<DIM, I, DomainEleOp>(
-      m_field, pip, field_name, block_name, sev);
+      m_field, pip, field_name, block_name, sev, scale);
   CHKERR opFactoryDomainRhs<DIM, A, I, DomainEleOp>(m_field, pip, field_name,
                                                     common_ptr, sev);
 
@@ -802,11 +808,11 @@ template <int DIM, AssemblyType A, IntegrationType I, typename DomainEleOp>
 MoFEMErrorCode opFactoryDomainLhs(
     MoFEM::Interface &m_field,
     boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pip,
-    std::string field_name, std::string block_name, Sev sev) {
+    std::string field_name, std::string block_name, Sev sev, double scale = 1) {
   MoFEMFunctionBegin;
 
   auto common_ptr = commonDataFactory<DIM, I, DomainEleOp>(
-      m_field, pip, field_name, block_name, sev);
+      m_field, pip, field_name, block_name, sev, scale);
   CHKERR opFactoryDomainLhs<DIM, A, I, DomainEleOp>(m_field, pip, field_name,
                                                     common_ptr, sev);
 

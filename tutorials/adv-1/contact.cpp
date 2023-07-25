@@ -138,6 +138,8 @@ double rho = 0.0;
 double spring_stiffness = 0.5;
 double alpha_damping = 0;
 
+double scale = 1.;
+
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
 #include <ContactOps.hpp>
@@ -298,6 +300,7 @@ MoFEMErrorCode Contact::createCommonData() {
 
   auto get_options = [&]() {
     MoFEMFunctionBegin;
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-scale", &scale, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-young_modulus",
                                  &young_modulus, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-poisson_ratio",
@@ -317,6 +320,15 @@ MoFEMErrorCode Contact::createCommonData() {
     MOFEM_LOG("CONTACT", Sev::inform)
         << "spring_stiffness " << spring_stiffness;
     MOFEM_LOG("CONTACT", Sev::inform) << "alpha_damping " << alpha_damping;
+
+    PetscBool is_scale = PETSC_TRUE;
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
+                               PETSC_NULL);
+    if (is_scale) {
+      scale /= young_modulus;
+    }
+
+    MOFEM_LOG("CONTACT", Sev::inform) << "Scale " << scale;
 
     MoFEMFunctionReturn(0);
   };
@@ -410,13 +422,14 @@ MoFEMErrorCode Contact::OPs() {
                                                  const double) {
         auto *pip_mng = mField.getInterface<PipelineManager>();
         auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
-        return rho * fe_domain_lhs->ts_aa + alpha_damping * fe_domain_lhs->ts_a;
+        return (rho / scale) * fe_domain_lhs->ts_aa +
+               (alpha_damping / scale) * fe_domain_lhs->ts_a;
       };
       pip.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
-    } 
+    }
 
     CHKERR HenckyOps::opFactoryDomainLhs<SPACE_DIM, AT, IT, DomainEleOp>(
-        mField, pip, "U", "MAT_ELASTIC", Sev::verbose);
+        mField, pip, "U", "MAT_ELASTIC", Sev::verbose, scale);
 
     MoFEMFunctionReturn(0);
   };
@@ -438,22 +451,23 @@ MoFEMErrorCode Contact::OPs() {
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
       pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
           "U", mat_acceleration));
-      pip.push_back(new OpInertiaForce(
-          "U", mat_acceleration, [](double, double, double) { return rho; }));
+      pip.push_back(
+          new OpInertiaForce("U", mat_acceleration, [](double, double, double) {
+            return rho / scale;
+          }));
       if (alpha_damping > 0) {
         auto mat_velocity = boost::make_shared<MatrixDouble>();
         pip.push_back(
             new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
         pip.push_back(
             new OpInertiaForce("U", mat_velocity, [](double, double, double) {
-              return alpha_damping;
+              return alpha_damping / scale;
             }));
       }
     }
 
-    CHKERR
-    HenckyOps::opFactoryDomainRhs<SPACE_DIM, AT, IT, DomainEleOp>(
-        mField, pip, "U", "MAT_ELASTIC", Sev::inform);
+    CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, AT, IT, DomainEleOp>(
+        mField, pip, "U", "MAT_ELASTIC", Sev::inform, scale);
 
     CHKERR ContactOps::opFactoryDomainRhs<SPACE_DIM, AT, IT, DomainEleOp>(
         pip, "SIGMA", "U");

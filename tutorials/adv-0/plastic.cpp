@@ -554,7 +554,8 @@ MoFEMErrorCode Example::OPs() {
                                                  const double) {
         auto *pip_mng = mField.getInterface<PipelineManager>();
         auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
-        return rho * fe_domain_lhs->ts_aa + alpha_damping * fe_domain_lhs->ts_a;
+        return (rho / scale) * fe_domain_lhs->ts_aa +
+               (alpha_damping / scale) * fe_domain_lhs->ts_a;
       };
       pip_mng.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
     }
@@ -586,15 +587,17 @@ MoFEMErrorCode Example::OPs() {
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
       pip_mng.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
           "U", mat_acceleration));
-      pip_mng.push_back(new OpInertiaForce(
-          "U", mat_acceleration, [](double, double, double) { return rho; }));
+      pip_mng.push_back(
+          new OpInertiaForce("U", mat_acceleration, [](double, double, double) {
+            return rho / scale;
+          }));
       if (alpha_damping > 0) {
         auto mat_velocity = boost::make_shared<MatrixDouble>();
         pip_mng.push_back(
             new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
         pip_mng.push_back(
             new OpInertiaForce("U", mat_velocity, [](double, double, double) {
-              return alpha_damping;
+              return alpha_damping / scale;
             }));
       }
     }
@@ -630,30 +633,6 @@ MoFEMErrorCode Example::OPs() {
     CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
         pip_mng, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
         "BODY_FORCE", Sev::inform);
-
-    if (!is_quasi_static) {
-
-      //! [Only used for dynamics]
-      using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
-          AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
-      //! [Only used for dynamics]
-
-      // auto mat_acceleration = boost::make_shared<MatrixDouble>();
-      // pip_mng.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
-      //     "U", mat_acceleration));
-      // pip_mng.push_back(new OpInertiaForce(
-      //     "U", mat_acceleration, [](double, double, double) { return rho; }));
-      if (alpha_damping > 0) {
-        auto mat_velocity = boost::make_shared<MatrixDouble>();
-        pip_mng.push_back(
-            new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
-        pip_mng.push_back(
-            new OpInertiaForce("U", mat_velocity, [](double, double, double) {
-              return alpha_damping;
-            }));
-      }
-    }
-
     CHKERR PlasticOps::opFactoryDomainReactions<SPACE_DIM, AT, IT, DomainEleOp>(
         mField, "MAT_PLASTIC", pip_mng, "U", "EP", "TAU");
     MoFEMFunctionReturn(0);
