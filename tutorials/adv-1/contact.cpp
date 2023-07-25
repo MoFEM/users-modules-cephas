@@ -479,6 +479,10 @@ MoFEMErrorCode Contact::OPs() {
         AT>::BiLinearForm<IT>::OpMass<1, SPACE_DIM>;
     //! [Operators used for contact]
 
+    // Add Natural BCs to LHS
+    CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
+        pip, mField, "U", Sev::inform);
+
     if (spring_stiffness > 0)
       pip.push_back(new OpSpringLhs(
           "U", "U",
@@ -504,6 +508,10 @@ MoFEMErrorCode Contact::OPs() {
     using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
         AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
     //! [Operators used for contact]
+    
+    // Add Natural BCs to RHS
+    CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
+        pip, mField, "U", {time_scale}, Sev::inform);
 
     if (spring_stiffness > 0) {
       auto u_disp = boost::make_shared<MatrixDouble>();
