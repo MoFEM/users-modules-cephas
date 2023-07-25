@@ -143,16 +143,23 @@ public:
                t_r(i) = t_normal(i);       
              t_r.normalize();
             (*alphaPtr)[gg] += -(t_field_grad(i) * t_r(i));
+                                  // double sumAlphaPtr = 0;
+          //  CHKERR VecSum((*alphaPtr)[gg] , &sumAlphaPtr);
             //  std::cout << "coords: " << t_coords << std::endl;
             // std::cout << (*alphaPtr)[gg] << std::endl;
-            // std::cout << "t_r: " << t_r << std::endl;
+           
             *alphaPart += t_field_grad(i) * t_r(i);
-        // std::cout << "alphaPart: " << *alphaPart << std::endl;
+        // std::cout << *alphaPart << std::endl;
             // std::cout << "coords: " << t_coords << std::endl;
             ++t_field_grad;
             ++t_normal;
             ++t_coords;
+
           }
+
+        //       double sumAlphaPtr = 0;
+        // CHKERR VecSum((*alphaPtr)[0], &sumAlphaPtr);
+        // std::cout << sumAlphaPtr << std::endl;
         }
       } 
       
@@ -207,6 +214,7 @@ public:
             ++t_normal_proj;
             ++t_coords;
           }
+
 
         }
       } 
@@ -326,7 +334,7 @@ double alphaPart = 0.;
   Range blockconstBC;
   Range FloatingblockconstBC;
  
-  int phi_Dirch[2] = {0, 1};
+  double phi_Dirch[3] = {1., 0., 0.};
 };
 
 ElectrostaticHomogeneous::ElectrostaticHomogeneous(MoFEM::Interface &m_field)
@@ -672,8 +680,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
   FloatingblockconstBC = get_entities_on_floating();
 
 
-  std::cout << "FloatingblockconstBC Size:"<< FloatingblockconstBC.size() << std::endl;
-  std::cout << "FloatingblockconstBC :"<< FloatingblockconstBC<< std::endl;
+  // std::cout << "FloatingblockconstBC Size:"<< FloatingblockconstBC.size() << std::endl;
+  // std::cout << "FloatingblockconstBC :"<< FloatingblockconstBC<< std::endl;
 
   auto op_loop_side = new OpLoopSide<SideEle>(
       mField, simpleInterface->getDomainFEName(), SPACE_DIM);
@@ -692,7 +700,6 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
   auto grad_grad_ptr = boost::make_shared<MatrixDouble>();
   auto alpha_ptr = boost::make_shared<VectorDouble>();
   auto grad_projection_ptr = boost::make_shared<VectorDouble>();
-  double alpha = 0.;
 
   op_loop_side->getOpPtrVector().push_back(
       new OpCalculateScalarFieldGradient<SPACE_DIM>(domainField, grad_grad_ptr));
@@ -788,6 +795,18 @@ MoFEMErrorCode ElectrostaticHomogeneous::outputResults() {
 MoFEMErrorCode ElectrostaticHomogeneous::runProgram() {
   MoFEMFunctionBegin;
 
+  auto zero_filed = [&](boost::shared_ptr<FieldEntity> ent_ptr_x) {
+    MoFEMFunctionBeginHot;
+    auto field_data = ent_ptr_x->getEntFieldData();
+    for (auto &v : field_data) {
+      v = 0.;
+    }
+    MoFEMFunctionReturnHot(0);
+  };
+
+  // double phi_Dirch[3] = {0., 1., 0.};
+  std::cout << "phi_Dirch: " << phi_Dirch[0] << ", " << phi_Dirch[1] << ", " << phi_Dirch[2] << std::endl;
+
   CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR boundaryCondition();
@@ -803,43 +822,81 @@ MoFEMErrorCode ElectrostaticHomogeneous::runProgram() {
   
   solve_counter++;
 
+  // here
+  CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(zero_filed,
+                                                                   domainField);
+ 
   CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
   CHKERR getAlphaPart();
   alphaB = alphaPart;
 
+  // CHKERR assembleSystem();
+  // CHKERR solveSystem();
+  // CHKERR outputResults();
 
+  std::cout << "alphaB: " << alphaB << std::endl;
+  alphaPart = -alphaB / (alphaA - alphaB);
+  std::cout << "alphaPart: " << alphaPart << std::endl;
+
+  phi_Dirch[2] = alphaPart;
+  std::cout << "phi_Dirch: " << phi_Dirch[0] << ", " << phi_Dirch[1] << ", "
+            << phi_Dirch[2] << std::endl;
+
+  solve_counter++;
+  CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(zero_filed,
+                                                                 domainField);
   CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
 
-  std::cout << "alphaB: " << alphaB << std::endl;
-    alphaPart = alphaB / (alphaA -alphaB);
-  std::cout << "alphaPart: " << alphaPart << std::endl;
+  // auto u_ptr = boost::make_shared<VectorDouble>();
+  // cout <<"u_ptr:"<< *u_ptr<<endl;
+  // auto scale = [u_ptr](const double alphaPart) { return u_ptr *
+  // alphaPart; };
+  //   CHKERR fieldLambdaOnValues(scale, domainField);
 
+  // // CHKERR
+  // mField.getInterface<FieldBlas>()->fieldLambdaOnValues(scale_field_lambda,
+  // "POTENTIAL"); auto vector_plus_scalar_field =
+  // [&](boost::shared_ptr<VectorDouble> u_ptr) {
+  //    MoFEMFunctionBeginHot;
+  //    auto data = u_ptr->getEntFieldData();
+  //    const auto size_data = data.size(); // scalar
 
-// auto u_ptr = boost::make_shared<VectorDouble>();
-// cout <<"u_ptr:"<< *u_ptr<<endl;
-// auto scale = [u_ptr](const double alphaPart) { return u_ptr * alphaPart; };
-//   CHKERR fieldLambdaOnValues(scale, domainField);
+  //    for ( int dd = 0; dd != size_data; ++dd)
+  //      data[dd] += alphaPart;
 
+  //    MoFEMFunctionReturnHot(0);
+  //  };
 
-// // CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnValues(scale_field_lambda, "POTENTIAL");
-// auto vector_plus_scalar_field = [&](boost::shared_ptr<VectorDouble> u_ptr, alphaPart) {
-//    MoFEMFunctionBeginHot;
-//    auto data = u_ptr->getEntFieldData();
-//    const auto size_data = data.size(); // scalar
- 
-//    for ( int dd = 0; dd != size_data; ++dd)
-//      data[dd] += alphaPart;
- 
-//    MoFEMFunctionReturnHot(0);
-//  };
- 
-// CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnValues(vector_plus_scalar_field, "U");
-// CHKERR outputResults();
+  // {
+  // auto vector_plus_scalar_field = [&](const double val) {
+  //   return val - alphaPart;
+  //  };
 
+  // CHKERR
+  // mField.getInterface<FieldBlas>()->fieldLambdaOnValues(vector_plus_scalar_field,
+  // domainField);
+  // }
+  // {
+  //   auto vector_plus_scalar_field =
+  //   [&](boost::shared_ptr<FieldEntity> ent_ptr_x) {
+  //     MoFEMFunctionBeginHot;
+  //     auto field_data = ent_ptr_x->getEntFieldData();
+  //     for (auto &v : field_data) {
+  //       v += alphaPart;
+  //     }
+  //     MoFEMFunctionReturnHot(0);
+  //   };
+
+  //   CHKERR
+  //   mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(
+  //       vector_plus_scalar_field, domainField);
+  // }
+
+  // CHKERR outputResults();
 
   MoFEMFunctionReturn(0);
 }
