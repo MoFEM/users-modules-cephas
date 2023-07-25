@@ -160,7 +160,7 @@ double cn1 = 1;
 int order = 2;      ///< Order if fixed.
 int geom_order = 2; ///< Order if fixed.
 
-constexpr bool is_quasi_static = false;
+constexpr bool is_quasi_static = true;
 double rho = 0.0;
 double alpha_damping = 0;
 
