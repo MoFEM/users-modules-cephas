@@ -264,12 +264,6 @@ struct Monitor : public FEMethod {
           return 2 * approx_order + geom_order - 1;
         };
         fe_rhs->getRuleHook = integration_rule;
-
-        //! [Only used for dynamics]
-        using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
-            AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
-        //! [Only used for dynamics]
-
         CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, PETSC, IT, DomainEleOp>(
             *m_field_ptr, pip, "U", "MAT_ELASTIC", Sev::inform);
         CHKERR DMoFEMLoopFiniteElements(dM, "dFE", fe_rhs);

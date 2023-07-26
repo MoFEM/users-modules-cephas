@@ -112,30 +112,7 @@ using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<AT>::LinearForm<
     IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Operators used for contact]
 
-namespace ContactOps {
 
-double cn_contact = 0.1;
-
-/**
- * @note Look to ContactNaturalDomainBC.hpp to see how this BC is specialised.
- *
- */
-struct DomainBCs {};
-
-/**
- * @note Look to ContactNaturalBoundaryBC.hpp to see how this BC is specialised.
- * 
- */
-struct BoundaryBCs {};
-
-using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<AT>::LinearForm<IT>;
-using OpDomainRhsBCs = DomainRhsBCs::OpFlux<DomainBCs, 1, SPACE_DIM>;
-using BoundaryRhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::LinearForm<IT>;
-using OpBoundaryRhsBCs = BoundaryRhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
-using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::BiLinearForm<IT>;
-using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
-
-}; // namespace ContactOps
 
 PetscBool is_quasi_static = PETSC_TRUE;
 
@@ -150,12 +127,25 @@ double alpha_damping = 0;
 
 double scale = 1.;
 
+namespace ContactOps {
+double cn_contact = 0.1;
+}; // namespace ContactOps
+
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
 #include <ContactOps.hpp>
 #include <PostProcContact.hpp>
-#include <ContactNaturalDomainBC.hpp>
-#include <ContactNaturalBoundaryBC.hpp>
+#include <ContactNaturalBC.hpp>
+
+using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<AT>::LinearForm<IT>;
+using OpDomainRhsBCs =
+    DomainRhsBCs::OpFlux<ContactOps::DomainBCs, 1, SPACE_DIM>;
+using BoundaryRhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::LinearForm<IT>;
+using OpBoundaryRhsBCs =
+    BoundaryRhsBCs::OpFlux<ContactOps::BoundaryBCs, 1, SPACE_DIM>;
+using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::BiLinearForm<IT>;
+using OpBoundaryLhsBCs =
+    BoundaryLhsBCs::OpFlux<ContactOps::BoundaryBCs, 1, SPACE_DIM>;
 
 using namespace ContactOps;
 

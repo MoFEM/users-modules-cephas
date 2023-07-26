@@ -1001,8 +1001,8 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-template <int DIM, typename AssembleDomainEleOp>
-struct OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssembleDomainEleOp>
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssemblyDomainEleOp>
     : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowLhs_dTAUImpl(
       const std::string row_field_name, const std::string col_field_name,
@@ -1053,11 +1053,11 @@ OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
   constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
   FTensor::Index<'L', size_symm> L;
 
-  const auto nb_integration_pts = getGaussPts().size2();
+  const auto nb_integration_pts = AssemblyDomainEleOp::getGaussPts().size2();
   const size_t nb_row_base_functions = row_data.getN().size2();
   auto &locMat = AssemblyDomainEleOp::locMat;
 
-  const auto type = getFEType();
+  const auto type = AssemblyDomainEleOp::getFEType();
   const auto nb_nodes = moab::CN::VerticesPerEntity(type);
 
   auto t_res_flow_dtau =
@@ -1067,10 +1067,10 @@ OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
 
   auto next = [&]() { ++t_res_flow_dtau; };
 
-  auto t_w = getFTensor0IntegrationWeight();
+  auto t_w = AssemblyDomainEleOp::getFTensor0IntegrationWeight();
   auto t_row_base = row_data.getFTensor0N();
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-    double alpha = getMeasure() * t_w;
+    double alpha = AssemblyDomainEleOp::getMeasure() * t_w;
     ++t_w;
     FTensor::Tensor1<double, size_symm> t_res_vec;
     t_res_vec(L) = alpha * (t_res_flow_dtau(i, j) * t_L(i, j, L));

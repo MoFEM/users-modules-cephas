@@ -107,16 +107,6 @@ typename MoFEM::OpBaseImpl<AT, BoundaryEleOpStab>::MatSetValuesHook
 //! [Specialisation for assembly]
 #endif // ADD_CONTACT
 
-using AssemblyDomainEleOp = FormsIntegrators<DomainEleOp>::Assembly<AT>::OpBase;
-using DomainNaturalBC = NaturalBC<DomainEleOp>::Assembly<AT>::LinearForm<IT>;
-using OpBodyForce =
-    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
-
-using BoundaryNaturalBC =
-    NaturalBC<BoundaryEleOp>::Assembly<AT>::LinearForm<IT>;
-using OpForce =
-    BoundaryNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
-
 inline double hardening_exp(double tau, double b_iso) {
   return std::exp(
       std::max(static_cast<double>(std::numeric_limits<float>::min_exponent10),
@@ -160,12 +150,14 @@ double cn1 = 1;
 int order = 2;      ///< Order if fixed.
 int geom_order = 2; ///< Order if fixed.
 
-constexpr bool is_quasi_static = true;
+PetscBool is_quasi_static = PETSC_TRUE;
 double rho = 0.0;
 double alpha_damping = 0;
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
+#include <PlasticNaturalBCs.hpp>
+
 #ifdef ADD_CONTACT
 #ifdef PYTHON_SFD
 #include <boost/python.hpp>
@@ -181,6 +173,16 @@ double cn_contact = 0.1;
 
 #include <ContactOps.hpp>
 #endif
+
+using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<AT>::LinearForm<IT>;
+using OpDomainRhsBCs =
+    DomainRhsBCs::OpFlux<PlasticOps::DomainBCs, 1, SPACE_DIM>;
+using BoundaryRhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::LinearForm<IT>;
+using OpBoundaryRhsBCs =
+    BoundaryRhsBCs::OpFlux<PlasticOps::BoundaryBCs, 1, SPACE_DIM>;
+using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::BiLinearForm<IT>;
+using OpBoundaryLhsBCs =
+    BoundaryLhsBCs::OpFlux<PlasticOps::BoundaryBCs, 1, SPACE_DIM>;
 
 using namespace PlasticOps;
 using namespace HenckyOps;
@@ -205,7 +207,7 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
-  struct PlasticityTimeScale : public MoFEM::TimeScale {
+  struct ScaledTimeScale : public MoFEM::TimeScale {
     using MoFEM::TimeScale::TimeScale;
     double getScale(const double time) {
       return scale * MoFEM::TimeScale::getScale(time);
@@ -427,6 +429,11 @@ MoFEMErrorCode Example::createCommonData() {
         << "cn_contact " << ContactOps::cn_contact;
 #endif // ADD_CONTACT
 
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-quasi_static",
+                               &is_quasi_static, PETSC_NULL);
+    MOFEM_LOG("PLASTICITY", Sev::inform)
+        << "Is quasi static: " << (is_quasi_static ? "true" : "false");
+
     MoFEMFunctionReturn(0);
   };
 
@@ -500,50 +507,55 @@ MoFEMErrorCode Example::OPs() {
 
   auto vol_rule = [](int, int, int ao) { return 2 * ao + geom_order - 1; };
 
-  auto add_boundary_ops_lhs_mechanical = [&](auto &pip_mng) {
+  auto add_boundary_ops_lhs_mechanical = [&](auto &pip) {
     MoFEMFunctionBegin;
 
-    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip_mng, {HDIV},
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV},
                                                               "GEOMETRY");
-    pip_mng.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
+    pip.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
+
+    // Add Natural BCs to LHS
+    CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
+        pip, mField, "U", Sev::inform);
 
 #ifdef ADD_CONTACT
-    CHKERR ContactOps::opFactoryBoundaryLhs<SPACE_DIM, AT, GAUSS,
-                                            BoundaryEleOp>(pip_mng, "SIGMA", "U");
+    CHKERR
+    ContactOps::opFactoryBoundaryLhs<SPACE_DIM, AT, GAUSS, BoundaryEleOp>(
+        pip, "SIGMA", "U");
     CHKERR
     ContactOps::opFactoryBoundaryToDomainLhs<SPACE_DIM, AT, IT, DomainEle>(
-        mField, pip_mng, simple->getDomainFEName(), "SIGMA", "U", "GEOMETRY",
+        mField, pip, simple->getDomainFEName(), "SIGMA", "U", "GEOMETRY",
         vol_rule);
 #endif // ADD_CONTACT
 
     MoFEMFunctionReturn(0);
   };
 
-  auto add_boundary_ops_rhs_mechanical = [&](auto &pip_mng) {
+  auto add_boundary_ops_rhs_mechanical = [&](auto &pip) {
     MoFEMFunctionBegin;
 
-    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip_mng, {HDIV},
+    CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(pip, {HDIV},
                                                               "GEOMETRY");
-    pip_mng.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
+    pip.push_back(new OpSetHOWeightsOnSubDim<SPACE_DIM>());
 
-    CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
-        pip_mng, mField, "U", {boost::make_shared<PlasticityTimeScale>()}, "FORCE",
-        Sev::inform);
+    // Add Natural BCs to RHS
+    CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
+        pip, mField, "U", {boost::make_shared<ScaledTimeScale>()}, Sev::inform);
 
 #ifdef ADD_CONTACT
     CHKERR ContactOps::opFactoryBoundaryRhs<SPACE_DIM, AT, IT, BoundaryEleOp>(
-        pip_mng, "SIGMA", "U");
+        pip, "SIGMA", "U");
 #endif // ADD_CONTACT
 
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_lhs = [this](auto &pip_mng) {
+  auto add_domain_ops_lhs = [this](auto &pip) {
     MoFEMFunctionBegin;
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip_mng, {H1, HDIV},
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
                                                           "GEOMETRY");
 
-    if (!is_quasi_static) {
+    if (is_quasi_static == PETSC_FALSE) {
 
       //! [Only used for dynamics]
       using OpMass = FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
@@ -552,32 +564,33 @@ MoFEMErrorCode Example::OPs() {
 
       auto get_inertia_and_mass_damping = [this](const double, const double,
                                                  const double) {
-        auto *pip_mng = mField.getInterface<PipelineManager>();
-        auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
+        auto *pip = mField.getInterface<PipelineManager>();
+        auto &fe_domain_lhs = pip->getDomainLhsFE();
         return (rho / scale) * fe_domain_lhs->ts_aa +
                (alpha_damping / scale) * fe_domain_lhs->ts_a;
       };
-      pip_mng.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
+      pip.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
     }
 
     CHKERR PlasticOps::opFactoryDomainLhs<SPACE_DIM, AT, IT, DomainEleOp>(
-        mField, "MAT_PLASTIC", pip_mng, "U", "EP", "TAU");
+        mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
 
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_rhs = [this](auto &pip_mng) {
+  auto add_domain_ops_rhs = [this](auto &pip) {
     MoFEMFunctionBegin;
 
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip_mng, {H1, HDIV},
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
                                                           "GEOMETRY");
 
-    CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
-        pip_mng, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
-        "BODY_FORCE", Sev::inform);
+    CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
+        pip, mField, "U",
+        {boost::make_shared<ScaledTimeScale>("body_force_hist.txt")},
+        Sev::inform);
 
     // only in case of dynamics
-    if (!is_quasi_static) {
+    if (is_quasi_static == PETSC_FALSE) {
 
       //! [Only used for dynamics]
       using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
@@ -585,17 +598,17 @@ MoFEMErrorCode Example::OPs() {
       //! [Only used for dynamics]
 
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
-      pip_mng.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
+      pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
           "U", mat_acceleration));
-      pip_mng.push_back(
+      pip.push_back(
           new OpInertiaForce("U", mat_acceleration, [](double, double, double) {
             return rho / scale;
           }));
       if (alpha_damping > 0) {
         auto mat_velocity = boost::make_shared<MatrixDouble>();
-        pip_mng.push_back(
+        pip.push_back(
             new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
-        pip_mng.push_back(
+        pip.push_back(
             new OpInertiaForce("U", mat_velocity, [](double, double, double) {
               return alpha_damping / scale;
             }));
@@ -603,11 +616,11 @@ MoFEMErrorCode Example::OPs() {
     }
 
     CHKERR PlasticOps::opFactoryDomainRhs<SPACE_DIM, AT, IT, DomainEleOp>(
-        mField, "MAT_PLASTIC", pip_mng, "U", "EP", "TAU");
+        mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
 
 #ifdef ADD_CONTACT
     CHKERR ContactOps::opFactoryDomainRhs<SPACE_DIM, AT, IT, DomainEleOp>(
-        pip_mng, "SIGMA", "U");
+        pip, "SIGMA", "U");
 #endif // ADD_CONTACT
 
     MoFEMFunctionReturn(0);
@@ -626,15 +639,12 @@ MoFEMErrorCode Example::OPs() {
   CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_bc);
   CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_bc);
 
-  auto create_reaction_pipeline = [&](auto &pip_mng) {
+  auto create_reaction_pipeline = [&](auto &pip) {
     MoFEMFunctionBegin;
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip_mng, {H1},
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
                                                           "GEOMETRY");
-    CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
-        pip_mng, mField, "U", {boost::make_shared<PlasticityTimeScale>()},
-        "BODY_FORCE", Sev::inform);
     CHKERR PlasticOps::opFactoryDomainReactions<SPACE_DIM, AT, IT, DomainEleOp>(
-        mField, "MAT_PLASTIC", pip_mng, "U", "EP", "TAU");
+        mField, "MAT_PLASTIC", pip, "U", "EP", "TAU");
     MoFEMFunctionReturn(0);
   };
 
@@ -871,7 +881,7 @@ MoFEMErrorCode Example::tsSolve() {
     uZScatter = scatter_create(D, 2);
 
   auto create_solver = [pip_mng]() {
-    if(is_quasi_static)
+    if (is_quasi_static == PETSC_TRUE)
       return pip_mng->createTSIM();
     else
       return pip_mng->createTSIM2();
@@ -1001,7 +1011,7 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  if (is_quasi_static) {
+  if (is_quasi_static == PETSC_TRUE) {
     CHKERR TSSetSolution(solver, D);
   } else {
     CHKERR TS2SetSolution(solver, D, DD);
@@ -1182,7 +1192,8 @@ MoFEMErrorCode SetUpSchurImpl::setUp(TS solver) {
 
 #ifndef ADD_CONTACT
       // Boundary
-      pip_mng->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
+      pip_mng->getOpBoundaryLhsPipeline().push_front(
+          new OpSchurAssembleBegin());
       pip_mng->getOpBoundaryLhsPipeline().push_back(
           new OpSchurAssembleEnd<SCHUR_DGESV>(
 
@@ -1210,7 +1221,8 @@ MoFEMErrorCode SetUpSchurImpl::setUp(TS solver) {
       using OpMassStab = B::OpMass<3, SPACE_DIM * SPACE_DIM>;
 
       // Boundary
-      pip_mng->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
+      pip_mng->getOpBoundaryLhsPipeline().push_front(
+          new OpSchurAssembleBegin());
       pip_mng->getOpBoundaryLhsPipeline().push_back(
           new OpMassStab("SIGMA", "SIGMA", [eps_stab](double, double, double) {
             return eps_stab;
@@ -1261,7 +1273,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(TS solver) {
 #ifndef ADD_CONTACT
         CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
             mField, schur_asmb_post_proc, 1)();
-#else // ADD_CONTACT
+#else  // ADD_CONTACT
         CHKERR MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
         CHKERR MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
         // Apply essential constrains to A matrix
