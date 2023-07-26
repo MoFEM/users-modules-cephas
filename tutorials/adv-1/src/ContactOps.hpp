@@ -247,11 +247,12 @@ template <int DIM, typename BoundaryEleOp>
 struct OpAssembleTotalContactTractionImpl<DIM, GAUSS, BoundaryEleOp>
     : public BoundaryEleOp {
   OpAssembleTotalContactTractionImpl(
-      boost::shared_ptr<CommonData> common_data_ptr);
+      boost::shared_ptr<CommonData> common_data_ptr, double scale = 1);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  const double scaleTraction;
 };
 
 template <int DIM, typename AssemblyBoundaryEleOp>
@@ -359,9 +360,9 @@ inline double constrain(double sdf, double tn) {
 template <int DIM, typename BoundaryEleOp>
 OpAssembleTotalContactTractionImpl<DIM, GAUSS, BoundaryEleOp>::
     OpAssembleTotalContactTractionImpl(
-        boost::shared_ptr<CommonData> common_data_ptr)
+        boost::shared_ptr<CommonData> common_data_ptr, double scale)
     : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE),
-      commonDataPtr(common_data_ptr) {}
+      commonDataPtr(common_data_ptr), scaleTraction(scale) {}
 
 template <int DIM, typename BoundaryEleOp>
 MoFEMErrorCode
@@ -382,6 +383,8 @@ OpAssembleTotalContactTractionImpl<DIM, GAUSS, BoundaryEleOp>::doWork(
     ++t_w;
     ++t_traction;
   }
+
+  t_sum_t(i) *= scaleTraction;
 
   constexpr int ind[] = {0, 1, 2};
   CHKERR VecSetValues(commonDataPtr->totalTraction, 3, ind, &t_sum_t(0),
@@ -841,7 +844,7 @@ MoFEMErrorCode opFactoryCalculateTraction(
   pip.push_back(new OpCalculateHVecTensorTrace<DIM, BoundaryEleOp>(
       sigma, common_data_ptr->contactTractionPtr()));
   pip.push_back(new typename C::template OpAssembleTotalContactTraction<DIM, I>(
-      common_data_ptr));
+      common_data_ptr, 1. / scale));
 
   MoFEMFunctionReturn(0);
 }
