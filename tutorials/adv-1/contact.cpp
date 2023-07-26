@@ -116,7 +116,16 @@ namespace ContactOps {
 
 double cn_contact = 0.1;
 
+/**
+ * @note Look to ContactNaturalDomainBC.hpp to see how this BC is specialised.
+ *
+ */
 struct DomainBCs {};
+
+/**
+ * @note Look to ContactNaturalBoundaryBC.hpp to see how this BC is specialised.
+ * 
+ */
 struct BoundaryBCs {};
 
 using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<AT>::LinearForm<IT>;
