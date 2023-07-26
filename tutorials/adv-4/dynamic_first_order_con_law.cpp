@@ -1,8 +1,8 @@
 /**
- * \file dynamic_elastic.cpp
- * \example dynamic_elastic.cpp
+ * \file dynamic_first_order_con_law.cpp
+ * \example dynamic_first_order_con_law.cpp
  *
- * Plane stress elastic dynamic problem
+ * Explicit first order conservation laws for solid dynamics
  *
  */
 
@@ -18,6 +18,95 @@ template <> struct ElementsAndOps<2> {
 
 template <> struct ElementsAndOps<3> {
   using DomainEle = VolumeElementForcesAndSourcesCore;
+};
+
+template <typename T> inline double trace(FTensor::Tensor2<T, 2> &t_stress) {
+  constexpr double third = boost::math::constants::third<double>();
+  return (t_stress(0, 0) + t_stress(1, 1)) * third;
+};
+
+template <typename T>
+inline double trace(FTensor::Tensor2_symmetric<T, 3> &t_stress) {
+  constexpr double third = boost::math::constants::third<double>();
+  return (t_stress(0, 0) + t_stress(1, 1) + t_stress(2, 2)) * third;
+};
+
+// Operator to Calculate Pstab and Fstab
+template <int DIM_0, int DIM_1>
+struct OpCalculatePiolaStabilised : public ForcesAndSourcesCore::UserDataOperator {
+  OpCalculatePStab(double shear_modulus,
+                    double bulk_modulus,
+                   boost::shared_ptr<MatrixDouble> first_piola_stab_ptr,
+                   boost::shared_ptr<MatrixDouble> def_grad_ptr,
+                   boost::shared_ptr<MatrixDouble> def_grad_dot_ptr,
+                   boost::shared_ptr<double> tau_F_ptr,
+                   boost::shared_ptr<MatrixDouble> grad_x_ptr,
+                   boost::shared_ptr<MatrixDouble> grad_vel_ptr)
+      : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPLAST), shearModulus(shear_modulus), bulkModulus(bulk_modulus)
+        firstPiolaStabPtr(first_piola_stab_ptr), defGradPtr(def_grad_ptr),
+        defGradDotPtr(def_grad_dot_ptr), tauFPtr(tau_F_ptr),
+        gradxPtr(grad_x_ptr), gradVelPtr(grad_vel_ptr), {}
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+    // Define Indicies
+    FTensor::Index<'i', SPACE_DIM> i;
+    FTensor::Index<'j', SPACE_DIM> j;
+
+    // Define Kronecker Delta
+    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+
+    // Number of Gauss points
+    const size_t nb_gauss_pts = getGaussPts().size2();
+   
+    // Resize Piola
+    firstPiolaStabPtr->resize(DIM_0 * DIM_1, nb_gauss_pts, false);
+    firstPiolaStabPtr->clear();
+
+    // Extract matrix from data matrix
+    auto t_Pst = getFTensor2FromMat<SPACE_DIM>(*firstPiolaStabPtr);
+    auto t_F = getFTensor2FromMat<SPACE_DIM>(*defGradPtr);
+    auto t_F_dot = getFTensor2FromMat<SPACE_DIM>(*defGradDotPtr);
+    // tau_F = CFL *(h/cp)
+    auto tau_F = *tauFPtr;
+    double xi_F = 0.0;
+    auto t_gradx = getFTensor2FromMat<SPACE_DIM>(*gradxPtr);
+    auto t_gradVel = getFTensor2FromMat<SPACE_DIM>(*gradVelPtr);
+
+    // Initialise Fstabilised
+    FTensor::Tensor2<double, DIM, DIM> t_Fst;
+
+    for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
+      // Stabilised Deformation Gradient
+      t_Fst(i, j) = t_F(i, j) + tau_F(i) * (t_gradVel(i, j) - t_F_dot(i, j)) +
+                    xi_F * (t_gradx(i, j) - t_F(i, j))
+
+      // Calculate PStab - assuming neo-hookean
+      t_Pst(i, j) = mU * (t_Fst(i, j) + t_Fst(j, i) - 2 / 3 trace(t_Fst) * t_kd(i, j)) 
+                    + bulkModulus * (trace(t_Fst) - 3) * t_kd(i, j)
+      
+      ++ t_F;
+      ++tauF;
+      ++t_gradVel;
+      ++t_F_dot;
+      ++xi_F;
+      ++t_gradx;
+      ++t_Pst;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  double shearModulus;
+  double bulkModulus;
+  boost::shared_ptr<MatrixDouble> PstabPtr;
+  boost::shared_ptr<MatrixDouble> defGradPtr;
+  boost::shared_ptr<MatrixDouble> defGradDotPtr;
+  boost::shared_ptr<double> tauFPtr;
+  boost::shared_ptr<MatrixDouble> gradxPtr;
+  boost::shared_ptr<MatrixDouble> gradVelPtr;
 };
 
 constexpr int SPACE_DIM =
@@ -39,13 +128,14 @@ using OpBodyForceVector =
     DomainNaturalBC::OpFlux<NaturalMeshsetTypeVectorScaling<BLOCKSET>, 1,
                             SPACE_DIM>;
 using OpGradTimesTensor2 = FormsIntegrators<DomainEleOp>::Assembly<
-          PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
-
+    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr double rho = 1;
 constexpr double omega = 2.4;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
+double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
+double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
@@ -100,20 +190,18 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("V", H1, AINSWORTH_LEGENDRE_BASE,
-                                SPACE_DIM);
+  CHKERR simple->addDomainField("V", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
   CHKERR simple->addBoundaryField("V", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
   CHKERR simple->addDomainField("F", H1, AINSWORTH_LEGENDRE_BASE,
                                 SPACE_DIM * SPACE_DIM);
-  CHKERR simple->addDataField("x", H1, AINSWORTH_LEGENDRE_BASE,
-                              SPACE_DIM);
+  CHKERR simple->addDataField("x", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
   CHKERR simple->addDataField("GEOMETRY", H1, AINSWORTH_LEGENDRE_BASE,
-                              SPACE_DIM);                              
+                              SPACE_DIM);
   int order = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("V", order);
   CHKERR simple->setFieldOrder("F", order);
-  CHKERR simple->setFieldOrder("x", order); 
+  CHKERR simple->setFieldOrder("x", order);
   CHKERR simple->setFieldOrder("GEOMETRY", order);
   CHKERR simple->setUp();
 
@@ -274,34 +362,35 @@ MoFEMErrorCode Example::assembleSystem() {
 
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {H1}, "GEOMETRY");
-    
 
+    // Calculate unknown F
     auto mat_F_tensor_ptr = boost::make_shared<MatrixDouble>();
     pip.push_back(new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>(
         "F", mat_F_tensor_ptr));
-
+    
+    // Calculate rate of F
     // auto mat_dot_F_tensor_ptr = boost::make_shared<MatrixDouble>();
     // pip.push_back(new OpCalculateTensor2FieldValuesDot<SPACE_DIM, SPACE_DIM>(
     //     "F", mat_dot_F_tensor_ptr));
 
+    // Calculate Gradient of velocity
     auto mat_v_grad_ptr = boost::make_shared<MatrixDouble>();
-    pip.push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("V",
-                                                               mat_v_grad_ptr));
+    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "V", mat_v_grad_ptr));
 
+    // Calculate Gradient of Spatial Positions
     auto mat_x_grad_ptr = boost::make_shared<MatrixDouble>();
-    pip.push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("x",
-                                                               mat_x_grad_ptr));
-
-    //some operator that calculates F^st
-    auto mat_P_stab_ptr = boost::make_shared<MatrixDouble>();
-    //some operator that calculate P^st
-    auto one = [](const double, const double, const double) { return 1; };
-    pip.push_back(new OpGradTimesTensor2("U", mat_P_stab_ptr));
+    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "x", mat_x_grad_ptr));
     
+    // Calculate Pstabilised
+    auto mat_P_stab_ptr = boost::make_shared<MatrixDouble>();
+    pip.push_back(new OpCalculatePiolaStabilised<SPACE_DIM, SPACE_DIM>(shear_modulus_G,bulk_modulus_K,mat_P_stab_ptr,mat_F_tensor_ptr,
+                mat_dot_F_tensor_ptr, tau_F_ptr, mat_x_grad_ptr, mat_v_grad_ptr));
+    auto one = [](const double, const double, const double) { return 1; };
+    
+    pip.push_back(new OpGradTimesTensor2("U", mat_P_stab_ptr));
 
-     
     // CHKERR add_rho_block(pip, "MAT_RHO", Sev::inform);
 
     // auto mat_acceleration_ptr = boost::make_shared<MatrixDouble>();
