@@ -611,14 +611,14 @@ addMatBlockOps(MoFEM::Interface &m_field,
       for (auto &b : blockData) {
 
         if (b.blockEnts.find(getFEEntityHandle()) != b.blockEnts.end()) {
-          CHKERR getMatDPtr(matDPtr, b.bulkModulusK / scaleYoungModulus,
-                            b.shearModulusG / scaleYoungModulus);
+          CHKERR getMatDPtr(matDPtr, b.bulkModulusK * scaleYoungModulus,
+                            b.shearModulusG * scaleYoungModulus);
           MoFEMFunctionReturnHot(0);
         }
       }
 
-      CHKERR getMatDPtr(matDPtr, bulkModulusKDefault / scaleYoungModulus,
-                        shearModulusGDefault / scaleYoungModulus);
+      CHKERR getMatDPtr(matDPtr, bulkModulusKDefault * scaleYoungModulus,
+                        shearModulusGDefault * scaleYoungModulus);
       MoFEMFunctionReturn(0);
     }
 

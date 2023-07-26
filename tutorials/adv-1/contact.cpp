@@ -128,14 +128,15 @@ using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
 
 }; // namespace ContactOps
 
-constexpr bool is_quasi_static = true;
+PetscBool is_quasi_static = PETSC_TRUE;
 
 int order = 2;
 int geom_order = 1;
 double young_modulus = 100;
 double poisson_ratio = 0.25;
 double rho = 0.0;
-double spring_stiffness = 0.5;
+double spring_stiffness = 0.0;
+double vis_spring_stiffness = 0.0;
 double alpha_damping = 0;
 
 double scale = 1.;
@@ -172,6 +173,13 @@ private:
 #ifdef PYTHON_SFD
   boost::shared_ptr<SDFPython> sdfPythonPtr;
 #endif
+
+  struct ScaledTimeScale : public MoFEM::TimeScale {
+    using MoFEM::TimeScale::TimeScale;
+    double getScale(const double time) {
+      return scale * MoFEM::TimeScale::getScale(time);
+    };
+  };
 };
 
 //! [Run problem]
@@ -310,6 +318,8 @@ MoFEMErrorCode Contact::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-spring_stiffness",
                                  &spring_stiffness, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-vis_spring_stiffness",
+                                 &vis_spring_stiffness, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-alpha_damping",
                                  &alpha_damping, PETSC_NULL);
 
@@ -318,7 +328,10 @@ MoFEMErrorCode Contact::createCommonData() {
     MOFEM_LOG("CONTACT", Sev::inform) << "Density " << rho;
     MOFEM_LOG("CONTACT", Sev::inform) << "cn_contact " << cn_contact;
     MOFEM_LOG("CONTACT", Sev::inform)
-        << "spring_stiffness " << spring_stiffness;
+        << "Spring stiffness " << spring_stiffness;
+    MOFEM_LOG("CONTACT", Sev::inform)
+        << "Vis spring_stiffness " << vis_spring_stiffness;
+
     MOFEM_LOG("CONTACT", Sev::inform) << "alpha_damping " << alpha_damping;
 
     PetscBool is_scale = PETSC_TRUE;
@@ -329,6 +342,11 @@ MoFEMErrorCode Contact::createCommonData() {
     }
 
     MOFEM_LOG("CONTACT", Sev::inform) << "Scale " << scale;
+
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_quasi_static",
+                               &is_quasi_static, PETSC_NULL);
+    MOFEM_LOG("CONTACT", Sev::inform)
+        << "Is quasi-static: " << (is_quasi_static ? "true" : "false");
 
     MoFEMFunctionReturn(0);
   };
@@ -388,7 +406,9 @@ MoFEMErrorCode Contact::OPs() {
   auto simple = mField.getInterface<Simple>();
   auto *pip_mng = mField.getInterface<PipelineManager>();
   auto bc_mng = mField.getInterface<BcManager>();
-  auto time_scale = boost::make_shared<TimeScale>();
+  auto time_scale = boost::make_shared<ScaledTimeScale>();
+  auto body_force_time_scale =
+      boost::make_shared<ScaledTimeScale>("body_force_hist.txt");
 
   auto integration_rule_vol = [](int, int, int approx_order) {
     return 2 * approx_order + geom_order - 1;
@@ -411,20 +431,22 @@ MoFEMErrorCode Contact::OPs() {
   auto add_domain_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
 
-    if (!is_quasi_static) {
+
+    if (is_quasi_static == PETSC_FALSE) {
+
+      auto *pip_mng = mField.getInterface<PipelineManager>();
+      auto fe_domain_lhs = pip_mng->getDomainLhsFE();
 
       //! [Only used for dynamics]
       using OpMass = FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
           GAUSS>::OpMass<1, SPACE_DIM>;
       //! [Only used for dynamics]
 
-      auto get_inertia_and_mass_damping = [this](const double, const double,
-                                                 const double) {
-        auto *pip_mng = mField.getInterface<PipelineManager>();
-        auto &fe_domain_lhs = pip_mng->getDomainLhsFE();
-        return (rho / scale) * fe_domain_lhs->ts_aa +
-               (alpha_damping / scale) * fe_domain_lhs->ts_a;
-      };
+      auto get_inertia_and_mass_damping =
+          [this, fe_domain_lhs](const double, const double, const double) {
+            return (rho * scale) * fe_domain_lhs->ts_aa +
+                   (alpha_damping * scale) * fe_domain_lhs->ts_a;
+          };
       pip.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
     }
 
@@ -438,10 +460,10 @@ MoFEMErrorCode Contact::OPs() {
     MoFEMFunctionBegin;
 
     CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
-        pip, mField, "U", {time_scale}, Sev::inform);
+        pip, mField, "U", {body_force_time_scale}, Sev::inform);
 
     // only in case of dynamics
-    if (!is_quasi_static) {
+    if (is_quasi_static == PETSC_FALSE) {
 
       //! [Only used for dynamics]
       using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
@@ -453,7 +475,7 @@ MoFEMErrorCode Contact::OPs() {
           "U", mat_acceleration));
       pip.push_back(
           new OpInertiaForce("U", mat_acceleration, [](double, double, double) {
-            return rho / scale;
+            return rho * scale;
           }));
       if (alpha_damping > 0) {
         auto mat_velocity = boost::make_shared<MatrixDouble>();
@@ -461,7 +483,7 @@ MoFEMErrorCode Contact::OPs() {
             new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
         pip.push_back(
             new OpInertiaForce("U", mat_velocity, [](double, double, double) {
-              return alpha_damping / scale;
+              return alpha_damping * scale;
             }));
       }
     }
@@ -497,13 +519,21 @@ MoFEMErrorCode Contact::OPs() {
     CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
         pip, mField, "U", Sev::inform);
 
-    if (spring_stiffness > 0)
+    if (spring_stiffness > 0 || vis_spring_stiffness > 0) {
+
+      auto *pip_mng = mField.getInterface<PipelineManager>();
+      auto fe_boundary_lhs = pip_mng->getBoundaryLhsFE();
+
       pip.push_back(new OpSpringLhs(
           "U", "U",
 
-          [this](double, double, double) { return spring_stiffness; }
+          [this, fe_boundary_lhs](double, double, double) {
+            return spring_stiffness * scale +
+                   (vis_spring_stiffness * scale) * fe_boundary_lhs->ts_a;
+          }
 
           ));
+    }
 
     CHKERR ContactOps::opFactoryBoundaryLhs<SPACE_DIM, AT, GAUSS,
                                             BoundaryEleOp>(pip, "SIGMA", "U");
@@ -527,12 +557,19 @@ MoFEMErrorCode Contact::OPs() {
     CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
 
-    if (spring_stiffness > 0) {
+    if (spring_stiffness > 0 || vis_spring_stiffness > 0) {
       auto u_disp = boost::make_shared<MatrixDouble>();
+      auto dot_u_disp = boost::make_shared<MatrixDouble>();
       pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_disp));
       pip.push_back(
+          new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", dot_u_disp));
+      pip.push_back(
           new OpSpringRhs("U", u_disp, [this](double, double, double) {
-            return spring_stiffness;
+            return spring_stiffness * scale;
+          }));
+      pip.push_back(
+          new OpSpringRhs("U", dot_u_disp, [this](double, double, double) {
+            return vis_spring_stiffness * scale;
           }));
     }
 
@@ -677,7 +714,7 @@ MoFEMErrorCode Contact::tsSolve() {
   // boundary conditions
   CHKERR set_essential_bc();
 
-  if (is_quasi_static) {
+  if (is_quasi_static == PETSC_TRUE) {
     auto solver = pip_mng->createTSIM();
     CHKERR TSSetFromOptions(solver);
 

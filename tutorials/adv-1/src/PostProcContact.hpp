@@ -270,16 +270,6 @@ struct Monitor : public FEMethod {
             AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
         //! [Only used for dynamics]
 
-        // only in case of dynamics
-        if (!is_quasi_static) {
-          auto mat_acceleration = boost::make_shared<MatrixDouble>();
-          pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
-              "U", mat_acceleration));
-          pip.push_back(
-              new OpInertiaForce("U", mat_acceleration,
-                                 [](double, double, double) { return rho; }));
-        }
-
         CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, PETSC, IT, DomainEleOp>(
             *m_field_ptr, pip, "U", "MAT_ELASTIC", Sev::inform);
         CHKERR DMoFEMLoopFiniteElements(dM, "dFE", fe_rhs);
