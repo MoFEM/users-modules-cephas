@@ -704,74 +704,109 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto create_post_process_element = [&]() {
     auto pp_fe = boost::make_shared<PostProcEle>(mField);
-    auto &pip_mng = pp_fe->getOpPtrVector();
+    auto &pip = pp_fe->getOpPtrVector();
 
-    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+    PetscBool post_proc_skin = PETSC_FALSE;
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-post_proc_skin",
+                               &post_proc_skin, PETSC_NULL);
 
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip_mng, {H1},
-                                                          "GEOMETRY");
+    auto push_vol_ops = [this](auto &pip) {
+      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
+                                                            "GEOMETRY");
 
-    auto [common_plastic_ptr, common_henky_ptr] =
-        PlasticOps::createCommonPlasticOps<SPACE_DIM, IT, DomainEleOp>(
-            mField, "MAT_PLASTIC", pip_mng, "U", "EP", "TAU", 1., Sev::inform);
+      auto [common_plastic_ptr, common_henky_ptr] =
+          PlasticOps::createCommonPlasticOps<SPACE_DIM, IT, DomainEleOp>(
+              mField, "MAT_PLASTIC", pip, "U", "EP", "TAU", 1.,
+              Sev::inform);
 
-    auto x_ptr = boost::make_shared<MatrixDouble>();
-    pip_mng.push_back(
-        new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", x_ptr));
-    auto u_ptr = boost::make_shared<MatrixDouble>();
-    pip_mng.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+      if (common_henky_ptr) {
+        if (common_plastic_ptr->mGradPtr != common_henky_ptr->matGradPtr)
+          CHK_THROW_MESSAGE(MOFEM_DATA_INCONSISTENCY, "Wrong pointer for grad");
+      } 
 
-    if (common_henky_ptr) {
+      return std::make_pair(common_plastic_ptr, common_henky_ptr);
+    };
 
-      if (common_plastic_ptr->mGradPtr != common_henky_ptr->matGradPtr)
-        CHK_THROW_MESSAGE(MOFEM_DATA_INCONSISTENCY, "Wrong pointer for grad");
+    auto push_vol_post_proc_ops = [this](auto &pp_fe, auto &&p) {
+      MoFEMFunctionBegin;
 
-      pip_mng.push_back(
+      auto &pip = pp_fe->getOpPtrVector();
 
-          new OpPPMap(
+      auto [common_plastic_ptr, common_henky_ptr] = p;     
 
-              pp_fe->getPostProcMesh(), pp_fe->getMapGaussPts(),
+      using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-              {{"PLASTIC_SURFACE", common_plastic_ptr->getPlasticSurfacePtr()},
-               {"PLASTIC_MULTIPLIER", common_plastic_ptr->getPlasticTauPtr()}},
+      auto x_ptr = boost::make_shared<MatrixDouble>();
+      pip.push_back(
+          new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", x_ptr));
+      auto u_ptr = boost::make_shared<MatrixDouble>();
+      pip.push_back(
+          new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
-              {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
+      if(is_large_strains) {
 
-              {{"GRAD", common_plastic_ptr->mGradPtr},
-               {"FIRST_PIOLA", common_henky_ptr->getMatFirstPiolaStress()}},
+        pip.push_back(
 
-              {{"PLASTIC_STRAIN", common_plastic_ptr->getPlasticStrainPtr()},
-               {"PLASTIC_FLOW", common_plastic_ptr->getPlasticFlowPtr()}}
+            new OpPPMap(
 
-              )
+                pp_fe->getPostProcMesh(), pp_fe->getMapGaussPts(),
 
-      );
+                {{"PLASTIC_SURFACE",
+                  common_plastic_ptr->getPlasticSurfacePtr()},
+                 {"PLASTIC_MULTIPLIER",
+                  common_plastic_ptr->getPlasticTauPtr()}},
 
-    } else {
-      pip_mng.push_back(
+                {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
 
-          new OpPPMap(
+                {{"GRAD", common_plastic_ptr->mGradPtr},
+                 {"FIRST_PIOLA", common_henky_ptr->getMatFirstPiolaStress()}},
 
-              pp_fe->getPostProcMesh(), pp_fe->getMapGaussPts(),
+                {{"PLASTIC_STRAIN", common_plastic_ptr->getPlasticStrainPtr()},
+                 {"PLASTIC_FLOW", common_plastic_ptr->getPlasticFlowPtr()}}
 
-              {{"PLASTIC_SURFACE", common_plastic_ptr->getPlasticSurfacePtr()},
-               {"PLASTIC_MULTIPLIER", common_plastic_ptr->getPlasticTauPtr()}},
+                )
 
-              {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
+        );
 
-              {},
+      } else {
 
-              {{"STRAIN", common_plastic_ptr->mStrainPtr},
-               {"STRESS", common_plastic_ptr->mStressPtr},
-               {"PLASTIC_STRAIN", common_plastic_ptr->getPlasticStrainPtr()},
-               {"PLASTIC_FLOW", common_plastic_ptr->getPlasticFlowPtr()}}
+        pip.push_back(
 
-              )
+            new OpPPMap(
 
-      );
-    }
+                pp_fe->getPostProcMesh(), pp_fe->getMapGaussPts(),
 
-    return pp_fe;
+                {{"PLASTIC_SURFACE",
+                  common_plastic_ptr->getPlasticSurfacePtr()},
+                 {"PLASTIC_MULTIPLIER",
+                  common_plastic_ptr->getPlasticTauPtr()}},
+
+                {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
+
+                {},
+
+                {{"STRAIN", common_plastic_ptr->mStrainPtr},
+                 {"STRESS", common_plastic_ptr->mStressPtr},
+                 {"PLASTIC_STRAIN", common_plastic_ptr->getPlasticStrainPtr()},
+                 {"PLASTIC_FLOW", common_plastic_ptr->getPlasticFlowPtr()}}
+
+                )
+
+        );
+      }
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto vol_post_proc = [this, push_vol_post_proc_ops, push_vol_ops]() {
+      auto pp_fe = boost::make_shared<PostProcEle>(mField);
+      CHK_MOAB_THROW(
+          push_vol_post_proc_ops(pp_fe, push_vol_ops(pp_fe->getOpPtrVector())),
+          "push_vol_post_proc_ops");
+      return pp_fe;
+    };
+
+    return vol_post_proc();
   };
 
   auto scatter_create = [&](auto D, auto coeff) {
