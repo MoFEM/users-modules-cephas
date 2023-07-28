@@ -229,8 +229,8 @@ inline auto diff_plastic_flow_dstrain(
 
 inline double constrain_diff_sign(double x) {
   const auto y = x / zeta;
-  if (y > std::numeric_limits<double>::max_exponent10 ||
-      y < std::numeric_limits<double>::min_exponent10) {
+  if (y > std::numeric_limits<double>::max_exponent ||
+      y < std::numeric_limits<double>::min_exponent) {
     return 0;
   } else {
     const auto e = std::exp(y);
@@ -241,8 +241,8 @@ inline double constrain_diff_sign(double x) {
 
 inline double constrian_sign(double x) {
   const auto y = x / zeta;
-  if (y > std::numeric_limits<double>::max_exponent10 ||
-      y < std::numeric_limits<double>::min_exponent10) {
+  if (y > std::numeric_limits<double>::max_exponent ||
+      y < std::numeric_limits<double>::min_exponent) {
     if (x > 0)
       return 1.;
     else
@@ -255,8 +255,8 @@ inline double constrian_sign(double x) {
 
 inline double constrain_abs(double x) {
   const auto y = -x / zeta;
-  if (y > std::numeric_limits<double>::max_exponent10 ||
-      y < std::numeric_limits<double>::min_exponent10) {
+  if (y > std::numeric_limits<double>::max_exponent ||
+      y < std::numeric_limits<double>::min_exponent) {
     return std::abs(x);
   } else {
     const double e = std::exp(y);
