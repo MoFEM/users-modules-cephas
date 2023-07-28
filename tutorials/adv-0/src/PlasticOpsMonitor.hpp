@@ -8,13 +8,19 @@ namespace PlasticOps {
 
 struct Monitor : public FEMethod {
 
-  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc_fe,
+  Monitor(SmartPetscObj<DM> dm,
+          std::pair<boost::shared_ptr<PostProcEle>,
+                    boost::shared_ptr<SkinPostProcEle>>
+              pair_post_proc_fe,
           boost::shared_ptr<DomainEle> reaction_fe,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
-      : dM(dm), postProcFe(post_proc_fe), reactionFe(reaction_fe),
-        uXScatter(ux_scatter), uYScatter(uy_scatter), uZScatter(uz_scatter){};
+      : dM(dm), reactionFe(reaction_fe), uXScatter(ux_scatter),
+        uYScatter(uy_scatter), uZScatter(uz_scatter) {
+    postProcFe = pair_post_proc_fe.first;
+    skinPostProcFe = pair_post_proc_fe.second;
+  };
 
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
@@ -27,9 +33,20 @@ struct Monitor : public FEMethod {
 
     auto make_vtk = [&]() {
       MoFEMFunctionBegin;
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe, getCacheWeakPtr());
-      CHKERR postProcFe->writeFile(
-          "out_plastic_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      if (postProcFe) {
+        CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe,
+                                        getCacheWeakPtr());
+        CHKERR postProcFe->writeFile("out_plastic_" +
+                                     boost::lexical_cast<std::string>(ts_step) +
+                                     ".h5m");
+      }
+      if (skinPostProcFe) {
+        CHKERR DMoFEMLoopFiniteElements(dM, "bFE", skinPostProcFe,
+                                        getCacheWeakPtr());
+        CHKERR skinPostProcFe->writeFile(
+            "out_skin_plastic_" + boost::lexical_cast<std::string>(ts_step) +
+            ".h5m");
+      }
       MoFEMFunctionReturn(0);
     };
 
@@ -103,6 +120,7 @@ struct Monitor : public FEMethod {
 private:
   SmartPetscObj<DM> dM;
   boost::shared_ptr<PostProcEle> postProcFe;
+  boost::shared_ptr<SkinPostProcEle> skinPostProcFe;
   boost::shared_ptr<DomainEle> reactionFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;

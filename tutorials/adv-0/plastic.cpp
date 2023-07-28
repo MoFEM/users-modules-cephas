@@ -55,6 +55,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
+using SkinPostProcEle = PostProcBrokenMeshInMoab<BoundaryEle>;
 
 #ifdef ADD_CONTACT
 //! [Specialisation for assembly]
@@ -702,13 +703,9 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  auto create_post_process_element = [&]() {
+  auto create_post_process_elements = [&]() {
     auto pp_fe = boost::make_shared<PostProcEle>(mField);
     auto &pip = pp_fe->getOpPtrVector();
-
-    PetscBool post_proc_skin = PETSC_FALSE;
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-post_proc_skin",
-                               &post_proc_skin, PETSC_NULL);
 
     auto push_vol_ops = [this](auto &pip) {
       CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
@@ -799,6 +796,11 @@ MoFEMErrorCode Example::tsSolve() {
     };
 
     auto vol_post_proc = [this, push_vol_post_proc_ops, push_vol_ops]() {
+      PetscBool post_proc_vol = PETSC_FALSE;
+      CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-post_proc_vol",
+                                 &post_proc_vol, PETSC_NULL);
+      if(post_proc_vol == PETSC_FALSE)
+        return boost::shared_ptr<PostProcEle>();
       auto pp_fe = boost::make_shared<PostProcEle>(mField);
       CHK_MOAB_THROW(
           push_vol_post_proc_ops(pp_fe, push_vol_ops(pp_fe->getOpPtrVector())),
@@ -806,7 +808,25 @@ MoFEMErrorCode Example::tsSolve() {
       return pp_fe;
     };
 
-    return vol_post_proc();
+    auto skin_post_proc = [this, push_vol_post_proc_ops, push_vol_ops]() {
+      PetscBool post_proc_skin = PETSC_TRUE;
+      CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-post_proc_skin",
+                                 &post_proc_skin, PETSC_NULL);
+      if (post_proc_skin == PETSC_FALSE)
+        return boost::shared_ptr<SkinPostProcEle>();
+
+      auto simple = mField.getInterface<Simple>();
+      auto pp_fe = boost::make_shared<SkinPostProcEle>(mField);
+      auto op_side = new OpLoopSide<DomainEle>(
+          mField, simple->getDomainFEName(), SPACE_DIM, Sev::verbose);
+      pp_fe->getOpPtrVector().push_back(op_side);
+      CHK_MOAB_THROW(push_vol_post_proc_ops(
+                         pp_fe, push_vol_ops(op_side->getOpPtrVector())),
+                     "push_vol_post_proc_ops"); 
+      return pp_fe;
+    };
+
+    return std::make_pair(vol_post_proc(), skin_post_proc());
   };
 
   auto scatter_create = [&](auto D, auto coeff) {
@@ -826,7 +846,7 @@ MoFEMErrorCode Example::tsSolve() {
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
     boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, create_post_process_element(), reactionFe, uXScatter,
+        new Monitor(dm, create_post_process_elements(), reactionFe, uXScatter,
                     uYScatter, uZScatter));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
