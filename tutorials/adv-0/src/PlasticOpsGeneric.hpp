@@ -229,8 +229,8 @@ inline auto diff_plastic_flow_dstrain(
 
 inline double constrain_diff_sign(double x) {
   const auto y = x / zeta;
-  if (y > std::numeric_limits<float>::max_exponent10 ||
-      y < std::numeric_limits<float>::min_exponent10) {
+  if (y > std::numeric_limits<double>::max_exponent ||
+      y < std::numeric_limits<double>::min_exponent) {
     return 0;
   } else {
     const auto e = std::exp(y);
@@ -241,8 +241,8 @@ inline double constrain_diff_sign(double x) {
 
 inline double constrian_sign(double x) {
   const auto y = x / zeta;
-  if (y > std::numeric_limits<float>::max_exponent10 ||
-      y < std::numeric_limits<float>::min_exponent10) {
+  if (y > std::numeric_limits<double>::max_exponent ||
+      y < std::numeric_limits<double>::min_exponent) {
     if (x > 0)
       return 1.;
     else
@@ -255,8 +255,8 @@ inline double constrian_sign(double x) {
 
 inline double constrain_abs(double x) {
   const auto y = -x / zeta;
-  if (y > std::numeric_limits<float>::max_exponent10 ||
-      y < std::numeric_limits<float>::min_exponent10) {
+  if (y > std::numeric_limits<double>::max_exponent ||
+      y < std::numeric_limits<double>::min_exponent) {
     return std::abs(x);
   } else {
     const double e = std::exp(y);
@@ -266,7 +266,7 @@ inline double constrain_abs(double x) {
 
 inline double w(double eqiv, double dot_tau, double f, double sigma_y,
                 double sigma_Y) {
-  return (f - sigma_y) / sigma_Y + cn1 * (dot_tau * eqiv);
+  return (f - sigma_y) / sigma_Y + cn1 * (eqiv);
 };
 
 /**
@@ -283,19 +283,19 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 inline double constraint(double eqiv, double dot_tau, double f, double sigma_y,
                          double abs_w, double vis_H, double sigma_Y) {
   return vis_H * dot_tau +
-         (sigma_Y / 2) * ((cn0 * (dot_tau - eqiv) + cn1 * (dot_tau * eqiv) -
+         (sigma_Y / 2) * ((cn0 * (dot_tau - eqiv) + cn1 * (eqiv) -
                            (f - sigma_y) / sigma_Y) -
                           abs_w);
 };
 
 inline double diff_constrain_ddot_tau(double sign, double eqiv, double dot_tau,
                                       double vis_H, double sigma_Y) {
-  return vis_H + (sigma_Y / 2) * (cn0 + cn1 * eqiv * (1 - sign));
+  return vis_H + (sigma_Y / 2) * (cn0);
 };
 
 inline double diff_constrain_deqiv(double sign, double eqiv, double dot_tau,
                                    double sigma_Y) {
-  return (sigma_Y / 2) * (-cn0 + cn1 * dot_tau * (1 - sign));
+  return (sigma_Y / 2) * (-cn0 + cn1 * (1 - sign));
 };
 
 inline auto diff_constrain_df(double sign) { return (-1 - sign) / 2; };
