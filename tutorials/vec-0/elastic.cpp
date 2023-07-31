@@ -85,7 +85,6 @@ struct Example {
 private:
   MoFEM::Interface &mField;
 
-
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode boundaryCondition();
@@ -331,7 +330,6 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR pip->setDomainLhsIntegrationRule(integration_rule);
   CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule_bc);
   CHKERR pip->setBoundaryLhsIntegrationRule(integration_rule_bc);
-
 
   MoFEMFunctionReturn(0);
 }
@@ -674,7 +672,7 @@ MoFEMErrorCode Example::checkResults() {
 
   auto zero_residual_at_constrains = [&]() {
     MoFEMFunctionBegin;
-    auto  fe_post_proc_ptr = boost::make_shared<FEMethod>();
+    auto fe_post_proc_ptr = boost::make_shared<FEMethod>();
     auto get_post_proc_hook_rhs = [this, fe_post_proc_ptr, res]() {
       MoFEMFunctionBegin;
       CHKERR EssentialPreProcReaction<DisplacementCubitBcData>(
@@ -867,7 +865,7 @@ MoFEMErrorCode SetUpSchurImpl::setUpSubDM() {
 MoFEMErrorCode SetUpSchurImpl::setOperator() {
   MoFEMFunctionBegin;
   auto pip = mField.getInterface<PipelineManager>();
-  
+
   // Boundary
   auto dm_is = getDMSubData(subDM)->getSmartRowIs();
   auto ao_up = createAOMappingIS(dm_is, PETSC_NULL);
