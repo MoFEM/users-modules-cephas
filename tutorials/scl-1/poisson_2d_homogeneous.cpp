@@ -106,9 +106,8 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
   { // Push operators to the Pipeline that is responsible for calculating LHS
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {H1});
-     double Permittivity = 2.5;
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK(field_name, field_name, Permittivity));
+        new OpDomainLhsMatrixK(field_name, field_name));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS
@@ -202,7 +201,7 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 
   auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-    post_proc_fe->getOpPtrVector(), {H1});
+      post_proc_fe->getOpPtrVector(), {H1});
 
   auto u_ptr = boost::make_shared<VectorDouble>();
   auto grad_u_ptr = boost::make_shared<MatrixDouble>();
