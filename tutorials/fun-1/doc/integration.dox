@@ -466,10 +466,10 @@ Smart pointers, such as <a href="https://www.boost.org/doc/libs/1_72_0/libs/smar
     // other processors (e.g. 1, 2, 3, etc.)
     local_size = 0; // local size of vector is zero on other processors
 
-  commonDataPtr->petscVec = createSmartVectorMPI(mField.get_comm(), local_size,
+  commonDataPtr->petscVec = createVectorMPI(mField.get_comm(), local_size,
                                                  CommonData::LAST_ELEMENT);
 \endcode
-`commonDataPtr->petscVec` is a smart pointer to a PETSc MPI Vector, which supports access from multiple processes and is useful for parallel computing. Function MoFEM::createSmartVectorMPI needs to be provided with a communicator, e.g. `mField.get_comm()`, which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next, we determine the local size of the vector which will be used to store mass, three coefficients for the first moment and six coefficients for the second moment of inertia, i.e. 10 coefficients in total in the order defined in Example::CommonData::VecElements. Note that the local size of the vector is 10 on the processor 0, and zero on other processors. It means that all data will be accumulated on processor 0 as shown in \ref basic_l1_figure_7 "Figure 7". The global size of the vector is a sum of all local sizes, and thus is also 10.
+`commonDataPtr->petscVec` is a smart pointer to a PETSc MPI Vector, which supports access from multiple processes and is useful for parallel computing. Function MoFEM::createVectorMPI needs to be provided with a communicator, e.g. `mField.get_comm()`, which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next, we determine the local size of the vector which will be used to store mass, three coefficients for the first moment and six coefficients for the second moment of inertia, i.e. 10 coefficients in total in the order defined in Example::CommonData::VecElements. Note that the local size of the vector is 10 on the processor 0, and zero on other processors. It means that all data will be accumulated on processor 0 as shown in \ref basic_l1_figure_7 "Figure 7". The global size of the vector is a sum of all local sizes, and thus is also 10.
 
 Note that in all following lessons, including this one, we implemented code to make it
 work with distributed meshes. 

@@ -402,7 +402,7 @@ MoFEMErrorCode MinimalSurfaceEqn::solveSystem() {
   auto dm = simple->getDM();
   SmartPetscObj<Vec> global_rhs, global_solution;
   CHKERR DMCreateGlobalVector_MoFEM(dm, global_rhs);
-  global_solution = smartVectorDuplicate(global_rhs);
+  global_solution = vectorDuplicate(global_rhs);
 
   // Create nonlinear solver (SNES)
   auto pipeline_mng = mField.getInterface<PipelineManager>();

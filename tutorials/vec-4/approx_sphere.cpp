@@ -376,7 +376,7 @@ MoFEMErrorCode ApproxSphere::solveSystem() {
   CHKERR TSSetMaxSteps(ts, 1);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
-  auto T = smartCreateDMVector(simple->getDM());
+  auto T = createDMVector(simple->getDM());
   CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                  SCATTER_FORWARD);
   CHKERR TSSetSolution(ts, T);
@@ -439,7 +439,7 @@ MoFEMErrorCode ApproxSphere::outputResults() {
   error_fe->preProcessHook = [&]() {
     MoFEMFunctionBegin;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Create vec ";
-    OpError::errorVec = createSmartVectorMPI(
+    OpError::errorVec = createVectorMPI(
         mField.get_comm(), (!mField.get_comm_rank()) ? 1 : 0, 1);
     VecZeroEntries(OpError::errorVec);
     MoFEMFunctionReturn(0);

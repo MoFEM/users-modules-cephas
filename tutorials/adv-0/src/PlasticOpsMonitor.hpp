@@ -32,7 +32,7 @@ struct Monitor : public FEMethod {
 
     auto calculate_reaction = [&]() {
       MoFEMFunctionBegin;
-      auto r = smartCreateDMVector(dM);
+      auto r = createDMVector(dM);
       reactionFe->f = r;
       CHKERR VecZeroEntries(r);
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", reactionFe);

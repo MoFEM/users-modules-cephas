@@ -82,11 +82,11 @@ struct NavierStokesElement {
       else
         vec_size = 0;
 
-      pressureDragForceVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
-      shearDragForceVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
-      totalDragForceVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
+      pressureDragForceVec = createVectorMPI(m_field.get_comm(), vec_size, 3);
+      shearDragForceVec = createVectorMPI(m_field.get_comm(), vec_size, 3);
+      totalDragForceVec = createVectorMPI(m_field.get_comm(), vec_size, 3);
 
-      volumeFluxVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
+      volumeFluxVec = createVectorMPI(m_field.get_comm(), vec_size, 3);
     }
 
     MoFEMErrorCode getParameters() {

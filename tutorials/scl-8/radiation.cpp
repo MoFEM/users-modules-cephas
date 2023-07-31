@@ -238,7 +238,7 @@ MoFEMErrorCode Example::kspSolve() {
   CHKERR TSSetFromOptions(ts);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
-  auto T = smartCreateDMVector(simple->getDM());
+  auto T = createDMVector(simple->getDM());
   CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                  SCATTER_FORWARD);
 

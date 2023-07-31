@@ -31,12 +31,10 @@ tutorials_copy_and_install("meshes/*" "${permissions_execute}")
 
 tutorials_build_and_install(
   thermo_elastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/thermo_elastic.cpp)
-
 set_target_properties(
   thermo_elastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
-# tutorials_build_and_install(
-#   thermo_elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
-  
-# set_target_properties(
-#   thermo_elastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+tutorials_build_and_install(
+  thermo_elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/thermo_elastic.cpp)
+set_target_properties(
+  thermo_elastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")

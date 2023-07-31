@@ -1,0 +1,50 @@
+reset
+  
+
+create surface circle radius 0.00975 zplane 
+create surface circle radius 0.00875 zplane 
+
+subtract surface 2 from surface 1
+webcut body 1  with general plane x 
+
+move Surface 4  x -0.00925 include_merged 
+move Surface 5  x 0.00925 include_merged 
+
+create surface rectangle width 0.07 height 0.0175 zplane 
+move Surface 6  x 0.01 include_merged 
+create surface rectangle width 0.0175 height 0.06  zplane 
+
+unite surface 5 4
+unite surface 7 6 
+
+create surface rectangle width 0.06 height 0.01 zplane 
+subtract surface 10  from surface 8  
+
+subtract surface 11 12 13 14  from surface 9 
+
+create surface rectangle width 0.2 height 0.1  zplane 
+move Surface 16  y -0.05 include_merged 
+subtract surface 16  from surface 15 
+
+surface all size auto factor 1
+surface all scheme trimesh
+mesh surface all
+
+block 1 add curve 74
+block 1 name "SYM_Y"
+
+block 2 add curve 75
+block 2 name "ZERO_2"
+block 3 add curve 16
+block 3 name "INFLUX_Y"
+block 3 attribute count 1
+block 3 attribute index 1 100
+block 4 add curve 76
+block 4 name "INFLUX_X"
+block 4 attribute count 1
+block 4 attribute index 1 1
+
+block 5 add curve 60 61 59 52 53 54 
+block 5 name "WETTING_ANGLE"
+block 5 attribute count 1
+block 5 attribute index 1 25

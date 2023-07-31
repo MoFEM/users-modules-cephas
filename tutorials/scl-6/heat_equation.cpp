@@ -385,17 +385,17 @@ MoFEMErrorCode HeatEquation::solveSystem() {
       DM ts_dm;
       CHKERR TSGetDM(solver, &ts_dm);
       CHKERR DMTSSetIJacobian(
-        ts_dm, CalcJacobian::set, smartGetDMTsCtx(ts_dm).get());
+        ts_dm, CalcJacobian::set, getDMTsCtx(ts_dm).get());
       \endcode
   */
   auto set_user_ts_jacobian = [&](auto dm) {
     MoFEMFunctionBegin;
-    CHKERR DMTSSetIJacobian(dm, CalcJacobian::set, smartGetDMTsCtx(dm).get());
+    CHKERR DMTSSetIJacobian(dm, CalcJacobian::set, getDMTsCtx(dm).get());
     MoFEMFunctionReturn(0);
   };
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMVector(dm);
+  auto D = createDMVector(dm);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
 
   auto solver = pipeline_mng->createTSIM(

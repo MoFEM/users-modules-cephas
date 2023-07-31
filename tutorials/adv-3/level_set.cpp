@@ -38,15 +38,20 @@ constexpr FieldSpace potential_velocity_space = SPACE_DIM == 2 ? H1 : HCURL;
 constexpr size_t potential_velocity_field_dim = SPACE_DIM == 2 ? 1 : 3;
 
 constexpr bool debug = false;
-constexpr int nb_levels = 3;
+constexpr int nb_levels = 3; //< number of refinement levels
 
-constexpr int start_bit = nb_levels + 1;
+constexpr int start_bit =
+    nb_levels + 1; //< first refinement level for computational mesh
 
-constexpr int current_bit = 2 * start_bit + 1;
-constexpr int skeleton_bit = 2 * start_bit + 2;
-constexpr int aggregate_bit = 2 * start_bit + 3;
-constexpr int projection_bit = 2 * start_bit + 4;
-constexpr int aggregate_projection_bit = 2 * start_bit + 5;
+constexpr int current_bit =
+    2 * start_bit + 1; ///< dofs bit used to do calculations
+constexpr int skeleton_bit = 2 * start_bit + 2; ///< skeleton elemets bit
+constexpr int aggregate_bit =
+    2 * start_bit + 3; ///< all bits for advection problem
+constexpr int projection_bit =
+    2 * start_bit + 4; //< bit from which data are projected
+constexpr int aggregate_projection_bit =
+    2 * start_bit + 5; ///< all bits for projection problem
 
 struct LevelSet {
 
@@ -226,7 +231,7 @@ private:
   };
 
   /**
-   * @brief Used to execute inital mesh approximation while mesh refinment
+   * @brief Used to execute inital mesh approximation while mesh refinement
    * 
    */
   struct WrapperClassInitalSolution : public WrapperClass {
@@ -483,6 +488,7 @@ MoFEMErrorCode LevelSet::readMesh() {
   simple->getBitRefLevel() = BitRefLevel();
   CHKERR simple->loadFile();
 
+  // Initialise bit ref levels
   auto set_problem_bit = [&]() {
     MoFEMFunctionBegin;
     auto bit0 = BitRefLevel().set(start_bit);
@@ -500,6 +506,8 @@ MoFEMErrorCode LevelSet::readMesh() {
     CHKERR bit_mng->setNthBitRefLevel(level0, aggregate_bit, true);
     CHKERR bit_mng->setNthBitRefLevel(level0, skeleton_bit, true);
 
+    // Set bits to build adjacencies between parents and children. That is used
+    // by simple interface.
     simple->getBitAdjEnt() = BitRefLevel().set();
     simple->getBitAdjParent() = BitRefLevel().set();
     simple->getBitRefLevel() = BitRefLevel().set(current_bit);
@@ -1223,7 +1231,7 @@ std::tuple<double, Tag> LevelSet::evaluateError() {
 
   auto simple = mField.getInterface<Simple>();
 
-  auto error_sum_ptr = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
+  auto error_sum_ptr = createVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
   Tag th_error;
   double def_val = 0;
   CHKERR mField.get_moab().tag_get_handle("Error", 1, MB_TYPE_DOUBLE, th_error,
@@ -1476,8 +1484,8 @@ MoFEMErrorCode LevelSet::testSideFE() {
   vol_fe->getRuleHook = [](int, int, int o) { return 3 * o; };
   skel_fe->getRuleHook = [](int, int, int o) { return 3 * o; };
 
-  auto div_vol_vec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
-  auto div_skel_vec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
+  auto div_vol_vec = createVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
+  auto div_skel_vec = createVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
 
   auto l_ptr = boost::make_shared<VectorDouble>();
   auto vel_ptr = boost::make_shared<MatrixDouble>();
@@ -1657,7 +1665,7 @@ MoFEMErrorCode LevelSet::initialiseFieldLevelSet(
   pip->setDomainLhsIntegrationRule([](int, int, int o) { return 3 * o; });
   pip->setDomainRhsIntegrationRule([](int, int, int o) { return 3 * o; });
 
-  auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
+  auto sub_dm = createDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "LEVELSET_POJECTION");
   CHKERR DMMoFEMSetDestroyProblem(sub_dm, PETSC_TRUE);
   CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
@@ -1690,8 +1698,8 @@ MoFEMErrorCode LevelSet::initialiseFieldLevelSet(
   CHKERR KSPSetFromOptions(ksp);
   CHKERR KSPSetUp(ksp);
 
-  auto L = smartCreateDMVector(sub_dm);
-  auto F = smartVectorDuplicate(L);
+  auto L = createDMVector(sub_dm);
+  auto F = vectorDuplicate(L);
 
   CHKERR KSPSolve(ksp, F, L);
   CHKERR VecGhostUpdateBegin(L, INSERT_VALUES, SCATTER_FORWARD);
@@ -1776,7 +1784,7 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity(
   pip->setDomainLhsIntegrationRule([](int, int, int o) { return 3 * o; });
   pip->setDomainRhsIntegrationRule([](int, int, int o) { return 3 * o; });
 
-  auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
+  auto sub_dm = createDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "VELOCITY_PROJECTION");
   CHKERR DMMoFEMSetDestroyProblem(sub_dm, PETSC_TRUE);
   CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
@@ -1809,8 +1817,8 @@ MoFEMErrorCode LevelSet::initialiseFieldVelocity(
   CHKERR KSPSetFromOptions(ksp);
   CHKERR KSPSetUp(ksp);
 
-  auto L = smartCreateDMVector(sub_dm);
-  auto F = smartVectorDuplicate(L);
+  auto L = createDMVector(sub_dm);
+  auto F = vectorDuplicate(L);
 
   CHKERR KSPSolve(ksp, F, L);
   CHKERR VecGhostUpdateBegin(L, INSERT_VALUES, SCATTER_FORWARD);
@@ -1886,7 +1894,7 @@ MoFEMErrorCode LevelSet::solveAdvection() {
   CHKERR pushOpDomain();
   CHKERR pushOpSkeleton();
 
-  auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
+  auto sub_dm = createDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "ADVECTION");
   CHKERR DMMoFEMSetDestroyProblem(sub_dm, PETSC_TRUE);
   CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
@@ -1976,7 +1984,7 @@ MoFEMErrorCode LevelSet::solveAdvection() {
 
   auto set_solution = [&](auto ts) {
     MoFEMFunctionBegin;
-    auto D = smartCreateDMVector(sub_dm);
+    auto D = createDMVector(sub_dm);
     CHKERR DMoFEMMeshToLocalVector(sub_dm, D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR TSSetSolution(ts, D);
     MoFEMFunctionReturn(0);
@@ -1986,8 +1994,8 @@ MoFEMErrorCode LevelSet::solveAdvection() {
   auto monitor_pt = set_time_monitor(sub_dm, ts);
   CHKERR TSSetFromOptions(ts);
 
-  auto B = smartCreateDMMatrix(sub_dm);
-  CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, ts_ctx);
+  auto B = createDMMatrix(sub_dm);
+  CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, nullptr);
   level_set_raw_ptr = this;
 
   CHKERR TSSetUp(ts);
@@ -2013,7 +2021,7 @@ MoFEMErrorCode LevelSet::solveAdvection() {
       CHKERR TSGetDM(ts, &dm);
       auto prb_ptr = getProblemPtr(dm);
 
-      auto x = smartCreateDMVector(dm);
+      auto x = createDMVector(dm);
       CHKERR DMoFEMMeshToLocalVector(dm, x, INSERT_VALUES, SCATTER_FORWARD);
       CHKERR VecGhostUpdateBegin(x, INSERT_VALUES, SCATTER_FORWARD);
       CHKERR VecGhostUpdateEnd(x, INSERT_VALUES, SCATTER_FORWARD);
@@ -2055,14 +2063,16 @@ MoFEMErrorCode LevelSet::solveAdvection() {
       DM dm;
       CHKERR TSGetDM(ts, &dm);
 
+      // FIXME: Look into vec-5 how to transfer internal theta method variables
+
       CHKERR TSReset(ts);
       CHKERR TSSetUp(ts);
 
       CHKERR level_set_raw_ptr->dgProjection(projection_bit);
       CHKERR set_solution(ts);
 
-      auto B = smartCreateDMMatrix(dm);
-      CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, ts_ctx);
+      auto B = createDMMatrix(dm);
+      CHKERR TSSetIJacobian(ts, B, B, TsSetIJacobian, nullptr);
 
       MoFEMFunctionReturn(0);
     };
@@ -2136,8 +2146,8 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
 
     Range ents;
     ents.insert_list(fe_to_refine.begin(), fe_to_refine.end());
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(ents,
-                                                                     NOISY);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+        ents, nullptr, NOISY);
 
     auto get_neighbours_by_bridge_vertices = [&](auto &&ents) {
       Range verts;
@@ -2188,22 +2198,24 @@ MoFEMErrorCode LevelSet::refineMesh(WrapperClass &&wp) {
 
     auto fix_neighbour_level = [&](auto ll) {
       MoFEMFunctionBegin;
+      // filter entities on level ll
       auto level_ll = level_ents;
       CHKERR bit_mng->filterEntitiesByRefLevel(set_bit(ll), BitRefLevel().set(),
                                                level_ll);
+      // find skin of ll level
       Range skin_edges;
       CHKERR skin.find_skin(0, level_ll, false, skin_edges);
+      // get parents of skin of level ll
       Range skin_parents;
       for (auto lll = 0; lll <= ll; ++lll) {
         CHKERR bit_mng->updateRangeByParent(skin_edges, skin_parents);
-        skin_edges = skin_parents;
       }
+      // filter parents on level ll - 1
       BitRefLevel bad_bit;
       for (auto lll = 0; lll <= ll - 2; ++lll) {
         bad_bit[lll] = true;
       }
-      CHKERR bit_mng->filterEntitiesByRefLevel(bad_bit, BitRefLevel().set(),
-                                               skin_edges);
+      // get adjacents to parents
       Range skin_adj_ents;
       CHKERR mField.get_moab().get_adjacencies(skin_parents, SPACE_DIM, false,
                                                skin_adj_ents,
@@ -2356,7 +2368,7 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
   rhs_fe_prj->getRuleHook = [](int, int, int o) { return 3 * o; };
   rhs_fe_current->getRuleHook = [](int, int, int o) { return 3 * o; };
 
-  auto sub_dm = createSmartDM(mField.get_comm(), "DMMOFEM");
+  auto sub_dm = createDM(mField.get_comm(), "DMMOFEM");
   CHKERR DMMoFEMCreateSubDM(sub_dm, simple->getDM(), "DG_PROJECTION");
   CHKERR DMMoFEMSetDestroyProblem(sub_dm, PETSC_TRUE);
   CHKERR DMMoFEMSetSquareProblem(sub_dm, PETSC_TRUE);
@@ -2405,11 +2417,16 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
 
   auto l_vec = boost::make_shared<VectorDouble>();
 
+  // This assumes that projection mesh is refined, current mesh is coarsened.
   auto set_prj_from_child = [&](auto rhs_fe_prj) {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-        rhs_fe_prj->getOpPtrVector(), {potential_velocity_space, L2});
+        rhs_fe_prj->getOpPtrVector(), {potential_velocity_space, L2}); 
+
+    // Evaluate field value on projection mesh      
     rhs_fe_prj->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("L", l_vec));
+
+    // This element is used to assemble    
     auto get_parent_this = [&]() {
       auto fe_parent_this = boost::make_shared<DomianParentEle>(mField);
       fe_parent_this->getOpPtrVector().push_back(
@@ -2417,6 +2434,8 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
       return fe_parent_this;
     };
 
+    // Create levels of parent elements, until current element is reached, and
+    // then assemble.
     auto get_parents_fe_ptr = [&](auto this_fe_ptr) {
       std::vector<boost::shared_ptr<DomianParentEle>> parents_elems_ptr_vec;
       for (int l = 0; l <= nb_levels; ++l)
@@ -2440,7 +2459,10 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
                         BitRefLevel().set(current_bit), BitRefLevel().set()));
   };
 
+  // This assumed that current mesh is refined, and projection mesh is coarser
   auto set_prj_from_parent = [&](auto rhs_fe_current) {
+
+    // Evaluate field on coarser element
     auto get_parent_this = [&]() {
       auto fe_parent_this = boost::make_shared<DomianParentEle>(mField);
       fe_parent_this->getOpPtrVector().push_back(
@@ -2448,6 +2470,7 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
       return fe_parent_this;
     };
 
+    // Create stack of evaluation on parent elements
     auto get_parents_fe_ptr = [&](auto this_fe_ptr) {
       std::vector<boost::shared_ptr<DomianParentEle>> parents_elems_ptr_vec;
       for (int l = 0; l <= nb_levels; ++l)
@@ -2479,6 +2502,8 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
         new OpRunParent(parent_fe_ptr, BitRefLevel().set(),
                         BitRefLevel().set(projection_bit).flip(), this_fe_ptr,
                         BitRefLevel(), BitRefLevel()));
+
+    // At the end assemble of current finite element
     rhs_fe_current->getOpPtrVector().push_back(new OpScalarFieldL("L", l_vec));
   };
 
@@ -2486,7 +2511,7 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
   set_prj_from_parent(rhs_fe_current);
 
   boost::shared_ptr<FEMethod> null_fe;
-  smartGetDMKspCtx(sub_dm)->clearLoops();
+  getDMKspCtx(sub_dm)->clearLoops();
   CHKERR DMMoFEMKSPSetComputeOperators(sub_dm, simple->getDomainFEName(),
                                        lhs_fe, null_fe, null_fe);
   CHKERR DMMoFEMKSPSetComputeRHS(sub_dm, simple->getDomainFEName(), rhs_fe_prj,
@@ -2500,8 +2525,8 @@ MoFEMErrorCode LevelSet::dgProjection(const int projection_bit) {
   CHKERR KSPSetFromOptions(ksp);
   CHKERR KSPSetUp(ksp);
 
-  auto L = smartCreateDMVector(sub_dm);
-  auto F = smartVectorDuplicate(L);
+  auto L = createDMVector(sub_dm);
+  auto F = vectorDuplicate(L);
 
   CHKERR KSPSolve(ksp, F, L);
   CHKERR VecGhostUpdateBegin(L, INSERT_VALUES, SCATTER_FORWARD);

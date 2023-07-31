@@ -244,8 +244,8 @@ MoFEMErrorCode Poisson2DiscontGalerkin::solveSystem() {
 
   // Create RHS and solution vectors
   auto dm = simpleInterface->getDM();
-  auto F = smartCreateDMVector(dm);
-  auto D = smartVectorDuplicate(F);
+  auto F = createDMVector(dm);
+  auto D = vectorDuplicate(F);
 
   CHKERR KSPSolve(ksp_solver, F, D);
 
@@ -296,7 +296,7 @@ MoFEMErrorCode Poisson2DiscontGalerkin::checkResults() {
   std::array<int, LAST_NORM> error_indices;
   for (int i = 0; i != LAST_NORM; ++i)
     error_indices[i] = i;
-  auto l2_vec = createSmartVectorMPI(
+  auto l2_vec = createVectorMPI(
       mField.get_comm(), (!mField.get_comm_rank()) ? LAST_NORM : 0, LAST_NORM);
 
   auto error_op = new DomainEleOp(domainField, DomainEleOp::OPROW);

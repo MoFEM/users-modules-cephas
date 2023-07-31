@@ -483,8 +483,8 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR KSPSetFromOptions(solver);
   CHKERR KSPSetUp(solver);
 
-  auto iD = smartCreateDMVector(dm);
-  auto F = smartVectorDuplicate(iD);
+  auto iD = createDMVector(dm);
+  auto F = vectorDuplicate(iD);
   CHKERR KSPSolve(solver, F, iD);
   CHKERR VecGhostUpdateBegin(iD, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(iD, INSERT_VALUES, SCATTER_FORWARD);

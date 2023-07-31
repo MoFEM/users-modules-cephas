@@ -11,10 +11,11 @@
 #-snes_linesearch_max_it 3
 #-snes_linesearch_keeplambda
 #-snes_linesearch_minlambda 0.01
+-snes_lag_jacobian 1
 
 #-snes_linesearch_monitor 
 -snes_max_it 60
--ts_max_steps 100
+-ts_max_steps 4
 
 -ts_max_time 1
 -ts_exact_final_time matchstep
@@ -22,16 +23,10 @@
 -ts_max_snes_failures 0
 -ts_error_if_step_fails true
 -ts_adapt_type none
+-ts_type beuler
 
 -ts_monitor
 -ts_adapt_monitor
-
--quasi_static 1
--ts_type beuler
--ts_theta_initial_guess_extrapolate 1
--ts_theta_theta 1
-
--ts_max_snes_failures 20
 
 -ksp_rtol 1e-10
 -ksp_atol 1e-10
@@ -40,11 +35,15 @@
 -pc_fieldsplit_type multiplicative
 -fieldsplit_0_ksp_type preonly 
 -fieldsplit_0_pc_type lu 
--fieldsplit_0_pc_factor_mat_solver_type mumps
+-fieldsplit_0_pc_factor_mat_solver_type mumps 
 
 -fieldsplit_1_ksp_type preonly 
 -fieldsplit_1_pc_type lu 
 -fieldsplit_1_pc_factor_mat_solver_type mumps 
+
+-fieldsplit_2_ksp_type preonly 
+-fieldsplit_2_pc_type lu 
+-fieldsplit_2_pc_factor_mat_solver_type mumps 
 
 -mat_mumps_icntl_20 0
 -mat_mumps_icntl_14 800 
@@ -58,5 +57,10 @@
 -fieldsplit_1_mat_mumps_icntl_24 1 
 -fieldsplit_1_mat_mumps_icntl_13 1
 -fieldsplit_1_mat_mumps_icntl_20 0
+-fieldsplit_2_mat_mumps_icntl_14 800 
+-fieldsplit_2_mat_mumps_icntl_24 1 
+-fieldsplit_2_mat_mumps_icntl_13 1
+-fieldsplit_2_mat_mumps_icntl_20 0
+
 
 

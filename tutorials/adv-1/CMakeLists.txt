@@ -26,19 +26,6 @@ tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 tutorials_copy_and_install("*.py" "${permissions_execute}")
 
-# Find python
-find_package(Python COMPONENTS Interpreter Development)
-
-find_library(
-  BOOST_PYTHON_LIBRARAY
-  NAMES boost_python3
-  PATHS 
-  ${MoFEM_BOOST_DIR}/lib
-)
-
-message(STATUS "Boost_PYTHON_LIBRARY_RELEASE ${Boost_PYTHON_LIBRARY_RELEASE}")
-message(STATUS "Python_LIBRARY ${Python_LIBRARY}")
-
 if(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE) 
 
   include_directories(${_Python_INCLUDE_DIR})

@@ -426,7 +426,7 @@ MoFEMErrorCode Example::boundaryCondition() {
     PetscViewer viewer;
     PetscViewerBinaryOpen(PETSC_COMM_WORLD, "vector.dat", FILE_MODE_READ,
                           &viewer);
-    auto T = smartCreateDMVector(simple->getDM());
+    auto T = createDMVector(simple->getDM());
     VecLoad(T, viewer);
     CHKERR DMoFEMMeshToLocalVector(dm, T, INSERT_VALUES, SCATTER_REVERSE);
     MoFEMFunctionReturn(0);
@@ -595,8 +595,8 @@ MoFEMErrorCode Example::boundaryCondition() {
       CHKERR KSPSetUp(solver);
 
       auto dm = simple->getDM();
-      auto D = smartCreateDMVector(dm);
-      auto F = smartVectorDuplicate(D);
+      auto D = createDMVector(dm);
+      auto F = vectorDuplicate(D);
 
       CHKERR KSPSolve(solver, F, D);
       CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -868,7 +868,7 @@ MoFEMErrorCode Example::solveSystem() {
   // CHKERR TSSetMaxTime(ts, ftime);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
-  auto T = smartCreateDMVector(simple->getDM());
+  auto T = createDMVector(simple->getDM());
   CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                  SCATTER_FORWARD);
   CHKERR TSSetSolution(ts, T);

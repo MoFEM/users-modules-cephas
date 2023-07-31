@@ -234,8 +234,8 @@ MoFEMErrorCode Example::assembleSystem() {
     CHKERR KSPSetUp(solver);
 
     auto dm = simpleInterface->getDM();
-    auto D = smartCreateDMVector(dm);
-    auto F = smartVectorDuplicate(D);
+    auto D = createDMVector(dm);
+    auto F = vectorDuplicate(D);
 
     // Note add one at nodes which are pinch nodes
     CHKERR VecZeroEntries(F);
@@ -277,8 +277,8 @@ MoFEMErrorCode Example::assembleSystem() {
     CHKERR KSPSetUp(solver);
 
     auto dm = simpleInterface->getDM();
-    auto D = smartCreateDMVector(dm);
-    auto F = smartVectorDuplicate(D);
+    auto D = createDMVector(dm);
+    auto F = vectorDuplicate(D);
 
     CHKERR KSPSolve(solver, F, D);
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);

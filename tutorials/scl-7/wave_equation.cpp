@@ -345,13 +345,13 @@ MoFEMErrorCode WaveEquation::solveSystem() {
   };
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMVector(dm);
+  auto D = createDMVector(dm);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
 
   auto ts = pipeline_mng->createTSIM2();
 
   CHKERR TSSetSolution(ts, D);
-  auto DD = smartVectorDuplicate(D);
+  auto DD = vectorDuplicate(D);
   CHKERR TS2SetSolution(ts, D, DD);
   CHKERR set_time_monitor(dm, ts);
   CHKERR TSSetFromOptions(ts);

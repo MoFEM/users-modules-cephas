@@ -381,9 +381,9 @@ MoFEMErrorCode NavierStokesExample::setupDiscreteManager() {
 MoFEMErrorCode NavierStokesExample::setupAlgebraicStructures() {
   MoFEMFunctionBegin;
 
-  D = smartCreateDMVector(dM);
-  F = smartVectorDuplicate(D);
-  Aij = smartCreateDMMatrix(dM);
+  D = createDMVector(dM);
+  F = vectorDuplicate(D);
+  Aij = createDMMatrix(dM);
 
   CHKERR VecZeroEntries(F);
   CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);

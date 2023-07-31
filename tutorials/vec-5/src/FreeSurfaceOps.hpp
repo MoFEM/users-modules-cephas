@@ -29,7 +29,7 @@ struct OpCalculateLift : public BoundaryEleOp {
       for (int gg = 0; gg != nb_int_points; gg++) {
 
         const double r = t_coords(0);
-        const double alpha = cylindrical(r) * t_w / 2;
+        const double alpha = cylindrical(r) * t_w;
         t_lift(i) -= t_normal(i) * (t_p * alpha);
 
         ++t_w;
@@ -91,7 +91,7 @@ private:
 
 struct OpNormalForceRhs : public AssemblyBoundaryEleOp {
   OpNormalForceRhs(const std::string field_name,
-                    boost::shared_ptr<VectorDouble> lambda_ptr)
+                   boost::shared_ptr<VectorDouble> lambda_ptr)
       : AssemblyBoundaryEleOp(field_name, field_name,
                               AssemblyDomainEleOp::OPROW),
         lambdaPtr(lambda_ptr) {}
@@ -133,6 +133,63 @@ struct OpNormalForceRhs : public AssemblyBoundaryEleOp {
 
 private:
   boost::shared_ptr<VectorDouble> lambdaPtr;
+};
+
+struct OpWettingAngleRhs : public AssemblyBoundaryEleOp {
+  OpWettingAngleRhs(const std::string field_name,
+                    boost::shared_ptr<MatrixDouble> grad_h_ptr,
+                    boost::shared_ptr<Range> ents_ptr = nullptr,
+                    double wetting_angle = 0)
+      : AssemblyBoundaryEleOp(field_name, field_name,
+                              AssemblyBoundaryEleOp::OPROW),
+        gradHPtr(grad_h_ptr), entsPtr(ents_ptr), wettingAngle(wetting_angle) {}
+
+  MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data) {
+    MoFEMFunctionBegin;
+    if (entsPtr) {
+      if (entsPtr->find(AssemblyBoundaryEleOp::getFEEntityHandle()) ==
+          entsPtr->end())
+        MoFEMFunctionReturnHot(0);
+    }
+    const double area = getMeasure();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_row_base = row_data.getFTensor0N();
+    auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
+    auto t_coords = getFTensor1CoordsAtGaussPts();
+
+    auto s = wetting_angle_sub_stepping(getFEMethod()->ts_step);
+
+    for (int gg = 0; gg != nbIntegrationPts; gg++) {
+
+      const double r = t_coords(0);
+      const double alpha = t_w * cylindrical(r) * area;
+      const double h_grad_norm = sqrt(t_grad_h(i) * t_grad_h(i) + eps);
+      const double cos_angle = std::cos(M_PI * wettingAngle / 180);
+      const double rhs_wetting = s * eta2 * h_grad_norm * cos_angle;
+
+      // cerr << "pass "
+      //      << h_grad_norm <<"\n";
+      int bb = 0;
+      for (; bb != nbRows; ++bb) {
+        locF[bb] += alpha * t_row_base * rhs_wetting;
+        ++t_row_base;
+      }
+
+      for (; bb < nbRowBaseFunctions; ++bb)
+        ++t_row_base;
+
+      ++t_w;
+      ++t_grad_h;
+      ++t_coords;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<MatrixDouble> gradHPtr;
+  boost::shared_ptr<Range> entsPtr;
+  double wettingAngle;
 };
 
 struct OpNormalConstrainLhs : public AssemblyBoundaryEleOp {
@@ -186,6 +243,112 @@ struct OpNormalConstrainLhs : public AssemblyBoundaryEleOp {
   };
 };
 
+struct OpWettingAngleLhs : public BoundaryEleOp {
+
+  OpWettingAngleLhs(
+      const std::string row_field_name,
+      boost::shared_ptr<MatrixDouble> grad_h_ptr,
+      boost::shared_ptr<std::vector<VectorInt>> col_ind_ptr,
+      boost::shared_ptr<std::vector<MatrixDouble>> col_diff_base_ptr,
+      boost::shared_ptr<Range> ents_ptr = nullptr, double wetting_angle = 0)
+      : BoundaryEleOp(row_field_name, BoundaryEleOp::OPROW),
+        gradHPtr(grad_h_ptr), colIndicesPtr(col_ind_ptr),
+        colDiffBaseFunctionsPtr(col_diff_base_ptr), entsPtr(ents_ptr),
+        wettingAngle(wetting_angle) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+    if (entsPtr) {
+      if (entsPtr->find(BoundaryEleOp::getFEEntityHandle()) == entsPtr->end())
+        MoFEMFunctionReturnHot(0);
+    }
+    const double area = getMeasure();
+
+    const auto row_size = data.getIndices().size();
+    if (row_size == 0)
+      MoFEMFunctionReturnHot(0);
+
+    auto integrate = [&](auto col_indicies, auto &col_diff_base_functions) {
+      MoFEMFunctionBegin;
+
+      const auto col_size = col_indicies.size();
+
+      locMat.resize(row_size, col_size, false);
+      locMat.clear();
+      int nb_gp = getGaussPts().size2();
+      int nb_rows = data.getIndices().size();
+
+      auto t_w = getFTensor0IntegrationWeight();
+      auto t_coords = getFTensor1CoordsAtGaussPts();
+      auto t_grad_h = getFTensor1FromMat<SPACE_DIM>(*gradHPtr);
+      auto t_row_base = data.getFTensor0N();
+      int nb_row_base_functions = data.getN().size2();
+
+      auto s = wetting_angle_sub_stepping(getFEMethod()->ts_step);
+
+      for (int gg = 0; gg != nb_gp; ++gg) {
+
+        const double r = t_coords(0);
+        const double alpha = t_w * area * cylindrical(r);
+        const double h_grad_norm = sqrt(t_grad_h(i) * t_grad_h(i) + eps);
+        const double one_over_h_grad_norm = 1. / h_grad_norm;
+        const double beta = s * alpha * eta2 * one_over_h_grad_norm *
+                            std::cos(M_PI * wettingAngle / 180);
+
+        int rr = 0;
+        for (; rr != nb_rows; ++rr) {
+          const double delta = beta * t_row_base;
+
+          auto ptr = &col_diff_base_functions(gg, 0);
+          auto t_col_diff_base = getFTensor1FromPtr<SPACE_DIM>(ptr);
+
+          for (int cc = 0; cc != col_size; ++cc) {
+            locMat(rr, cc) += t_col_diff_base(i) * (delta * t_grad_h(i));
+            ++t_col_diff_base;
+          }
+          ++t_row_base;
+        }
+
+        for (; rr < nb_row_base_functions; ++rr) {
+          ++t_row_base;
+        }
+
+        ++t_grad_h;
+        ++t_w;
+        ++t_coords;
+      }
+
+      MoFEMFunctionReturn(0);
+    };
+
+    for (auto c = 0; c != colIndicesPtr->size(); ++c) {
+
+      auto &col_ind = (*colIndicesPtr)[c];
+      if (col_ind.size()) {
+        auto &diff_base = (*colDiffBaseFunctionsPtr)[c];
+
+        CHKERR integrate(col_ind, diff_base);
+
+        CHKERR MatSetValues(getKSPB(), data.getIndices().size(),
+                            &*data.getIndices().begin(), col_ind.size(),
+                            &*col_ind.begin(), &locMat(0, 0), ADD_VALUES);
+      }
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  MatrixDouble locMat;
+
+  boost::shared_ptr<MatrixDouble> gradHPtr;
+  boost::shared_ptr<Range> entsPtr;
+  double wettingAngle;
+  boost::shared_ptr<std::vector<VectorInt>> colIndicesPtr;
+  boost::shared_ptr<std::vector<MatrixDouble>> colDiffBaseFunctionsPtr;
+};
+
 /**
  * @brief Rhs for U
  *
@@ -228,9 +391,11 @@ struct OpRhsU : public AssemblyDomainEleOp {
     FTensor::Tensor1<double, U_FIELD_DIM> t_inertia_force;
     FTensor::Tensor1<double, U_FIELD_DIM> t_convection;
     FTensor::Tensor1<double, U_FIELD_DIM> t_buoyancy;
+    FTensor::Tensor1<double, U_FIELD_DIM> t_gravity;
     FTensor::Tensor1<double, U_FIELD_DIM> t_forces;
 
     t_buoyancy(i) = 0;
+    t_gravity(i) = 0;
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -243,7 +408,8 @@ struct OpRhsU : public AssemblyDomainEleOp {
       auto t_D = get_D(2 * mu);
 
       t_inertia_force(i) = (rho * alpha) * (t_dot_u(i));
-      t_buoyancy(SPACE_DIM - 1) = -(alpha * rho * a0) * t_h;
+      // t_buoyancy(SPACE_DIM - 1) = -(alpha * rho * a0) * t_h;
+      t_gravity(SPACE_DIM - 1) = (alpha * rho * a0);
       t_phase_force(i) = -alpha * kappa * t_g * t_grad_h(i);
       t_convection(i) = (rho * alpha) * (t_u(j) * t_grad_u(i, j));
 
@@ -252,8 +418,8 @@ struct OpRhsU : public AssemblyDomainEleOp {
 
       auto t_nf = getFTensor1FromArray<U_FIELD_DIM, U_FIELD_DIM>(locF);
 
-      t_forces(i) = t_inertia_force(i) + t_buoyancy(i) + t_convection(i) +
-                    t_phase_force(i);
+      t_forces(i) = t_inertia_force(i) + t_buoyancy(i) + t_gravity(i) +
+                    t_convection(i) + t_phase_force(i);
 
       int bb = 0;
       for (; bb != nbRows / U_FIELD_DIM; ++bb) {
@@ -261,8 +427,7 @@ struct OpRhsU : public AssemblyDomainEleOp {
         t_nf(i) += t_base * t_forces(i);
         t_nf(i) += t_diff_base(j) * t_stress(i, j);
 
-        // When we move to C++17 add if constexpr()
-        if constexpr (coord_type == CYLINDRICAL) {
+        if (coord_type == CYLINDRICAL) {
           t_nf(0) += (t_base * (alpha / t_coords(0))) * (2 * mu * t_u(0) + t_p);
         }
 
@@ -373,8 +538,7 @@ struct OpLhsU_dU : public AssemblyDomainEleOp {
               (beta0 * t_row_base) * t_kd(i, j) * (t_col_diff_base(k) * t_u(k));
           t_mat(i, j) += t_d_stress(i, j, k) * t_col_diff_base(k);
 
-          // When we move to C++17 add if constexpr()
-          if constexpr (coord_type == CYLINDRICAL) {
+          if (coord_type == CYLINDRICAL) {
             t_mat(0, 0) += (bb * (alpha / t_coords(0))) * (2 * mu);
           }
 
@@ -407,6 +571,37 @@ private:
   boost::shared_ptr<MatrixDouble> uPtr;
   boost::shared_ptr<MatrixDouble> gradUPtr;
   boost::shared_ptr<VectorDouble> hPtr;
+};
+
+struct OpLoopSideGetDataForSideEle : ForcesAndSourcesCore::UserDataOperator {
+
+  using UDO = ForcesAndSourcesCore::UserDataOperator;
+
+  OpLoopSideGetDataForSideEle(
+      const std::string field_name,
+      boost::shared_ptr<std::vector<VectorInt>> col_indices_ptr,
+      boost::shared_ptr<std::vector<MatrixDouble>> col_diff_basefunctions_ptr)
+      : UDO(field_name, UDO::OPCOL), colIndicesPtr(col_indices_ptr),
+        colDiffBaseFunctionsPtr(col_diff_basefunctions_ptr) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+
+    if (type == MBVERTEX) {
+      colIndicesPtr->clear();
+      colDiffBaseFunctionsPtr->clear();
+    }
+
+    colIndicesPtr->push_back(data.getIndices());
+    colDiffBaseFunctionsPtr->push_back(data.getDiffN());
+
+    MoFEMFunctionReturn(0);
+  }
+
+protected:
+  boost::shared_ptr<std::vector<VectorInt>> colIndicesPtr;
+  boost::shared_ptr<std::vector<MatrixDouble>> colDiffBaseFunctionsPtr;
 };
 
 /**
@@ -451,9 +646,11 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
     FTensor::Tensor1<double, U_FIELD_DIM> t_inertia_force_dh;
     FTensor::Tensor1<double, U_FIELD_DIM> t_convection_dh;
     FTensor::Tensor1<double, U_FIELD_DIM> t_buoyancy_dh;
+    FTensor::Tensor1<double, U_FIELD_DIM> t_gravity_dh;
     FTensor::Tensor1<double, U_FIELD_DIM> t_forces_dh;
 
     t_buoyancy_dh(i) = 0;
+    t_gravity_dh(i) = 0;
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -467,11 +664,12 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
       auto t_D_dh = get_D(2 * mu_dh);
 
       t_inertia_force_dh(i) = (alpha * rho_dh) * t_dot_u(i);
-      t_buoyancy_dh(SPACE_DIM - 1) = -(alpha * a0) * (rho + rho_dh * t_h);
+      // t_buoyancy_dh(SPACE_DIM - 1) = -(alpha * a0) * (rho + rho_dh * t_h);
+      t_gravity_dh(SPACE_DIM - 1) = (alpha * rho_dh * a0);
       t_convection_dh(i) = (rho_dh * alpha) * (t_u(j) * t_grad_u(i, j));
       const double t_phase_force_g_dh = -alpha * kappa * t_g;
-      t_forces_dh(i) =
-          t_inertia_force_dh(i) + t_buoyancy_dh(i) + t_convection_dh(i);
+      t_forces_dh(i) = t_inertia_force_dh(i) + t_buoyancy_dh(i) +
+                       t_gravity_dh(i) + t_convection_dh(i);
 
       t_stress_dh(i, j) = alpha * (t_D_dh(i, j, k, l) * t_grad_u(k, l));
 
@@ -490,8 +688,7 @@ struct OpLhsU_dH : public AssemblyDomainEleOp {
           t_mat(i) += (t_phase_force_g_dh * t_row_base) * t_col_diff_base(i);
           t_mat(i) += (t_row_diff_base(j) * t_col_base) * t_stress_dh(i, j);
 
-          // When we move to C++17 add if constexpr()
-          if constexpr (coord_type == CYLINDRICAL) {
+          if (coord_type == CYLINDRICAL) {
             t_mat(0) += (bb * (alpha / t_coords(0))) * (2 * mu_dh * t_u(0));
           }
 
@@ -617,7 +814,7 @@ template <bool I> struct OpRhsH : public AssemblyDomainEleOp {
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
 
 #ifndef NDEBUG
-    if(data.getDiffN().size1() != data.getN().size1())
+    if (data.getDiffN().size1() != data.getN().size1())
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "wrong size 1");
     if (data.getDiffN().size2() != data.getN().size2() * SPACE_DIM) {
       MOFEM_LOG("SELF", Sev::error)
@@ -738,14 +935,17 @@ struct OpLhsH_dU : public AssemblyDomainEleOp {
 
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
-      const double alpha = t_w * vol;
+      const auto r = t_coords(0);
+      const auto alpha = t_w * vol * cylindrical(r);
       auto t_mat = getFTensor1FromPtr<U_FIELD_DIM>(&locMat(0, 0));
+      FTensor::Tensor1<double, SPACE_DIM> t_row;
 
       int rr = 0;
       for (; rr != nbRows; ++rr) {
+        t_row(i) = (alpha * t_row_base) * t_grad_h(i);
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (int cc = 0; cc != nbCols / U_FIELD_DIM; ++cc) {
-          t_mat(i) += (t_row_base * t_col_base * alpha) * t_grad_h(i);
+          t_mat(i) += t_row(i) * t_col_base;
           ++t_mat;
           ++t_col_base;
         }
@@ -757,6 +957,7 @@ struct OpLhsH_dU : public AssemblyDomainEleOp {
 
       ++t_grad_h;
       ++t_w;
+      ++t_coords;
     }
 
     MoFEMFunctionReturn(0);
@@ -1166,7 +1367,5 @@ struct OpLhsG_dG : public AssemblyDomainEleOp {
 
 private:
 };
-
-
 
 } // namespace FreeSurfaceOps

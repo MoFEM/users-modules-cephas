@@ -3,14 +3,14 @@
 cmake_minimum_required (VERSION 3.1.3)
 
 project(MoFEM-UserModules 
-  VERSION 0.13.3
+  VERSION 0.14.0
   DESCRIPTION "Finite element framework" 
   LANGUAGES C CXX)
 
 # Set fallback version. Fallback version is version of users moudles which is used
 # as default version if version from the git tags can not be extracted. For example 
 # that is a case when someone install mofem from tarball.
-set(UM_FALLBACK_VERSION "0.13.3" CACHE STRING "Fallback version" FORCE)
+set(UM_FALLBACK_VERSION "0.14.0" CACHE STRING "Fallback version" FORCE)
 message(STATUS "Falback version v${UM_FALLBACK_VERSION}")
 
 #search include directories before system directories
@@ -115,6 +115,19 @@ if(MoFEM_CBLAS_INCLUDE_DIR)
   include_directories(${MoFEM_CBLAS_INCLUDE_DIR})
 endif(MoFEM_CBLAS_INCLUDE_DIR)
 add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
+
+# python
+find_package(Python COMPONENTS Interpreter Development)
+
+find_library(
+  BOOST_PYTHON_LIBRARAY
+  NAMES boost_python3
+  PATHS 
+  ${MoFEM_BOOST_DIR}/lib
+)
+
+message(STATUS "Boost_PYTHON_LIBRARY_RELEASE ${Boost_PYTHON_LIBRARY_RELEASE}")
+message(STATUS "Python_LIBRARY ${Python_LIBRARY}")
 
 link_directories(${MoFEM_INSTALL_DIR}/lib)
 
