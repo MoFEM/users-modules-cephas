@@ -23,16 +23,24 @@ constexpr IntegrationType I =
     IntegrationType::GAUSS; //< selected integration type
 
 using EntData = EntitiesFieldData::EntData;
-using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;// DomainEle alias for the specific instantiation of the ElementsAndOpsByDim
-using BoundaryEle =
-    PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;// BoundaryEle alias for the specific instantiation of the ElementsAndOpsByDim
+using DomainEle = PipelineManager::ElementsAndOpsByDim<
+    SPACE_DIM>::DomainEle; // DomainEle alias for the specific instantiation of
+                           // the ElementsAndOpsByDim
+using BoundaryEle = PipelineManager::ElementsAndOpsByDim<
+    SPACE_DIM>::BoundaryEle; // BoundaryEle alias for the specific instantiation
+                             // of the ElementsAndOpsByDim
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-using OpK = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<// choosing the linear or Bilear form for assembly
-    I>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;// declaring BASE_DIM=1, FIELD_DIM=SPACE_DIM, SPACE_DIM, S=0 and I is a tensor
+using OpK = FormsIntegrators<DomainEleOp>::Assembly<
+    A>::BiLinearForm< // choosing the linear or Bilear form for assembly
+    I>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM,
+                            0>; // declaring BASE_DIM=1, FIELD_DIM=SPACE_DIM,
+                                // SPACE_DIM, S=0 and I is a tensor
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
-    I>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>; // declaring BASE_DIM, FIELD_DIM, SPACE_DIM, S, I; I is a tensor
+    I>::OpGradTimesSymTensor<1, SPACE_DIM,
+                             SPACE_DIM>; // declaring BASE_DIM, FIELD_DIM,
+                                         // SPACE_DIM, S, I; I is a tensor
 
 struct DomainBCs {};
 struct BoundaryBCs {};
@@ -67,7 +75,6 @@ using PostProcEleDomain = PostProcEleByDim<SPACE_DIM>::PostProcEleDomain;
 using SideEle = PostProcEleByDim<SPACE_DIM>::SideEle;
 using PostProcEleBdy = PostProcEleByDim<SPACE_DIM>::PostProcEleBdy;
 
-
 #include <ElasticSpring.hpp>
 #include <CalculateTraction.hpp>
 #include <NaturalDomainBC.hpp>
@@ -99,7 +106,6 @@ private:
       boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
       std::string field_name, std::string block_name,
       boost::shared_ptr<MatrixDouble> mat_D_Ptr, Sev sev);
-
 };
 
 MoFEMErrorCode Example::addMatBlockOps(
@@ -318,7 +324,7 @@ MoFEMErrorCode Example::boundaryCondition() {
   };
   pip->getDomainRhsFE()->preProcessHook = get_pre_proc_hook();
 
-    MoFEMFunctionReturn(0);
+  MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
 
@@ -371,7 +377,7 @@ MoFEMErrorCode Example::assembleSystem() {
   // Add force boundary condition
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
       pip->getOpBoundaryRhsPipeline(), mField, "U", -1, Sev::inform);
-  // Add case for mix type of BCs 
+  // Add case for mix type of BCs
   CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
       pip->getOpBoundaryLhsPipeline(), mField, "U", Sev::verbose);
 
@@ -758,7 +764,6 @@ private:
   Range volEnts;
   Range subEnts;
 };
-
 
 MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<KSP> solver) {
   MoFEMFunctionBegin;

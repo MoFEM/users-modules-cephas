@@ -38,9 +38,12 @@ tutorials_build_and_install(
 #   electrostatichomogeneous_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
   tutorials_build_and_install(
-  electrostatichomogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatichomogeneous.cpp) 
+     electrostatichomogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatichomogeneous.cpp) 
   tutorials_build_and_install(
-    elec_constbc ${CMAKE_CURRENT_SOURCE_DIR}/elec_constbc.cpp) 
+    elec_constbc ${CMAKE_CURRENT_SOURCE_DIR}/elec_constbc.cpp)
+
+  tutorials_build_and_install(
+    elect_constBCwithoutCharge ${CMAKE_CURRENT_SOURCE_DIR}/elect_constBCwithoutCharge.cpp) 
 
 
   

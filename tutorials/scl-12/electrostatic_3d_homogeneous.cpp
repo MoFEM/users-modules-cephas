@@ -78,22 +78,7 @@ MoFEMErrorCode Electrostatic3DHomogeneous::setupProblem() {
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
 
   CHKERR simpleInterface->setUp();
-  // Range interface_ents;
 
-  // for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-
-  //   if (bit->getName().compare(0, 9, "INTERFACE") == 0) {
-  //     const int id = bit->getMeshsetId();
-  //     cout << bit->getMeshsetId() << endl;
-  //     Range ents;
-  //     CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(), 2,
-  //                                                        ents, true);
-  //     interface_ents.merge(ents);
-  //   }
-  // }
-
-
-  /////
   vol_block_sets_ptr = boost::make_shared<std::map<int, VolBlockData<SPACE_DIM>>>();
   Range electric_tets;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
