@@ -130,8 +130,9 @@ public:
 
     MoFEMFunctionReturn(0);
   }
+
 };
 
-};     // namespace Poisson2DHomogeneousOperators
+}; // namespace Poisson2DHomogeneousOperators
 
 #endif //__POISSON_2D_HOMOGENEOUS_HPP__

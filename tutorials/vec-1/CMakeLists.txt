@@ -36,8 +36,6 @@ if(SLEPC_FOUND)
     eigen_elastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/eigen_elastic.cpp) 
   set_target_properties(
     eigen_elastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
-    
-    
 
   add_test(
     eigen_elastic_3d
