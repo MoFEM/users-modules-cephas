@@ -430,16 +430,14 @@ MoFEMErrorCode Contact::OPs() {
   auto add_domain_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
 
-
+    //! [Only used for dynamics]
+    using OpMass = FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
+        GAUSS>::OpMass<1, SPACE_DIM>;
+    //! [Only used for dynamics]
     if (is_quasi_static == PETSC_FALSE) {
 
       auto *pip_mng = mField.getInterface<PipelineManager>();
       auto fe_domain_lhs = pip_mng->getDomainLhsFE();
-
-      //! [Only used for dynamics]
-      using OpMass = FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
-          GAUSS>::OpMass<1, SPACE_DIM>;
-      //! [Only used for dynamics]
 
       auto get_inertia_and_mass_damping =
           [this, fe_domain_lhs](const double, const double, const double) {
@@ -447,6 +445,17 @@ MoFEMErrorCode Contact::OPs() {
                    (alpha_damping * scale) * fe_domain_lhs->ts_a;
           };
       pip.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
+    } else {
+
+      auto *pip_mng = mField.getInterface<PipelineManager>();
+      auto fe_domain_lhs = pip_mng->getDomainLhsFE();
+
+      auto get_inertia_and_mass_damping =
+          [this, fe_domain_lhs](const double, const double, const double) {
+            return (alpha_damping * scale) * fe_domain_lhs->ts_a;
+          };
+      pip.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
+
     }
 
     CHKERR HenckyOps::opFactoryDomainLhs<SPACE_DIM, AT, IT, DomainEleOp>(
@@ -461,14 +470,13 @@ MoFEMErrorCode Contact::OPs() {
     CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
         pip, mField, "U", {body_force_time_scale}, Sev::inform);
 
+    //! [Only used for dynamics]
+    using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
+        AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+    //! [Only used for dynamics]
+
     // only in case of dynamics
     if (is_quasi_static == PETSC_FALSE) {
-
-      //! [Only used for dynamics]
-      using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
-          AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
-      //! [Only used for dynamics]
-
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
       pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
           "U", mat_acceleration));
@@ -476,15 +484,18 @@ MoFEMErrorCode Contact::OPs() {
           new OpInertiaForce("U", mat_acceleration, [](double, double, double) {
             return rho * scale;
           }));
-      if (alpha_damping > 0) {
-        auto mat_velocity = boost::make_shared<MatrixDouble>();
-        pip.push_back(
-            new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
-        pip.push_back(
-            new OpInertiaForce("U", mat_velocity, [](double, double, double) {
-              return alpha_damping * scale;
-            }));
-      }
+
+    }
+
+    // only in case of viscosity
+    if (alpha_damping > 0) {
+      auto mat_velocity = boost::make_shared<MatrixDouble>();
+      pip.push_back(
+          new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
+      pip.push_back(
+          new OpInertiaForce("U", mat_velocity, [](double, double, double) {
+            return alpha_damping * scale;
+          }));
     }
 
     CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, AT, IT, DomainEleOp>(
