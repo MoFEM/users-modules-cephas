@@ -227,17 +227,17 @@ inline auto diff_plastic_flow_dstrain(
   return t_diff_flow;
 };
 
-inline double constrain_diff_sign(double x) {
-  const auto y = x / zeta;
-  if (y > std::numeric_limits<float>::max_exponent10 ||
-      y < std::numeric_limits<float>::min_exponent10) {
-    return 0;
-  } else {
-    const auto e = std::exp(y);
-    const auto ep1 = e + 1;
-    return (2 / zeta) * (e / (ep1 * ep1));
-  }
-};
+// inline double constrain_diff_sign(double x) {
+//   const auto y = x / zeta;
+//   if (y > std::numeric_limits<float>::max_exponent10 ||
+//       y < std::numeric_limits<float>::min_exponent10) {
+//     return 0;
+//   } else {
+//     const auto e = std::exp(y);
+//     const auto ep1 = e + 1;
+//     return (2 / zeta) * (e / (ep1 * ep1));
+//   }
+// };
 
 inline double constrian_sign(double x) {
   const auto y = x / zeta;
