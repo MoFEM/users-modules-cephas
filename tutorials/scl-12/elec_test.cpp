@@ -38,15 +38,10 @@ using intPostProcElementForcesAndSourcesCore = intPostproc<SPACE_DIM>::intEle;
 
 using OpDomainLhsMatrixK = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpGradGrad<BASE_DIM, FIELD_DIM, SPACE_DIM>;
+
 using OpInterfaceRhsVectorF = FormsIntegrators<IntEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, FIELD_DIM>;
 
-// on the dich boundary
-using OpDirchBoundaryMassL = FormsIntegrators<IntEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpMass<BASE_DIM, FIELD_DIM>; /// opMass
-
-using OpDirchBoundarySourceR = FormsIntegrators<IntEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, FIELD_DIM>; /// OpSourceL
 static char help[] = "...\n\n";
 
 template <int SPACE_DIM> struct BlockData {
@@ -55,65 +50,24 @@ template <int SPACE_DIM> struct BlockData {
   double epsPermit;
   Range blockInterfaces;
   Range blockDomains;
-  MatrixDouble gradU; ////p
 };
-
 template <int SPACE_DIM> struct DataAtIntegrationPts {
 
   SmartPetscObj<Vec> petscVec;
   double blockPermittivity;
   double chrgDens;
-  VectorDouble fieldValue;
-  MatrixDouble fieldGrad;
-
   DataAtIntegrationPts(MoFEM::Interface &m_field) {
     blockPermittivity = 0;
     chrgDens = 0;
   }
-  double alphaPart = 0.;
 };
 
-template <int SPACE_DIM>
-struct OpNegativeGradient : public ForcesAndSourcesCore::UserDataOperator {
-  OpNegativeGradient(boost::shared_ptr<MatrixDouble> grad_u_negative,
-                     boost::shared_ptr<MatrixDouble> grad_u)
-      : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPLAST),
-        gradUNegative(grad_u_negative), gradU(grad_u) {}
-
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
-    MoFEMFunctionBegin;
-
-    const size_t nb_gauss_pts = getGaussPts().size2();
-    gradUNegative->resize(SPACE_DIM, nb_gauss_pts, false);
-    gradUNegative->clear();
-
-    auto t_grad_u = getFTensor1FromMat<SPACE_DIM>(*gradU);
-
-    auto t_negative_grad_u = getFTensor1FromMat<SPACE_DIM>(*gradUNegative);
-
-    FTensor::Index<'I', SPACE_DIM> I;
-
-    for (int gg = 0; gg != nb_gauss_pts; gg++) {
-      t_negative_grad_u(I) = -t_grad_u(I);
-
-      ++t_grad_u;
-      ++t_negative_grad_u;
-    }
-
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  boost::shared_ptr<MatrixDouble> gradUNegative;
-  boost::shared_ptr<MatrixDouble> gradU;
-};
 template <int SPACE_DIM> struct OpAlpha : public IntEleOp {
 public:
   OpAlpha(std::string field_name, boost::shared_ptr<MatrixDouble> grad_ptr,
           boost::shared_ptr<VectorDouble> Aplha_ptr,
           boost::shared_ptr<Range> ents_ptr, double *alpha_part)
-      : IntEleOp(field_name, SideEleOp::OPROW), gradPtr(grad_ptr),
+      : IntEleOp(field_name, IntEleOp::OPROW), gradPtr(grad_ptr),
         alphaPtr(Aplha_ptr), entsPtr(ents_ptr), alphaPart(alpha_part) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
@@ -170,56 +124,41 @@ private:
   boost::shared_ptr<Range> entsPtr;
 };
 
-template <int SPACE_DIM> struct OpNormaltoScalarFieldGrad : public SideEleOp {
-public:
-  OpNormaltoScalarFieldGrad(std::string field_name,
-                            boost::shared_ptr<MatrixDouble> grad_ptr,
-                            boost::shared_ptr<VectorDouble> normal_proj_ptr,
-                            boost::shared_ptr<Range> ents_ptr)
-      : SideEleOp(field_name, SideEleOp::OPROW), gradPtr(grad_ptr),
-        gradProjPtr(normal_proj_ptr), entsPtr(ents_ptr) {}
+template <int SPACE_DIM>
+struct OpNegativeGradient : public ForcesAndSourcesCore::UserDataOperator {
+  OpNegativeGradient(boost::shared_ptr<MatrixDouble> grad_u_negative,
+                     boost::shared_ptr<MatrixDouble> grad_u)
+      : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPLAST),
+        gradUNegative(grad_u_negative), gradU(grad_u) {}
 
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 
-    FTensor::Index<'i', SPACE_DIM> i;
-    const auto fe_ent = getFEEntityHandle();
-    const auto nb_gauss_pts = getGaussPts().size2();
-    gradProjPtr->resize(nb_gauss_pts, false);
-    gradProjPtr->clear();
-    auto t_field_grad = getFTensor1FromMat<SPACE_DIM>(*(gradPtr));
-    auto t_normal_proj = getFTensor0FromVec(*gradProjPtr);
-    auto t_normal = getFTensor1NormalsAtGaussPts();
+    const size_t nb_gauss_pts = getGaussPts().size2();
+    gradUNegative->resize(SPACE_DIM, nb_gauss_pts, false);
+    gradUNegative->clear();
 
-    // get coordinates of the integration point
-    auto t_coords = getFTensor1CoordsAtGaussPts();
-    // FTensor::Index<'I', SPACE_DIM> i;
-    for (const auto &entity : *entsPtr) {
-      if (entity == fe_ent) {
-        // get coordinates of the integration point
-        for (int gg = 0; gg != nb_gauss_pts; gg++) {
-          FTensor::Tensor1<double, SPACE_DIM> t_r;
-          t_r(i) = t_normal(i);
-          t_r.normalize();
-          t_normal_proj += (t_field_grad(i) * t_r(i));
-          ++t_field_grad;
-          // ++t_normal;
-          ++t_normal_proj;
-          ++t_coords;
-        }
-      }
+    auto t_grad_u = getFTensor1FromMat<SPACE_DIM>(*gradU);
+
+    auto t_negative_grad_u = getFTensor1FromMat<SPACE_DIM>(*gradUNegative);
+
+    FTensor::Index<'I', SPACE_DIM> I;
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      t_negative_grad_u(I) = -t_grad_u(I);
+
+      ++t_grad_u;
+      ++t_negative_grad_u;
     }
-    // }
 
     MoFEMFunctionReturn(0);
   }
 
 private:
-  boost::shared_ptr<MatrixDouble> gradPtr;
-  boost::shared_ptr<VectorDouble> gradProjPtr;
-  boost::shared_ptr<Range> entsPtr;
+  boost::shared_ptr<MatrixDouble> gradUNegative;
+  boost::shared_ptr<MatrixDouble> gradU;
 };
-
 template <int SPACE_DIM> struct OpBlockChargeDensity : public IntEleOp {
   OpBlockChargeDensity(
       boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
@@ -295,7 +234,6 @@ private:
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode solveSystem();
-  MoFEMErrorCode getAlphaPart();
   MoFEMErrorCode outputResults();
 
   // MoFEM interfaces
@@ -306,25 +244,15 @@ private:
       int_block_sets_ptr; ///////
   Simple *simpleInterface;
   boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe;
-  // boost::shared_ptr<ForcesAndSourcesCore> dirichilet_rhs_fe;
   boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr;
-  // boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> previousUpdate;
-  // boost::shared_ptr<MatrixDouble> fieldGradPtr;
-
-  double alphaPart = 0.;
-  double alphaA = 0.;
-  double alphaB = 0.;
-
-  int solve_counter = 0;
 
   std::string domainField;
   int oRder;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
-  boost::shared_ptr<std::vector<unsigned char>> flatingBoundaryMarker;
   Range blockconstBC;
-  Range FloatingblockconstBC;
-
-  double phi_Dirch[3] = {0., 1., 0.};
+  double alphaPart = 0.;
+  double alphaA = 0.;
+  Range FloatingElectrodes;
 };
 
 ElectrostaticHomogeneous::ElectrostaticHomogeneous(MoFEM::Interface &m_field)
@@ -338,7 +266,6 @@ MoFEMErrorCode ElectrostaticHomogeneous::readMesh() {
   CHKERR simpleInterface->loadFile();
   MoFEMFunctionReturn(0);
 }
-
 //! [Read mesh]
 
 //! [Setup problem]
@@ -347,16 +274,12 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
 
   CHKERR simpleInterface->addDomainField(domainField, H1,
                                          AINSWORTH_LEGENDRE_BASE, 1);
-  CHKERR simpleInterface->addBoundaryField(domainField, H1,
-                                           AINSWORTH_LEGENDRE_BASE, 1);
 
   int oRder = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
 
-  // initialise shared pointer in common data
   common_data_ptr = boost::make_shared<DataAtIntegrationPts<SPACE_DIM>>(mField);
-
   perm_block_sets_ptr =
       boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
   Range electrIcs;
@@ -436,27 +359,27 @@ MoFEMErrorCode ElectrostaticHomogeneous::boundaryCondition() {
 
   // Remove BCs from blockset name "BOUNDARY_CONDITION";
   CHKERR bc_mng->removeBlockDOFsOnEntities<BcScalarMeshsetType<BLOCKSET>>(
-      simpleInterface->getProblemName(), "POTENTIAL_BC",
+      simpleInterface->getProblemName(), "BOUNDARY_CONDITION",
       std::string(domainField), true);
 
   auto get_entities_on_mesh = [&]() {
-    Range boundary_entities;
+    Range floating_boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
-      if (entity_name.compare(0, 11, "CONSTANT_BC") == 0) {
+      if (entity_name.compare(0, 19, "FLOATING_ElECTRODE") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(
-            mField.get_moab(), SPACE_DIM - 1, boundary_entities, true);
+            mField.get_moab(), SPACE_DIM - 1, floating_boundary_entities, true);
       }
     }
     // Add vertices to boundary entities
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
+    Range floating_boundary_vertices;
+    CHKERR mField.get_moab().get_connectivity(floating_boundary_entities,
+                                              floating_boundary_vertices, true);
+    floating_boundary_entities.merge(floating_boundary_vertices);
 
     // Store entities for fieldsplit (block) solver
 
-    return boundary_entities;
+    return floating_boundary_entities;
   };
   auto mark_boundary_dofs = [&](Range &&skin_edges) {
     auto problem_manager = mField.getInterface<ProblemsManager>();
@@ -468,6 +391,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::boundaryCondition() {
 
   boundaryMarker = mark_boundary_dofs(get_entities_on_mesh());
   blockconstBC = get_entities_on_mesh();
+  cout << "blockconstBC.size() = " << blockconstBC.size() << endl;
+  cout << "blockconstBC = " << blockconstBC << endl;
 
   MoFEMFunctionReturn(0);
 }
@@ -476,29 +401,21 @@ MoFEMErrorCode ElectrostaticHomogeneous::boundaryCondition() {
 //! [Assemble system]
 MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
   MoFEMFunctionBegin;
-
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getDomainLhsFE().reset();
   pipeline_mng->getBoundaryLhsFE().reset();
   pipeline_mng->getBoundaryRhsFE().reset();
-  // auto side_proc_fe = boost::make_shared<SideEle>(mField);
 
-  auto set_values_to_bc_dofs = [&](auto &fe) {
-    auto get_bc_hook = [&]() {
-      EssentialPreProc<TemperatureCubitBcData> hook(mField, fe, {});
-      return hook;
-    };
-    fe->preProcessHook = get_bc_hook();
-  };
   common_data_ptr = boost::make_shared<DataAtIntegrationPts<SPACE_DIM>>(mField);
-  // auto pipeline_mng = mField.getInterface<PipelineManager>();
-  auto add_domain_lhs_ops = [&](auto &pipeline) {
+
+  auto add_domain_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpBlockPermittivity<SPACE_DIM>(
         common_data_ptr, perm_block_sets_ptr, domainField));
   };
 
-  add_domain_lhs_ops(pipeline_mng->getOpDomainLhsPipeline());
+  add_domain_ops(pipeline_mng->getOpDomainLhsPipeline());
+
   auto epsilon = [&](const double, const double, const double) {
     return common_data_ptr->blockPermittivity;
   };
@@ -507,79 +424,69 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetBc(domainField, true, boundaryMarker));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField, epsilon));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpUnSetBc(domainField));
   }
+  { // Push operators to the Pipeline that is responsible for calculating LHS
 
-  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      new OpSetBc(domainField, false, boundaryMarker));
-  pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpDirchBoundaryMassL(
-      domainField, domainField,
-      [](const double, const double, const double) { return 1.; },
-      boost::make_shared<Range>(blockconstBC)));
-  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      new OpUnSetBc(domainField));
+    auto set_values_to_bc_dofs = [&](auto &fe) {
+      auto get_bc_hook = [&]() {
+        EssentialPreProc<TemperatureCubitBcData> hook(mField, fe, {});
+        return hook;
+      };
+      fe->preProcessHook = get_bc_hook();
+    };
 
-  // int phi_Dirch[] = {0, 1};
-  auto boundary_val_function = [&](const double, const double, const double) {
-    return phi_Dirch[solve_counter];
-  };
-  auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpSetBc(domainField, false, boundaryMarker));
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpDirchBoundarySourceR(domainField, boundary_val_function,
-                                 boost::make_shared<Range>(blockconstBC)));
+    auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
+      using OpInternal =
+          FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+              GAUSS>::OpGradTimesTensor<BASE_DIM, FIELD_DIM, SPACE_DIM>;
 
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpUnSetBc(domainField));
+      auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateScalarFieldGradient<SPACE_DIM>(domainField,
+                                                        grad_u_vals_ptr));
 
-  auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
-    using OpInternal =
-        FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-            GAUSS>::OpGradTimesTensor<BASE_DIM, FIELD_DIM, SPACE_DIM>;
+      auto minus_epsilon = [&](double, double, double) constexpr {
+        return -common_data_ptr->blockPermittivity;
+      };
 
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpSetBc(domainField, true, boundaryMarker));
+      add_domain_ops(pipeline_mng->getOpDomainRhsPipeline());
+
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpInternal(domainField, grad_u_vals_ptr, minus_epsilon));
+    };
 
     // auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpCalculateScalarFieldGradient<SPACE_DIM>(domainField,
-                                                      grad_u_vals_ptr));
+    // auto alpha_ptr = boost::make_shared<VectorDouble>();
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(new
+    // OpAlpha<SPACE_DIM>(
+    //     domainField, grad_u_vals_ptr, alpha_ptr,
+    //     boost::make_shared<Range>(FloatingElectrodes), &alphaPart));
 
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpInternal(domainField, grad_u_vals_ptr,
-                       [](double, double, double) constexpr { return -1; }));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpUnSetBc(domainField));
-    // pipeline_mng->getOpDomainRhsPipeline().push_back(
-    // new OpScalarFieldGradientDotNormal(domainField));
-  };
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        pipeline_mng->getOpDomainRhsPipeline(), {H1});
 
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      pipeline_mng->getOpDomainRhsPipeline(), {H1});
-  // set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
-  calculate_residual_from_set_values_on_bc(
-      pipeline_mng->getOpDomainRhsPipeline());
+    // setbc for rhs
+    set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
+    calculate_residual_from_set_values_on_bc(
+        pipeline_mng->getOpDomainRhsPipeline());
 
-  interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
-      new intPostProcElementForcesAndSourcesCore(mField));
-  {
-    // interface_rhs_fe->getOpPtrVector().push_back(
-    //     new OpBlockChargeDensity<SPACE_DIM>(common_data_ptr,
-    //     int_block_sets_ptr,
-    //                                         domainField));
+    interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
+        new intPostProcElementForcesAndSourcesCore(mField));
+
+    interface_rhs_fe->getOpPtrVector().push_back(
+        new OpBlockChargeDensity<SPACE_DIM>(common_data_ptr, int_block_sets_ptr,
+                                            domainField));
 
     auto sIgma = [&](const double, const double, const double) {
       return common_data_ptr->chrgDens;
     };
+
     interface_rhs_fe->getOpPtrVector().push_back(
         new OpInterfaceRhsVectorF(domainField, sIgma));
-  }
 
+    // unsetbc for rhs
+  }
   MoFEMFunctionReturn(0);
 }
 //! [Assemble system]
@@ -594,6 +501,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::setIntegrationRules() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
+
+  // interface_rhs_fe->getRuleHook = PoissonExample::FaceRule();
 
   MoFEMFunctionReturn(0);
 }
@@ -632,70 +541,6 @@ MoFEMErrorCode ElectrostaticHomogeneous::solveSystem() {
 }
 //! [Solve system]
 
-MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
-  MoFEMFunctionBegin;
-
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-  pipeline_mng->getDomainRhsFE().reset();
-  pipeline_mng->getDomainLhsFE().reset();
-  pipeline_mng->getBoundaryLhsFE().reset();
-  pipeline_mng->getBoundaryRhsFE().reset();
-
-  auto get_entities_on_floating = [&]() {
-    Range constBCEdges;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string entity_name = it->getName();
-
-      if (entity_name.compare(0, 11, "CONSTANT_BC") == 0) {
-        Skinner skin(&mField.get_moab());
-        //  CHKERR skin.find_skin(0, constBCEdges, false, constBCEdges);
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   constBCEdges, true);
-      }
-    }
-    return constBCEdges;
-  };
-  auto flatingBoundaryMarker_dof = [&](Range &&constBCEdges) {
-    auto problem_manager = mField.getInterface<ProblemsManager>();
-    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
-    problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
-                              constBCEdges, *marker_ptr);
-    return marker_ptr;
-  };
-
-  FloatingblockconstBC = get_entities_on_floating();
-  auto op_loop_side = new OpLoopSide<SideEle>(
-      mField, simpleInterface->getDomainFEName(), SPACE_DIM);
-
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-  op_loop_side->getOpPtrVector().push_back(
-      new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
-  op_loop_side->getOpPtrVector().push_back(
-      new OpInvertMatrix<SPACE_DIM>(jac_ptr, det_ptr, inv_jac_ptr));
-  op_loop_side->getOpPtrVector().push_back(
-      new OpSetHOInvJacToScalarBases<SPACE_DIM>(H1, inv_jac_ptr));
-
-  auto grad_grad_ptr = boost::make_shared<MatrixDouble>();
-  auto alpha_ptr = boost::make_shared<VectorDouble>();
-  auto grad_projection_ptr = boost::make_shared<VectorDouble>();
-
-  op_loop_side->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldGradient<SPACE_DIM>(domainField,
-                                                    grad_grad_ptr));
-
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      op_loop_side); // for loop overside
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpAlpha<SPACE_DIM>(
-      domainField, grad_grad_ptr, alpha_ptr,
-      boost::make_shared<Range>(FloatingblockconstBC), &alphaPart));
-
-  CHKERR pipeline_mng->loopFiniteElements();
-
-  MoFEMFunctionReturn(0);
-}
-
 //! [Output results]
 MoFEMErrorCode ElectrostaticHomogeneous::outputResults() {
   MoFEMFunctionBegin;
@@ -705,6 +550,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::outputResults() {
   pipeline_mng->getBoundaryLhsFE().reset();
   pipeline_mng->getBoundaryRhsFE().reset();
 
+  pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -749,9 +595,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::outputResults() {
 
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile(
-      "out_resultGD_" + boost::lexical_cast<std::string>(solve_counter) +
-      ".h5m");
+  CHKERR post_proc_fe->writeFile("out_resultFD.h5m");
 
   MoFEMFunctionReturn(0);
 }
@@ -760,58 +604,13 @@ MoFEMErrorCode ElectrostaticHomogeneous::outputResults() {
 //! [Run program]
 MoFEMErrorCode ElectrostaticHomogeneous::runProgram() {
   MoFEMFunctionBegin;
-  std::cout << "alphaA: " << alphaA << std::endl;
-  auto zero_filed = [&](boost::shared_ptr<FieldEntity> ent_ptr_x) {
-    MoFEMFunctionBeginHot;
-    auto field_data = ent_ptr_x->getEntFieldData();
-    for (auto &v : field_data) {
-      v = 0.;
-    }
-    MoFEMFunctionReturnHot(0);
-  };
-  // double phi_Dirch[3] = {0., 1., 0.};
-  std::cout << "phi_Dirch: " << phi_Dirch[0] << ", " << phi_Dirch[1] << ", "
-            << phi_Dirch[2] << std::endl;
 
   CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR boundaryCondition();
   CHKERR setIntegrationRules();
   CHKERR assembleSystem();
-  CHKERR solveSystem();
-  CHKERR outputResults();
-  CHKERR getAlphaPart();
-
   alphaA = alphaPart;
-  alphaPart = 0.;
-
-  std::cout << "alphaA: " << alphaA << std::endl;
-  solve_counter++;
-
-  CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(zero_filed,
-                                                                 domainField);
-  CHKERR boundaryCondition();
-  CHKERR setIntegrationRules();
-  CHKERR assembleSystem();
-  CHKERR solveSystem();
-  CHKERR outputResults();
-  CHKERR getAlphaPart();
-  alphaB = alphaPart;
-
-  std::cout << "alphaB: " << alphaB << std::endl;
-  alphaPart = -alphaA / (alphaB - alphaA);
-  std::cout << "alphaPart: " << alphaPart << std::endl;
-
-  phi_Dirch[2] = alphaPart;
-  std::cout << "phi_Dirch: " << phi_Dirch[0] << ", " << phi_Dirch[1] << ", "
-            << phi_Dirch[2] << std::endl;
-
-  solve_counter++;
-  CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(zero_filed,
-                                                                 domainField);
-  CHKERR boundaryCondition();
-  CHKERR setIntegrationRules();
-  CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
 

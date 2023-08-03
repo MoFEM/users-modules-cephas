@@ -45,6 +45,9 @@ tutorials_build_and_install(
   tutorials_build_and_install(
     elect_constBCwithoutCharge ${CMAKE_CURRENT_SOURCE_DIR}/elect_constBCwithoutCharge.cpp) 
 
+  tutorials_build_and_install(
+    elec_test ${CMAKE_CURRENT_SOURCE_DIR}/elec_test.cpp) 
+
 
   
 
