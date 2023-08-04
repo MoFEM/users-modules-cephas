@@ -108,42 +108,69 @@ typename MoFEM::OpBaseImpl<AT, BoundaryEleOpStab>::MatSetValuesHook
 //! [Specialisation for assembly]
 #endif // ADD_CONTACT
 
-inline double hardening_exp(double tau, double b_iso) {
+inline double iso_hardening_exp(double tau, double b_iso) {
   return std::exp(
       std::max(static_cast<double>(std::numeric_limits<float>::min_exponent10),
                -b_iso * tau));
 }
 
-inline double hardening(double tau, double H, double Qinf, double b_iso,
-                        double sigmaY) {
-  return H * tau + Qinf * (1. - hardening_exp(tau, b_iso)) + sigmaY;
+/**
+ * Isotropic hardening
+ */
+inline double iso_hardening(double tau, double H, double Qinf, double b_iso,
+                            double sigmaY) {
+  return H * tau + Qinf * (1. - iso_hardening_exp(tau, b_iso)) + sigmaY;
 }
 
-inline double hardening_dtau(double tau, double H, double Qinf, double b_iso) {
+inline double iso_hardening_dtau(double tau, double H, double Qinf,
+                                 double b_iso) {
   auto r = [&](auto tau) {
-    return H + Qinf * b_iso * hardening_exp(tau, b_iso);
+    return H + Qinf * b_iso * iso_hardening_exp(tau, b_iso);
   };
   constexpr double eps = 1e-12;
   return std::max(r(tau), eps * r(0));
 }
 
-inline double hardening_dtau2(double tau, double Qinf, double b_iso) {
-  return -(Qinf * (b_iso * b_iso)) * hardening_exp(tau, b_iso);
+/**
+ * Kinematic hardening
+*/
+template <typename T, int DIM>
+inline auto
+kinematic_hardening(FTensor::Tensor2_symmetric<T, DIM> &t_plastic_strain,
+                    double C1_k) {
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+  FTensor::Tensor2_symmetric<double, DIM> t_alpha;
+  t_alpha(i, j) = C1_k * t_plastic_strain(i, j);
+  return t_alpha;
 }
 
-PetscBool is_large_strains = PETSC_TRUE;
-PetscBool set_timer = PETSC_FALSE;
+template <int DIM>
+inline auto kinematic_hardening_dplastic_strain(double C1_k) {
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+  FTensor::Index<'k', DIM> k;
+  FTensor::Index<'l', DIM> l;
+  FTensor::Ddg<double, DIM, DIM> t_diff;
+  constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+  t_diff(i, j, k, l) = C1_k * (t_kd(i, k) ^ t_kd(j, l)) / 4.;
+  return t_diff;
+}
+
+PetscBool is_large_strains = PETSC_TRUE; ///< Large strains
+PetscBool set_timer = PETSC_FALSE;       ///< Set timer
 
 double scale = 1.;
 
-double young_modulus = 206913;
-double poisson_ratio = 0.29;
-double sigmaY = 450;
-double H = 129;
-double visH = 0;
-double zeta = 5e-2;
-double Qinf = 265;
-double b_iso = 16.93;
+double young_modulus = 206913; ///< Young modulus
+double poisson_ratio = 0.29;   ///< Poisson ratio
+double sigmaY = 450;           ///< Yield stress
+double H = 129;                ///< Hardening
+double visH = 0;               ///< Viscous hardening
+double zeta = 5e-2;            ///< Viscous hardening
+double Qinf = 265;             ///< Saturation yield stress
+double b_iso = 16.93;          ///< Saturation exponent
+double C1_k = 0;               ///< Kinematic hardening
 
 double cn0 = 1;
 double cn1 = 1;
@@ -173,7 +200,7 @@ double cn_contact = 0.1;
 }; // namespace ContactOps
 
 #include <ContactOps.hpp>
-#endif
+#endif // ADD_CONTACT
 
 using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<AT>::LinearForm<IT>;
 using OpDomainRhsBCs =
@@ -383,6 +410,7 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-zeta", &zeta, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Qinf", &Qinf, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-C1_k", &C1_k, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-set_timer", &set_timer,
@@ -403,6 +431,7 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("PLASTICITY", Sev::inform) << "Viscous hardening " << visH;
     MOFEM_LOG("PLASTICITY", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("PLASTICITY", Sev::inform) << "Saturation exponent " << b_iso;
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Kinematic hardening " << C1_k;
     MOFEM_LOG("PLASTICITY", Sev::inform) << "cn0 " << cn0;
     MOFEM_LOG("PLASTICITY", Sev::inform) << "cn1 " << cn1;
     MOFEM_LOG("PLASTICITY", Sev::inform) << "zeta " << zeta;
@@ -713,13 +742,12 @@ MoFEMErrorCode Example::tsSolve() {
 
       auto [common_plastic_ptr, common_henky_ptr] =
           PlasticOps::createCommonPlasticOps<SPACE_DIM, IT, DomainEleOp>(
-              mField, "MAT_PLASTIC", pip, "U", "EP", "TAU", 1.,
-              Sev::inform);
+              mField, "MAT_PLASTIC", pip, "U", "EP", "TAU", 1., Sev::inform);
 
       if (common_henky_ptr) {
         if (common_plastic_ptr->mGradPtr != common_henky_ptr->matGradPtr)
           CHK_THROW_MESSAGE(MOFEM_DATA_INCONSISTENCY, "Wrong pointer for grad");
-      } 
+      }
 
       return std::make_pair(common_plastic_ptr, common_henky_ptr);
     };
@@ -729,7 +757,7 @@ MoFEMErrorCode Example::tsSolve() {
 
       auto &pip = pp_fe->getOpPtrVector();
 
-      auto [common_plastic_ptr, common_henky_ptr] = p;     
+      auto [common_plastic_ptr, common_henky_ptr] = p;
 
       using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
@@ -737,10 +765,9 @@ MoFEMErrorCode Example::tsSolve() {
       pip.push_back(
           new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", x_ptr));
       auto u_ptr = boost::make_shared<MatrixDouble>();
-      pip.push_back(
-          new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+      pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
-      if(is_large_strains) {
+      if (is_large_strains) {
 
         pip.push_back(
 
@@ -799,7 +826,7 @@ MoFEMErrorCode Example::tsSolve() {
       PetscBool post_proc_vol = PETSC_FALSE;
       CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-post_proc_vol",
                                  &post_proc_vol, PETSC_NULL);
-      if(post_proc_vol == PETSC_FALSE)
+      if (post_proc_vol == PETSC_FALSE)
         return boost::shared_ptr<PostProcEle>();
       auto pp_fe = boost::make_shared<PostProcEle>(mField);
       CHK_MOAB_THROW(
@@ -822,7 +849,7 @@ MoFEMErrorCode Example::tsSolve() {
       pp_fe->getOpPtrVector().push_back(op_side);
       CHK_MOAB_THROW(push_vol_post_proc_ops(
                          pp_fe, push_vol_ops(op_side->getOpPtrVector())),
-                     "push_vol_post_proc_ops"); 
+                     "push_vol_post_proc_ops");
       return pp_fe;
     };
 

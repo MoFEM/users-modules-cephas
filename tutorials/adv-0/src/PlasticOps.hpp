@@ -50,6 +50,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
     VIS_H,
     QINF,
     BISO,
+    C1_k,
     LAST_PARAM
   };
 
@@ -77,7 +78,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   VectorDouble resC;
   VectorDouble resCdTau;
   MatrixDouble resCdStrain;
-  MatrixDouble resCdStrainDot;
+  MatrixDouble resCdPlasticStrain;
   MatrixDouble resFlow;
   MatrixDouble resFlowDtau;
   MatrixDouble resFlowDstrain;
@@ -283,6 +284,7 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
         p[CommonData::H] *= scaleVal;
         p[CommonData::VIS_H] *= scaleVal;
         p[CommonData::QINF] *= scaleVal;
+        p[CommonData::C1_k] *= scaleVal;
       };
 
       for (auto &b : blockData) {
@@ -295,7 +297,7 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
       }
 
       (*matParamsPtr) = {young_modulus, poisson_ratio, sigmaY, H,
-                         visH,          Qinf,          b_iso};
+                         visH,          Qinf,          b_iso,  C1_k};
       scale_fun(*matParamsPtr);
       CHKERR getMatDPtr(matDPtr, getK(*matParamsPtr), getG(*matParamsPtr));
 
@@ -331,7 +333,7 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
         MOFEM_TAG_AND_LOG("WORLD", sev, "MatBlock") << *m;
         std::vector<double> block_data;
         CHKERR m->getAttributes(block_data);
-        if (block_data.size() != 2 + CommonData::LAST_PARAM) {
+        if (block_data.size() != CommonData::LAST_PARAM) {
           SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                   "Wrong number of block attribute");
         }
@@ -356,7 +358,8 @@ addMatBlockOps(MoFEM::Interface &m_field, std::string block_name, Pip &pip,
             << "h = " << block_params[CommonData::H] << std::endl
             << "vis_h = " << block_params[CommonData::VIS_H] << std::endl
             << "qinf = " << block_params[CommonData::QINF] << std::endl
-            << "biso = " << block_params[CommonData::BISO] << std::endl;
+            << "biso = " << block_params[CommonData::BISO] << std::endl
+            << "C1_k = " << block_params[CommonData::C1_k] << std::endl;
 
         blockData.push_back({block_params, get_block_ents()});
       }
