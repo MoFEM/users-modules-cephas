@@ -23,6 +23,7 @@ tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 tutorials_copy_and_install("*.txt" "${permissions_execute}")
+tutorials_copy_and_install("param_file.petsc" "${permissions_execute}")
 
 tutorials_build_and_install(
   dynamic_first_order_con_law_3d ${CMAKE_CURRENT_SOURCE_DIR}/dynamic_first_order_con_law.cpp)
