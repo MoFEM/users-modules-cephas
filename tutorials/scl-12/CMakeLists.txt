@@ -43,7 +43,7 @@ tutorials_build_and_install(
     elec_constbc ${CMAKE_CURRENT_SOURCE_DIR}/elec_constbc.cpp)
 
   tutorials_build_and_install(
-    elect_constBCwithoutCharge ${CMAKE_CURRENT_SOURCE_DIR}/elect_constBCwithoutCharge.cpp) 
+    electrostatics ${CMAKE_CURRENT_SOURCE_DIR}/electrostatics.cpp) 
 
   tutorials_build_and_install(
     elec_test ${CMAKE_CURRENT_SOURCE_DIR}/elec_test.cpp) 

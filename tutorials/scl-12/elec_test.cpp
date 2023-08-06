@@ -50,14 +50,14 @@ using OpDirchBoundarySourceR = FormsIntegrators<IntEleOp>::Assembly<
 
 static char help[] = "...\n\n";
 
-template <int SPACE_DIM> struct BlockData {
+struct BlockData {
   int iD;
   double sigma;
   double epsPermit;
   Range blockInterfaces;
   Range blockDomains;
 };
-template <int SPACE_DIM> struct DataAtIntegrationPts {
+struct DataAtIntegrationPts {
 
   SmartPetscObj<Vec> petscVec;
   double blockPermittivity;
@@ -68,7 +68,6 @@ template <int SPACE_DIM> struct DataAtIntegrationPts {
   }
 };
 
-template <int SPACE_DIM>
 struct OpNegativeGradient : public ForcesAndSourcesCore::UserDataOperator {
   OpNegativeGradient(boost::shared_ptr<MatrixDouble> grad_u_negative,
                      boost::shared_ptr<MatrixDouble> grad_u)
@@ -103,10 +102,10 @@ private:
   boost::shared_ptr<MatrixDouble> gradUNegative;
   boost::shared_ptr<MatrixDouble> gradU;
 };
-template <int SPACE_DIM> struct OpBlockChargeDensity : public IntEleOp {
+struct OpBlockChargeDensity : public IntEleOp {
   OpBlockChargeDensity(
-      boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
-      boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> int_block_sets_ptr,
+      boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
+      boost::shared_ptr<std::map<int, BlockData>> int_block_sets_ptr,
       const std::string &field_name)
       : IntEleOp(field_name, field_name, OPROWCOL, false),
         commonDataPtr(common_data_ptr), intBlockSetsPtr(int_block_sets_ptr) {
@@ -128,15 +127,15 @@ template <int SPACE_DIM> struct OpBlockChargeDensity : public IntEleOp {
   }
 
 protected:
-  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
-  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> intBlockSetsPtr;
+  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
+  boost::shared_ptr<std::map<int, BlockData>> intBlockSetsPtr;
 };
 
-template <int SPACE_DIM> struct OpBlockPermittivity : public DomainEleOp {
+struct OpBlockPermittivity : public DomainEleOp {
 
   OpBlockPermittivity(
-      boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr,
-      boost::shared_ptr<map<int, BlockData<SPACE_DIM>>> perm_block_sets_ptr,
+      boost::shared_ptr<DataAtIntegrationPts> common_data_ptr,
+      boost::shared_ptr<map<int, BlockData>> perm_block_sets_ptr,
       const std::string &field_name)
       : DomainEleOp(field_name, field_name, OPROWCOL, false),
         commonDataPtr(common_data_ptr), permBlockSetsPtr(perm_block_sets_ptr) {
@@ -159,8 +158,8 @@ template <int SPACE_DIM> struct OpBlockPermittivity : public DomainEleOp {
   }
 
 protected:
-  boost::shared_ptr<map<int, BlockData<SPACE_DIM>>> permBlockSetsPtr;
-  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> commonDataPtr;
+  boost::shared_ptr<map<int, BlockData>> permBlockSetsPtr;
+  boost::shared_ptr<DataAtIntegrationPts> commonDataPtr;
 };
 
 struct ElectrostaticHomogeneous {
@@ -183,12 +182,11 @@ private:
   // MoFEM interfaces
   MoFEM::Interface &mField;
 
-  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> perm_block_sets_ptr;
-  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>>
-      int_block_sets_ptr; ///////
+  boost::shared_ptr<std::map<int, BlockData>> perm_block_sets_ptr;
+  boost::shared_ptr<std::map<int, BlockData>> int_block_sets_ptr; ///////
   Simple *simpleInterface;
   boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe;
-  boost::shared_ptr<DataAtIntegrationPts<SPACE_DIM>> common_data_ptr;
+  boost::shared_ptr<DataAtIntegrationPts> common_data_ptr;
 
   std::string domainField;
   int oRder;
@@ -225,10 +223,9 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
 
-  common_data_ptr = boost::make_shared<DataAtIntegrationPts<SPACE_DIM>>(mField);
+  common_data_ptr = boost::make_shared<DataAtIntegrationPts>(mField);
 
-  perm_block_sets_ptr =
-      boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
+  perm_block_sets_ptr = boost::make_shared<std::map<int, BlockData>>();
   Range electrIcs;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 12, "MAT_ELECTRIC") == 0) {
@@ -250,8 +247,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
       block_data.epsPermit = attributes[0];
     }
   }
-  int_block_sets_ptr =
-      boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
+  int_block_sets_ptr = boost::make_shared<std::map<int, BlockData>>();
   Range interfIcs;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 12, "INT_ELECTRIC") == 0) {
@@ -336,11 +332,11 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
   pipeline_mng->getBoundaryRhsFE().reset();
   // auto side_proc_fe = boost::make_shared<SideEle>(mField);
 
-  common_data_ptr = boost::make_shared<DataAtIntegrationPts<SPACE_DIM>>(mField);
+  common_data_ptr = boost::make_shared<DataAtIntegrationPts>(mField);
   // auto pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto add_domain_lhs_ops = [&](auto &pipeline) {
-    pipeline.push_back(new OpBlockPermittivity<SPACE_DIM>(
+    pipeline.push_back(new OpBlockPermittivity(
         common_data_ptr, perm_block_sets_ptr, domainField));
   };
 
@@ -449,9 +445,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
     interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
         new intPostProcElementForcesAndSourcesCore(mField));
 
-    interface_rhs_fe->getOpPtrVector().push_back(
-        new OpBlockChargeDensity<SPACE_DIM>(common_data_ptr, int_block_sets_ptr,
-                                            domainField));
+    interface_rhs_fe->getOpPtrVector().push_back(new OpBlockChargeDensity(
+        common_data_ptr, int_block_sets_ptr, domainField));
 
     auto sIgma = [&](const double, const double, const double) {
       return common_data_ptr->chrgDens;
@@ -550,7 +545,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::outputResults() {
 
   auto neg_grad_u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(
-      new OpNegativeGradient<SPACE_DIM>(neg_grad_u_ptr, grad_u_ptr));
+      new OpNegativeGradient(neg_grad_u_ptr, grad_u_ptr));
 
   post_proc_fe->getOpPtrVector().push_back(
 
@@ -616,8 +611,8 @@ int main(int argc, char *argv[]) {
     MoFEM::Interface &m_field = core; // finite element interface
 
     // Run the main analysis
-    ElectrostaticHomogeneous poisson_problem(m_field);
-    CHKERR poisson_problem.runProgram();
+    ElectrostaticHomogeneous Electrostatics_problem(m_field);
+    CHKERR Electrostatics_problem.runProgram();
   }
   CATCH_ERRORS;
 

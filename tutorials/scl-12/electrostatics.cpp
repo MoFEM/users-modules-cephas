@@ -1,30 +1,13 @@
 /**
- * \file electrostatic_2d_homogeneous.cpp
- * \example electrostatic_2d_homogeneous.cpp
- *
- * Solution of poisson equation. Direct implementation of User Data Operators
- * for teaching proposes.
- *
- * \note In practical application we suggest use form integrators to generalise
- * and simplify code. However, here we like to expose user to ways how to
- * implement data operator from scratch.
- */
-
-#include <BasicFiniteElements.hpp>
-#include <PoissonOperators.hpp>
-#include <electrostatic_2d_homogeneous.hpp>
-
-using namespace MoFEM;
-using namespace Electrostatic2DHomogeneousOperators;
-
-using PostProcFaceEle =
-    PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
-
-static char help[] = "...\n\n";
-
-struct Electrostatic2DHomogeneous {
+ * @file Electrostatics.cpp
+ * \example Electrostatics.cpp
+ *  */
+// #ifndef __ELECTROSTATICS_CPP__
+// #define __ELECTROSTATICS_CPP__
+#include <electrostatics.hpp>
+struct ElectrostaticHomogeneous {
 public:
-  Electrostatic2DHomogeneous(MoFEM::Interface &m_field);
+  ElectrostaticHomogeneous(MoFEM::Interface &m_field);
 
   // Declaration of the main function to run analysis
   MoFEMErrorCode runProgram();
@@ -42,66 +25,59 @@ private:
   // MoFEM interfaces
   MoFEM::Interface &mField;
 
-  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>> surf_block_sets_ptr;
-  boost::shared_ptr<std::map<int, BlockData<SPACE_DIM>>>
-      edge_block_sets_ptr; ///////
+  boost::shared_ptr<std::map<int, BlockData>> perm_block_sets_ptr;
+  boost::shared_ptr<std::map<int, BlockData>> int_block_sets_ptr; ///////
   Simple *simpleInterface;
   boost::shared_ptr<ForcesAndSourcesCore> interface_rhs_fe;
   boost::shared_ptr<DataAtIntegrationPts> common_data_ptr;
 
   std::string domainField;
   int oRder;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
+  double alphaPart = 0.5;
+  double alphaA = 0.;
+  Range FloatingElectrodes;
+  Range blockconstBC;
 };
 
-Electrostatic2DHomogeneous::Electrostatic2DHomogeneous(
-    MoFEM::Interface &m_field)
+ElectrostaticHomogeneous::ElectrostaticHomogeneous(MoFEM::Interface &m_field)
     : domainField("POTENTIAL"), mField(m_field) {}
 
 //! [Read mesh]
-MoFEMErrorCode Electrostatic2DHomogeneous::readMesh() {
+MoFEMErrorCode ElectrostaticHomogeneous::readMesh() {
   MoFEMFunctionBegin;
-
   CHKERR mField.getInterface(simpleInterface);
   CHKERR simpleInterface->getOptions();
   CHKERR simpleInterface->loadFile();
-
   MoFEMFunctionReturn(0);
 }
 //! [Read mesh]
 
 //! [Setup problem]
-MoFEMErrorCode Electrostatic2DHomogeneous::setupProblem() {
+MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
   MoFEMFunctionBegin;
 
   CHKERR simpleInterface->addDomainField(domainField, H1,
                                          AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simpleInterface->addBoundaryField(domainField, H1,
+                                           AINSWORTH_LEGENDRE_BASE, 1);
 
   int oRder = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
 
-  // Range interface_ents;
-  // for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-  //   if (bit->getName().compare(0, 9, "INTERFACE") == 0) {
-  //     const int id = bit->getMeshsetId();
-  //     Range ents;
-  //     CHKERR mField.get_moab().get_entities_by_dimension(bit->getMeshset(),
-  //     1,
-  //                                                        ents, true);
-  //     interface_ents.merge(ents);
-  //   }
-  // }
-  surf_block_sets_ptr =
-      boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
-  Range electric_tris;
+  common_data_ptr = boost::make_shared<DataAtIntegrationPts>(mField);
+
+  perm_block_sets_ptr = boost::make_shared<std::map<int, BlockData>>();
+  Range electrIcs;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 12, "MAT_ELECTRIC") == 0) {
       const int id = bit->getMeshsetId();
-      auto &block_data = (*surf_block_sets_ptr)[id];
+      auto &block_data = (*perm_block_sets_ptr)[id];
 
       CHKERR mField.get_moab().get_entities_by_dimension(
-          bit->getMeshset(), SPACE_DIM, block_data.tRis, true);
-      electric_tris.merge(block_data.tRis);
+          bit->getMeshset(), SPACE_DIM, block_data.blockDomains, true);
+      electrIcs.merge(block_data.blockDomains);
 
       std::vector<double> attributes;
       bit->getAttributes(attributes);
@@ -114,17 +90,16 @@ MoFEMErrorCode Electrostatic2DHomogeneous::setupProblem() {
       block_data.epsPermit = attributes[0];
     }
   }
-  edge_block_sets_ptr =
-      boost::make_shared<std::map<int, BlockData<SPACE_DIM>>>();
-  Range interface_edges;
+  int_block_sets_ptr = boost::make_shared<std::map<int, BlockData>>();
+  Range interfIcs;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
     if (bit->getName().compare(0, 12, "INT_ELECTRIC") == 0) {
       const int id = bit->getMeshsetId();
-      auto &block_data = (*edge_block_sets_ptr)[id];
+      auto &block_data = (*int_block_sets_ptr)[id];
 
       CHKERR mField.get_moab().get_entities_by_dimension(
-          bit->getMeshset(), SPACE_DIM - 1, block_data.eDges, true);
-      interface_edges.merge(block_data.eDges);
+          bit->getMeshset(), SPACE_DIM - 1, block_data.blockInterfaces, true);
+      interfIcs.merge(block_data.blockInterfaces);
 
       std::vector<double> attributes;
       bit->getAttributes(attributes);
@@ -143,61 +118,89 @@ MoFEMErrorCode Electrostatic2DHomogeneous::setupProblem() {
   CHKERR mField.modify_finite_element_add_field_row("INTERFACE", domainField);
   CHKERR mField.modify_finite_element_add_field_col("INTERFACE", domainField);
   CHKERR mField.modify_finite_element_add_field_data("INTERFACE", domainField);
-  CHKERR mField.add_ents_to_finite_element_by_dim(interface_edges, MBEDGE,
+  CHKERR mField.add_ents_to_finite_element_by_dim(electrIcs, SPACE_DIM,
+                                                  "INTERFACE");
+  CHKERR mField.add_ents_to_finite_element_by_dim(interfIcs, SPACE_DIM - 1,
                                                   "INTERFACE");
 
   CHKERR simpleInterface->defineFiniteElements();
   CHKERR simpleInterface->defineProblem(PETSC_TRUE);
   CHKERR simpleInterface->buildFields();
   CHKERR simpleInterface->buildFiniteElements();
+  CHKERR simpleInterface->buildProblem();
 
   CHKERR mField.build_finite_elements("INTERFACE");
   CHKERR DMMoFEMAddElement(simpleInterface->getDM(), "INTERFACE");
 
   CHKERR simpleInterface->buildProblem();
-
-  // CHKERR simpleInterface->setUp();
-
   MoFEMFunctionReturn(0);
 }
 //! [Setup problem]
 
 //! [Boundary condition]
-MoFEMErrorCode Electrostatic2DHomogeneous::boundaryCondition() {
+MoFEMErrorCode ElectrostaticHomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
   auto bc_mng = mField.getInterface<BcManager>();
 
-  // Remove BCs from blockset name "BOUNDARY_CONDITION";
+  // Remove_BCs_from_blockset name "BOUNDARY_CONDITION";
   CHKERR bc_mng->removeBlockDOFsOnEntities<BcScalarMeshsetType<BLOCKSET>>(
       simpleInterface->getProblemName(), "BOUNDARY_CONDITION",
       std::string(domainField), true);
+  ////////////
+
+  auto *simple = mField.getInterface<Simple>();
+
+  // Mark BC for blocksets. Blockset name is
+  // "FLOATING_ELECTRODE"
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
+                                        "FLOATING_ELECTRODE", domainField, 0, 1,
+                                        true);
+
+  boundaryMarker =
+      bc_mng->getMergedBlocksMarker(vector<string>{"FLOATING_ELECTRODE"});
 
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
 
 //! [Assemble system]
-MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
+MoFEMErrorCode ElectrostaticHomogeneous::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainRhsFE().reset();
+  pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
+  // auto side_proc_fe = boost::make_shared<SideEle>(mField);
+
   common_data_ptr = boost::make_shared<DataAtIntegrationPts>(mField);
+  // auto pipeline_mng = mField.getInterface<PipelineManager>();
+
   auto add_domain_lhs_ops = [&](auto &pipeline) {
-    pipeline.push_back(new OpBlockPermittivity<SPACE_DIM>(
-        common_data_ptr, surf_block_sets_ptr, domainField));
+    pipeline.push_back(new OpBlockPermittivity(
+        common_data_ptr, perm_block_sets_ptr, domainField));
   };
 
   add_domain_lhs_ops(pipeline_mng->getOpDomainLhsPipeline());
-
+  auto epsilon = [&](const double, const double, const double) {
+    return common_data_ptr->blockPermittivity;
+  };
   { // Push operators to the Pipeline that is responsible for calculating LHS
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainLhsPipeline(), {H1});
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK(domainField, domainField, common_data_ptr));
+        new OpSetBc(domainField, true, boundaryMarker));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpDomainLhsMatrixK(domainField, domainField, epsilon));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpUnSetBc(domainField));
   }
-  { // Push operators to the Pipeline that is responsible for calculating LHS
-
+  { // Push operators to the Pipeline that is responsible for
+    // calculating
+    // LHS
+    MoFEMFunctionBegin;
     auto set_values_to_bc_dofs = [&](auto &fe) {
       auto get_bc_hook = [&]() {
         EssentialPreProc<TemperatureCubitBcData> hook(mField, fe, {});
@@ -205,51 +208,109 @@ MoFEMErrorCode Electrostatic2DHomogeneous::assembleSystem() {
       };
       fe->preProcessHook = get_bc_hook();
     };
+    // Set essential BC
+    auto set_boundary = [&]() {
+      MoFEMFunctionBegin;
+      CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+          pipeline_mng->getOpBoundaryLhsPipeline(), {});
+
+      auto set_bc_essential = [&](auto domainField, auto block_name) {
+        MoFEMFunctionBegin;
+        auto bc_mng = mField.getInterface<BcManager>();
+
+        auto &bcs = bc_mng->getBcMapByBlockName();
+        for (auto &bc : bcs) {
+          if (bc_mng->checkBlock(bc, block_name)) {
+            // auto val = bc.second->bcAttributes[0];
+            pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+                new OpSetBc(domainField, false, bc.second->getBcMarkersPtr()));
+            pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+                new OpDirchBoundaryMassL(
+                    domainField, domainField,
+                    [](double, double, double) { return 1; },
+                    bc.second->getBcEntsPtr()));
+            auto boundary_val_function = [&](const double, const double,
+                                             const double) {
+              return alphaPart;
+            };
+            pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+                new OpDirchBoundarySourceR(
+                    domainField, boundary_val_function,
+                    boost::make_shared<Range>(bc.second->bcEnts)));
+            pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+                new OpUnSetBc(domainField));
+
+            // Set essential BC
+          }
+        }
+
+        MoFEMFunctionReturn(0);
+      };
+
+      CHKERR set_bc_essential(domainField, "FLOATING_ELECTRODE");
+
+      MoFEMFunctionReturn(0);
+    };
+    // CHKERR set_bc_essential(domainField, "FLOATING_ELECTRODE");
 
     auto calculate_residual_from_set_values_on_bc = [&](auto &pipeline) {
-      using DomainEle =
-          PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
-      using DomainEleOp = DomainEle::UserDataOperator;
       using OpInternal =
           FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
               GAUSS>::OpGradTimesTensor<BASE_DIM, FIELD_DIM, SPACE_DIM>;
+
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpSetBc(domainField, true, boundaryMarker));
 
       auto grad_u_vals_ptr = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateScalarFieldGradient<SPACE_DIM>(domainField,
                                                         grad_u_vals_ptr));
+
+      auto minus_epsilon = [&](double, double, double) constexpr {
+        return -common_data_ptr->blockPermittivity;
+      };
+
+      add_domain_lhs_ops(pipeline_mng->getOpDomainRhsPipeline());
+
       pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpInternal(domainField, grad_u_vals_ptr,
-                         [](double, double, double) constexpr { return -1; }));
+          new OpInternal(domainField, grad_u_vals_ptr, minus_epsilon));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpUnSetBc(domainField));
     };
 
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpDomainRhsPipeline(), {H1});
+
     set_values_to_bc_dofs(pipeline_mng->getDomainRhsFE());
     calculate_residual_from_set_values_on_bc(
         pipeline_mng->getOpDomainRhsPipeline());
 
     interface_rhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(
-        new EdgeElementForcesAndSourcesCore(mField));
-    {
-      interface_rhs_fe->getOpPtrVector().push_back(
-          new OpBlockChargeDensity<SPACE_DIM>(
-              common_data_ptr, edge_block_sets_ptr, domainField));
+        new intElementForcesAndSourcesCore(mField));
 
-      interface_rhs_fe->getOpPtrVector().push_back(
-          new OpInterfaceRhsVectorF(domainField, common_data_ptr));
-    }
+    interface_rhs_fe->getOpPtrVector().push_back(new OpBlockChargeDensity(
+        common_data_ptr, int_block_sets_ptr, domainField));
+
+    auto sIgma = [&](const double, const double, const double) {
+      return common_data_ptr->chrgDens;
+    };
+
+    interface_rhs_fe->getOpPtrVector().push_back(
+        new OpInterfaceRhsVectorF(domainField, sIgma));
+    CHKERR set_boundary();
+    MoFEMFunctionReturn(0);
   }
+
   MoFEMFunctionReturn(0);
 }
 //! [Assemble system]
 
 //! [Set integration rules]
-MoFEMErrorCode Electrostatic2DHomogeneous::setIntegrationRules() {
+MoFEMErrorCode ElectrostaticHomogeneous::setIntegrationRules() {
   MoFEMFunctionBegin;
 
-  auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  auto rule_rhs = [](int, int, int p) -> int { return p; };
+  auto rule_lhs = [](int, int, int p) -> int { return 2 * p + 1; };
+  auto rule_rhs = [](int, int, int p) -> int { return p + 1; };
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
@@ -262,18 +323,18 @@ MoFEMErrorCode Electrostatic2DHomogeneous::setIntegrationRules() {
 //! [Set integration rules]
 
 //! [Solve system]
-MoFEMErrorCode Electrostatic2DHomogeneous::solveSystem() {
+MoFEMErrorCode ElectrostaticHomogeneous::solveSystem() {
   MoFEMFunctionBegin;
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto ksp_solver = pipeline_mng->createKSP();
 
-  boost::shared_ptr<ForcesAndSourcesCore> null; ///< Null element does nothing
+  boost::shared_ptr<ForcesAndSourcesCore> null; ///< Null element does
   CHKERR DMMoFEMKSPSetComputeRHS(simpleInterface->getDM(), "INTERFACE",
                                  interface_rhs_fe, null, null);
 
-  auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   CHKERR KSPSetFromOptions(ksp_solver);
   CHKERR KSPSetUp(ksp_solver);
 
@@ -295,20 +356,19 @@ MoFEMErrorCode Electrostatic2DHomogeneous::solveSystem() {
 //! [Solve system]
 
 //! [Output results]
-MoFEMErrorCode Electrostatic2DHomogeneous::outputResults() {
+MoFEMErrorCode ElectrostaticHomogeneous::outputResults() {
   MoFEMFunctionBegin;
-
   auto pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
 
-  auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
-
+  pipeline_mng->getDomainLhsFE().reset();
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-  // constexpr auto SPACE_DIM = 2; // dimension of problem
-
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateHOJac<SPACE_DIM>(jac_ptr));
   post_proc_fe->getOpPtrVector().push_back(
@@ -349,14 +409,14 @@ MoFEMErrorCode Electrostatic2DHomogeneous::outputResults() {
 
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_result2D.h5m");
+  CHKERR post_proc_fe->writeFile("out_resultFD.h5m");
 
   MoFEMFunctionReturn(0);
 }
 //! [Output results]
 
 //! [Run program]
-MoFEMErrorCode Electrostatic2DHomogeneous::runProgram() {
+MoFEMErrorCode ElectrostaticHomogeneous::runProgram() {
   MoFEMFunctionBegin;
 
   CHKERR readMesh();
@@ -364,6 +424,7 @@ MoFEMErrorCode Electrostatic2DHomogeneous::runProgram() {
   CHKERR boundaryCondition();
   CHKERR setIntegrationRules();
   CHKERR assembleSystem();
+  alphaA = alphaPart;
   CHKERR solveSystem();
   CHKERR outputResults();
 
@@ -393,8 +454,8 @@ int main(int argc, char *argv[]) {
     MoFEM::Interface &m_field = core; // finite element interface
 
     // Run the main analysis
-    Electrostatic2DHomogeneous poisson_problem(m_field);
-    CHKERR poisson_problem.runProgram();
+    ElectrostaticHomogeneous Electrostatics_problem(m_field);
+    CHKERR Electrostatics_problem.runProgram();
   }
   CATCH_ERRORS;
 
