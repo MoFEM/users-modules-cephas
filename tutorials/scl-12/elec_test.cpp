@@ -488,34 +488,6 @@ MoFEMErrorCode ElectrostaticHomogeneous::setIntegrationRules() {
 MoFEMErrorCode ElectrostaticHomogeneous::solveSystem() {
   MoFEMFunctionBegin;
 
-  //   auto pipeline_mng = mField.getInterface<PipelineManager>();
-
-  //   auto ksp_solver = pipeline_mng->createKSP();
-
-  //   boost::shared_ptr<ForcesAndSourcesCore> null; ///< Null element does
-  //   CHKERR DMMoFEMKSPSetComputeRHS(simpleInterface->getDM(),
-  //   "INTERFACE",
-  //                                  interface_rhs_fe, null, null);
-
-  //   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-  //   CHKERR KSPSetFromOptions(ksp_solver);
-  //   CHKERR KSPSetUp(ksp_solver);
-
-  //   // Create RHS and solution vectors
-  //   auto dm = simpleInterface->getDM();
-  //   auto F = smartCreateDMVector(dm);
-  //   auto D = smartVectorDuplicate(F);
-
-  //   // Solve the system
-  //   CHKERR KSPSolve(ksp_solver, F, D);
-
-  //   // Scatter result data on the mesh
-  //   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  //   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  //   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
-  //   MoFEMFunctionReturn(0);
-  // }
   auto pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto ksp_solver = pipeline_mng->createKSP();
@@ -525,31 +497,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::solveSystem() {
                                  interface_rhs_fe, null, null);
 
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-
-  auto set_fieldsplit_preconditioner_ksp = [&](auto ksp) {
-    MoFEMFunctionBeginHot;
-    PC pc;
-    CHKERR KSPGetPC(ksp, &pc);
-    PetscBool is_pcfs = PETSC_FALSE;
-    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
-    if (is_pcfs == PETSC_TRUE) {
-      auto bc_mng = mField.getInterface<BcManager>();
-      auto name_prb = simpleInterface->getProblemName();
-      auto is_all_bc =
-          bc_mng->getBlockIS(name_prb, "FLOATING_ELECTRODE", domainField, 0, 0);
-      // bc_mng->getBlockIS(name_prb, "BOUNDARY_CONDITION", domainField, 0, 0);
-      int is_all_bc_size;
-      CHKERR ISGetSize(is_all_bc, &is_all_bc_size);
-      // MOFEM_LOG("EXAMPLE", Sev::inform)
-      //     << "Field split block size " << is_all_bc_size;
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL,
-                               is_all_bc); // boundary block
-    }
-    MoFEMFunctionReturnHot(0);
-  };
-
   CHKERR KSPSetFromOptions(ksp_solver);
-  CHKERR set_fieldsplit_preconditioner_ksp(ksp_solver);
   CHKERR KSPSetUp(ksp_solver);
 
   // Create RHS and solution vectors
