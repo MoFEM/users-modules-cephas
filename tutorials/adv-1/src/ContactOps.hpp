@@ -397,7 +397,8 @@ template <int DIM, typename AssemblyBoundaryEleOp>
 OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
     OpConstrainBoundaryRhsImpl(const std::string field_name,
                                boost::shared_ptr<CommonData> common_data_ptr)
-    : AssemblyBoundaryEleOp(field_name, field_name, DomainEleOp::OPROW),
+    : AssemblyBoundaryEleOp(field_name, field_name,
+                            AssemblyBoundaryEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
 template <int DIM, typename AssemblyBoundaryEleOp>
@@ -492,7 +493,7 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
                                   const std::string col_field_name,
                                   boost::shared_ptr<CommonData> common_data_ptr)
     : AssemblyBoundaryEleOp(row_field_name, col_field_name,
-                            DomainEleOp::OPROWCOL),
+                            AssemblyBoundaryEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   AssemblyBoundaryEleOp::sYmm = false;
 }
@@ -605,7 +606,7 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
         const std::string row_field_name, const std::string col_field_name,
         boost::shared_ptr<CommonData> common_data_ptr)
     : AssemblyBoundaryEleOp(row_field_name, col_field_name,
-                            DomainEleOp::OPROWCOL),
+                            AssemblyBoundaryEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   AssemblyBoundaryEleOp::sYmm = false;
 }
@@ -761,6 +762,9 @@ MoFEMErrorCode opFactoryBoundaryToDomainLhs(
     std::string fe_domain_name, std::string sigma, std::string u,
     std::string geom, ForcesAndSourcesCore::RuleHookFun rule) {
   MoFEMFunctionBegin;
+
+  using DomainEleOp = typename DomainEle::UserDataOperator;
+
   auto op_loop_side = new OpLoopSide<DomainEle>(
       m_field, fe_domain_name, DIM, Sev::noisy,
       boost::make_shared<ForcesAndSourcesCore::UserDataOperator::AdjCache>());
