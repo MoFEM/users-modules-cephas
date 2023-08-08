@@ -553,7 +553,7 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
     FTensor::Tensor2<double, DIM, DIM> t_cQ;
     t_cQ(i, j) = kronecker_delta(i, j) - t_cP(i, j);
 
-    FTensor::Tensor2<double, 3, 3> t_res_dU;
+    FTensor::Tensor2<double, DIM, DIM> t_res_dU;
     t_res_dU(i, j) = kronecker_delta(i, j) + t_cP(i, j);
 
     if (c > 0) {
