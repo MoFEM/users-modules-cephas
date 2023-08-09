@@ -677,12 +677,12 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
     };
 
     auto get_res_c_dplastic_strain = [&](auto &t_diff_res) {
-      t_diff_res(i, j) = (DomainEleOp::getTSa() * c_equiv) * t_diff_eqiv(i, j);
+      t_diff_res(i, j) = (this->getTSa() * c_equiv) * t_diff_eqiv(i, j);
       t_diff_res(k, l) -= c_f * t_flow(i, j) * t_alpha_dir(i, j, k, l);
     };
 
     auto get_res_c_dtau = [&]() {
-      return DomainEleOp::getTSa() * c_dot_tau + c_sigma_y * d_sigma_y;
+      return this->getTSa() * c_dot_tau + c_sigma_y * d_sigma_y;
     };
 
     auto get_res_c_plastic_strain = [&](auto &t_diff_res) {
@@ -697,7 +697,7 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
 
     auto get_res_flow_dtau = [&](auto &t_res_flow_dtau) {
       const auto da = d_sigma_y;
-      const auto db = DomainEleOp::getTSa();
+      const auto db = this->getTSa();
       t_res_flow_dtau(k, l) =
           da * t_plastic_strain_dot(k, l) - db * t_flow_dir(k, l);
     };
@@ -710,7 +710,7 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
     auto get_res_flow_dplastic_strain = [&](auto &t_res_flow_dplastic_strain) {
       const auto a = sigma_y;
       t_res_flow_dplastic_strain(m, n, k, l) =
-          (a * DomainEleOp::getTSa()) * t_diff_plastic_strain(m, n, k, l);
+          (a * this->getTSa()) * t_diff_plastic_strain(m, n, k, l);
       const auto b = t_tau_dot;
       t_res_flow_dplastic_strain(m, n, i, j) +=
           (t_flow_dir_dstrain(m, n, k, l) * t_alpha_dir(k, l, i, j)) * b;
@@ -719,7 +719,7 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
     t_res_c = get_res_c();
     get_res_flow(t_res_flow);
 
-    if (DomainEleOp::getTSCtx() == TSMethod::TSContext::CTX_TSSETIJACOBIAN) {
+    if (this->getTSCtx() == TSMethod::TSContext::CTX_TSSETIJACOBIAN) {
       t_res_c_dtau = get_res_c_dtau();
       get_res_c_dstrain(t_res_c_dstrain);
       get_res_c_dplastic_strain(t_res_c_plastic_strain);
