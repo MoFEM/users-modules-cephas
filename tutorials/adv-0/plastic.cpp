@@ -13,7 +13,7 @@ the " */
 #define EXECUTABLE_DIMENSION 3
 #endif
 
-#define ADD_CONTACT
+// #define ADD_CONTACT
 
 #include <MoFEM.hpp>
 #include <MatrixFunction.hpp>
