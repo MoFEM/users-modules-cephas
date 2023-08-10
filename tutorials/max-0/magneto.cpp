@@ -28,7 +28,7 @@ constexpr FieldApproximationBase approximation_base =
 constexpr int BASE_DIM = 3;
 constexpr AssemblyType A = AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType I =
-    IntegrationType::GAUSS;                     //< selected integration type
+    IntegrationType::GAUSS; //< selected integration type
 constexpr CoordinateTypes coord_type = CARTESIAN;
 
 using EntData = EntitiesFieldData::EntData;
@@ -304,28 +304,10 @@ MoFEMErrorCode Magnetostatics::boundaryCondition() {
     return boundary_entities;
   };
 
-  auto boundary_essential_bc = [&]() {
-    Range boundary_entities;
-    auto bc_mng = mField.getInterface<BcManager>();
-    CHKERR bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
-                                          "ESSENTIAL", "MAGNETIC_POTENTIAL", 0,
-                                          0);
-
-    auto &bc_map = bc_mng->getBcMapByBlockName();
-    // boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
-    for (auto b : bc_map) {
-      if (std::regex_match(b.first, std::regex("(.*)ESSENTIAL(.*)"))) {
-        boundary_entities.merge(*(b.second->getBcEntsPtr()));
-      }
-    }
-    // Add vertices to boundary entities
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
-
-    return boundary_entities;
-  };
+  auto bc_mng = mField.getInterface<BcManager>();
+  CHKERR bc_mng->removeBlockDOFsOnEntities<BcScalarMeshsetType<BLOCKSET>>(
+      simpleInterface->getProblemName(), "(BOUNDARY_CONDITION|SETU|ESSENTIAL)",
+      std::string("MAGNETIC_POTENTIAL"), true);
 
   auto source_bc = [&]() {
     Range boundary_entities;
@@ -358,43 +340,7 @@ MoFEMErrorCode Magnetostatics::boundaryCondition() {
   };
 
   naturalBcRange = boundary_natural_bc();
-  essentialBcRange = boundary_essential_bc();
   sourceRange = source_bc();
-
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-  if (SPACE_DIM == 3)
-    if (essentialBcRange.empty()) {
-      Range tets;
-      CHKERR mField.get_moab().get_entities_by_type(0, MBTET, tets);
-      Skinner skin(&mField.get_moab());
-      Range skin_faces; // skin faces from 3d ents
-      CHKERR skin.find_skin(0, tets, false, skin_faces);
-      skin_faces = subtract(skin_faces, naturalBcRange);
-      Range proc_skin;
-      CHKERR pcomm->filter_pstatus(skin_faces,
-                                   PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                                   PSTATUS_NOT, -1, &proc_skin);
-      CHKERR mField.get_moab().get_adjacencies(
-          proc_skin, 1, true, essentialBcRange, moab::Interface::UNION);
-      essentialBcRange.merge(proc_skin);
-    }
-  if (SPACE_DIM == 2)
-    if (essentialBcRange.empty()) {
-      Range faces;
-      CHKERR mField.get_moab().get_entities_by_type(0, MBTRI, faces);
-      Skinner skin(&mField.get_moab());
-      Range skin_edges; // skin faces from 3d ents
-      CHKERR skin.find_skin(0, faces, false, skin_edges);
-      skin_edges = subtract(skin_edges, naturalBcRange);
-      Range proc_skin;
-      CHKERR pcomm->filter_pstatus(skin_edges,
-                                   PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                                   PSTATUS_NOT, -1, &proc_skin);
-      CHKERR mField.get_moab().get_adjacencies(
-          proc_skin, 1, true, essentialBcRange, moab::Interface::UNION);
-      essentialBcRange.merge(proc_skin);
-    }
 
   MoFEMFunctionReturn(0);
 }
@@ -405,10 +351,6 @@ MoFEMErrorCode Magnetostatics::assembleSystem() {
   MoFEMFunctionBegin;
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
-
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simpleInterface->getProblemName(), "MAGNETIC_POTENTIAL",
-      essentialBcRange);
 
   auto add_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
