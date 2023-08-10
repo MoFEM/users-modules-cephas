@@ -438,14 +438,14 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto ts_a = AssemblyBoundaryEleOp::getTStime();
+    auto ts_time = AssemblyBoundaryEleOp::getTStime();
 
     auto sdf = surfaceDistanceFunction(
-        ts_a, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+        ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
         t_total_traction(0), t_total_traction(1), t_total_traction(2));
 
     auto t_grad_sdf = gradSurfaceDistanceFunction(
-        ts_a, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+        ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
         t_total_traction(0), t_total_traction(1), t_total_traction(2));
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
