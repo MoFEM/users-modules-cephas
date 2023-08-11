@@ -1062,12 +1062,12 @@ MoFEMErrorCode Example::tsSolve() {
       MoFEMFunctionBegin;
       CHKERR EssentialPreProcReaction<DisplacementCubitBcData>(
           mField, post_proc_rhs_ptr, nullptr, Sev::verbose)();
-      CHKERR EssentialPreProcRhs<DisplacementCubitBcData>(
+      CHKERR EssentialPostProcRhs<DisplacementCubitBcData>(
           mField, post_proc_rhs_ptr, 1.)();
       MoFEMFunctionReturn(0);
     };
     auto get_post_proc_hook_lhs = [this, post_proc_lhs_ptr]() {
-      return EssentialPreProcLhs<DisplacementCubitBcData>(
+      return EssentialPostProcLhs<DisplacementCubitBcData>(
           mField, post_proc_lhs_ptr, 1.);
     };
     post_proc_rhs_ptr->postProcessHook = get_post_proc_hook_rhs;
@@ -1353,13 +1353,13 @@ MoFEMErrorCode SetUpSchurImpl::setUp(TS solver) {
         MOFEM_LOG("TIMER", Sev::verbose) << "Lhs Assemble End";
 
 #ifndef ADD_CONTACT
-        CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+        CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
             mField, schur_asmb_post_proc, 1)();
 #else  // ADD_CONTACT
         CHKERR MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
         CHKERR MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
         // Apply essential constrains to A matrix
-        CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+        CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
             mField, schur_asmb_post_proc, 1, A)();
         CHKERR MatAssemblyBegin(P, MAT_FINAL_ASSEMBLY);
         CHKERR MatAssemblyEnd(P, MAT_FINAL_ASSEMBLY);
@@ -1369,7 +1369,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(TS solver) {
         // Apply essential constrains to Schur complement
         CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
         CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-        CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+        CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
             mField, schur_asmb_post_proc, 1, S, aoUp)();
 
         MoFEMFunctionReturn(0);

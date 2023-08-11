@@ -428,11 +428,11 @@ MoFEMErrorCode Example::solveSystem() {
     pre_proc_rhs->preProcessHook = get_pre_proc_hook();
 
     auto get_post_proc_hook_rhs = [&]() {
-      return EssentialPreProcRhs<DisplacementCubitBcData>(mField, post_proc_rhs,
+      return EssentialPostProcRhs<DisplacementCubitBcData>(mField, post_proc_rhs,
                                                           1.);
     };
     auto get_post_proc_hook_lhs = [&]() {
-      return EssentialPreProcLhs<DisplacementCubitBcData>(mField, post_proc_lhs,
+      return EssentialPostProcLhs<DisplacementCubitBcData>(mField, post_proc_lhs,
                                                           1.);
     };
     post_proc_rhs->postProcessHook = get_post_proc_hook_rhs();
@@ -676,7 +676,7 @@ MoFEMErrorCode Example::checkResults() {
       MoFEMFunctionBegin;
       CHKERR EssentialPreProcReaction<DisplacementCubitBcData>(
           mField, fe_post_proc_ptr, res)();
-      CHKERR EssentialPreProcRhs<DisplacementCubitBcData>(
+      CHKERR EssentialPostProcRhs<DisplacementCubitBcData>(
           mField, fe_post_proc_ptr, 0, res)();
       MoFEMFunctionReturn(0);
     };
@@ -893,7 +893,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
     MoFEMFunctionBegin;
     CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
-    CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+    CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
         mField, post_proc_schur_lhs_ptr, 1, S, ao_up)();
     MOFEM_LOG("TIMER", Sev::inform) << "Lhs Assemble End";
     MoFEMFunctionReturn(0);

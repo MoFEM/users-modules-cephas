@@ -682,11 +682,11 @@ MoFEMErrorCode Contact::tsSolve() {
     pre_proc_ptr->preProcessHook = get_bc_hook_rhs();
 
     auto get_post_proc_hook_rhs = [&]() {
-      return EssentialPreProcRhs<DisplacementCubitBcData>(
+      return EssentialPostProcRhs<DisplacementCubitBcData>(
           mField, post_proc_rhs_ptr, 1.);
     };
     auto get_post_proc_hook_lhs = [&]() {
-      return EssentialPreProcLhs<DisplacementCubitBcData>(
+      return EssentialPostProcLhs<DisplacementCubitBcData>(
           mField, post_proc_lhs_ptr, 1.);
     };
     post_proc_rhs_ptr->postProcessHook = get_post_proc_hook_rhs();
@@ -904,7 +904,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
     post_proc_schur_lhs_ptr->postProcessHook = [this,
                                                 post_proc_schur_lhs_ptr]() {
       MoFEMFunctionBegin;
-      CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+      CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
           mField, post_proc_schur_lhs_ptr, 1.)();
       MoFEMFunctionReturn(0);
     };
@@ -987,7 +987,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
 
     CHKERR MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
-    CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+    CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
         mField, post_proc_schur_lhs_ptr, 1, A)();
 
     CHKERR MatAssemblyBegin(P, MAT_FINAL_ASSEMBLY);
@@ -997,7 +997,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
     CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
 
-    CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+    CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
         mField, post_proc_schur_lhs_ptr, 1, S, ao_up)();
 
 #ifndef NDEBUG

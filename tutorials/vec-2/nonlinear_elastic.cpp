@@ -278,12 +278,12 @@ MoFEMErrorCode Example::solveSystem() {
       MoFEMFunctionBegin;
       CHKERR EssentialPreProcReaction<DisplacementCubitBcData>(
           mField, post_proc_rhs_ptr, nullptr, Sev::verbose)();
-      CHKERR EssentialPreProcRhs<DisplacementCubitBcData>(
+      CHKERR EssentialPostProcRhs<DisplacementCubitBcData>(
           mField, post_proc_rhs_ptr, 1.)();
       MoFEMFunctionReturn(0);
     };
     auto get_post_proc_hook_lhs = [this, post_proc_lhs_ptr]() {
-      return EssentialPreProcLhs<DisplacementCubitBcData>(
+      return EssentialPostProcLhs<DisplacementCubitBcData>(
           mField, post_proc_lhs_ptr, 1.);
     };
     post_proc_rhs_ptr->postProcessHook = get_post_proc_hook_rhs;
@@ -332,8 +332,8 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR TSGetSNESIterations(ts, &nonlinits);
   CHKERR TSGetKSPIterations(ts, &linits);
   MOFEM_LOG_C("EXAMPLE", Sev::inform,
-              "steps %D (%D rejected, %D SNES fails), ftime %g, nonlinits "
-              "%D, linits %D\n",
+              "steps %d (%d rejected, %d SNES fails), ftime %g, nonlinits "
+              "%d, linits %d",
               steps, rejects, snesfails, ftime, nonlinits, linits);
 
   MoFEMFunctionReturn(0);
