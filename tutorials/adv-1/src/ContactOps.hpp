@@ -16,6 +16,13 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble contactTraction;
   MatrixDouble contactDisp;
 
+  VectorDouble sdfVals; ///< size is equal to number of gauss points on element
+  MatrixDouble gradsSdf; ///< nb of rows is equals to dimension, and nb of cols
+                         ///< is equals to number of gauss points on element
+  MatrixDouble hessSdf;  ///< nb of rows is equals to nb of element of symmetric
+                        ///< matrix, and nb of cols is equals to number of gauss
+                        ///< points on element
+
   static SmartPetscObj<Vec>
       totalTraction; // User have to release and create vector when appropiate.
 
@@ -52,6 +59,19 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   inline auto contactDispPtr() {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(), &contactDisp);
   }
+
+  inline auto sdfPtr() {
+    return boost::shared_ptr<VectorDouble>(shared_from_this(), &sdfVals);
+  } 
+
+  inline auto gradSdfPtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &gradsSdf);
+  }
+
+  inline auto hessSdfPtr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &hessSdf);
+  } 
+
 };
 
 SmartPetscObj<Vec> CommonData::totalTraction;
@@ -234,6 +254,9 @@ hess_surface_distance_function(double t, double x, double y, double z,
 template <int DIM, IntegrationType I, typename BoundaryEleOp>
 struct OpAssembleTotalContactTractionImpl;
 
+template <int DIM, IntegrationType I, typename BoundaryEleOp>
+struct OpEvaluateSDFImpl;
+
 template <int DIM, IntegrationType I, typename AssemblyBoundaryEleOp>
 struct OpConstrainBoundaryRhsImpl;
 
@@ -253,6 +276,21 @@ struct OpAssembleTotalContactTractionImpl<DIM, GAUSS, BoundaryEleOp>
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   const double scaleTraction;
+};
+
+template <int DIM, typename BoundaryEleOp>
+struct OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp> : public BoundaryEleOp {
+  OpEvaluateSDFImpl(boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+
+  SurfaceDistanceFunction surfaceDistanceFunction = surface_distance_function;
+  GradSurfaceDistanceFunction gradSurfaceDistanceFunction =
+      grad_surface_distance_function;
+  HessSurfaceDistanceFunction hessSurfaceDistanceFunction =
+      hess_surface_distance_function;
 };
 
 template <int DIM, typename AssemblyBoundaryEleOp>
@@ -310,6 +348,9 @@ template <typename BoundaryEleOp> struct ContactIntegrators {
   template <int DIM, IntegrationType I>
   using OpAssembleTotalContactTraction =
       OpAssembleTotalContactTractionImpl<DIM, I, BoundaryEleOp>;
+
+  template <int DIM, IntegrationType I>
+  using OpEvaluateSDF = OpEvaluateSDFImpl<DIM, I, BoundaryEleOp>;
 
   template <AssemblyType A> struct Assembly {
 
@@ -392,6 +433,77 @@ OpAssembleTotalContactTractionImpl<DIM, GAUSS, BoundaryEleOp>::doWork(
 
   MoFEMFunctionReturn(0);
 }
+
+template <int DIM, typename BoundaryEleOp>
+OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::OpEvaluateSDFImpl(
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE),
+      commonDataPtr(common_data_ptr) {}
+
+template <int DIM, typename BoundaryEleOp>
+MoFEMErrorCode
+OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  const auto nb_gauss_pts = BoundaryEleOp::getGaussPts().size2();
+  auto &sdf_vec = commonDataPtr->sdfVals;
+  auto &grad_mat = commonDataPtr->gradsSdf;
+  auto &hess_mat = commonDataPtr->hessSdf;
+
+  sdf_vec.resize(nb_gauss_pts, false);
+  grad_mat.resize(DIM, nb_gauss_pts, false);
+  hess_mat.resize((DIM * (DIM + 1)) / 2, nb_gauss_pts, false);
+
+  auto t_total_traction = CommonData::getFTensor1TotalTraction();
+
+  auto t_sdf = getFTensor0FromVec(sdf_vec);
+  auto t_grad_sdf = getFTensor1FromMat<DIM>(grad_mat);
+  auto t_hess_sdf = getFTensor2SymmetricFromMat<DIM>(hess_mat);
+
+  auto t_disp = getFTensor1FromMat<DIM>(commonDataPtr->contactDisp);
+  auto t_coords = BoundaryEleOp::getFTensor1CoordsAtGaussPts();
+
+  FTensor::Index<'i', DIM> i;
+  FTensor::Index<'j', DIM> j;
+
+  auto next = [&]() {
+    ++t_sdf;
+    ++t_grad_sdf;
+    ++t_hess_sdf;
+    ++t_disp;
+    ++t_coords;
+  };
+
+  for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
+    t_spatial_coords(i) = t_coords(i) + t_disp(i);
+
+    auto ts_time = BoundaryEleOp::getTStime();
+
+    auto sdf_v = surfaceDistanceFunction(
+        ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+
+    auto t_grad_sdf_v = gradSurfaceDistanceFunction(
+        ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+
+    auto t_hess_sdf_v = hessSurfaceDistanceFunction(
+        ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+
+    t_sdf = sdf_v;
+    t_grad_sdf(i) = t_grad_sdf_v(i);
+    t_hess_sdf(i, j) = t_hess_sdf_v(i, j);
+
+    next();
+  }
+
+
+  MoFEMFunctionReturn(0);
+}
+
 
 template <int DIM, typename AssemblyBoundaryEleOp>
 OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
