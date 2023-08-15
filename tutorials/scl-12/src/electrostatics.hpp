@@ -1,6 +1,7 @@
 #ifndef EXECUTABLE_DIMENSION
 #define EXECUTABLE_DIMENSION 2
 #endif
+
 #include <MoFEM.hpp>
 
 constexpr auto domainField = "POTENTIAL";
@@ -60,6 +61,57 @@ struct DataAtIntegrationPts {
     blockPermittivity = 0;
     chrgDens = 0;
   }
+};
+
+template <int SPACE_DIM> struct OpAlpha : public IntEleOp {
+public:
+  OpAlpha(std::string field_name, boost::shared_ptr<MatrixDouble> grad_ptr,
+          boost::shared_ptr<VectorDouble> Aplha_ptr,
+          boost::shared_ptr<Range> ents_ptr, double *alpha_part)
+      : IntEleOp(field_name, SideEleOp::OPROW), gradPtr(grad_ptr),
+        alphaPtr(Aplha_ptr), entsPtr(ents_ptr), alphaPart(alpha_part) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    FTensor::Index<'i', SPACE_DIM> i;
+
+    const auto fe_ent = getFEEntityHandle();
+    const auto nb_gauss_pts = getGaussPts().size2();
+    alphaPtr->resize(nb_gauss_pts, false);
+    alphaPtr->clear();
+    auto t_field_grad = getFTensor1FromMat<SPACE_DIM>(*(gradPtr));
+    auto t_normal = getFTensor1NormalsAtGaussPts();
+    // FTensor::Index<'I', SPACE_DIM> i;
+
+    for (const auto &entity : *entsPtr) {
+      if (entity == fe_ent) {
+
+        std::ofstream outputFile("alpha_values.txt");
+        // get coordinates of the integration point
+        for (int gg = 0; gg != nb_gauss_pts; gg++) {
+          FTensor::Tensor1<double, SPACE_DIM> t_r;
+          t_r(i) = t_normal(i);
+          t_r.normalize();
+          (*alphaPtr)[gg] += -(t_field_grad(i) * t_r(i));
+          *alphaPart += t_field_grad(i) * t_r(i);
+          outputFile << *alphaPart << std::endl;
+          ++t_field_grad;
+          ++t_normal;
+        }
+      }
+    }
+
+    // }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<MatrixDouble> gradPtr;
+  boost::shared_ptr<VectorDouble> alphaPtr;
+  double *alphaPart;
+  boost::shared_ptr<Range> entsPtr;
 };
 
 struct OpNegativeGradient : public ForcesAndSourcesCore::UserDataOperator {

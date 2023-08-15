@@ -443,7 +443,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::boundaryCondition() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
-      if (entity_name.compare(0, 11, "CONSTANT_BC") == 0) {
+      if (entity_name.compare(0, 11, "ELECTRODE") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(
             mField.get_moab(), SPACE_DIM - 1, boundary_entities, true);
       }
@@ -646,7 +646,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
 
-      if (entity_name.compare(0, 11, "CONSTANT_BC") == 0) {
+      if (entity_name.compare(0, 11, "ELECTRODE") == 0) { // ELECTRODE
         Skinner skin(&mField.get_moab());
         //  CHKERR skin.find_skin(0, constBCEdges, false, constBCEdges);
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
@@ -655,13 +655,14 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
     }
     return constBCEdges;
   };
-  auto flatingBoundaryMarker_dof = [&](Range &&constBCEdges) {
-    auto problem_manager = mField.getInterface<ProblemsManager>();
-    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
-    problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
-                              constBCEdges, *marker_ptr);
-    return marker_ptr;
-  };
+
+  // auto flatingBoundaryMarker_dof = [&](Range &&constBCEdges) {
+  //   auto problem_manager = mField.getInterface<ProblemsManager>();
+  //   auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
+  //   problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
+  //                             constBCEdges, *marker_ptr);
+  //   return marker_ptr;
+  // };
 
   FloatingblockconstBC = get_entities_on_floating();
   auto op_loop_side = new OpLoopSide<SideEle>(
