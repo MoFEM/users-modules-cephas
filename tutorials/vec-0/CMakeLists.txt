@@ -23,6 +23,7 @@ tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
 tutorials_copy_and_install("../vec-2/beam_2D.cub" "${permissions_default}")
 tutorials_copy_and_install("../vec-2/beam_3D.cub" "${permissions_default}")
+tutorials_copy_and_install("../vec-2/LShape_Rot_MPC.cub" "${permissions_default}")
 
 tutorials_build_and_install(
   elastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/elastic.cpp)
@@ -39,6 +40,13 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   ${CMAKE_CURRENT_BINARY_DIR}/elastic_2d
   -file_name part.h5m -order 3 
+  -ksp_rtol 1e-12 -ksp_atol 1e-9 -test -log_no_color)
+
+add_test(
+  elastic_mpc
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
+  ${CMAKE_CURRENT_BINARY_DIR}/elastic_2d
+  -file_name part.h5m -order 2 
   -ksp_rtol 1e-12 -ksp_atol 1e-9 -test -log_no_color)
 
 add_test(

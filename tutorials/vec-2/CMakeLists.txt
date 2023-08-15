@@ -55,3 +55,10 @@ add_test(
   ${CMAKE_CURRENT_BINARY_DIR}/nonlinear_elastic_2d
   -file_name ${CMAKE_CURRENT_SOURCE_DIR}/LShape_Rot_D1_2D.cub -order 2 -ts_max_time 1.0 -ts_dt 0.05
   -log_no_color -test 3)
+
+add_test(
+  test_rotation_mpc
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
+  ${CMAKE_CURRENT_BINARY_DIR}/nonlinear_elastic_2d
+  -file_name ${CMAKE_CURRENT_SOURCE_DIR}/LShape_Rot_MPC.cub -order 2 -ts_max_time 1.0 -ts_dt 0.05
+  -log_no_color -test 4)

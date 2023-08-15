@@ -316,6 +316,8 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
 
+  CHKERR bc_mng->addBlockDOFsToMPCs(simple->getProblemName(), "U");
+
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order + 1;
   };
@@ -427,16 +429,26 @@ MoFEMErrorCode Example::solveSystem() {
     };
     pre_proc_rhs->preProcessHook = get_pre_proc_hook();
 
-    auto get_post_proc_hook_rhs = [&]() {
-      return EssentialPostProcRhs<DisplacementCubitBcData>(mField, post_proc_rhs,
-                                                          1.);
+    auto get_post_proc_hook_rhs = [this, post_proc_rhs]() {
+      MoFEMFunctionBeginHot;
+      
+      CHKERR EssentialPreProcRhs<DisplacementCubitBcData>(mField, post_proc_rhs,
+                                                          1.)();
+      CHKERR EssentialPreProcRhs<MPCsType>(mField, post_proc_rhs, 1.)();
+      MoFEMFunctionReturnHot(0);
     };
-    auto get_post_proc_hook_lhs = [&]() {
-      return EssentialPostProcLhs<DisplacementCubitBcData>(mField, post_proc_lhs,
-                                                          1.);
+
+    auto get_post_proc_hook_lhs = [this, post_proc_lhs]() {
+      MoFEMFunctionBeginHot;
+
+      CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(mField, post_proc_lhs,
+                                                          1.)();
+      CHKERR EssentialPreProcLhs<MPCsType>(mField, post_proc_lhs)();
+      MoFEMFunctionReturnHot(0);
     };
-    post_proc_rhs->postProcessHook = get_post_proc_hook_rhs();
-    post_proc_lhs->postProcessHook = get_post_proc_hook_lhs();
+
+    post_proc_rhs->postProcessHook = get_post_proc_hook_rhs;
+    post_proc_lhs->postProcessHook = get_post_proc_hook_lhs;
 
     ksp_ctx_ptr->getPreProcComputeRhs().push_front(pre_proc_rhs);
     ksp_ctx_ptr->getPostProcComputeRhs().push_back(post_proc_rhs);
@@ -677,6 +689,8 @@ MoFEMErrorCode Example::checkResults() {
       CHKERR EssentialPreProcReaction<DisplacementCubitBcData>(
           mField, fe_post_proc_ptr, res)();
       CHKERR EssentialPostProcRhs<DisplacementCubitBcData>(
+          mField, fe_post_proc_ptr, 0, res)();
+      CHKERR EssentialPreProcRhs<MPCsType>(
           mField, fe_post_proc_ptr, 0, res)();
       MoFEMFunctionReturn(0);
     };
