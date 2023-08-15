@@ -285,14 +285,14 @@ MoFEMErrorCode Example::solveSystem() {
           mField, post_proc_rhs_ptr, nullptr, Sev::verbose)();
       CHKERR EssentialPostProcRhs<DisplacementCubitBcData>(
           mField, post_proc_rhs_ptr, 1.)();
-      CHKERR EssentialPreProcRhs<MPCsType>(mField, post_proc_rhs_ptr)();
+      CHKERR EssentialPostProcRhs<MPCsType>(mField, post_proc_rhs_ptr)();
       MoFEMFunctionReturn(0);
     };
     auto get_post_proc_hook_lhs = [this, post_proc_lhs_ptr]() {
       MoFEMFunctionBegin;
-      CHKERR EssentialPreProcLhs<DisplacementCubitBcData>(
+      CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
           mField, post_proc_lhs_ptr, 1.)();
-      CHKERR EssentialPreProcLhs<MPCsType>(mField, post_proc_lhs_ptr)();
+      CHKERR EssentialPostProcLhs<MPCsType>(mField, post_proc_lhs_ptr)();
       MoFEMFunctionReturn(0);
     };
     post_proc_rhs_ptr->postProcessHook = get_post_proc_hook_rhs;
