@@ -1,20 +1,58 @@
 /**
- * @file NaturalBoundaryBC.hpp
- * @brief Implementation of natural boundary conditions
- * @version 0.13.2
- * @date 2022-09-22
+ * @file NaturalBCs.hpp
+ * @brief Set natural conditions
+ * @version 0.1
+ * @date 2023-07-26
  * 
- * @copyright Copyright (c) 2022
+ * @copyright Copyright (c) 2023
  * 
  */
 
 #include <ElasticSpring.hpp>
 
+namespace PlasticOps {
+
+struct DomainBCs;
+struct BoundaryBCs;
+
+} // namespace PlasticOps
+
+
 template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
           typename OpBase>
 struct AddFluxToRhsPipelineImpl<
 
-    OpFluxRhsImpl<ContactOps::BoundaryBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>,
+    OpFluxRhsImpl<PlasticOps::DomainBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>, A,
+    I, OpBase
+
+    > {
+
+  AddFluxToRhsPipelineImpl() = delete;
+
+  using T =
+      typename NaturalBC<OpBase>::template Assembly<A>::template LinearForm<I>;
+  using OpBodyForce = typename T::template OpFlux<NaturalMeshsetType<BLOCKSET>,
+                                                  BASE_DIM, FIELD_DIM>;
+
+  static MoFEMErrorCode add(
+
+      boost::ptr_deque<ForcesAndSourcesCore::UserDataOperator> &pipeline,
+      MoFEM::Interface &m_field, std::string field_name,
+      std::vector<boost::shared_ptr<ScalingMethod>> smv, Sev sev
+
+  ) {
+    MoFEMFunctionBegin;
+    CHKERR T::template AddFluxToPipeline<OpBodyForce>::add(
+        pipeline, m_field, field_name, smv, "BODY_FORCE", sev);
+    MoFEMFunctionReturn(0);
+  }
+};
+
+template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
+          typename OpBase>
+struct AddFluxToRhsPipelineImpl<
+
+    OpFluxRhsImpl<PlasticOps::BoundaryBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>,
     A, I, OpBase
 
     > {
@@ -53,7 +91,7 @@ template <int BASE_DIM, int FIELD_DIM, AssemblyType A, IntegrationType I,
           typename OpBase>
 struct AddFluxToLhsPipelineImpl<
 
-    OpFluxLhsImpl<ContactOps::BoundaryBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>,
+    OpFluxLhsImpl<PlasticOps::BoundaryBCs, BASE_DIM, FIELD_DIM, A, I, OpBase>,
     A, I, OpBase
 
     > {

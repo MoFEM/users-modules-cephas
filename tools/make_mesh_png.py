@@ -30,6 +30,8 @@ def make_png(file, args):
     if args.d2:
         p.camera_position = args.d2
     p.camera.zoom(args.zoom)
+    p.camera.roll += args.roll 
+    p.camera.azimuth += args.azimuth
     image = p.screenshot('%spng' % file[:-3])
     
 def is_not_vtk(files):
@@ -43,7 +45,9 @@ if __name__ == '__main__':
     parser.add_argument('-d2', '--d2', dest='d2', default='')
     parser.add_argument('-f', '--field', dest='field', default='', type=str)
     parser.add_argument('-wv', '--wrap_vector', dest='wrap_vector', default='', type=str)
-    parser.add_argument('--zoom', dest='zoom', default=1.2, type=str)
+    parser.add_argument('--zoom', dest='zoom', default=1.2, type=float)
+    parser.add_argument('--roll', dest='roll', default=0, type=float)
+    parser.add_argument('--azimuth', dest='azimuth', default=0, type=float)
     args = parser.parse_args()
     
     if debug: 

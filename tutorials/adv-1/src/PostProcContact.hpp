@@ -264,26 +264,6 @@ struct Monitor : public FEMethod {
           return 2 * approx_order + geom_order - 1;
         };
         fe_rhs->getRuleHook = integration_rule;
-
-        // only in case of dynamics
-        if (!is_quasi_static) {
-          auto mat_acceleration = boost::make_shared<MatrixDouble>();
-          pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
-              "U", mat_acceleration));
-          pip.push_back(
-              new OpInertiaForce("U", mat_acceleration,
-                                 [](double, double, double) { return rho; }));
-        }
-        if (alpha_damping > 0) {
-          auto mat_velocity = boost::make_shared<MatrixDouble>();
-          pip.push_back(new OpCalculateVectorFieldValuesDot<SPACE_DIM>(
-              "U", mat_velocity));
-          pip.push_back(
-              new OpInertiaForce("U", mat_velocity, [](double, double, double) {
-                return alpha_damping;
-              }));
-        }
-
         CHKERR HenckyOps::opFactoryDomainRhs<SPACE_DIM, PETSC, IT, DomainEleOp>(
             *m_field_ptr, pip, "U", "MAT_ELASTIC", Sev::inform);
         CHKERR DMoFEMLoopFiniteElements(dM, "dFE", fe_rhs);
@@ -314,10 +294,13 @@ struct Monitor : public FEMethod {
               return spring_stiffness;
             }));
 
+        CHKERR DMoFEMLoopFiniteElements(dM, "bFE", fe_rhs);
+
         MoFEMFunctionReturn(0);
       };
 
       CHKERR assemble_domain();
+      CHKERR assemble_boundary();
 
       auto fe_post_proc_ptr = boost::make_shared<FEMethod>();
       auto get_post_proc_hook_rhs = [this, fe_post_proc_ptr, res,
