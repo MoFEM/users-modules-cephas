@@ -247,11 +247,12 @@ template <int DIM, typename BoundaryEleOp>
 struct OpAssembleTotalContactTractionImpl<DIM, GAUSS, BoundaryEleOp>
     : public BoundaryEleOp {
   OpAssembleTotalContactTractionImpl(
-      boost::shared_ptr<CommonData> common_data_ptr);
+      boost::shared_ptr<CommonData> common_data_ptr, double scale = 1);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  const double scaleTraction;
 };
 
 template <int DIM, typename AssemblyBoundaryEleOp>
@@ -359,9 +360,9 @@ inline double constrain(double sdf, double tn) {
 template <int DIM, typename BoundaryEleOp>
 OpAssembleTotalContactTractionImpl<DIM, GAUSS, BoundaryEleOp>::
     OpAssembleTotalContactTractionImpl(
-        boost::shared_ptr<CommonData> common_data_ptr)
+        boost::shared_ptr<CommonData> common_data_ptr, double scale)
     : BoundaryEleOp(NOSPACE, BoundaryEleOp::OPSPACE),
-      commonDataPtr(common_data_ptr) {}
+      commonDataPtr(common_data_ptr), scaleTraction(scale) {}
 
 template <int DIM, typename BoundaryEleOp>
 MoFEMErrorCode
@@ -383,6 +384,8 @@ OpAssembleTotalContactTractionImpl<DIM, GAUSS, BoundaryEleOp>::doWork(
     ++t_traction;
   }
 
+  t_sum_t(i) *= scaleTraction;
+
   constexpr int ind[] = {0, 1, 2};
   CHKERR VecSetValues(commonDataPtr->totalTraction, 3, ind, &t_sum_t(0),
                       ADD_VALUES);
@@ -394,7 +397,8 @@ template <int DIM, typename AssemblyBoundaryEleOp>
 OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
     OpConstrainBoundaryRhsImpl(const std::string field_name,
                                boost::shared_ptr<CommonData> common_data_ptr)
-    : AssemblyBoundaryEleOp(field_name, field_name, DomainEleOp::OPROW),
+    : AssemblyBoundaryEleOp(field_name, field_name,
+                            AssemblyBoundaryEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
 template <int DIM, typename AssemblyBoundaryEleOp>
@@ -434,14 +438,14 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
 
-    auto ts_a = AssemblyBoundaryEleOp::getTStime();
+    auto ts_time = AssemblyBoundaryEleOp::getTStime();
 
     auto sdf = surfaceDistanceFunction(
-        ts_a, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+        ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
         t_total_traction(0), t_total_traction(1), t_total_traction(2));
 
     auto t_grad_sdf = gradSurfaceDistanceFunction(
-        ts_a, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+        ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
         t_total_traction(0), t_total_traction(1), t_total_traction(2));
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
@@ -489,7 +493,7 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
                                   const std::string col_field_name,
                                   boost::shared_ptr<CommonData> common_data_ptr)
     : AssemblyBoundaryEleOp(row_field_name, col_field_name,
-                            DomainEleOp::OPROWCOL),
+                            AssemblyBoundaryEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   AssemblyBoundaryEleOp::sYmm = false;
 }
@@ -549,7 +553,7 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
     FTensor::Tensor2<double, DIM, DIM> t_cQ;
     t_cQ(i, j) = kronecker_delta(i, j) - t_cP(i, j);
 
-    FTensor::Tensor2<double, 3, 3> t_res_dU;
+    FTensor::Tensor2<double, DIM, DIM> t_res_dU;
     t_res_dU(i, j) = kronecker_delta(i, j) + t_cP(i, j);
 
     if (c > 0) {
@@ -602,7 +606,7 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
         const std::string row_field_name, const std::string col_field_name,
         boost::shared_ptr<CommonData> common_data_ptr)
     : AssemblyBoundaryEleOp(row_field_name, col_field_name,
-                            DomainEleOp::OPROWCOL),
+                            AssemblyBoundaryEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   AssemblyBoundaryEleOp::sYmm = false;
 }
@@ -758,6 +762,9 @@ MoFEMErrorCode opFactoryBoundaryToDomainLhs(
     std::string fe_domain_name, std::string sigma, std::string u,
     std::string geom, ForcesAndSourcesCore::RuleHookFun rule) {
   MoFEMFunctionBegin;
+
+  using DomainEleOp = typename DomainEle::UserDataOperator;
+
   auto op_loop_side = new OpLoopSide<DomainEle>(
       m_field, fe_domain_name, DIM, Sev::noisy,
       boost::make_shared<ForcesAndSourcesCore::UserDataOperator::AdjCache>());
@@ -841,7 +848,7 @@ MoFEMErrorCode opFactoryCalculateTraction(
   pip.push_back(new OpCalculateHVecTensorTrace<DIM, BoundaryEleOp>(
       sigma, common_data_ptr->contactTractionPtr()));
   pip.push_back(new typename C::template OpAssembleTotalContactTraction<DIM, I>(
-      common_data_ptr));
+      common_data_ptr, 1. / scale));
 
   MoFEMFunctionReturn(0);
 }

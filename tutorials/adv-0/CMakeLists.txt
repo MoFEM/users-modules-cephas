@@ -1,6 +1,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-2/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../adv-1/src)
 
 include_directories(${MoFEM_INSTALL_DIR}/third_party/phg-quadrule)
 
@@ -18,7 +19,6 @@ set(permissions_execute
 
 tutorials_copy_and_install("*.msh" "${permissions_default}")
 tutorials_copy_and_install("*.cfg" "${permissions_default}")
-# tutorials_copy_and_install("*.jou" "${permissions_default}")
 tutorials_copy_and_install("*.cub" "${permissions_default}")
 tutorials_copy_and_install("*.h5m" "${permissions_default}")
 tutorials_copy_and_install("*.petsc" "${permissions_default}")
@@ -28,26 +28,52 @@ tutorials_copy_and_install("*.png" "${permissions_execute}")
 tutorials_copy_and_install("*.md" "${permissions_execute}")
 tutorials_copy_and_install("*.cfg" "${permissions_execute}")
 tutorials_copy_and_install("*.jou" "${permissions_execute}")
+tutorials_copy_and_install("*.py" "${permissions_execute}")
 tutorials_copy_and_install("meshes/*" "${permissions_execute}")
 
-tutorials_build_and_install(
-  plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
-
-set_target_properties(
-  plastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1")
-
-tutorials_build_and_install(
-  plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+if(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE) 
   
-set_target_properties(
-  plastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1")
+  include_directories(${_Python_INCLUDE_DIR})
+
+  tutorials_build_and_install(
+    plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+  tutorials_build_and_install(
+    plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+
+  set_target_properties(
+    plastic_3d PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1 -DPYTHON_SFD -DADD_CONTACT")
+  set_target_properties(
+    plastic_2d PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1 -DPYTHON_SFD -DADD_CONTACT")
+
+  target_link_libraries(plastic_2d 
+    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
+  target_link_libraries(plastic_3d 
+    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
+
+else (Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
+
+  tutorials_build_and_install(
+    plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+  tutorials_build_and_install(
+    plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+
+  set_target_properties(
+    plastic_3d PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1")
+  set_target_properties(
+    plastic_2d PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1")
+
+endif(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
 
 add_test(
   plastic_3d_necking
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   plastic_3d 
   -file_name necking_3D_p2.h5m
-  -ts_dt 0.02
+  -ts_dt 0.01
   -ts_max_time 1.2
   -ts_max_steps 1
   -ts_type theta

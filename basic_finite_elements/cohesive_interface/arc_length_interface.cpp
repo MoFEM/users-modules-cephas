@@ -723,29 +723,29 @@ int main(int argc, char *argv[]) {
 
     // Rhs
     SnesCtx::FEMethodsSequence &loops_to_do_Rhs =
-        snes_ctx.get_loops_to_do_Rhs();
-    snes_ctx.get_preProcess_to_do_Rhs().push_back(&my_dirichlet_bc);
-    snes_ctx.get_preProcess_to_do_Rhs().push_back(&pre_post_proc_fe);
+        snes_ctx.getComputeRhs();
+    snes_ctx.getPreProcComputeRhs().push_back(&my_dirichlet_bc);
+    snes_ctx.getPreProcComputeRhs().push_back(&pre_post_proc_fe);
     loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
         "INTERFACE", &cohesive_elements.getFeRhs()));
     loops_to_do_Rhs.push_back(
         SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeRhs()));
     loops_to_do_Rhs.push_back(
         SnesCtx::PairNameFEMethodPtr("ARC_LENGTH", my_arc_method_ptr.get()));
-    snes_ctx.get_postProcess_to_do_Rhs().push_back(&pre_post_proc_fe);
-    snes_ctx.get_postProcess_to_do_Rhs().push_back(&my_dirichlet_bc);
+    snes_ctx.getPostProcComputeRhs().push_back(&pre_post_proc_fe);
+    snes_ctx.getPostProcComputeRhs().push_back(&my_dirichlet_bc);
 
     // Mat
     SnesCtx::FEMethodsSequence &loops_to_do_Mat =
-        snes_ctx.get_loops_to_do_Mat();
-    snes_ctx.get_preProcess_to_do_Mat().push_back(&my_dirichlet_bc);
+        snes_ctx.getSetOperators();
+    snes_ctx.getPreProcSetOperators().push_back(&my_dirichlet_bc);
     loops_to_do_Mat.push_back(SnesCtx::PairNameFEMethodPtr(
         "INTERFACE", &cohesive_elements.getFeLhs()));
     loops_to_do_Mat.push_back(
         SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeLhs()));
     loops_to_do_Mat.push_back(
         SnesCtx::PairNameFEMethodPtr("ARC_LENGTH", my_arc_method_ptr.get()));
-    snes_ctx.get_postProcess_to_do_Mat().push_back(&my_dirichlet_bc);
+    snes_ctx.getPostProcSetOperators().push_back(&my_dirichlet_bc);
 
     double gamma = 0.5, reduction = 1;
     // step = 1;

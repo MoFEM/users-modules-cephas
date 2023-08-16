@@ -1,0 +1,70 @@
+reset
+
+#{rad=6.4135}
+#{rad2=0.982*6.4135}
+#{heigh=53.34/2}
+#{offset=8.98/2}
+
+create surface circle radius {rad} zplane
+create surface circle radius {rad} zplane
+create surface circle radius {rad2} zplane
+move surface 1 location 0 0 {heigh} include_merged
+move surface 2 location 0 0 {offset} include_merged
+create volume loft surface 1 2
+create volume loft surface 2 3
+delete body 1 2 3
+merge volume all
+
+webcut volume 4 5 with plane yplane offset 0
+webcut volume all with plane xplane offset 0
+
+delete volume 6 7 10 8 9 11
+
+imprint volume all
+merge volume all 
+
+volume 5 size 2
+volume 4 size 2
+volume all scheme tetmesh
+mesh volume 5
+mesh volume 4
+
+set duplicate block elements on
+
+#FIXED_BOUNDARY CONDITIONS
+
+block 5 surface 30
+block 5 name "FIX_Z"
+block 5 attribute count 3
+block 5 attribute index 1 0 
+block 5 attribute index 2 0
+block 5 attribute index 3 0
+
+block 6 surface 26 36
+block 6 name "FIX_X"
+block 6 attribute count 3
+block 6 attribute index 1 0
+block 6 attribute index 2 0
+block 6 attribute index 3 0
+
+block 7 surface 29 39
+block 7 name "FIX_Y"
+block 7 attribute count 3
+block 7 attribute index 1 0
+block 7 attribute index 2 0
+block 7 attribute index 3 0
+
+block 8 surface 38
+block 8 name "FIX_Z1"
+block 8 attribute count 3
+block 8 attribute index 1 0
+block 8 attribute index 2 0
+block 8 attribute index 3 7.5
+
+block 9 surface 30
+block 9 name "REACTION"
+block 9 attribute count 3
+block 9 attribute index 1 0
+block 9 attribute index 2 0
+block 9 attribute index 3 0
+
