@@ -199,6 +199,115 @@ private:
   ScalFun betaCoeff;
 };
 
+struct OpPostProcError : public DomainEleOp {
+public:
+  OpPostProcError(std::string field_name, ScalFun analytical_function,
+                  boost::shared_ptr<VectorDouble> val_pointer,
+                  boost::shared_ptr<VectorDouble> error_pointer,
+                  SmartPetscObj<Vec> petsc_vec, int petsc_vec_position)
+      : DomainEleOp(field_name, DomainEleOp::OPROW),
+        analyticalFunc(analytical_function), valPtr(val_pointer),
+        errorPtr(error_pointer), petscVec(petsc_vec),
+        petscVecPosition(petsc_vec_position){};
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    const int nb_integration_pts = data.getN().size1();
+
+    // resize the vector for errors
+    errorPtr->resize(nb_integration_pts);
+
+    // get area of the element
+    const double area = getMeasure();
+
+    // create tensors for the values and errors
+    auto t_val = getFTensor0FromVec(*(valPtr));
+    auto t_error = getFTensor0FromVec(*(errorPtr));
+
+    // get coordinates at integration point
+    auto t_coords = getFTensor1CoordsAtGaussPts();
+
+    // Create storage for the local error
+    std::array<double, 1> element_local_value;
+    std::fill(element_local_value.begin(), element_local_value.end(), 0.0);
+
+    for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+      // get analytical value
+      double analytical_val =
+          analyticalFunc(t_coords(0), t_coords(1), t_coords(2));
+
+      // find error on gauss points
+      t_error = analytical_val - t_val;
+
+      // add to global error
+      element_local_value[0] +=
+          t_error * t_error * area / nb_integration_pts; // RMS error
+
+      ++t_val;
+      ++t_error;
+      ++t_coords;
+    }
+
+    // Set array of indices
+    std::array<int, 1> indices = {petscVecPosition};
+
+    // Assemble first moment of inertia
+    CHKERR ::VecSetValues(petscVec, indices.size(), indices.data(),
+                          &element_local_value[0], ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  };
+
+private:
+  ScalFun analyticalFunc;
+  boost::shared_ptr<VectorDouble> valPtr;
+  boost::shared_ptr<VectorDouble> errorPtr;
+  SmartPetscObj<Vec> petscVec;
+  int petscVecPosition;
+};
+
+template <int DIM> struct OpGetMagnitude : public DomainEleOp {
+public:
+  OpGetMagnitude(std::string field_name,
+                 boost::shared_ptr<MatrixDouble> val_pointer,
+                 boost::shared_ptr<VectorDouble> mag_pointer, double scale = 1.)
+      : DomainEleOp(field_name, DomainEleOp::OPROW), magPtr(mag_pointer),
+        valPtr(val_pointer), sCale(scale){};
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    FTensor::Index<'i', DIM> i;
+
+    const int nb_integration_pts = data.getN().size1();
+
+    // resize the vector for magnitudes
+    magPtr->resize(nb_integration_pts);
+
+    // create tensors for the values and magnitudes
+    auto t_val = getFTensor1FromMat<DIM>(*(valPtr));
+    auto t_mag = getFTensor0FromVec(*(magPtr));
+
+    for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+      // calculate magnitude at gauss point
+      t_mag = sqrt(t_val(i) * t_val(i)) * sCale;
+
+      ++t_val;
+      ++t_mag;
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
+private:
+  boost::shared_ptr<MatrixDouble> valPtr;
+  boost::shared_ptr<VectorDouble> magPtr;
+  double sCale;
+};
+
 struct Magnetostatics {
 public:
   Magnetostatics(MoFEM::Interface &m_field);
@@ -225,6 +334,15 @@ private:
   Range essentialBcRange;
   Range sourceRange;
 
+  enum VecElements {
+    VALUE_ERROR = 0, // sum(error^2 * area)
+    LAST_ELEMENT
+  };
+
+  // Petsc vector for errors
+  SmartPetscObj<Vec> petscVec;
+
+  // body force as a natural boundary condition definition
   using OpBodyForce =
       DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>,
                               potential_field_dim * potential_field_dim,
@@ -265,6 +383,17 @@ MoFEMErrorCode Magnetostatics::setupProblem() {
                                PETSC_NULL);
 
   CHKERR simpleInterface->setUp();
+
+  // initialise petsc vector for required processor
+  int local_size;
+  if (mField.get_comm_rank() == 0) // get_comm_rank() gets processor number
+    // processor 0
+    local_size = LAST_ELEMENT; // last element gives size of vector
+  else
+    // other processors (e.g. 1, 2, 3, etc.)
+    local_size = 0; // local size of vector is zero on other processors
+
+  petscVec = createSmartVectorMPI(mField.get_comm(), local_size, LAST_ELEMENT);
 
   MoFEMFunctionReturn(0);
 }
@@ -489,6 +618,8 @@ MoFEMErrorCode Magnetostatics::outputResults() {
   auto field_val_ptr = boost::make_shared<MatrixDouble>();
   auto field_val_ptr_2D = boost::make_shared<VectorDouble>();
   auto induction_ptr = boost::make_shared<MatrixDouble>();
+  auto induction_mag_ptr = boost::make_shared<VectorDouble>();
+  auto induction_mag_error_ptr = boost::make_shared<VectorDouble>();
 
   if (SPACE_DIM == 3)
     post_proc_fe->getOpPtrVector().push_back(
@@ -503,6 +634,40 @@ MoFEMErrorCode Magnetostatics::outputResults() {
       new OpCalculateHcurlVectorCurl<potential_field_dim, SPACE_DIM>(
           "MAGNETIC_POTENTIAL", induction_ptr));
 
+  // check errors if -ana_radius is set
+  {
+    double ana_radius = 0.0;
+    double ana_current_density = 0.0;
+
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-ana_radius", &ana_radius,
+                                 PETSC_NULL);
+
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-ana_current_density",
+                                 &ana_current_density, PETSC_NULL);
+
+    if (ana_radius > 0.0) {
+
+      // get magnitude of the magnetic induction field
+      post_proc_fe->getOpPtrVector().push_back(new OpGetMagnitude<SPACE_DIM>(
+          "MAGNETIC_POTENTIAL", induction_ptr, induction_mag_ptr));
+
+      // magnetic induction field magnitude analytical function
+      auto analytical_fun = [&](const double x, const double y,
+                                const double z) {
+        double radius = sqrt(x * x + y * y);
+        if (radius < ana_radius)
+          return ana_current_density * radius / 2.0;
+        else
+          return ana_current_density * ana_radius * ana_radius / (2.0 * radius);
+      };
+
+      // get error of the magnetic induction field magnitude
+      post_proc_fe->getOpPtrVector().push_back(new OpPostProcError(
+          "MAGNETIC_POTENTIAL", analytical_fun, induction_mag_ptr,
+          induction_mag_error_ptr, petscVec, 0));
+    }
+  }
+
   using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
   if (SPACE_DIM == 2)
@@ -511,7 +676,9 @@ MoFEMErrorCode Magnetostatics::outputResults() {
         new OpPPMap(
             post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-            OpPPMap::DataMapVec{{"MAGNETIC_POTENTIAL_2D", field_val_ptr_2D}},
+            OpPPMap::DataMapVec{
+                {"MAGNETIC_POTENTIAL_2D", field_val_ptr_2D},
+                {"MAGNETIC_INDUCTION_ERROR", induction_mag_error_ptr}},
 
             OpPPMap::DataMapMat{{"MAGNETIC_INDUCTION_FIELD", induction_ptr}},
 
@@ -529,7 +696,8 @@ MoFEMErrorCode Magnetostatics::outputResults() {
         new OpPPMap(
             post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-            OpPPMap::DataMapVec{},
+            OpPPMap::DataMapVec{
+                {"MAGNETIC_INDUCTION_ERROR", induction_mag_error_ptr}},
 
             OpPPMap::DataMapMat{{"MAGNETIC_POTENTIAL", field_val_ptr},
                                 {"MAGNETIC_INDUCTION_FIELD", induction_ptr}},
@@ -547,6 +715,19 @@ MoFEMErrorCode Magnetostatics::outputResults() {
   CHKERR post_proc_fe->writeFile("out_magneto_result_" +
                                  boost::lexical_cast<std::string>(SPACE_DIM) +
                                  "D.h5m");
+
+  // assemble the petsc vector
+  CHKERR VecAssemblyBegin(petscVec);
+  CHKERR VecAssemblyEnd(petscVec);
+
+  const double *array;
+  CHKERR VecGetArrayRead(petscVec, &array);
+
+  double error = sqrt(array[VALUE_ERROR]);
+  std::cout << "magnetic induction field magnitude error: " << error
+            << std::endl;
+
+  CHKERR VecRestoreArrayRead(petscVec, &array);
 
   MoFEMFunctionReturn(0);
 }
