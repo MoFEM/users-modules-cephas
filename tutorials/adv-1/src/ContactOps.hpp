@@ -475,11 +475,11 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(
     ++t_coords;
   };
 
+  auto ts_time = BoundaryEleOp::getTStime();
+
   for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
     FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
     t_spatial_coords(i) = t_coords(i) + t_disp(i);
-
-    auto ts_time = BoundaryEleOp::getTStime();
 
     auto sdf_v = surfaceDistanceFunction(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),

@@ -262,8 +262,11 @@ struct Monitor : public FEMethod {
 
       CHKERR DMoFEMPreProcessFiniteElements(dM, post_proc_begin->getFEMethod());
       if (!postProcBdyFe) {
+        postProcDomainFe->ts_t = this->ts_t; // this here is a Monitor
         CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcDomainFe);
       } else {
+        postProcDomainFe->ts_t = this->ts_t; // this here is a Monitor
+        postProcBdyFe->ts_t = this->ts_t;
         CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcDomainFe);
         CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcBdyFe);
       }
