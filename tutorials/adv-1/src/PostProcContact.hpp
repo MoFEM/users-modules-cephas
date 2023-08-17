@@ -141,7 +141,7 @@ struct Monitor : public FEMethod {
                 post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
                 {{"SDF", common_data_sdf_ptr->sdfPtr()}},
-[]
+                
                 {
 
                     {"TRACTION_CONTACT",
