@@ -1,9 +1,10 @@
 /**
- * @file electrostatics.cpp
- * \example electrostatics.cpp
+ * @file Electrostatics.cpp
+ * \example Electrostatics.cpp
  *  */
 // #ifndef __ELECTROSTATICS_CPP__
 // #define __ELECTROSTATICS_CPP__
+
 #include <electrostatics.hpp>
 struct ElectrostaticHomogeneous {
 public:
@@ -335,8 +336,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
       new OpCalculateScalarFieldGradient<SPACE_DIM>(domainField,
                                                     grad_grad_ptr));
 
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      op_loop_side); // for loop overside
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(op_loop_side);
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpAlpha<SPACE_DIM>(
       domainField, grad_grad_ptr, alpha_ptr,
       boost::make_shared<Range>(FloatingblockconstBC), &alphaPart));

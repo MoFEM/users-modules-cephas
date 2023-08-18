@@ -27,7 +27,7 @@ tutorials_build_and_install(
   electrostatic_3d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatic_3d_homogeneous.cpp)
 
 
-    if(SLEPC_FOUND)
+    # if(SLEPC_FOUND)
 
     tutorials_build_and_install(
       electrostatics_3d ${CMAKE_CURRENT_SOURCE_DIR}/electrostatics.cpp)
@@ -49,7 +49,7 @@ tutorials_build_and_install(
       -order 1
       -log_no_color -test)
   
-  endif(SLEPC_FOUND)
+  # endif(SLEPC_FOUND)
   
 
 
