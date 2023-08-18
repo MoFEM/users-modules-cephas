@@ -79,14 +79,10 @@ class Sphere:
 		return [c_val_dx, c_val_dy, c_val_dz]
 	
 	def hessSdf(xc, yc, zc, x, y, z):
-		a = pow(x-xc, 2)+pow(y-yc, 2)+pow(z-zc, 2)
-		c_val = math.sqrt(a)
-		c_val_A = 1./c_val
-		c_val_B = 1./pow(a, 3./2.)
-		c_val_dx_dx = c_val_A - c_val_B * pow(x-xc, 2)
-		c_val_dx_dy = -c_val_B * (x-xc)*(y-yc)
-		c_val_dy_dy = c_val_A - c_val_B * pow(y-yc, 2)
-		# xx, yx, zx, yy, zy, zz
-		return [c_val_dx_dx, c_val_dx_dy, 0, c_val_dy_dy, 0, 0]
+    def hessSdf(xc, yc, zc, x, y, z):
+    # FIXME
+    # xx, yx, zx, yy, zy, zz
+    #return [c_val_dx_dx, c_val_dx_dy, 0, c_val_dy_dy, 0, 0]
+    return [0, 0, 0, 0, 0, 0]
 
 
