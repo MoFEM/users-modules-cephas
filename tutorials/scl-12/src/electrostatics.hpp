@@ -37,12 +37,6 @@ using OpDomainLhsMatrixK = FormsIntegrators<DomainEleOp>::Assembly<
 using OpInterfaceRhsVectorF = FormsIntegrators<IntEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, FIELD_DIM>;
 
-using OpDirchBoundaryMassL = FormsIntegrators<IntEleOp>::Assembly<
-    PETSC>::BiLinearForm<GAUSS>::OpMass<BASE_DIM, FIELD_DIM>; /// opMass
-
-using OpDirchBoundarySourceR = FormsIntegrators<IntEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpSource<BASE_DIM, FIELD_DIM>; /// OpSourceL
-
 static char help[] = "...\n\n";
 
 struct BlockData {

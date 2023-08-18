@@ -27,18 +27,6 @@ tutorials_build_and_install(
   electrostatic_3d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatic_3d_homogeneous.cpp)
 
 
-
-  tutorials_build_and_install(
-     electrostatichomogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatichomogeneous.cpp) 
-  tutorials_build_and_install(
-    elec_constbc ${CMAKE_CURRENT_SOURCE_DIR}/elec_constbc.cpp)
-
-  tutorials_build_and_install(
-    electrostatics ${CMAKE_CURRENT_SOURCE_DIR}/electrostatics.cpp) 
-
-  tutorials_build_and_install(
-    elec_test ${CMAKE_CURRENT_SOURCE_DIR}/elec_test.cpp) 
-
     if(SLEPC_FOUND)
 
     tutorials_build_and_install(

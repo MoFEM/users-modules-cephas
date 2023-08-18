@@ -1,6 +1,6 @@
 /**
- * @file Electrostatics.cpp
- * \example Electrostatics.cpp
+ * @file electrostatics.cpp
+ * \example electrostatics.cpp
  *  */
 // #ifndef __ELECTROSTATICS_CPP__
 // #define __ELECTROSTATICS_CPP__
@@ -35,9 +35,8 @@ private:
   std::string domainField;
   int oRder;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
-  double alphaPart = 0.5;
-  double alphaA = 0.;
-  Range blockconstBC;
+  double alphaPart = 0.0;
+  double alpha = 0.;
   Range FloatingblockconstBC;
 };
 
@@ -63,7 +62,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
   CHKERR simpleInterface->addBoundaryField(domainField, H1,
                                            AINSWORTH_LEGENDRE_BASE, 1);
 
-  int oRder = 3;
+  int oRder = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
 
@@ -148,7 +147,6 @@ MoFEMErrorCode ElectrostaticHomogeneous::boundaryCondition() {
   CHKERR bc_mng->removeBlockDOFsOnEntities<BcScalarMeshsetType<BLOCKSET>>(
       simpleInterface->getProblemName(), "BOUNDARY_CONDITION",
       std::string(domainField), true);
-  ////////////
 
   MoFEMFunctionReturn(0);
 }
@@ -342,7 +340,6 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpAlpha<SPACE_DIM>(
       domainField, grad_grad_ptr, alpha_ptr,
       boost::make_shared<Range>(FloatingblockconstBC), &alphaPart));
-  std::cout << "FloatingblockconstBC: " << FloatingblockconstBC << std::endl;
   CHKERR pipeline_mng->loopFiniteElements();
 
   MoFEMFunctionReturn(0);
@@ -419,8 +416,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::runProgram() {
   CHKERR solveSystem();
   CHKERR outputResults();
   CHKERR getAlphaPart();
-  alphaA = alphaPart;
-  std::cout << "alphaA: " << alphaA << std::endl;
+  alpha = alphaPart;
+  std::cout << "alpha: " << alpha << std::endl;
   MoFEMFunctionReturn(0);
 }
 //! [Run program]
