@@ -87,8 +87,8 @@ public:
           FTensor::Tensor1<double, SPACE_DIM> t_r;
           t_r(i) = t_normal(i);
           t_r.normalize();
-          (*alphaPtr)[gg] += -(t_field_grad(i) * t_r(i));
-          *alphaPart += t_field_grad(i) * t_r(i);
+          // (*alphaPtr)[gg] += -(t_field_grad(i) * t_r(i));
+          *alphaPart += t_field_grad(i) * t_r(i); // not safe
           outputFile << *alphaPart << std::endl;
           ++t_field_grad;
           ++t_normal;
@@ -96,7 +96,7 @@ public:
       }
     }
 
-    // }
+        // }
 
     MoFEMFunctionReturn(0);
   }
@@ -104,7 +104,7 @@ public:
 private:
   boost::shared_ptr<MatrixDouble> gradPtr;
   boost::shared_ptr<VectorDouble> alphaPtr;
-  double *alphaPart;
+  double *alphaPart; // raw ptr
   boost::shared_ptr<Range> entsPtr;
 };
 

@@ -37,7 +37,7 @@ private:
   int oRder;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   double alphaPart = 0.0;
-  double alpha = 0.;
+  double ALPHA = 0.;
   Range FloatingblockconstBC;
 };
 
@@ -416,8 +416,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::runProgram() {
   CHKERR solveSystem();
   CHKERR outputResults();
   CHKERR getAlphaPart();
-  alpha = alphaPart;
-  std::cout << "alpha: " << alpha << std::endl;
+  ALPHA = alphaPart;
+  std::cout << "ALPHA:" << ALPHA << std::endl;
   MoFEMFunctionReturn(0);
 }
 //! [Run program]
