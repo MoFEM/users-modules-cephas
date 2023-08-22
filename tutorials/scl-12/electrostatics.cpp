@@ -17,6 +17,7 @@ private:
   // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
+  MoFEMErrorCode createCommonData();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode setIntegrationRules();
@@ -26,7 +27,7 @@ private:
 
   // MoFEM interfaces
   MoFEM::Interface &mField;
-
+  boost::shared_ptr<OpAlpha> alphacommonDataPtr;
   boost::shared_ptr<std::map<int, BlockData>> perm_block_sets_ptr;
   boost::shared_ptr<std::map<int, BlockData>> int_block_sets_ptr; ///////
   Simple *simpleInterface;
@@ -137,7 +138,23 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
   MoFEMFunctionReturn(0);
 }
 //! [Setup problem]
+MoFEMErrorCode ElectrostaticHomogeneous::createCommonData() {
+  MoFEMFunctionBegin;
+  alphacommonDataPtr = boost::make_shared<OpAlpha>();
 
+  int local_size;
+  if (mField.get_comm_rank() == 0) // get_comm_rank() gets processor number
+    // processor 0
+    local_size = OpAlpha::LAST_ELEMENT; // last element gives size of vector
+  else
+    // other processors (e.g. 1, 2, 3, etc.)
+    local_size = 0; // local size of vector is zero on other processors
+
+  alphacommonDataPtr.petscVec =
+      createVectorMPI(mField.get_comm(), local_size, OpAlpha::LAST_ELEMENT);
+
+  MoFEMFunctionReturn(0);
+}
 //! [Boundary condition]
 MoFEMErrorCode ElectrostaticHomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
@@ -337,9 +354,9 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
                                                     grad_grad_ptr));
 
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(op_loop_side);
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpAlpha<SPACE_DIM>(
-      domainField, grad_grad_ptr, alpha_ptr,
-      boost::make_shared<Range>(FloatingblockconstBC), &alphaPart));
+  // pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpAlpha<SPACE_DIM>(
+  //     domainField, grad_grad_ptr, alpha_ptr,
+  //     boost::make_shared<Range>(FloatingblockconstBC), &alphaPart));
   CHKERR pipeline_mng->loopFiniteElements();
 
   MoFEMFunctionReturn(0);
@@ -410,6 +427,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::runProgram() {
 
   CHKERR readMesh();
   CHKERR setupProblem();
+  CHKERR createCommonData();
   CHKERR boundaryCondition();
   CHKERR setIntegrationRules();
   CHKERR assembleSystem();
