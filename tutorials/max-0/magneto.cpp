@@ -720,14 +720,16 @@ MoFEMErrorCode Magnetostatics::outputResults() {
   CHKERR VecAssemblyBegin(petscVec);
   CHKERR VecAssemblyEnd(petscVec);
 
-  const double *array;
-  CHKERR VecGetArrayRead(petscVec, &array);
+  if (!mField.get_comm_rank()) {
+    const double *array;
+    CHKERR VecGetArrayRead(petscVec, &array);
 
-  double error = sqrt(array[VALUE_ERROR]);
-  std::cout << "magnetic induction field magnitude error: " << error
-            << std::endl;
+    double error = sqrt(array[VALUE_ERROR]);
+    std::cout << "magnetic induction field magnitude error: " << error
+              << std::endl;
 
-  CHKERR VecRestoreArrayRead(petscVec, &array);
+    CHKERR VecRestoreArrayRead(petscVec, &array);
+  }
 
   MoFEMFunctionReturn(0);
 }
