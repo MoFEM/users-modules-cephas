@@ -283,9 +283,6 @@ MoFEMErrorCode StandardPoisson::outputResults() {
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getBoundaryRhsFE().reset();
 
-  auto d_ptr = boost::make_shared<VectorDouble>();
-  auto l_ptr = boost::make_shared<VectorDouble>();
-
   using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
   auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
@@ -293,14 +290,14 @@ MoFEMErrorCode StandardPoisson::outputResults() {
   CHKERR AddHOOps<2, 2, 2>::add(post_proc_fe->getOpPtrVector(), {H1});
 
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldValues(domainField, d_ptr));
+      new OpCalculateScalarFieldValues(domainField, commonDataPtr->approxVals));
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateScalarFieldGradient<2>(domainField,
                                             commonDataPtr->approxValsGrad));
 
   post_proc_fe->getOpPtrVector().push_back(new OpPPMap(
       post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
-      {{domainField, d_ptr}},
+      {{domainField, commonDataPtr->approxVals}},
       {{domainField + "_GRAD", commonDataPtr->approxValsGrad}}, {}, {}));
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 

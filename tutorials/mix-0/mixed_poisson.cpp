@@ -40,7 +40,7 @@ private:
   Range domainEntities;
   double errorIndicatorIntegral;
   int totalElementNumber;
-  int baseOrder;
+  int initOrder;
   int refIterNum;
 
   //! [Analytical function]
@@ -162,32 +162,36 @@ MoFEMErrorCode MixedPoisson::readMesh() {
 //! [Set up problem]
 MoFEMErrorCode MixedPoisson::setupProblem() {
   MoFEMFunctionBegin;
+
+  CHKERR simpleInterface->addDomainField("U", L2, AINSWORTH_LEGENDRE_BASE, 1);
+
+  int nb_quads = 0;
+  CHKERR mField.get_moab().get_number_entities_by_type(0, MBQUAD, nb_quads);
+  auto base = AINSWORTH_LEGENDRE_BASE;
+  if (nb_quads) {
+    // AINSWORTH_LEGENDRE_BASE is not implemented for HDIV/HCURL space on quads 
+    base = DEMKOWICZ_JACOBI_BASE;  
+  }
+
   // Note that in 2D case HDIV and HCURL spaces are isomorphic, and therefore
   // only base for HCURL has been implemented in 2D. Base vectors for HDIV space
   // are be obtained after rotation of HCURL base vectors by a right angle
-  CHKERR simpleInterface->addDomainField("FLUX", HCURL, DEMKOWICZ_JACOBI_BASE,
-                                         1);
-  // We use AINSWORTH_LEGENDRE_BASE since DEMKOWICZ_JACOBI_BASE for triangle
-  // is not yet implemented for L2 space. For quads DEMKOWICZ_JACOBI_BASE and
-  // AINSWORTH_LEGENDRE_BASE are construcreed in the same way
-  CHKERR simpleInterface->addDomainField("U", L2, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simpleInterface->addDomainField("Q", HCURL, base, 1);
 
   refIterNum = 0;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-ref_iter_num", &refIterNum,
                             PETSC_NULL);
-  baseOrder = 2;
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-base_order", &baseOrder,
-                            PETSC_NULL);
-  CHKERR simpleInterface->setFieldOrder("FLUX", baseOrder);
-  CHKERR simpleInterface->setFieldOrder("U", baseOrder - 1);
+  initOrder = 2;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &initOrder, PETSC_NULL);
+  CHKERR simpleInterface->setFieldOrder("U", initOrder);
+  CHKERR simpleInterface->setFieldOrder("Q", initOrder + 1);
   CHKERR simpleInterface->setUp();
 
-  CHKERR mField.get_moab().get_entities_by_dimension(0, 2, domainEntities,
-                                                     false);
+  CHKERR mField.get_moab().get_entities_by_dimension(0, 2, domainEntities);
   Tag th_order;
   CHKERR getTagHandle(mField, "ORDER", MB_TYPE_INTEGER, th_order);
   for (auto ent : domainEntities) {
-    CHKERR mField.get_moab().tag_set_data(th_order, &ent, 1, &baseOrder);
+    CHKERR mField.get_moab().tag_set_data(th_order, &ent, 1, &initOrder);
   }
   MoFEMFunctionReturn(0);
 }
@@ -197,7 +201,7 @@ MoFEMErrorCode MixedPoisson::setupProblem() {
 MoFEMErrorCode MixedPoisson::setIntegrationRules() {
   MoFEMFunctionBegin;
 
-  auto rule = [](int, int, int p) -> int { return 2 * p + 1; };
+  auto rule = [](int, int, int p) -> int { return 2 * p + 2; };
 
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule);
@@ -234,26 +238,14 @@ MoFEMErrorCode MixedPoisson::assembleSystem() {
   pipeline_mng->getOpDomainRhsPipeline().clear();
   pipeline_mng->getOpDomainLhsPipeline().clear();
 
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateHOJacForFace(jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMakeHdivFromHcurl());
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpSetInvJacHcurlFace(inv_jac_ptr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetHOWeightsOnFace());
+  CHKERR AddHOOps<2, 2, 2>::add(pipeline_mng->getOpDomainLhsPipeline(), {HDIV});
 
   auto beta = [](const double, const double, const double) { return 1; };
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpHdivHdiv("FLUX", "FLUX", beta));
+      new OpHdivHdiv("Q", "Q", beta));
   auto unity = []() { return 1; };
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpHdivU("FLUX", "U", unity, true));
+      new OpHdivU("Q", "U", unity, true));
   auto source = [&](const double x, const double y, const double z) {
     return -sourceFunction(x, y, z);
   };
@@ -306,7 +298,7 @@ MoFEMErrorCode MixedPoisson::refineOrder() {
       CHKERR mField.get_moab().get_adjacencies(&ent, 1, 1, false, adj,
                                                moab::Interface::UNION);
       refined_ents.merge(adj);
-      refinement_levels[new_order - baseOrder].merge(refined_ents);
+      refinement_levels[new_order - initOrder].merge(refined_ents);
       CHKERR mField.get_moab().tag_set_data(th_order, &ent, 1, &new_order);
     }
   }
@@ -314,13 +306,12 @@ MoFEMErrorCode MixedPoisson::refineOrder() {
   for (int ll = 1; ll < refinement_levels.size(); ll++) {
     CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
         refinement_levels[ll]);
-    CHKERR mField.set_field_order(refinement_levels[ll], "FLUX",
-                                  baseOrder + ll);
-    CHKERR mField.set_field_order(refinement_levels[ll], "U",
-                                  baseOrder + ll - 1);
+    CHKERR mField.set_field_order(refinement_levels[ll], "U", initOrder + ll);
+    CHKERR mField.set_field_order(refinement_levels[ll], "Q",
+                                  initOrder + ll + 1);
   }
 
-  CHKERR mField.getInterface<CommInterface>()->synchroniseFieldEntities("FLUX");
+  CHKERR mField.getInterface<CommInterface>()->synchroniseFieldEntities("Q");
   CHKERR mField.getInterface<CommInterface>()->synchroniseFieldEntities("U");
   CHKERR mField.build_fields();
   CHKERR mField.build_finite_elements();
@@ -359,22 +350,8 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getOpDomainRhsPipeline().clear();
 
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateHOJacForFace(jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetInvJacHcurlFace(inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetInvJacL2ForFace(inv_jac_ptr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetHOWeightsOnFace());
+  CHKERR AddHOOps<2, 2, 2>::add(pipeline_mng->getOpDomainRhsPipeline(),
+                                {HDIV, L2});
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", commonDataPtr->approxVals));
@@ -382,26 +359,15 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
       new OpCalculateScalarFieldGradient<2>("U",
                                             commonDataPtr->approxValsGrad));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateHVecVectorField<3>("FLUX", commonDataPtr->approxFlux));
+      new OpCalculateHVecVectorField<3>("Q", commonDataPtr->approxFlux));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpError(commonDataPtr, mField));
 
   CHKERR VecZeroEntries(commonDataPtr->petscVec);
-  CHKERR VecGhostUpdateBegin(commonDataPtr->petscVec, INSERT_VALUES,
-                             SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(commonDataPtr->petscVec, INSERT_VALUES,
-                           SCATTER_FORWARD);
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR VecAssemblyBegin(commonDataPtr->petscVec);
   CHKERR VecAssemblyEnd(commonDataPtr->petscVec);
-  CHKERR VecGhostUpdateBegin(commonDataPtr->petscVec, ADD_VALUES,
-                             SCATTER_REVERSE);
-  CHKERR VecGhostUpdateEnd(commonDataPtr->petscVec, ADD_VALUES,
-                           SCATTER_REVERSE);
-  CHKERR VecGhostUpdateBegin(commonDataPtr->petscVec, INSERT_VALUES,
-                             SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(commonDataPtr->petscVec, INSERT_VALUES,
-                           SCATTER_FORWARD);
+
   const double *array;
   CHKERR VecGetArrayRead(commonDataPtr->petscVec, &array);
   MOFEM_LOG("EXAMPLE", Sev::inform)
@@ -449,29 +415,16 @@ MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
 
   using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 
-  auto post_proc_fe =
-      boost::make_shared<PostProcEle>(mField);
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
 
-  auto det_ptr = boost::make_shared<VectorDouble>();
-  auto jac_ptr = boost::make_shared<MatrixDouble>();
-  auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
-  
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateHOJacForFace(jac_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpInvertMatrix<2>(jac_ptr, det_ptr, inv_jac_ptr));
-  post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpSetContravariantPiolaTransformOnFace2D(jac_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpSetInvJacHcurlFace(inv_jac_ptr));
+  CHKERR AddHOOps<2, 2, 2>::add(post_proc_fe->getOpPtrVector(), {HDIV});
 
   auto u_ptr = boost::make_shared<VectorDouble>();
   auto flux_ptr = boost::make_shared<MatrixDouble>();
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateScalarFieldValues("U", u_ptr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateHVecVectorField<3>("FLUX", flux_ptr));
+      new OpCalculateHVecVectorField<3>("Q", flux_ptr));
 
   using OpPPMap = OpPostProcMapInMoab<3, 3>;
 
@@ -482,7 +435,7 @@ MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
 
                   OpPPMap::DataMapVec{{"U", u_ptr}},
 
-                  OpPPMap::DataMapMat{{"FLUX", flux_ptr}},
+                  OpPPMap::DataMapMat{{"Q", flux_ptr}},
 
                   OpPPMap::DataMapMat{},
 
