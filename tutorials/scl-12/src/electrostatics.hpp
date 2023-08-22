@@ -63,7 +63,10 @@ public:
           boost::shared_ptr<VectorDouble> Aplha_ptr,
           boost::shared_ptr<Range> ents_ptr, double *alpha_part)
       : IntEleOp(field_name, SideEleOp::OPROW), gradPtr(grad_ptr),
-        alphaPtr(Aplha_ptr), entsPtr(ents_ptr), alphaPart(alpha_part) {}
+        alphaPtr(Aplha_ptr), entsPtr(ents_ptr), alphaPart(alpha_part) {
+    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+    doEntities[MBVERTEX] = true;
+  }
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
