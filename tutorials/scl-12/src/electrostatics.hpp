@@ -61,12 +61,9 @@ template <int SPACE_DIM> struct OpAlpha : public IntEleOp {
 public:
   OpAlpha(std::string field_name, boost::shared_ptr<MatrixDouble> grad_ptr,
           boost::shared_ptr<VectorDouble> Aplha_ptr,
-          boost::shared_ptr<Range> ents_ptr, SmartPetscObj<Vec> alpha_part)
+          boost::shared_ptr<Range> ents_ptr, double *alpha_part)
       : IntEleOp(field_name, SideEleOp::OPROW), gradPtr(grad_ptr),
-        alphaPtr(Aplha_ptr), entsPtr(ents_ptr), alphaPart(alpha_part) {
-    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-    doEntities[MBVERTEX] = true;
-  }
+        alphaPtr(Aplha_ptr), entsPtr(ents_ptr), alphaPart(alpha_part) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -90,10 +87,9 @@ public:
           FTensor::Tensor1<double, SPACE_DIM> t_r;
           t_r(i) = t_normal(i);
           t_r.normalize();
-          // (*alphaPtr)[gg] += -(t_field_grad(i) * t_r(i));
-          CHKERR VecSetValue(alphaPart->petscVec, gg, t_field_grad(i) * t_r(i),
-                             ADD_VALUES);
-          outputFile << "Value added to Petsc Vec" << std::endl;
+          (*alphaPtr)[gg] += -(t_field_grad(i) * t_r(i));
+          *alphaPart += t_field_grad(i) * t_r(i);
+          outputFile << *alphaPart << std::endl;
           ++t_field_grad;
           ++t_normal;
         }
@@ -108,7 +104,7 @@ public:
 private:
   boost::shared_ptr<MatrixDouble> gradPtr;
   boost::shared_ptr<VectorDouble> alphaPtr;
-  SmartPetscObj<Vec> alphaPart;
+  double *alphaPart;
   boost::shared_ptr<Range> entsPtr;
 };
 
