@@ -39,6 +39,12 @@ private:
   double alphaPart = 0.0;
   double ALPHA = 0.;
   Range FloatingblockconstBC;
+
+  SmartPetscObj<Vec> petscVec;
+  enum VecElements {
+    VALUE_ERROR = 0, // sum(error^2 * area)
+    LAST_ELEMENT
+  };
 };
 
 ElectrostaticHomogeneous::ElectrostaticHomogeneous(MoFEM::Interface &m_field)
@@ -134,6 +140,20 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
   CHKERR DMMoFEMAddElement(simpleInterface->getDM(), "INTERFACE");
 
   CHKERR simpleInterface->buildProblem();
+  ///////////////
+  CHKERR simpleInterface->setUp();
+
+  // initialise petsc vector for required processor
+  int local_size;
+  if (mField.get_comm_rank() == 0) // get_comm_rank() gets processor number
+    // processor 0
+    local_size = LAST_ELEMENT; // last element gives size of vector
+  else
+    // other processors (e.g. 1, 2, 3, etc.)
+    local_size = 0; // local size of vector is zero on other processors
+
+  petscVec = createSmartVectorMPI(mField.get_comm(), local_size, LAST_ELEMENT);
+  ///////////////////////
   MoFEMFunctionReturn(0);
 }
 //! [Setup problem]
@@ -337,10 +357,36 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
                                                     grad_grad_ptr));
 
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(op_loop_side);
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpAlpha<SPACE_DIM>(
-      domainField, grad_grad_ptr, alpha_ptr,
-      boost::make_shared<Range>(FloatingblockconstBC), &alphaPart));
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpAlpha<SPACE_DIM>(domainField, grad_grad_ptr, petscVec,
+                             boost::make_shared<Range>(FloatingblockconstBC)));
+
+  // std::array<int, 1> indices = {1};
+  // double valueToSet = alphaPart;
+  // CHKERR VecSetValues(petscVec, indices.size(), indices.data(), &valueToSet,
+  //                     ADD_VALUES);
+
   CHKERR pipeline_mng->loopFiniteElements();
+  CHKERR VecAssemblyBegin(petscVec);
+  CHKERR VecAssemblyEnd(petscVec);
+  double localAlphaValue = 0.0;
+  if (mField.get_comm_rank() == 0) {
+    double *localArray;
+    CHKERR VecGetArray(petscVec, &localArray);
+    for (int i = 0; i < LAST_ELEMENT; ++i) {
+      std::cout << "Local data[" << i << "]: " << localArray[i] << std::endl;
+    }
+    CHKERR VecRestoreArray(petscVec, &localArray);
+
+    PetscInt index = 0;
+    VecGetValues(petscVec, 1, &index, &localAlphaValue);
+  }
+
+  // Perform an MPI_Allreduce to sum up localAlphaValue across all processes
+  MPI_Allreduce(&localAlphaValue, &ALPHA, 1, MPI_DOUBLE, MPI_SUM,
+                mField.get_comm());
+
+  std::cout << "ALPHA: " << ALPHA << std::endl;
 
   MoFEMFunctionReturn(0);
 }
@@ -416,8 +462,6 @@ MoFEMErrorCode ElectrostaticHomogeneous::runProgram() {
   CHKERR solveSystem();
   CHKERR outputResults();
   CHKERR getAlphaPart();
-  ALPHA = alphaPart;
-  std::cout << "ALPHA:" << ALPHA << std::endl;
   MoFEMFunctionReturn(0);
 }
 //! [Run program]
