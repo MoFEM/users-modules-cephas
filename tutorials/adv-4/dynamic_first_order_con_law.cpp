@@ -359,7 +359,7 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
       const size_t nb_gauss_pts = getGaussPts().size2();
 
       // Resize Piola
-      firstPiolaPtr->resize(DIM_0 * DIM_1, nb_gauss_pts, false);
+      firstPiolaPtr->resize(DIM_0 * DIM_1, nb_gauss_pts, false);//ignatios check
       firstPiolaPtr->clear();
 
       // Extract matrix from data matrix
@@ -376,7 +376,7 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
       t_P(i, j) =
           shearModulus * (t_F(i, j) + t_F(j, i) -  two_o_three * trace(t_F) * t_kd(i, j)) +
           bulkModulus * trace(t_F) * t_kd(i, j);
-      // cerr << "kolokitha!\n";
+      
       // t_P(i, j) =
       //     mU * (t_F(i, j) + t_F(j, i) - two_o_three * trace(t_F) * t_kd(i, j)) +
       //     bulkModulus * (trace(t_F) - 3.) * t_kd(i, j);
@@ -927,7 +927,8 @@ MoFEMErrorCode Example::assembleSystem() {
         mat_F_tensor_ptr));
 
     auto one = [](const double, const double, const double) { return 1; };
-    pip.push_back(new OpGradTimesTensor2("V", mat_P_stab_ptr));
+    auto minus_one = [](const double, const double, const double) { return -1.; };
+    pip.push_back(new OpGradTimesTensor2("V", mat_P_stab_ptr, minus_one));
     // pip.push_back(new OpGradTimesPiola("V", mat_P_stab_ptr, one));
     
     pip.push_back(new OpRhsTestPiola("F", mat_v_grad_ptr, one));
