@@ -89,6 +89,13 @@ int main(int argc, char *argv[]) {
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
 
+    auto get_dim = [](const Range &ents) -> int {
+      for (int d : {3, 2, 1})
+        if (ents.num_of_dimension(d))
+          return d;
+      return 0;
+    };
+
     // Create MoFEM  database
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
@@ -97,11 +104,25 @@ int main(int argc, char *argv[]) {
     CHKERR meshsets_interface_ptr->setMeshsetFromFile();
 
     MOFEM_LOG_CHANNEL("WORLD");
-    MOFEM_LOG_TAG("WORLD", "mofem_part")
-    for (CubitMeshSet_multiIndex::iterator cit =
-             meshsets_interface_ptr->getBegin();
-         cit != meshsets_interface_ptr->getEnd(); cit++)
+    MOFEM_LOG_TAG("WORLD", "mofem_part");
+    int min_dim = 3;
+    for (auto cit = meshsets_interface_ptr->getBegin();
+         cit != meshsets_interface_ptr->getEnd(); cit++) {
+      Range ents;
+      CHKERR m_field.get_moab().get_entities_by_handle(cit->getMeshset(), ents,
+                                                       true);
+      min_dim = std::min(min_dim, get_dim(ents));
       MOFEM_LOG("WORLD", Sev::inform) << *cit;
+    }
+
+    int g_dim; // global dimension
+    MPI_Allreduce(&min_dim, &g_dim, 1, MPI_INT, MPI_MIN, m_field.get_comm());
+    if (g_dim < adj_dim) {
+      MOFEM_LOG("WORLD", Sev::warning)
+          << "The min meshsets dimension is = " << min_dim
+          << ". Setting -adj_dim = " << g_dim << ".";
+      adj_dim = g_dim;
+    }
     MOFEM_LOG_CHANNEL("WORLD");
 
     {
