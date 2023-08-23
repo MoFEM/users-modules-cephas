@@ -69,8 +69,7 @@ using OpGradTimesPiola = FormsIntegrators<DomainEleOp>::Assembly<
 using OpRhsTestPiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM * SPACE_DIM, 1>;
 
-using BoundaryNaturalBC =
-    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+using BoundaryNaturalBC = NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
 using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
 
 
@@ -178,6 +177,8 @@ template <int FIELD_DIM> struct OpCalculateExplicitMass : public DomainEleOp {
       const int nb_integration_pts = getGaussPts().size2();
       mat.resize(nb_row_dofs, nb_col_dofs, false);
       mat.clear();
+      matLumped.resize(nb_row_dofs, nb_col_dofs, false);
+      matLumped.clear();
 
       const double nb_row_base_functions = row_data.getN().size2();
 
@@ -226,6 +227,14 @@ template <int FIELD_DIM> struct OpCalculateExplicitMass : public DomainEleOp {
         ++t_coords;
         ++t_w; // move to another integration weight
       }
+
+      // for (MatrixDouble::iterator1 it1 = mat.begin1(); it1 != mat.end1(); ++it1) {
+      //   for (MatrixDouble::iterator2 it2 = it1.begin(); it2 != it1.end(); ++it2) {
+      //     std::cout << "(" << it2.index1() << "," << it2.index2()
+      //               << ") = " << *it2 << endl;
+      //   }
+      //   cout << endl;
+      // }
             CHKERR MatSetValues(M, row_data, col_data, &mat(0,
             0),
                                 ADD_VALUES);
@@ -241,6 +250,7 @@ template <int FIELD_DIM> struct OpCalculateExplicitMass : public DomainEleOp {
 };
 private:
 MatrixDouble mat, transMat;
+MatrixDouble matLumped;
 ScalarFun betaCoeff;
 SmartPetscObj<Mat> M;
 };
@@ -534,7 +544,7 @@ private:
   struct DynamicFirstOrderConsTimeScale : public MoFEM::TimeScale {
     using MoFEM::TimeScale::TimeScale;
     double getScale(const double time) {
-      return 0.001 * sin( 0.1 * MoFEM::TimeScale::getScale(time));
+      return 0.001 * sin( 0.1 * time);
     };
   };
 };
@@ -567,16 +577,38 @@ MoFEMErrorCode Example::readMesh() {
 MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
+  enum bases { AINSWORTH, DEMKOWICZ, LASBASETOPT };
+  const char *list_bases[LASBASETOPT] = {"ainsworth", "demkowicz"};
+  PetscInt choice_base_value = AINSWORTH;
+  CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-base", list_bases,
+                              LASBASETOPT, &choice_base_value, PETSC_NULL);
+
+  FieldApproximationBase base;
+  switch (choice_base_value) {
+  case AINSWORTH:
+    base = AINSWORTH_LEGENDRE_BASE;
+    MOFEM_LOG("WORLD", Sev::inform)
+        << "Set AINSWORTH_LEGENDRE_BASE for displacements";
+    break;
+  case DEMKOWICZ:
+    base = DEMKOWICZ_JACOBI_BASE;
+    MOFEM_LOG("WORLD", Sev::inform)
+        << "Set DEMKOWICZ_JACOBI_BASE for displacements";
+    break;
+  default:
+    base = LASTBASE;
+    break;
+  }
   // Add field
-  CHKERR simple->addDomainField("V", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
-  CHKERR simple->addBoundaryField("V", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
-  CHKERR simple->addDomainField("F", H1, AINSWORTH_LEGENDRE_BASE,
+  CHKERR simple->addDomainField("V", H1, base, SPACE_DIM);
+  CHKERR simple->addBoundaryField("V", H1, base, SPACE_DIM);
+  CHKERR simple->addDomainField("F", H1, base,
                                 SPACE_DIM * SPACE_DIM);
-  CHKERR simple->addDataField("x_1", H1, AINSWORTH_LEGENDRE_BASE,
+  CHKERR simple->addDataField("x_1", H1, base,
                               SPACE_DIM);
-  CHKERR simple->addDataField("x_2", H1, AINSWORTH_LEGENDRE_BASE,
+  CHKERR simple->addDataField("x_2", H1, base,
                               SPACE_DIM);
-  CHKERR simple->addDataField("GEOMETRY", H1, AINSWORTH_LEGENDRE_BASE,
+  CHKERR simple->addDataField("GEOMETRY", H1, base,
                               SPACE_DIM);
   int order = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
@@ -589,9 +621,10 @@ MoFEMErrorCode Example::setupProblem() {
 
   auto project_ho_geometry = [&]() {
     Projection10NodeCoordsOnField ent_method(mField, "GEOMETRY");
-    mField.loop_dofs("GEOMETRY", ent_method);
-    Projection10NodeCoordsOnField ent_method_x(mField, "x_1");
-    return mField.loop_dofs("x_1", ent_method_x);
+    return mField.loop_dofs("GEOMETRY", ent_method);
+
+    // Projection10NodeCoordsOnField ent_method_x(mField, "x_1");
+    // return mField.loop_dofs("x_1", ent_method_x);
     // Projection10NodeCoordsOnField ent_method_x_2(mField, "x_2");
     // return mField.loop_dofs("x_2", ent_method_x_2);
   };
@@ -646,7 +679,7 @@ MoFEMErrorCode Example::boundaryCondition() {
 
 MoFEMErrorCode TSPrePostProc::tsPreStage(TS ts, double a) {
   MoFEMFunctionBegin;
-cerr << "tsPreStage " <<"\n";
+// cerr << "tsPreStage " <<"\n";
 if (auto ptr = tsPrePostProc.lock()) {
 
     int size;
@@ -661,7 +694,14 @@ if (auto ptr = tsPrePostProc.lock()) {
     auto &m_field = ptr->fsRawPtr->mField;
     auto fb = m_field.getInterface<FieldBlas>();
     double dt;
-    TSGetTimeStep(ts, &dt);
+    CHKERR TSGetTimeStep(ts, &dt);
+    double time;
+    CHKERR TSGetTime(ts, &time);
+    PetscPrintf(PETSC_COMM_WORLD, "Timestep %e time %e\n", dt, time);
+    // double pseudo_time_step;
+    // CHKERR TSPseudoComputeTimeStep(ts, &pseudo_time_step);
+    
+    // PetscPrintf(PETSC_COMM_WORLD, "Timestep %e time %e pseudo-time-step %e\n", dt, time, pseudo_time_step);
     //v = (x_t+1 - x_t) / Δt
     //x_t+1 = Δt * v + x_t 
     // cerr << "dt " << dt <<"\n";
@@ -813,9 +853,9 @@ MoFEMErrorCode Example::assembleSystem() {
   auto apply_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
 
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-        pipeline_mng->getOpDomainRhsPipeline(), {H1}, "GEOMETRY");
-
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
+                                                          "GEOMETRY");
+    
     // Calculate unknown F
     auto mat_F_tensor_ptr = boost::make_shared<MatrixDouble>();
     pip.push_back(new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>(
@@ -918,14 +958,14 @@ MoFEMErrorCode Example::assembleSystem() {
   CHKERR pipeline_mng->setDomainExplicitRhsIntegrationRule(integration_rule);
   // CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
 
-  auto get_bc_hook = [&]() {
-    EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainExplicitRhsFE(),
-        {boost::make_shared<TimeScale>()});
-    return hook;
-  };
+  // auto get_bc_hook = [&]() {
+  //   EssentialPreProc<DisplacementCubitBcData> hook(
+  //       mField, pipeline_mng->getDomainExplicitRhsFE(),
+  //       {boost::make_shared<TimeScale>()});
+  //   return hook;
+  // };
 
-  pipeline_mng->getDomainExplicitRhsFE()->preProcessHook = get_bc_hook();
+  // pipeline_mng->getDomainExplicitRhsFE()->preProcessHook = get_bc_hook();
 
   MoFEMFunctionReturn(0);
 }
@@ -1111,6 +1151,7 @@ MoFEMErrorCode Example::solveSystem() {
   
     SmartPetscObj<Mat> M;   ///< Mass matrix
     SmartPetscObj<KSP> ksp; ///< Linear solver
+    // SmartPetscObj<Vector> lumpVec;
     
     // boost::shared_ptr<CommonData> data(new CommonData());
 
@@ -1123,8 +1164,21 @@ MoFEMErrorCode Example::solveSystem() {
     boost::shared_ptr<DomainEle> vol_mass_ele(new DomainEle(mField));
     
     vol_mass_ele->B = M;
+
+    auto integration_rule = [](int, int, int approx_order) {
+      return 2 * approx_order;
+    };
+    
+    vol_mass_ele->getRuleHook = integration_rule;
+    
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+                      vol_mass_ele->getOpPtrVector(), {H1});
+    // CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+    //     pipeline_mng->getOpDomainExplicitRhsPipeline(), {H1}, "GEOMETRY");
+
     vol_mass_ele->getOpPtrVector().push_back(new OpMassV("V", "V", get_rho));
     vol_mass_ele->getOpPtrVector().push_back(new OpMassF("F", "F"));
+
 
     // vol_mass_ele->getOpPtrVector().push_back(new OpCalculateExplicitMass<SPACE_DIM>("V", "V", M, get_rho));
     // vol_mass_ele->getOpPtrVector().push_back(new OpCalculateExplicitMass<SPACE_DIM*SPACE_DIM>("F", "F", M));
@@ -1133,6 +1187,16 @@ MoFEMErrorCode Example::solveSystem() {
                                     vol_mass_ele);
     CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
+    auto lumpVec = createDMVector(simple->getDM());
+    CHKERR MatGetRowSum(M, lumpVec);
+
+    CHKERR MatZeroEntries(M);
+    CHKERR MatDiagonalSet(M, lumpVec, INSERT_VALUES);
+    //CHKERR VecView(lumpVec, PETSC_VIEWER_STDOUT_WORLD);
+
+    // auto lumpVecCheck = createDMVector(simple->getDM());
+    // CHKERR MatGetRowSum(M, lumpVecCheck);
+    // CHKERR VecView(lumpVecCheck, PETSC_VIEWER_STDOUT_WORLD);
 
     // MatView(M,PETSC_VIEWER_STDOUT_WORLD);
     // Create and septup KSP (linear solver), we need this to calculate g(t,u) =
@@ -1156,7 +1220,7 @@ MoFEMErrorCode Example::solveSystem() {
         
   
         auto D = smartVectorDuplicate(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
-        cerr << "ksp.use_count() " <<  ksp.use_count() <<"\n";
+        // cerr << "ksp.use_count() " <<  ksp.use_count() <<"\n";
       // auto ptr_ksp = ksp();
       CHKERR KSPSolve(ksp, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, D);
       CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -1171,11 +1235,6 @@ MoFEMErrorCode Example::solveSystem() {
     pipeline_mng->getBoundaryExplicitRhsFE()->postProcessHook = solve_boundary_for_g;
 
 
-  
-if (auto ptr = tsPrePostProc.lock()) {
-  // if (true) {
-
-    ptr->fsRawPtr = this;
   MoFEM::SmartPetscObj<TS> ts;
   ts = pipeline_mng->createTSEX(dm);
 
@@ -1202,11 +1261,16 @@ if (auto ptr = tsPrePostProc.lock()) {
   
   boost::shared_ptr<ForcesAndSourcesCore> null;
   
+if (auto ptr = tsPrePostProc.lock()) {
+  // if (true) {
+
+    ptr->fsRawPtr = this;
+  
   //   ptr->T = createDMVector(dm);
   // ptr->T = T;
   // ptr->solverSubDM = simple->getDM();
   CHKERR TSSetUp(ts);
-  CHKERR TSSolve(ts, T);
+  CHKERR TSSolve(ts, NULL);
 
   CHKERR TSGetTime(ts, &ftime);
 

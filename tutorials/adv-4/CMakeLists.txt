@@ -1,6 +1,6 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-2/src)
+# include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
+# include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-2/src)
 
 set(permissions_default 
   OWNER_WRITE 
@@ -27,16 +27,16 @@ tutorials_copy_and_install("param_file.petsc" "${permissions_execute}")
 
 tutorials_build_and_install(
   dynamic_first_order_con_law_3d ${CMAKE_CURRENT_SOURCE_DIR}/dynamic_first_order_con_law.cpp)
-tutorials_build_and_install(
-  dynamic_first_order_con_law_2d ${CMAKE_CURRENT_SOURCE_DIR}/dynamic_first_order_con_law.cpp)
+# tutorials_build_and_install(
+#   dynamic_first_order_con_law_2d ${CMAKE_CURRENT_SOURCE_DIR}/dynamic_first_order_con_law.cpp)
     
 set_target_properties(
   dynamic_first_order_con_law_3d 
   PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
 
-set_target_properties(
-  dynamic_first_order_con_law_2d 
-  PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
+# set_target_properties(
+#   dynamic_first_order_con_law_2d 
+#   PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
 # add_test(
 #   dynamic_first_order_con_law
