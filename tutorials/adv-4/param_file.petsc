@@ -2,16 +2,18 @@
 -ts_exact_final_time stepover 
 -ts_dt 0.04375
 -ts_max_time 150
--ts_type rk
--ts_rk_type 4
+-ts_type euler
+#-ts_rk_type 4
 
 #-pc_type superlu_dist 
 -pc_type lu
 -pc_factor_mat_solver_type mumps 
 -mat_mumps_icntl_20 0
+-mat_mumps_icntl_14 800
 
-#-ksp_rtol 1.e-40 
-#-ksp_atol 1.e-20 
+-ksp_rtol 1.e-40 
+-ksp_atol 1.e-20 
 -ksp_monitor 
 -order 1
 -ts_adapt_type none
+-base demkowicz

@@ -645,7 +645,7 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto time_scale = boost::make_shared<TimeScale>();
 
-  
+  pipeline_mng->getBoundaryExplicitRhsFE().reset();
   CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpBoundaryExplicitRhsPipeline(), {NOSPACE}, "GEOMETRY");
 
@@ -728,6 +728,7 @@ MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   auto *simple = mField.getInterface<Simple>();
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  
 
   auto get_body_force = [this](const double, const double, const double) {
     FTensor::Index<'i', SPACE_DIM> i;
@@ -852,7 +853,8 @@ MoFEMErrorCode Example::assembleSystem() {
 
   auto apply_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
-
+    
+    
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
                                                           "GEOMETRY");
     
@@ -951,6 +953,10 @@ MoFEMErrorCode Example::assembleSystem() {
   };
 
   
+  
+  // CHKERR apply_rhs(pipeline_mng->getCastExplicitDomainRhsFE());
+  
+  pipeline_mng->getDomainExplicitRhsFE().reset();
   CHKERR apply_rhs(pipeline_mng->getOpDomainExplicitRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
@@ -1004,7 +1010,7 @@ MoFEMErrorCode Example::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto dm = simple->getDM();
-  
+
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
@@ -1173,7 +1179,7 @@ MoFEMErrorCode Example::solveSystem() {
     vol_mass_ele->getRuleHook = integration_rule;
     
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-                      vol_mass_ele->getOpPtrVector(), {H1});
+                      vol_mass_ele->getOpPtrVector(), {H1}, "GEOMETRY");
     // CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
     //     pipeline_mng->getOpDomainExplicitRhsPipeline(), {H1}, "GEOMETRY");
 
