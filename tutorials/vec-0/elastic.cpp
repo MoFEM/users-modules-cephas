@@ -12,29 +12,34 @@
 
 using namespace MoFEM;
 
-//! [Define dimension]
 constexpr int BASE_DIM = 1; //< Dimension of the base functions
-constexpr int SPACE_DIM =
-    EXECUTABLE_DIMENSION;   //< Space dimension of problem, mesh
+
+//! [Define dimension]
+constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;   //< Space dimension of problem, mesh
+//! [Define dimension]
 constexpr AssemblyType A = (SCHUR_ASSEMBLE)
                                ? AssemblyType::SCHUR
                                : AssemblyType::PETSC; //< selected assembly type
 
 constexpr IntegrationType I =
     IntegrationType::GAUSS; //< selected integration type
-
+    
+//! [Define entities]
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
-using BoundaryEle =
-    PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
+using BoundaryEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
+//! [Define entities]
 
+//! [OpK]
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<A>::BiLinearForm<
     I>::OpGradSymTensorGrad<BASE_DIM, SPACE_DIM, SPACE_DIM, 0>;
+//! [OpK]
+//! [OpInternalForce]
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<A>::LinearForm<
     I>::OpGradTimesSymTensor<BASE_DIM, SPACE_DIM, SPACE_DIM>;
-
+//! [OpInternalForce]
 struct DomainBCs {};
 struct BoundaryBCs {};
 
@@ -316,6 +321,18 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
 
+  MoFEMFunctionReturn(0);
+}
+//! [Boundary condition]
+
+//! [Push operators to pipeline]
+MoFEMErrorCode Example::assembleSystem() {
+  MoFEMFunctionBegin;
+  auto pip = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>();
+  auto bc_mng = mField.getInterface<BcManager>();
+
+//! [Integration rule]
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order + 1;
   };
@@ -328,18 +345,7 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR pip->setDomainLhsIntegrationRule(integration_rule);
   CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule_bc);
   CHKERR pip->setBoundaryLhsIntegrationRule(integration_rule_bc);
-
-
-  MoFEMFunctionReturn(0);
-}
-//! [Boundary condition]
-
-//! [Push operators to pipeline]
-MoFEMErrorCode Example::assembleSystem() {
-  MoFEMFunctionBegin;
-  auto pip = mField.getInterface<PipelineManager>();
-  auto simple = mField.getInterface<Simple>();
-  auto bc_mng = mField.getInterface<BcManager>();
+//! [Integration rule]
 
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       pip->getOpDomainLhsPipeline(), {H1}, "GEOMETRY");
@@ -350,14 +356,17 @@ MoFEMErrorCode Example::assembleSystem() {
   CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
       pip->getOpBoundaryLhsPipeline(), {NOSPACE}, "GEOMETRY");
 
+
+//! [Push domain stiffness matrix to pipeline]
   auto mat_D_ptr = boost::make_shared<MatrixDouble>();
 
   // Assemble domain stiffness matrix
   CHKERR addMatBlockOps(pip->getOpDomainLhsPipeline(), "U", "MAT_ELASTIC",
                         mat_D_ptr, Sev::verbose);
   pip->getOpDomainLhsPipeline().push_back(new OpK("U", "U", mat_D_ptr));
+  //! [Push domain stiffness matrix to pipeline]
 
-  // Infernal forces
+  //! [Push Internal forces]
   auto mat_grad_ptr = boost::make_shared<MatrixDouble>();
   auto mat_strain_ptr = boost::make_shared<MatrixDouble>();
   auto mat_stress_ptr = boost::make_shared<MatrixDouble>();
@@ -371,27 +380,30 @@ MoFEMErrorCode Example::assembleSystem() {
   pip->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", mat_strain_ptr, mat_stress_ptr, mat_D_ptr));
-  // Internal forces
+
   pip->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", mat_stress_ptr,
                           [](double, double, double) constexpr { return -1; }));
+  //! [Push Internal forces]
 
-  // Body forces
+  //! [Push Body forces]
   CHKERR DomainRhsBCs::AddFluxToPipeline<OpDomainRhsBCs>::add(
       pip->getOpDomainRhsPipeline(), mField, "U", Sev::inform);
+  //! [Push Body forces]
 
+  //! [Push natural boundary conditions]
   // Add force boundary condition
   CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
       pip->getOpBoundaryRhsPipeline(), mField, "U", -1, Sev::inform);
   // Add case for mix type of BCs
   CHKERR BoundaryLhsBCs::AddFluxToPipeline<OpBoundaryLhsBCs>::add(
       pip->getOpBoundaryLhsPipeline(), mField, "U", Sev::verbose);
-
+  //! [Push natural boundary conditions]
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
 
-//! [Solve]
+
 struct SetUpSchur {
   static boost::shared_ptr<SetUpSchur>
   createSetUpSchur(MoFEM::Interface &m_field);
@@ -400,7 +412,7 @@ struct SetUpSchur {
 protected:
   SetUpSchur() = default;
 };
-
+//! [Solve]
 MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
@@ -484,16 +496,20 @@ MoFEMErrorCode Example::outputResults() {
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
   auto inv_jac_ptr = boost::make_shared<MatrixDouble>();
+  //! [Postprocess clean]
   pip->getDomainRhsFE().reset();
   pip->getDomainLhsFE().reset();
   pip->getBoundaryRhsFE().reset();
   pip->getBoundaryLhsFE().reset();
+  //! [Postprocess clean]
 
+  //! [Postprocess initialise]
   auto post_proc_mesh = boost::make_shared<moab::Core>();
   auto post_proc_begin = boost::make_shared<PostProcBrokenMeshInMoabBaseBegin>(
       mField, post_proc_mesh);
   auto post_proc_end = boost::make_shared<PostProcBrokenMeshInMoabBaseEnd>(
       mField, post_proc_mesh);
+  //! [Postprocess initialise]
 
   auto calculate_stress_ops = [&](auto &pip) {
     AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1}, "GEOMETRY");
@@ -544,6 +560,7 @@ MoFEMErrorCode Example::outputResults() {
     );
     return post_proc_fe;
   };
+
 
   auto post_proc_boundary = [&](auto post_proc_mesh) {
     auto post_proc_fe =
@@ -603,7 +620,7 @@ MoFEMErrorCode Example::outputResults() {
   CHKERR post_proc_end->writeFile("out_elastic.h5m");
   MoFEMFunctionReturn(0);
 }
-//! [Postprocessing results]
+//! [Postprocess results]
 
 //! [Check]
 MoFEMErrorCode Example::checkResults() {
