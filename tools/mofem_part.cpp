@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsInt("-adj_dim", "adjacency dim", "", adj_dim, &adj_dim,
                            PETSC_NULL);
     CHKERR PetscOptionsBool(
-        "-my_create_lower_dim_ents", "if tru create lower dimension entireties",
+        "-my_create_lower_dim_ents", "if true create lower dimension entireties",
         "", create_lower_dim_ents, &create_lower_dim_ents, PETSC_NULL);
     CHKERR PetscOptionsBool("-block_tags", "only block and meshsests tags", "",
                             only_tags, &only_tags, PETSC_NULL);
@@ -120,6 +120,10 @@ int main(int argc, char *argv[]) {
     if (g_dim < adj_dim) {
       MOFEM_LOG("WORLD", Sev::warning)
           << "The minimum meshsets dimension is = " << min_dim;
+    }
+    if (adj_dim >= dim) {
+      MOFEM_LOG("WORLD", Sev::warning)
+          << "The -adj_dim >= dim, adj_dim = " << adj_dim << " dim = " << dim;
     }
     MOFEM_LOG_CHANNEL("WORLD");
 
