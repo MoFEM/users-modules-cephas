@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     PetscInt n_partas = 1;
     PetscBool create_lower_dim_ents = PETSC_TRUE;
     PetscInt dim = 3;
-    PetscInt adj_dim = 2;
+    PetscInt adj_dim = 0;
 
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "none", "none");
     CHKERRQ(ierr);
@@ -119,9 +119,7 @@ int main(int argc, char *argv[]) {
     MPI_Allreduce(&min_dim, &g_dim, 1, MPI_INT, MPI_MIN, m_field.get_comm());
     if (g_dim < adj_dim) {
       MOFEM_LOG("WORLD", Sev::warning)
-          << "The min meshsets dimension is = " << min_dim
-          << ". Setting -adj_dim = " << g_dim << ".";
-      adj_dim = g_dim;
+          << "The minimum meshsets dimension is = " << min_dim;
     }
     MOFEM_LOG_CHANNEL("WORLD");
 
