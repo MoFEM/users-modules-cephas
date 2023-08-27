@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
               "Dimension of entities to partition not found");
 
     CHKERR PetscOptionsInt("-dim", "entities dim", "", dim, &dim, PETSC_NULL);
-    adj_dim = dim - 1;
+    // adj_dim = dim - 1;
     CHKERR PetscOptionsInt("-adj_dim", "adjacency dim", "", adj_dim, &adj_dim,
                            PETSC_NULL);
     CHKERR PetscOptionsBool(
