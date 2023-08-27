@@ -174,7 +174,7 @@ struct OpCalculateEigenValsImpl<DIM, GAUSS, DomainEleOp> : public DomainEleOp {
         for (int jj = 0; jj != DIM; jj++)
           eigen_vec(ii, jj) = C(ii, jj);
 
-      CHKERR computeEigenValuesSymmetric<DIM>(eigen_vec, eig);
+      CHKERR computeEigenValuesSymmetric(eigen_vec, eig);
       for (auto ii = 0; ii != DIM; ++ii)
         eig(ii) = std::max(std::numeric_limits<double>::epsilon(), eig(ii));
 
