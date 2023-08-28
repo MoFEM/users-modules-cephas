@@ -18,7 +18,8 @@ using namespace MoFEM;
 
 constexpr AssemblyType AT = AssemblyType::SCHUR; //< selected assembly type
 constexpr IntegrationType IT =
-    IntegrationType::GAUSS;                      //< selected integration type
+    IntegrationType::GAUSS; //< selected integration type
+constexpr CoordinateTypes coord_type = CARTESIAN;
 
 template <int DIM> struct ElementsAndOps;
 
@@ -48,7 +49,7 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 //! [Specialisation for assembly]
 
 // Assemble to A matrix, by default, however, some terms are assembled only to
-// preconditioning. 
+// preconditioning.
 
 template <>
 typename MoFEM::OpBaseImpl<AT, DomainEleOp>::MatSetValuesHook
@@ -72,7 +73,7 @@ typename MoFEM::OpBaseImpl<AT, BoundaryEleOp>::MatSetValuesHook
 
 /**
  * @brief Element used to specialise assembly
- * 
+ *
  */
 struct BoundaryEleOpStab : public BoundaryEleOp {
   using BoundaryEleOp::BoundaryEleOp;
@@ -103,8 +104,6 @@ using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<AT>::LinearForm<
     IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Operators used for contact]
 
-
-
 PetscBool is_quasi_static = PETSC_TRUE;
 
 int order = 2;
@@ -115,8 +114,11 @@ double rho = 0.0;
 double spring_stiffness = 0.0;
 double vis_spring_stiffness = 0.0;
 double alpha_damping = 0;
+double mu = 1.;
 
 double scale = 1.;
+
+PetscBool isDiscontinuousPressure = PETSC_FALSE;
 
 namespace ContactOps {
 double cn_contact = 0.1;
@@ -193,6 +195,8 @@ MoFEMErrorCode Incompressible::setupProblem() {
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-geom_order", &geom_order,
                             PETSC_NULL);
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_discontinuous_pressure",
+                             &isDiscontinuousPressure, PETSC_NULL);
   MOFEM_LOG("CONTACT", Sev::inform) << "Order " << order;
   MOFEM_LOG("CONTACT", Sev::inform) << "Geom order " << geom_order;
 
@@ -231,6 +235,29 @@ MoFEMErrorCode Incompressible::setupProblem() {
   CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
 
   CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
+
+  // Adding fields related to incompressible elasticiy
+  // Add displacement domain and boundary fields
+  CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
+  CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
+  CHKERR simple->setFieldOrder("U", order);
+
+  // Add pressure domain and boundary fields
+  // Choose either Crouzeix-Raviart element:
+  if (isDiscontinuousPressure) {
+    CHKERR simple->addDomainField("P", L2, base, 1);
+    CHKERR simple->addBoundaryField("P", L2, base, 1);
+    CHKERR simple->setFieldOrder("P", order - 2);
+  } else {
+    // ... or Taylor-Hood element:
+    CHKERR simple->addDomainField("P", H1, base, 1);
+    CHKERR simple->addBoundaryField("P", H1, base, 1);
+    CHKERR simple->setFieldOrder("P", order - 1);
+  }
+
+  // Add geometry data field
+  CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
   CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
 
   auto get_skin = [&]() {
@@ -420,6 +447,37 @@ MoFEMErrorCode Incompressible::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
+    
+    //-------------------------------------------------------------------------
+
+    //! [Operators used for incompressible elasticity]
+    using OpGradSymTensorGrad =
+        FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+            IT>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+    using OpMixScalarTimesDiv = FormsIntegrators<DomainEleOp>::Assembly<
+        PETSC>::BiLinearForm<IT>::OpMixScalarTimesDiv<SPACE_DIM, coord_type>;
+    //! [Operators used for incompressible elasticity]
+
+    auto mat_D_ptr = boost::make_shared<MatrixDouble>();
+    constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+    mat_D_ptr->resize(size_symm * size_symm, 1);
+
+    FTensor::Index<'i', SPACE_DIM> i;
+    FTensor::Index<'j', SPACE_DIM> j;
+    FTensor::Index<'k', SPACE_DIM> k;
+    FTensor::Index<'l', SPACE_DIM> l;
+
+    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+
+    auto t_mat = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
+    t_mat(i, j, k, l) = 2. * mu * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
+
+    pip.push_back(new OpMixScalarTimesDiv(
+        "P", "U", [](const double, const double, const double) { return -1.; },
+        true, false));
+    pip.push_back(new OpGradSymTensorGrad("U", "U", mat_D_ptr));
+
+    //-------------------------------------------------------------------------
 
     //! [Only used for dynamics]
     using OpMass = FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
@@ -446,7 +504,6 @@ MoFEMErrorCode Incompressible::OPs() {
             return (alpha_damping * scale) * fe_domain_lhs->ts_a;
           };
       pip.push_back(new OpMass("U", "U", get_inertia_and_mass_damping));
-
     }
 
     CHKERR HenckyOps::opFactoryDomainLhs<SPACE_DIM, AT, IT, DomainEleOp>(
@@ -475,7 +532,6 @@ MoFEMErrorCode Incompressible::OPs() {
           new OpInertiaForce("U", mat_acceleration, [](double, double, double) {
             return rho * scale;
           }));
-
     }
 
     // only in case of viscosity
@@ -553,7 +609,7 @@ MoFEMErrorCode Incompressible::OPs() {
     using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
         AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
     //! [Operators used for contact]
-    
+
     // Add Natural BCs to RHS
     CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
         pip, mField, "U", {time_scale}, Sev::inform);
