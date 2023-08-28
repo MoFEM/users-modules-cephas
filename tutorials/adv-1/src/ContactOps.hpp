@@ -16,13 +16,13 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble contactTraction;
   MatrixDouble contactDisp;
 
-  VectorDouble sdfVals; ///< size is equal to number of gauss points on element
+  VectorDouble sdfVals;  ///< size is equal to number of gauss points on element
   MatrixDouble gradsSdf; ///< nb of rows is equals to dimension, and nb of cols
                          ///< is equals to number of gauss points on element
   MatrixDouble hessSdf;  ///< nb of rows is equals to nb of element of symmetric
                         ///< matrix, and nb of cols is equals to number of gauss
                         ///< points on element
-  VectorDouble constraintVals;                        
+  VectorDouble constraintVals;
 
   static SmartPetscObj<Vec>
       totalTraction; // User have to release and create vector when appropiate.
@@ -63,7 +63,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
 
   inline auto sdfPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &sdfVals);
-  } 
+  }
 
   inline auto gradSdfPtr() {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(), &gradsSdf);
@@ -71,12 +71,11 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
 
   inline auto hessSdfPtr() {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(), &hessSdf);
-  } 
+  }
 
-    inline auto constraintPtr() {
+  inline auto constraintPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &constraintVals);
-  } 
-
+  }
 };
 
 SmartPetscObj<Vec> CommonData::totalTraction;
@@ -447,8 +446,8 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::OpEvaluateSDFImpl(
 
 template <int DIM, typename BoundaryEleOp>
 MoFEMErrorCode
-OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(
-    int side, EntityType type, EntData &data) {
+OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(int side, EntityType type,
+                                                     EntData &data) {
   MoFEMFunctionBegin;
 
   const auto nb_gauss_pts = BoundaryEleOp::getGaussPts().size2();
@@ -516,10 +515,8 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(
     next();
   }
 
-
   MoFEMFunctionReturn(0);
 }
-
 
 template <int DIM, typename AssemblyBoundaryEleOp>
 OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
@@ -981,6 +978,6 @@ MoFEMErrorCode opFactoryCalculateTraction(
   MoFEMFunctionReturn(0);
 }
 
-};     // namespace ContactOps
+}; // namespace ContactOps
 
 #endif // __CONTACTOPS_HPP__

@@ -58,7 +58,7 @@ struct Monitor : public FEMethod {
       pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
           "U", common_data_ptr->contactDispPtr()));
       pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
-            "SIGMA", common_data_ptr->contactTractionPtr()));
+          "SIGMA", common_data_ptr->contactTractionPtr()));
       using C = ContactIntegrators<BoundaryEleOp>;
       pip.push_back(new typename C::template OpEvaluateSDF<SPACE_DIM, GAUSS>(
           common_data_ptr));
@@ -133,15 +133,12 @@ struct Monitor : public FEMethod {
 
                 post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-                {
-                    {"SDF", common_data_ptr->sdfPtr()},
-                    {"CONSTRAINT_CONTACT", common_data_ptr->constraintPtr()}
-                },
-                
+                {{"SDF", common_data_ptr->sdfPtr()},
+                 {"CONSTRAINT_CONTACT", common_data_ptr->constraintPtr()}},
+
                 {
 
-                    {"TRACTION_CONTACT",
-                     common_data_ptr->contactTractionPtr()},
+                    {"TRACTION_CONTACT", common_data_ptr->contactTractionPtr()},
                     {"GRAD_SDF", common_data_ptr->gradSdfPtr()}
 
                 },
@@ -177,7 +174,7 @@ struct Monitor : public FEMethod {
 
       auto [henky_common_data_ptr, contact_stress_ptr] =
           push_domain_ops(op_loop_side->getOpPtrVector());
-      
+
       auto X_ptr = boost::make_shared<MatrixDouble>();
       pip.push_back(
           new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", X_ptr));
@@ -188,16 +185,12 @@ struct Monitor : public FEMethod {
 
               post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-              {
-                {"SDF", common_data_ptr->sdfPtr()},
-                {"CONSTRAINT_CONTACT", common_data_ptr->constraintPtr()}
-              },
+              {{"SDF", common_data_ptr->sdfPtr()},
+               {"CONSTRAINT_CONTACT", common_data_ptr->constraintPtr()}},
 
-              {
-               {"U", common_data_ptr->contactDispPtr()},
+              {{"U", common_data_ptr->contactDispPtr()},
                {"GEOMETRY", X_ptr},
-               {"TRACTION_CONTACT",
-                common_data_ptr->contactTractionPtr()},
+               {"TRACTION_CONTACT", common_data_ptr->contactTractionPtr()},
                {"GRAD_SDF", common_data_ptr->gradSdfPtr()}
 
               },
@@ -244,7 +237,7 @@ struct Monitor : public FEMethod {
 
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
-  
+
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
     MoFEM::Interface *m_field_ptr;
@@ -264,7 +257,7 @@ struct Monitor : public FEMethod {
         postProcDomainFe->copyTs(*this); // this here is a Monitor
         CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcDomainFe);
       } else {
-        postProcDomainFe->copyTs(*this);     // this here is a Monitor
+        postProcDomainFe->copyTs(*this); // this here is a Monitor
         postProcBdyFe->copyTs(*this);
         CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcDomainFe);
         CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcBdyFe);
@@ -287,7 +280,7 @@ struct Monitor : public FEMethod {
 
     auto calculate_reactions = [&]() {
       MoFEMFunctionBegin;
-      
+
       auto res = createDMVector(dM);
 
       auto assemble_domain = [&]() {
@@ -384,9 +377,9 @@ struct Monitor : public FEMethod {
         << "Write file at time " << ts_t << " write step " << sTEP;
 
     int se = 1;
-    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_every", &se, PETSC_NULL);    
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_every", &se, PETSC_NULL);
 
-    if (ts_step % se == 0) {
+    if (!(ts_step % se)) {
       CHKERR post_proc();
     }
     CHKERR calculate_traction();
