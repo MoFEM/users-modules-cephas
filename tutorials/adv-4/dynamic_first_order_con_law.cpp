@@ -1058,7 +1058,7 @@ struct Monitor : public FEMethod {
       // cerr << "ASDDASDASFSAGASGAS\n";
       auto t_p = getFTensor1FromMat<SPACE_DIM>(*fieldPtr);
       // PetscPrintf(PETSC_COMM_WORLD, "Velocities x: %e y: %e z: %e\n", t_p(0), t_p(1), t_p(2));
-      cerr << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " << t_p(2) <<"\n";
+      // cerr << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " << t_p(2) <<"\n";
       // MOFEM_LOG("EXAMPLE", Sev::noisy)
       //     << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " << t_p(2);
     }
@@ -1075,7 +1075,7 @@ struct Monitor : public FEMethod {
     auto print_vets = [](boost::shared_ptr<FieldEntity> ent_ptr) {
       MoFEMFunctionBegin;
       if(!(ent_ptr->getPStatus() & PSTATUS_NOT_OWNED)) {
-        MOFEM_LOG("SYNC", Sev::inform) << "Velocities: " << ent_ptr->getEntFieldData();
+        MOFEM_LOG("SYNC", Sev::inform) << "Velocities: " << ent_ptr->getEntFieldData()[0] << " " << ent_ptr->getEntFieldData()[1] << " " << ent_ptr->getEntFieldData()[2] << "\n";
       }
       MoFEMFunctionReturn(0);
     };
