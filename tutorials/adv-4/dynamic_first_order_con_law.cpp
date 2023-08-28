@@ -1298,11 +1298,11 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
     
-    // auto lumpVec = createDMVector(simple->getDM());
-    // CHKERR MatGetRowSum(M, lumpVec);
+    auto lumpVec = createDMVector(simple->getDM());
+    CHKERR MatGetRowSum(M, lumpVec);
 
-    // CHKERR MatZeroEntries(M);
-    // CHKERR MatDiagonalSet(M, lumpVec, INSERT_VALUES);
+    CHKERR MatZeroEntries(M);
+    CHKERR MatDiagonalSet(M, lumpVec, INSERT_VALUES);
 
 
     //CHKERR VecView(lumpVec, PETSC_VIEWER_STDOUT_WORLD);
