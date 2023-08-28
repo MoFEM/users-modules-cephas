@@ -10,39 +10,40 @@
 #include <MatrixFunction.hpp>
 using namespace MoFEM;
 
-template <int DIM> struct ElementsAndOps {};
+// template <int DIM> struct ElementsAndOps {};
 
-template <> struct ElementsAndOps<2> {
-  using DomainEle = FaceElementForcesAndSourcesCore;
-};
+// template <> struct ElementsAndOps<2> {
+//   using DomainEle = FaceElementForcesAndSourcesCore;
+// };
 
-template <> struct ElementsAndOps<3> {
-  using DomainEle = VolumeElementForcesAndSourcesCore;
-};
+// template <> struct ElementsAndOps<3> {
+//   using DomainEle = VolumeElementForcesAndSourcesCore;
+// };
 
 
 template <typename T> 
 inline double trace(FTensor::Tensor2<T, 2, 2> &t_stress) {
   constexpr double third = boost::math::constants::third<double>();
-  return (t_stress(0, 0) + t_stress(1, 1)) * third;
+  return (t_stress(0, 0) + t_stress(1, 1));
 };
 
 template <typename T>
 inline double trace(FTensor::Tensor2<T, 3, 3> &t_stress) {
   constexpr double third = boost::math::constants::third<double>();
-  return (t_stress(0, 0) + t_stress(1, 1) + t_stress(2, 2)) * third;
+  return (t_stress(0, 0) + t_stress(1, 1) + t_stress(2, 2));
 };
 
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 using EntData = EntitiesFieldData::EntData;
-using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 using BoundaryEle =
     PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
+using SetPtsData = FieldEvaluatorInterface::SetPtsData;
 
 using OpMassV = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
@@ -60,14 +61,17 @@ using DomainNaturalBC =
 using OpBodyForceVector =
     DomainNaturalBC::OpFlux<NaturalMeshsetTypeVectorScaling<BLOCKSET>, 1,
                             SPACE_DIM>;
+                            
 using OpGradTimesTensor2 = FormsIntegrators<DomainEleOp>::Assembly<
-          PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
-
-using OpGradTimesPiola = FormsIntegrators<DomainEleOp>::Assembly<
-          PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+          AssemblyType::PETSC>::LinearForm<IntegrationType::GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
 using OpRhsTestPiola = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM * SPACE_DIM, 1>;
+    AssemblyType::PETSC>::LinearForm<IntegrationType::GAUSS>::OpBaseTimesVector<1, SPACE_DIM * SPACE_DIM, 1>;
+
+
+using OpGradTimesPiola = FormsIntegrators<DomainEleOp>::Assembly<
+          AssemblyType::PETSC>::LinearForm<IntegrationType::GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+
 
 using BoundaryNaturalBC = NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
 using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
@@ -373,8 +377,8 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
       //     shearModulus * (t_F(i, j) + t_F(j, i)) +
       //     lammeLambda * ( trace(t_F) ) * t_kd(i, j);
 
-      t_P(i, j) =
-          shearModulus * (t_F(i, j) + t_F(j, i) -  two_o_three * trace(t_F) * t_kd(i, j)) +
+      t_P(i, j) = 
+       shearModulus * (t_F(i, j) + t_F(j, i) -  two_o_three * trace(t_F) * t_kd(i, j)) +
           bulkModulus * trace(t_F) * t_kd(i, j);
       
       // t_P(i, j) =
@@ -394,6 +398,51 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
     double lammeLambda;
     boost::shared_ptr<MatrixDouble> firstPiolaPtr;
     boost::shared_ptr<MatrixDouble> defGradPtr;
+  };
+
+template <int DIM_0, int DIM_1>
+  struct OpCalculateTranspose : public ForcesAndSourcesCore::UserDataOperator {
+    OpCalculateTranspose(boost::shared_ptr<MatrixDouble> in_ptr,
+                     boost::shared_ptr<MatrixDouble> out_ptr)
+        : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPLAST),
+          inMat(in_ptr),
+          outMat(out_ptr) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data) {
+      MoFEMFunctionBegin;
+      // Define Indicies
+      FTensor::Index<'i', SPACE_DIM> i;
+      FTensor::Index<'j', SPACE_DIM> j;
+
+      constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
+
+      // Number of Gauss points
+      const size_t nb_gauss_pts = getGaussPts().size2();
+
+      // Resize Piola
+      outMat->resize(DIM_0 * DIM_1, nb_gauss_pts, false);
+      outMat->clear();
+
+      // Extract matrix from data matrix
+      auto t_out = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*outMat);
+      auto t_in = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*inMat);
+      const double two_o_three = 2. / 3.;
+      for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      t_out(j, i) = t_in(i, j);
+      // if((t_out( i, j) * t_out( i, j)) > 1.e-12 )
+      //   cerr << "t_in " << t_in << "\n";
+      ++t_out;
+      ++t_in;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    boost::shared_ptr<MatrixDouble> inMat;
+    boost::shared_ptr<MatrixDouble> outMat;
   };
 
 template <int DIM_0, int DIM_1>
@@ -461,7 +510,7 @@ struct TSPrePostProc {
   SmartPetscObj<DM> solverSubDM;
   SmartPetscObj<Vec> globSol;
   Example *fsRawPtr;
-  static MoFEMErrorCode tsPreStage(TS ts, double a);
+  static MoFEMErrorCode tsPostStage(TS ts, PetscReal stagetime, PetscInt stageindex, Vec* Y);
   static MoFEMErrorCode tsPostStep(TS ts);
 
 private:
@@ -545,6 +594,7 @@ private:
     using MoFEM::TimeScale::TimeScale;
     double getScale(const double time) {
       return 0.001 * sin( 0.1 * time);
+      // return -0.001;
     };
   };
 };
@@ -620,13 +670,16 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->setUp();
 
   auto project_ho_geometry = [&]() {
+    
+    Projection10NodeCoordsOnField ent_method_x(mField, "x_1");
+    CHKERR mField.loop_dofs("x_1", ent_method_x);
+    Projection10NodeCoordsOnField ent_method_x_2(mField, "x_2");
+    CHKERR mField.loop_dofs("x_2", ent_method_x_2);
+
     Projection10NodeCoordsOnField ent_method(mField, "GEOMETRY");
     return mField.loop_dofs("GEOMETRY", ent_method);
 
-    // Projection10NodeCoordsOnField ent_method_x(mField, "x_1");
-    // return mField.loop_dofs("x_1", ent_method_x);
-    // Projection10NodeCoordsOnField ent_method_x_2(mField, "x_2");
-    // return mField.loop_dofs("x_2", ent_method_x_2);
+    
   };
   CHKERR project_ho_geometry();
   // InitialiseDeformationGradient<SPACE_DIM> ent_method_F(mField, "F");
@@ -659,27 +712,26 @@ MoFEMErrorCode Example::boundaryCondition() {
   };
 
   CHKERR pipeline_mng->setBoundaryExplicitRhsIntegrationRule(integration_rule);
-  // CHKERR pipeline_mng->setDomainExplicitRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainExplicitRhsIntegrationRule(integration_rule);
 
 
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "V");
-  
 
-  auto get_bc_hook_rhs = [&]() {
-    EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainExplicitRhsFE(), {boost::make_shared<DynamicFirstOrderConsTimeScale>()}, false);
-    return hook;
+  auto get_pre_proc_hook = [&]() {
+    return EssentialPreProc<DisplacementCubitBcData>(
+        mField, pipeline_mng->getDomainExplicitRhsFE(),
+        {boost::make_shared<DynamicFirstOrderConsTimeScale>()});
   };
-  // pipeline_mng->getDomainExplicitRhsFE()->preProcessHook = get_bc_hook_rhs();
+  pipeline_mng->getDomainExplicitRhsFE()->preProcessHook = get_pre_proc_hook();
 
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
 
-MoFEMErrorCode TSPrePostProc::tsPreStage(TS ts, double a) {
+MoFEMErrorCode TSPrePostProc::tsPostStage(TS ts, PetscReal stagetime, PetscInt stageindex, Vec* Y) {
   MoFEMFunctionBegin;
-// cerr << "tsPreStage " <<"\n";
+// cerr << "tsPostStage " <<"\n";
 if (auto ptr = tsPrePostProc.lock()) {
 
     int size;
@@ -717,6 +769,8 @@ MoFEMErrorCode TSPrePostProc::tsPostStep(TS ts) {
 if (auto ptr = tsPrePostProc.lock()) {
     auto &m_field = ptr->fsRawPtr->mField;
     auto fb = m_field.getInterface<FieldBlas>();
+    //find trajectory V and F
+    //
     //x_t+1 = Δt * v + x_t 
     CHKERR fb->fieldCopy(1., "x_2", "x_1");
 }
@@ -836,25 +890,9 @@ MoFEMErrorCode Example::assembleSystem() {
     return sin(time * omega * M_PI);
   };
 
-  // auto apply_lhs = [&](auto &pip) {
-  //   MoFEMFunctionBegin;
-  //   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
-  //                                                         "GEOMETRY");
-  //   CHKERR HenckyOps::opFactoryDomainLhs<SPACE_DIM, PETSC, GAUSS, DomainEleOp>(
-  //       mField, pip, "V", "MAT_ELASTIC", Sev::verbose);
-  //   CHKERR add_rho_block(pip, "MAT_RHO", Sev::verbose);
-
-  //   pip.push_back(new OpMass("V", "V", get_rho));
-  //   pip.push_back(new OpMassForTensor("F", "F"));
-  //   // static_cast<OpMass &>(pip.back()).feScalingFun =
-  //   //     [](const FEMethod *fe_ptr) { return fe_ptr->ts_aa; };
-  //   MoFEMFunctionReturn(0);
-  // };
-
   auto apply_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
-    
-    
+
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
                                                           "GEOMETRY");
     
@@ -863,7 +901,7 @@ MoFEMErrorCode Example::assembleSystem() {
     pip.push_back(new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>(
         "F", mat_F_tensor_ptr));
 
-    auto mat_dot_F_tensor_ptr = boost::make_shared<MatrixDouble>();
+    // auto mat_dot_F_tensor_ptr = boost::make_shared<MatrixDouble>();
     // pip.push_back(new OpCalculateTensor2FieldValuesDot<SPACE_DIM, SPACE_DIM>(
     //     "F", mat_dot_F_tensor_ptr));
     
@@ -879,38 +917,41 @@ MoFEMErrorCode Example::assembleSystem() {
     pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "V", mat_v_grad_ptr));
 
-    // Calculate Gradient of Spatial Positions
-    auto mat_x_grad_ptr = boost::make_shared<MatrixDouble>();
-    pip.push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("x_2",
-                                                               mat_x_grad_ptr));
+  auto mat_v_grad_trans_ptr = boost::make_shared<MatrixDouble>();
+  pip.push_back(new OpCalculateTranspose<SPACE_DIM, SPACE_DIM>(
+      mat_v_grad_ptr, mat_v_grad_trans_ptr));
 
-    auto gravity_vector_ptr = boost::make_shared<MatrixDouble>();
-    gravity_vector_ptr->resize(SPACE_DIM, 1);
-    auto set_body_force = [&]() {
-      FTensor::Index<'i', SPACE_DIM> i;
-      MoFEMFunctionBegin;
-      auto t_force = getFTensor1FromMat<SPACE_DIM, 0>(*gravity_vector_ptr);
-      double unit_weight = 1.;
-      CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-unit_weight", &unit_weight,
-                                 PETSC_NULL);
-      t_force(i) = 0;
-      if (SPACE_DIM == 2) {
-        t_force(1) = -unit_weight;
-      } else if (SPACE_DIM == 3) {
-        t_force(1) = -unit_weight;
-      }
-      MoFEMFunctionReturn(0);
-    };
+  // Calculate Gradient of Spatial Positions
+  // auto mat_x_grad_ptr = boost::make_shared<MatrixDouble>();
+  // pip.push_back(
+  //   new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("x_2",
+  //                                                            mat_x_grad_ptr));
 
-    // CHKERR set_body_force();
-    // pip.push_back(new OpBodyForce(
-    //   "V", gravity_vector_ptr, [](double, double, double) { return 1.; }));
+  auto gravity_vector_ptr = boost::make_shared<MatrixDouble>();
+  gravity_vector_ptr->resize(SPACE_DIM, 1);
+  auto set_body_force = [&]() {
+    FTensor::Index<'i', SPACE_DIM> i;
+    MoFEMFunctionBegin;
+    auto t_force = getFTensor1FromMat<SPACE_DIM, 0>(*gravity_vector_ptr);
+    double unit_weight = 1.;
+    CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-unit_weight", &unit_weight,
+                               PETSC_NULL);
+    t_force(i) = 0;
+    if (SPACE_DIM == 2) {
+      t_force(1) = -unit_weight;
+    } else if (SPACE_DIM == 3) {
+      t_force(2) = unit_weight;
+    }
+    MoFEMFunctionReturn(0);
+  };
 
+  // CHKERR set_body_force();
+  // pip.push_back(new OpBodyForce(
+  //   "V", gravity_vector_ptr, [](double, double, double) { return 1.; }));
 
-    //some operator that calculates F^st
-    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "x_2", mat_x_grad_ptr));
+  // some operator that calculates F^st
+  //  pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+  //      "x_2", mat_x_grad_ptr));
     
   //  // Calculate P
   //   auto mat_P_ptr = boost::make_shared<MatrixDouble>();
@@ -927,8 +968,9 @@ MoFEMErrorCode Example::assembleSystem() {
     pip.push_back(new OpCalculatePiola<SPACE_DIM, SPACE_DIM>(
         shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_stab_ptr,
         mat_F_tensor_ptr));
+    
 
-    auto one = [](const double, const double, const double) { return 1; };
+    auto one = [&](const double, const double, const double) { return 3.*bulk_modulus_K; };
     auto minus_one = [](const double, const double, const double) { return -1.; };
     pip.push_back(new OpGradTimesTensor2("V", mat_P_stab_ptr, minus_one));
     // pip.push_back(new OpGradTimesPiola("V", mat_P_stab_ptr, one));
@@ -956,7 +998,7 @@ MoFEMErrorCode Example::assembleSystem() {
   
   // CHKERR apply_rhs(pipeline_mng->getCastExplicitDomainRhsFE());
   
-  pipeline_mng->getDomainExplicitRhsFE().reset();
+  // pipeline_mng->getDomainExplicitRhsFE().reset();
   CHKERR apply_rhs(pipeline_mng->getOpDomainExplicitRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
@@ -985,10 +1027,63 @@ MoFEMErrorCode Example::assembleSystem() {
  * to output results to the hard drive.
  */
 struct Monitor : public FEMethod {
-  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc)
-      : dM(dm), postProc(post_proc){};
+  MoFEM::Interface &mField;
+  Monitor(SmartPetscObj<DM> dm, MoFEM::Interface &m_field,
+          boost::shared_ptr<PostProcEle> post_proc,
+          boost::shared_ptr<MatrixDouble> pass_field_ptr,
+          std::array<double, 3> pass_field_eval_coords,
+          boost::shared_ptr<SetPtsData> pass_field_eval_data)
+      : dM(dm), mField(m_field), postProc(post_proc), fieldPtr(pass_field_ptr),
+        fieldEvalCoords(pass_field_eval_coords),
+        fieldEvalData(pass_field_eval_data){};
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
+
+    // cerr << "wagawaga\n";
+    auto *simple = mField.getInterface<Simple>();
+
+    if (SPACE_DIM == 3) {
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->evalFEAtThePoint3D(
+          fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
+          simple->getDomainFEName(), fieldEvalData, mField.get_comm_rank(),
+          mField.get_comm_rank(), nullptr, MF_EXIST, QUIET);
+    } else {
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->evalFEAtThePoint2D(
+          fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
+          simple->getDomainFEName(), fieldEvalData, mField.get_comm_rank(),
+          mField.get_comm_rank(), nullptr, MF_EXIST, QUIET);
+    }
+
+    if (fieldPtr->size1()) {
+      // cerr << "ASDDASDASFSAGASGAS\n";
+      auto t_p = getFTensor1FromMat<SPACE_DIM>(*fieldPtr);
+      // PetscPrintf(PETSC_COMM_WORLD, "Velocities x: %e y: %e z: %e\n", t_p(0), t_p(1), t_p(2));
+      cerr << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " << t_p(2) <<"\n";
+      // MOFEM_LOG("EXAMPLE", Sev::noisy)
+      //     << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " << t_p(2);
+    }
+
+
+  for (auto m :
+       mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
+           (boost::format("%s(.*)") % "Data_Vertex").str()
+               ))
+  ) {
+    Range ents;
+    mField.get_moab().get_entities_by_dimension(
+        m->getMeshset(), 0, ents, true);
+    auto print_vets = [](boost::shared_ptr<FieldEntity> ent_ptr) {
+      MoFEMFunctionBegin;
+      if(!(ent_ptr->getPStatus() & PSTATUS_NOT_OWNED)) {
+        MOFEM_LOG("SYNC", Sev::inform) << "Velocities: " << ent_ptr->getEntFieldData();
+      }
+      MoFEMFunctionReturn(0);
+    };
+    CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(
+        print_vets, "V", &ents);
+    MOFEM_LOG_SEVERITY_SYNC(mField.get_comm(), Sev::inform);
+  }
+
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
@@ -1001,6 +1096,9 @@ struct Monitor : public FEMethod {
 private:
   SmartPetscObj<DM> dM;
   boost::shared_ptr<PostProcEle> postProc;
+  boost::shared_ptr<MatrixDouble> fieldPtr;
+  std::array<double, 3> fieldEvalCoords;
+  boost::shared_ptr<SetPtsData> fieldEvalData;
 };
 
 //! [Solve]
@@ -1043,6 +1141,11 @@ MoFEMErrorCode Example::solveSystem() {
       new OpCalculateDeformationGradient<SPACE_DIM, SPACE_DIM>(
           mat_F_ptr, mat_H_tensor_ptr));
 
+  auto mat_v_grad_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("V",
+                                                               mat_v_grad_ptr));
+
   using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
   post_proc_fe->getOpPtrVector().push_back(
@@ -1055,7 +1158,7 @@ MoFEMErrorCode Example::solveSystem() {
 
           {{"V", u_ptr}, {"GEOMETRY", X_ptr}, {"x", x_ptr}},
 
-          {{"FIRST_PIOLA", mat_P_ptr}, {"F", mat_F_ptr}},
+          {{"FIRST_PIOLA", mat_P_ptr}, {"F", mat_F_ptr}, {"V_grad", mat_v_grad_ptr}},
 
           {}
 
@@ -1178,13 +1281,13 @@ MoFEMErrorCode Example::solveSystem() {
     
     vol_mass_ele->getRuleHook = integration_rule;
     
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-                      vol_mass_ele->getOpPtrVector(), {H1}, "GEOMETRY");
+    // CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+    //                   vol_mass_ele->getOpPtrVector(), {H1}, "GEOMETRY");
     // CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
     //     pipeline_mng->getOpDomainExplicitRhsPipeline(), {H1}, "GEOMETRY");
-
-    vol_mass_ele->getOpPtrVector().push_back(new OpMassV("V", "V", get_rho));
-    vol_mass_ele->getOpPtrVector().push_back(new OpMassF("F", "F"));
+    auto energy_consistency = [&](const double, const double, const double) { return 3.*bulk_modulus_K; };
+    vol_mass_ele->getOpPtrVector().push_back(new OpMassV("V", "V"));
+    vol_mass_ele->getOpPtrVector().push_back(new OpMassF("F", "F", energy_consistency));
 
 
     // vol_mass_ele->getOpPtrVector().push_back(new OpCalculateExplicitMass<SPACE_DIM>("V", "V", M, get_rho));
@@ -1194,11 +1297,14 @@ MoFEMErrorCode Example::solveSystem() {
                                     vol_mass_ele);
     CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
-    auto lumpVec = createDMVector(simple->getDM());
-    CHKERR MatGetRowSum(M, lumpVec);
+    
+    // auto lumpVec = createDMVector(simple->getDM());
+    // CHKERR MatGetRowSum(M, lumpVec);
 
-    CHKERR MatZeroEntries(M);
-    CHKERR MatDiagonalSet(M, lumpVec, INSERT_VALUES);
+    // CHKERR MatZeroEntries(M);
+    // CHKERR MatDiagonalSet(M, lumpVec, INSERT_VALUES);
+
+
     //CHKERR VecView(lumpVec, PETSC_VIEWER_STDOUT_WORLD);
 
     // auto lumpVecCheck = createDMVector(simple->getDM());
@@ -1245,8 +1351,45 @@ MoFEMErrorCode Example::solveSystem() {
   MoFEM::SmartPetscObj<TS> ts;
   ts = pipeline_mng->createTSEX(dm);
 
+  //Field eval
+  PetscBool field_eval_flag = PETSC_TRUE;
+  boost::shared_ptr<MatrixDouble> field_ptr;
+  boost::shared_ptr<SetPtsData> field_eval_data;
+
+  std::array<double, 3> field_eval_coords = {0.5, 0.5, 0.};
+  int dim = 3;
+    // CHKERR PetscOptionsGetRealArray(NULL, NULL, "-field_eval_coords",
+    //                                 field_eval_coords.data(), &dim,
+    //                                 &field_eval_flag);
+
+    if (field_eval_flag) {
+      field_eval_data =
+          mField.getInterface<FieldEvaluatorInterface>()->getData<DomainEle>();
+      if(SPACE_DIM == 3){
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->buildTree3D(
+          field_eval_data, simple->getDomainFEName());
+      } else {
+        CHKERR mField.getInterface<FieldEvaluatorInterface>()->buildTree2D(
+          field_eval_data, simple->getDomainFEName());
+      }
+
+      field_eval_data->setEvalPoints(field_eval_coords.data(), 1);
+
+      auto no_rule = [](int, int, int) { return -1; };
+
+      auto fe_ptr = field_eval_data->feMethodPtr.lock();
+      fe_ptr->getRuleHook = no_rule;
+
+      field_ptr = boost::make_shared<MatrixDouble>();
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>("GEOMETRY", field_ptr));
+    }
+
+
   boost::shared_ptr<FEMethod> null_fe;
-  auto monitor_ptr = boost::make_shared<Monitor>(dm, post_proc_fe);
+  auto monitor_ptr = boost::make_shared<Monitor>(dm, mField, post_proc_fe, field_ptr, field_eval_coords, field_eval_data);
+  
+    
   CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                              null_fe, monitor_ptr);
 
@@ -1263,7 +1406,7 @@ MoFEMErrorCode Example::solveSystem() {
   auto fb = mField.getInterface<FieldBlas>();
 
   
-  CHKERR TSSetPreStage(ts, TSPrePostProc::tsPreStage);
+  CHKERR TSSetPostStage(ts, TSPrePostProc::tsPostStage);
   CHKERR TSSetPostStep(ts, TSPrePostProc::tsPostStep);
   
   boost::shared_ptr<ForcesAndSourcesCore> null;
