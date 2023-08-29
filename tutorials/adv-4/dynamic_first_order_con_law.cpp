@@ -771,13 +771,7 @@ if (auto ptr = tsPrePostProc.lock()) {
     //v = (x_t+1 - x_t) / Δt
     //x_t+1 = Δt * v + x_t 
     // cerr << "dt " << dt <<"\n";
-    CHKERR fb->fieldCopy(1., "x_1", "x_2");
-    CHKERR fb->fieldAxpy(dt, "V", "x_2");
-    CHKERR fb->fieldCopy(1., "x_2", "x_1");
     
-    CHKERR fb->fieldCopy(-1./dt, "F_0", "F_dot");
-    CHKERR fb->fieldAxpy(1./dt, "F", "F_dot");
-    CHKERR fb->fieldCopy(1., "F", "F_0");
 }
   MoFEMFunctionReturn(0);
 }
@@ -792,6 +786,17 @@ if (auto ptr = tsPrePostProc.lock()) {
     //
     //x_t+1 = Δt * v + x_t 
     // CHKERR fb->fieldCopy(1., "x_2", "x_1");
+    double dt;
+    CHKERR TSGetTimeStep(ts, &dt);
+    double time;
+    CHKERR TSGetTime(ts, &time);
+    CHKERR fb->fieldCopy(1., "x_1", "x_2");
+    CHKERR fb->fieldAxpy(dt, "V", "x_2");
+    CHKERR fb->fieldCopy(1., "x_2", "x_1");
+    
+    CHKERR fb->fieldCopy(-1./dt, "F_0", "F_dot");
+    CHKERR fb->fieldAxpy(1./dt, "F", "F_dot");
+    CHKERR fb->fieldCopy(1., "F", "F_0");
 }
   MoFEMFunctionReturn(0);
 }
