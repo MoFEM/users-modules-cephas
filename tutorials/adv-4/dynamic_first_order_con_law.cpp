@@ -1494,7 +1494,7 @@ MoFEMErrorCode Example::solveSystem() {
   
   CHKERR TSSetPostStage(ts, TSPrePostProc::tsPostStage);
   CHKERR TSSetPostStep(ts, TSPrePostProc::tsPostStep);
-  CHKERR TSSetPreStep(ts, TSPrePostProc::tsPreStep);
+  // CHKERR TSSetPreStep(ts, TSPrePostProc::tsPreStep);
   
   boost::shared_ptr<ForcesAndSourcesCore> null;
   
@@ -1507,7 +1507,7 @@ if (auto ptr = tsPrePostProc.lock()) {
   // ptr->T = T;
   // ptr->solverSubDM = simple->getDM();
   CHKERR TSSetUp(ts);
-  CHKERR TSSetSaveTrajectory(ts);
+  // CHKERR TSSetSaveTrajectory(ts);
   CHKERR TSSolve(ts, NULL);
 
   CHKERR TSGetTime(ts, &ftime);
