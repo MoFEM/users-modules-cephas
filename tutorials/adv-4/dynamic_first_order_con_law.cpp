@@ -770,7 +770,7 @@ if (auto ptr = tsPrePostProc.lock()) {
     // cerr << "dt " << dt <<"\n";
     CHKERR fb->fieldCopy(1., "x_1", "x_2");
     CHKERR fb->fieldAxpy(dt, "V", "x_2");
-    // CHKERR fb->fieldCopy(1., "x_2", "x_1");
+    CHKERR fb->fieldCopy(1., "x_2", "x_1");
     
     CHKERR fb->fieldCopy(-1./dt, "F_0", "F_dot");
     CHKERR fb->fieldAxpy(1./dt, "F", "F_dot");
