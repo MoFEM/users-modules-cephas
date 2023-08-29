@@ -310,7 +310,7 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
     
     // tau_F = alpha deltaT
     auto tau_F = tauFPtr;
-    double xi_F = 0.0;
+    double xi_F = 0.1;
     auto t_gradx = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*gradxPtr);
     auto t_gradVel = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*gradVelPtr);
 
