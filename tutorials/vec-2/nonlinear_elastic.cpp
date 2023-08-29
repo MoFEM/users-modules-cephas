@@ -62,12 +62,14 @@ struct Example {
 
 private:
   MoFEM::Interface &mField;
+  // SmartPetscObj<Vec> normUVec;
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
+  MoFEMErrorCode gettingNorms();
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 };
@@ -80,6 +82,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR boundaryCondition();
   CHKERR assembleSystem();
   CHKERR solveSystem();
+  CHKERR gettingNorms();
   CHKERR outputResults();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
@@ -228,6 +231,35 @@ private:
   boost::shared_ptr<PostProcEleBdy> postProc;
 };
 
+// struct MonitorNorms : public FEMethod {
+//   MonitorNorms(SmartPetscObj<DM> dm, boost::shared_ptr<DomainEle>
+//   norm_proc_fe,
+//                SmartPetscObj<Vec> norm_u_vec)
+//       : dM(dm), normProcFe(norm_proc_fe), normUVec(norm_u_vec){};
+//   MoFEMErrorCode postProcess() {
+//     MoFEMFunctionBegin;
+//     constexpr int save_every_nth_step = 1;
+//     if (ts_step % save_every_nth_step == 0) {
+//       CHKERR VecZeroEntries(normUVec);
+//       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", normProcFe);
+//       MOFEM_LOG("WORLD", Sev::inform) << "Norms: ";
+
+//       CHKERR VecAssemblyBegin(normUVec);
+//       CHKERR VecAssemblyEnd(normUVec);
+//       double norm_u2;
+//       CHKERR VecSum(normUVec, &norm_u2);
+//       MOFEM_LOG("EXAMPLE", Sev::inform)
+//           << "norm_u at " << ts_step << ": " << std::sqrt(norm_u2);
+//     }
+//     MoFEMFunctionReturn(0);
+//   }
+
+// private:
+//   SmartPetscObj<DM> dM;
+//   boost::shared_ptr<DomainEle> normProcFe;
+//   SmartPetscObj<Vec> normUVec;
+// };
+
 //! [Solve]
 MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
@@ -236,6 +268,8 @@ MoFEMErrorCode Example::solveSystem() {
 
   auto dm = simple->getDM();
   auto ts = pipeline_mng->createTSIM();
+
+  // auto norm_vec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
 
   // Setup postprocessing
   auto create_post_proc_fe = [dm, this, simple]() {
@@ -279,6 +313,26 @@ MoFEMErrorCode Example::solveSystem() {
     );
     return post_proc_fe_bdy;
   };
+
+  // auto create_post_proc_norm_fe = [dm, this]() {
+  //   auto post_proc_fe = boost::make_shared<DomainEle>(mField);
+
+  //   auto post_proc_rule_hook = [](int, int, int p) -> int { return 2 * p; };
+  //   post_proc_fe->getRuleHook = post_proc_rule_hook;
+
+  //   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+  //       post_proc_fe->getOpPtrVector(), {H1});
+
+  //   auto u_ptr = boost::make_shared<MatrixDouble>();
+  //   post_proc_fe->getOpPtrVector().push_back(
+  //       new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+
+  //   post_proc_fe->getOpPtrVector().push_back(
+  //       new OpCalcNormL2Tesnosr1<SPACE_DIM>("U", u_ptr, normUVec,
+  //                                           mField.get_comm_rank()));
+
+  //   return post_proc_fe;
+  // };
 
   auto add_extra_finite_elements_to_ksp_solver_pipelines = [&]() {
     MoFEMFunctionBegin;
@@ -328,11 +382,20 @@ MoFEMErrorCode Example::solveSystem() {
     return boost::make_shared<Monitor>(dm, post_proc_fe);
   };
 
+  // auto create_monitor_norm_fe = [dm, this](auto &&post_proc_fe) {
+  //   return boost::make_shared<MonitorNorms>(dm, post_proc_fe, normUVec);
+  // };
+
   // Set monitor which postprocessing results and saves them to the hard drive
   boost::shared_ptr<FEMethod> null_fe;
   auto monitor_ptr = create_monitor_fe(create_post_proc_fe());
   CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
                              null_fe, monitor_ptr);
+
+  // normUVec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
+  // auto monitor_norm_ptr = create_monitor_norm_fe(create_post_proc_norm_fe());
+  // CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
+  //                            null_fe, monitor_norm_ptr);
 
   // Set time solver
   double ftime = 1;
@@ -361,6 +424,42 @@ MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionReturn(0);
 }
 //! [Solve]
+
+//! [Getting norms]
+MoFEMErrorCode Example::gettingNorms() {
+  MoFEMFunctionBegin;
+
+  auto *simple = mField.getInterface<Simple>();
+  auto dm = simple->getDM();
+
+  auto post_proc_norm_fe = boost::make_shared<DomainEle>(mField);
+  auto norms_vec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
+
+  auto post_proc_norm_rule_hook = [](int, int, int p) -> int { return 2 * p; };
+  post_proc_norm_fe->getRuleHook = post_proc_norm_rule_hook;
+
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      post_proc_norm_fe->getOpPtrVector(), {H1});
+
+  auto u_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_norm_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+
+  post_proc_norm_fe->getOpPtrVector().push_back(
+      new OpCalcNormL2Tesnosr1<SPACE_DIM>("U", u_ptr, norms_vec,
+                                          mField.get_comm_rank()));
+
+  CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_norm_fe);
+
+  CHKERR VecAssemblyBegin(norms_vec);
+  CHKERR VecAssemblyEnd(norms_vec);
+  double norm_u2;
+  CHKERR VecSum(norms_vec, &norm_u2);
+  MOFEM_LOG("EXAMPLE", Sev::inform) << "norm_u: " << std::sqrt(norm_u2);
+
+  MoFEMFunctionReturn(0);
+}
+//! [Getting norms]
 
 //! [Postprocessing results]
 MoFEMErrorCode Example::outputResults() {
@@ -398,6 +497,11 @@ MoFEMErrorCode Example::outputResults() {
                "Regression test field; wrong norm value. %6.4e != %6.4e", nrm2,
                regression_value);
   }
+
+  // double norm_u2;
+  // CHKERR VecSum(normUVec, &norm_u2);
+  // MOFEM_LOG("EXAMPLE", Sev::inform) << "norm_u at the end: " <<
+  // std::sqrt(norm_u2);
   MoFEMFunctionReturn(0);
 }
 //! [Postprocessing results]
