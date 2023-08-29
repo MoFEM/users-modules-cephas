@@ -1188,9 +1188,9 @@ struct Monitor : public FEMethod {
 
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
-      CHKERR postProc->writeFile(
-          "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      // CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
+      // CHKERR postProc->writeFile(
+      //     "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
     }
     MoFEMFunctionReturn(0);
   }
