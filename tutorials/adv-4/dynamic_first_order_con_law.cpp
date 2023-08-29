@@ -301,7 +301,6 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
     defGradStabPtr->resize(DIM_0 * DIM_1, nb_gauss_pts, false);
     defGradStabPtr->clear();
 
-    constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
     // Extract matrix from data matrix
     auto t_F = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*defGradPtr);
     auto t_Fstab = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*defGradStabPtr);
@@ -309,25 +308,24 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
     
     // tau_F = alpha deltaT
     auto tau_F = tauFPtr;
-    double xi_F = 0.;
+    double xi_F = 0.0;
     auto t_gradx = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*gradxPtr);
     auto t_gradVel = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*gradVelPtr);
 
     for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
       // Stabilised Deformation Gradient
-            t_Fstab(i, j) = t_F(i, j) +
-                            tau_F * (t_gradVel(i, j) - t_F_dot(i, j)) +
-                            xi_F * (t_gradx(i, j) - t_F(i, j)- t_kd(i, j));
+      t_Fstab(i, j) = t_F(i, j) + tau_F *  (t_gradVel(i, j) - t_F_dot(i, j)); 
+      // + xi_F * (t_gradx(i, j) - t_F(i, j));
+      
+      // if(sqrt(t_F_dot(i,j)*t_F_dot(i,j)) > 1.e-28)
+      //   cerr << t_F_dot <<"\n";
 
-            // if(sqrt(t_F_dot(i,j)*t_F_dot(i,j)) > 1.e-28)
-            //   cerr << t_F_dot <<"\n";
-
-            ++t_F;
-            ++t_Fstab;
-            ++t_gradVel;
-            ++t_F_dot;
-            ++xi_F;
-            ++t_gradx;
+      ++t_F;
+      ++t_Fstab;
+      ++t_gradVel;
+      ++t_F_dot;
+      ++xi_F;
+      ++t_gradx;
     }
 
     MoFEMFunctionReturn(0);
@@ -772,7 +770,7 @@ if (auto ptr = tsPrePostProc.lock()) {
     // cerr << "dt " << dt <<"\n";
     CHKERR fb->fieldCopy(1., "x_1", "x_2");
     CHKERR fb->fieldAxpy(dt, "V", "x_2");
-    CHKERR fb->fieldCopy(1., "x_2", "x_1");
+    // CHKERR fb->fieldCopy(1., "x_2", "x_1");
     
     CHKERR fb->fieldCopy(-1./dt, "F_0", "F_dot");
     CHKERR fb->fieldAxpy(1./dt, "F", "F_dot");
