@@ -301,6 +301,8 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
     defGradStabPtr->resize(DIM_0 * DIM_1, nb_gauss_pts, false);
     defGradStabPtr->clear();
 
+    constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
+
     // Extract matrix from data matrix
     auto t_F = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*defGradPtr);
     auto t_Fstab = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*defGradStabPtr);
@@ -314,8 +316,8 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
 
     for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
       // Stabilised Deformation Gradient
-      t_Fstab(i, j) = t_F(i, j) + tau_F *  (t_gradVel(i, j) - t_F_dot(i, j)); 
-      // + xi_F * (t_gradx(i, j) - t_F(i, j));
+      t_Fstab(i, j) = t_F(i, j) + tau_F *  (t_gradVel(i, j) - t_F_dot(i, j)) + 
+      + xi_F * (t_gradx(i, j) - t_F(i, j) - t_kd(i, j));
       
       // if(sqrt(t_F_dot(i,j)*t_F_dot(i,j)) > 1.e-28)
       //   cerr << t_F_dot <<"\n";
