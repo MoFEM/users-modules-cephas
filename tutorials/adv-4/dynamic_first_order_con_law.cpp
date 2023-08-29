@@ -314,10 +314,11 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
 
     for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
       // Stabilised Deformation Gradient
-      // t_Fstab(i, j) = t_F(i, j) + tau_F *  (t_gradVel(i, j) /*- t_F_dot(i, j)*/) +
-      //               xi_F * (t_gradx(i, j) - t_F(i, j));
-      if(sqrt(t_F_dot(i,j)*t_F_dot(i,j)) > 1.e-28)
-        cerr << t_F_dot <<"\n";
+      t_Fstab(i, j) = t_F(i, j) + tau_F *  (t_gradVel(i, j) - t_F_dot(i, j)); 
+      // + xi_F * (t_gradx(i, j) - t_F(i, j));
+      
+      // if(sqrt(t_F_dot(i,j)*t_F_dot(i,j)) > 1.e-28)
+      //   cerr << t_F_dot <<"\n";
 
       ++t_F;
       ++t_Fstab;
@@ -661,12 +662,19 @@ MoFEMErrorCode Example::setupProblem() {
                               SPACE_DIM);
   CHKERR simple->addDataField("x_2", H1, base,
                               SPACE_DIM);
+  CHKERR simple->addDataField("F_0", H1, base,
+                                SPACE_DIM * SPACE_DIM);
+  CHKERR simple->addDataField("F_dot", H1, base,
+                                SPACE_DIM * SPACE_DIM);
+                              
   CHKERR simple->addDataField("GEOMETRY", H1, base,
                               SPACE_DIM);
   int order = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("V", order);
   CHKERR simple->setFieldOrder("F", order);
+  CHKERR simple->setFieldOrder("F_0", order);
+  CHKERR simple->setFieldOrder("F_dot", order);
   CHKERR simple->setFieldOrder("x_1", order); 
   CHKERR simple->setFieldOrder("x_2", order); 
   CHKERR simple->setFieldOrder("GEOMETRY", order);
@@ -762,6 +770,11 @@ if (auto ptr = tsPrePostProc.lock()) {
     // cerr << "dt " << dt <<"\n";
     CHKERR fb->fieldCopy(1., "x_1", "x_2");
     CHKERR fb->fieldAxpy(dt, "V", "x_2");
+
+    
+    CHKERR fb->fieldCopy(-1./dt, "F_0", "F_dot");
+    CHKERR fb->fieldAxpy(1./dt, "F", "F_dot");
+    CHKERR fb->fieldCopy(1., "F", "F_0");
 }
   MoFEMFunctionReturn(0);
 }
@@ -795,40 +808,35 @@ MoFEMErrorCode TSPrePostProc::tsPreStep(TS ts) {
     CHKERR TSGetTime(ts, &time);
     int step_num;
     CHKERR TSGetStepNumber(ts, &step_num);
-
-    TSTrajectory tj;
-    CHKERR TSGetTrajectory(ts, &tj);
-    // TSAdapt adapt;
-    // TSGetAdapt(ts, &adapt)
-  
-    auto T = createDMVector(simple->getDM());
-    Vec TT = smartVectorDuplicate(T);
-    CHKERR TSGetSolution(ts, &TT);
-    // auto TT = smartVectorDuplicate(*T);
-  
-    CHKERR VecGhostUpdateBegin(TT,
-                               ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateEnd(TT,
-                             ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecAssemblyBegin(TT);
-    CHKERR VecAssemblyEnd(TT);
+    // TSTrajectory tj;
+    // CHKERR TSGetTrajectory(ts, &tj);
     
-    CHKERR VecCopy(TT, T);
+    // auto T = createDMVector(simple->getDM());
+    // Vec TT = smartVectorDuplicate(T);
+    // CHKERR TSGetSolution(ts, &TT);
+    
+    // CHKERR VecGhostUpdateBegin(TT,
+    //                            ADD_VALUES, SCATTER_REVERSE);
+    // CHKERR VecGhostUpdateEnd(TT,
+    //                          ADD_VALUES, SCATTER_REVERSE);
+    // CHKERR VecAssemblyBegin(TT);
+    // CHKERR VecAssemblyEnd(TT);
+    
+    // CHKERR VecCopy(TT, T);
 
-    CHKERR TSTrajectoryGetVecs(tj, ts, step_num, &time, T,
-                               pipeline_mng->getDomainExplicitRhsFE()->ts_u_t);
+    // CHKERR TSTrajectoryGetVecs(tj, ts, step_num, &time, T,
+    //                            pipeline_mng->getDomainExplicitRhsFE()->ts_u_t);
 
-    // if (*(pipeline_mng->getDomainExplicitRhsFE()
-    //           ->vecAssembleSwitch)) {
+    // // if (*(pipeline_mng->getDomainExplicitRhsFE()
+    // //           ->vecAssembleSwitch)) {
 
-    CHKERR VecGhostUpdateBegin(pipeline_mng->getDomainExplicitRhsFE()->ts_u_t,
-                               ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateEnd(pipeline_mng->getDomainExplicitRhsFE()->ts_u_t,
-                             ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecAssemblyBegin(pipeline_mng->getDomainExplicitRhsFE()->ts_u_t);
-    CHKERR VecAssemblyEnd(pipeline_mng->getDomainExplicitRhsFE()->ts_u_t);
-    // *(pipeline_mng->getDomainExplicitRhsFE()->vecAssembleSwitch) = false;
-    // }
+    // CHKERR VecGhostUpdateBegin(pipeline_mng->getDomainExplicitRhsFE()->ts_u_t,
+    //                            ADD_VALUES, SCATTER_REVERSE);
+    // CHKERR VecGhostUpdateEnd(pipeline_mng->getDomainExplicitRhsFE()->ts_u_t,
+    //                          ADD_VALUES, SCATTER_REVERSE);
+    // CHKERR VecAssemblyBegin(pipeline_mng->getDomainExplicitRhsFE()->ts_u_t);
+    // CHKERR VecAssemblyEnd(pipeline_mng->getDomainExplicitRhsFE()->ts_u_t);
+    
   }
   MoFEMFunctionReturn(0);
 }
@@ -1009,14 +1017,10 @@ MoFEMErrorCode Example::assembleSystem() {
   //   pip.push_back(new OpCalculatePiola<SPACE_DIM, SPACE_DIM>(shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_ptr, mat_F_tensor_ptr));
 
   //  // Calculate F
-   double tau = 1.;
+   double tau = 0.2;
   
   // Calculate P stab
-  auto mat_P_stab_ptr = boost::make_shared<MatrixDouble>();
-  pip.push_back(new OpCalculatePiola<SPACE_DIM, SPACE_DIM>(
-      shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_stab_ptr,
-      mat_F_tensor_ptr));
-
+  
   auto one = [&](const double, const double, const double) {
     return 3. * bulk_modulus_K;
   };
@@ -1032,7 +1036,10 @@ MoFEMErrorCode Example::assembleSystem() {
   //         field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
   //     dataPtr(data_ptr), zeroType(zero_type), dataVec(data_vec) {
   auto mat_dot_F_tensor_ptr = boost::make_shared<MatrixDouble>();
-  pip.push_back(new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>("F", mat_dot_F_tensor_ptr, v_f_dot));
+    pip.push_back(new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>(
+        "F_dot", mat_dot_F_tensor_ptr));
+
+  // pip.push_back(new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>("F", mat_dot_F_tensor_ptr, v_f_dot));
 
   // Calculate Gradient of Spatial Positions
   auto mat_x_grad_ptr = boost::make_shared<MatrixDouble>();
@@ -1044,6 +1051,11 @@ MoFEMErrorCode Example::assembleSystem() {
   pip.push_back(new OpCalculateFStab<SPACE_DIM, SPACE_DIM>(
       mat_F_tensor_ptr, mat_F_stab_ptr, mat_dot_F_tensor_ptr, tau,
       mat_x_grad_ptr, mat_v_grad_ptr));
+
+auto mat_P_stab_ptr = boost::make_shared<MatrixDouble>();
+  pip.push_back(new OpCalculatePiola<SPACE_DIM, SPACE_DIM>(
+      shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_stab_ptr,
+      mat_F_stab_ptr));
 
   pip.push_back(new OpGradTimesTensor2("V", mat_P_stab_ptr, minus_one));
   // pip.push_back(new OpGradTimesPiola("V", mat_P_stab_ptr, one));
@@ -1494,7 +1506,7 @@ MoFEMErrorCode Example::solveSystem() {
   
   CHKERR TSSetPostStage(ts, TSPrePostProc::tsPostStage);
   CHKERR TSSetPostStep(ts, TSPrePostProc::tsPostStep);
-  // CHKERR TSSetPreStep(ts, TSPrePostProc::tsPreStep);
+  CHKERR TSSetPreStep(ts, TSPrePostProc::tsPreStep);
   
   boost::shared_ptr<ForcesAndSourcesCore> null;
   
