@@ -301,6 +301,7 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
     defGradStabPtr->resize(DIM_0 * DIM_1, nb_gauss_pts, false);
     defGradStabPtr->clear();
 
+    constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
     // Extract matrix from data matrix
     auto t_F = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*defGradPtr);
     auto t_Fstab = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*defGradStabPtr);
@@ -308,24 +309,25 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
     
     // tau_F = alpha deltaT
     auto tau_F = tauFPtr;
-    double xi_F = 0.0;
+    double xi_F = 0.1;
     auto t_gradx = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*gradxPtr);
     auto t_gradVel = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*gradVelPtr);
 
     for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
       // Stabilised Deformation Gradient
-      t_Fstab(i, j) = t_F(i, j) + tau_F *  (t_gradVel(i, j) - t_F_dot(i, j)); 
-      // + xi_F * (t_gradx(i, j) - t_F(i, j));
-      
-      // if(sqrt(t_F_dot(i,j)*t_F_dot(i,j)) > 1.e-28)
-      //   cerr << t_F_dot <<"\n";
+            t_Fstab(i, j) = t_F(i, j) +
+                            tau_F * (t_gradVel(i, j) - t_F_dot(i, j)) +
+                            xi_F * (t_gradx(i, j) - t_F(i, j) - t_kd(i,j) );
 
-      ++t_F;
-      ++t_Fstab;
-      ++t_gradVel;
-      ++t_F_dot;
-      ++xi_F;
-      ++t_gradx;
+            // if(sqrt(t_F_dot(i,j)*t_F_dot(i,j)) > 1.e-28)
+            //   cerr << t_F_dot <<"\n";
+
+            ++t_F;
+            ++t_Fstab;
+            ++t_gradVel;
+            ++t_F_dot;
+            ++xi_F;
+            ++t_gradx;
     }
 
     MoFEMFunctionReturn(0);
@@ -597,8 +599,8 @@ private:
   struct DynamicFirstOrderConsTimeScale : public MoFEM::TimeScale {
     using MoFEM::TimeScale::TimeScale;
     double getScale(const double time) {
-      return 0.001 * sin( 0.1 * time);
-      // return 0.001;
+      // return 0.001 * sin( 0.1 * time);
+      return 0.001;
     };
   };
 };
@@ -768,13 +770,7 @@ if (auto ptr = tsPrePostProc.lock()) {
     //v = (x_t+1 - x_t) / Δt
     //x_t+1 = Δt * v + x_t 
     // cerr << "dt " << dt <<"\n";
-    CHKERR fb->fieldCopy(1., "x_1", "x_2");
-    CHKERR fb->fieldAxpy(dt, "V", "x_2");
-
     
-    CHKERR fb->fieldCopy(-1./dt, "F_0", "F_dot");
-    CHKERR fb->fieldAxpy(1./dt, "F", "F_dot");
-    CHKERR fb->fieldCopy(1., "F", "F_0");
 }
   MoFEMFunctionReturn(0);
 }
@@ -788,7 +784,20 @@ if (auto ptr = tsPrePostProc.lock()) {
     //find trajectory V and F
     //
     //x_t+1 = Δt * v + x_t 
+    // CHKERR fb->fieldCopy(1., "x_2", "x_1");
+
+    double dt;
+    CHKERR TSGetTimeStep(ts, &dt);
+    double time;
+    CHKERR TSGetTime(ts, &time);
+
+    CHKERR fb->fieldCopy(1., "x_1", "x_2");
+    CHKERR fb->fieldAxpy(dt, "V", "x_2");
     CHKERR fb->fieldCopy(1., "x_2", "x_1");
+    
+    CHKERR fb->fieldCopy(-1./dt, "F_0", "F_dot");
+    CHKERR fb->fieldAxpy(1./dt, "F", "F_dot");
+    CHKERR fb->fieldCopy(1., "F", "F_0");
 }
   MoFEMFunctionReturn(0);
 }
@@ -1186,8 +1195,8 @@ struct Monitor : public FEMethod {
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
-      CHKERR postProc->writeFile(
-          "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      // CHKERR postProc->writeFile(
+      //     "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
     }
     MoFEMFunctionReturn(0);
   }
