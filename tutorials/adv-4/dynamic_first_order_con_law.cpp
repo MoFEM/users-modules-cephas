@@ -597,8 +597,8 @@ private:
   struct DynamicFirstOrderConsTimeScale : public MoFEM::TimeScale {
     using MoFEM::TimeScale::TimeScale;
     double getScale(const double time) {
-      return 0.001 * sin( 0.1 * time);
-      // return 0.001;
+      // return 0.001 * sin( 0.1 * time);
+      return 0.001;
     };
   };
 };
