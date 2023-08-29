@@ -317,8 +317,9 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
     for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
       // Stabilised Deformation Gradient
             t_Fstab(i, j) = t_F(i, j) +
-                            tau_F * (t_gradVel(i, j) - t_F_dot(i, j)) +
-                            xi_F * (t_gradx(i, j) - t_F(i, j) - t_kd(i, j));
+                            tau_F * (t_gradVel(i, j) - t_F_dot(i, j));
+                            //  +
+                            // xi_F * (t_gradx(i, j) - t_F(i, j) - t_kd(i, j));
 
             // if(sqrt(t_F_dot(i,j)*t_F_dot(i,j)) > 1.e-28)
             //   cerr << t_F_dot <<"\n";
