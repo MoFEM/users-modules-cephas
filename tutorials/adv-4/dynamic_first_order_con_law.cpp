@@ -597,13 +597,20 @@ private:
   MoFEMErrorCode checkResults();
   friend struct TSPrePostProc;
 
-  struct DynamicFirstOrderConsTimeScale : public MoFEM::TimeScale {
+  struct DynamicFirstOrderConsSinusTimeScale : public MoFEM::TimeScale {
     using MoFEM::TimeScale::TimeScale;
     double getScale(const double time) {
-      // return 0.001 * sin( 0.1 * time);
+      return 0.001 * sin( 0.1 * time);
+    };
+  };
+
+  struct DynamicFirstOrderConsConstantTimeScale : public MoFEM::TimeScale {
+    using MoFEM::TimeScale::TimeScale;
+    double getScale(const double time) {
       return 0.001;
     };
   };
+
 };
 
 //! [Run problem]
@@ -712,17 +719,25 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto time_scale = boost::make_shared<TimeScale>();
 
+  PetscBool sin_time_function = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-sin_time_function", &sin_time_function, PETSC_NULL);
+  
+  if(sin_time_function)
+    time_scale = boost::make_shared<DynamicFirstOrderConsSinusTimeScale>();
+  else
+    time_scale = boost::make_shared<DynamicFirstOrderConsConstantTimeScale>();
+
   pipeline_mng->getBoundaryExplicitRhsFE().reset();
   CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
         pipeline_mng->getOpBoundaryExplicitRhsPipeline(), {NOSPACE}, "GEOMETRY");
 
   CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
       pipeline_mng->getOpBoundaryExplicitRhsPipeline(), mField, "V",
-      {boost::make_shared<DynamicFirstOrderConsTimeScale>()}, "FORCE",
+      {time_scale}, "FORCE",
       Sev::inform);
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * (approx_order) + 1;
+    return 2 * approx_order;
   };
 
   CHKERR pipeline_mng->setBoundaryExplicitRhsIntegrationRule(integration_rule);
@@ -731,11 +746,11 @@ MoFEMErrorCode Example::boundaryCondition() {
 
   CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "V");
-
+  
   auto get_pre_proc_hook = [&]() {
     return EssentialPreProc<DisplacementCubitBcData>(
         mField, pipeline_mng->getDomainExplicitRhsFE(),
-        {boost::make_shared<DynamicFirstOrderConsTimeScale>()});
+        {time_scale});
   };
   pipeline_mng->getDomainExplicitRhsFE()->preProcessHook = get_pre_proc_hook();
 
@@ -766,6 +781,14 @@ if (auto ptr = tsPrePostProc.lock()) {
     PetscPrintf(PETSC_COMM_WORLD, "Timestep %e time %e\n", dt, time);
     // double pseudo_time_step;
     // CHKERR TSPseudoComputeTimeStep(ts, &pseudo_time_step);
+
+    CHKERR fb->fieldCopy(1., "x_1", "x_2");
+    CHKERR fb->fieldAxpy(dt, "V", "x_2");
+    CHKERR fb->fieldCopy(1., "x_2", "x_1");
+    
+    CHKERR fb->fieldCopy(-1./dt, "F_0", "F_dot");
+    CHKERR fb->fieldAxpy(1./dt, "F", "F_dot");
+    CHKERR fb->fieldCopy(1., "F", "F_0");
     
     // PetscPrintf(PETSC_COMM_WORLD, "Timestep %e time %e pseudo-time-step %e\n", dt, time, pseudo_time_step);
     //v = (x_t+1 - x_t) / Δt
@@ -790,13 +813,7 @@ if (auto ptr = tsPrePostProc.lock()) {
     CHKERR TSGetTimeStep(ts, &dt);
     double time;
     CHKERR TSGetTime(ts, &time);
-    CHKERR fb->fieldCopy(1., "x_1", "x_2");
-    CHKERR fb->fieldAxpy(dt, "V", "x_2");
-    CHKERR fb->fieldCopy(1., "x_2", "x_1");
-    
-    CHKERR fb->fieldCopy(-1./dt, "F_0", "F_dot");
-    CHKERR fb->fieldAxpy(1./dt, "F", "F_dot");
-    CHKERR fb->fieldCopy(1., "F", "F_0");
+
 }
   MoFEMFunctionReturn(0);
 }
@@ -1112,7 +1129,7 @@ auto mat_P_stab_ptr = boost::make_shared<MatrixDouble>();
   CHKERR apply_rhs(pipeline_mng->getOpDomainExplicitRhsPipeline(), u_t);
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order + 1;
+    return 2 * approx_order;
   };
   CHKERR pipeline_mng->setDomainExplicitRhsIntegrationRule(integration_rule);
   // CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
@@ -1186,6 +1203,7 @@ struct Monitor : public FEMethod {
       MoFEMFunctionBegin;
       if(!(ent_ptr->getPStatus() & PSTATUS_NOT_OWNED)) {
         MOFEM_LOG("SYNC", Sev::inform) << "Velocities: " << ent_ptr->getEntFieldData()[0] << " " << ent_ptr->getEntFieldData()[1] << " " << ent_ptr->getEntFieldData()[2] << "\n";
+        // MOFEM_LOG("SYNC", Sev::inform) << "Velocities: " << ent_ptr->getEntFieldData() << "\n";
       }
       MoFEMFunctionReturn(0);
     };
@@ -1386,7 +1404,7 @@ MoFEMErrorCode Example::solveSystem() {
     vol_mass_ele->B = M;
 
     auto integration_rule = [](int, int, int approx_order) {
-      return 2 * approx_order + 1;
+      return 2 * approx_order;
     };
     
     vol_mass_ele->getRuleHook = integration_rule;
