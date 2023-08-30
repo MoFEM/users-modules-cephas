@@ -1025,7 +1025,10 @@ MoFEMErrorCode Example::assembleSystem() {
   //   pip.push_back(new OpCalculatePiola<SPACE_DIM, SPACE_DIM>(shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_ptr, mat_F_tensor_ptr));
 
   //  // Calculate F
-   double tau = 0.2;
+  double tau = 0.2;
+    CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-tau", &tau,
+                               PETSC_NULL);
+   
   
   // Calculate P stab
   
