@@ -8,6 +8,8 @@
 
 #include <MoFEM.hpp>
 #include <MatrixFunction.hpp>
+
+
 using namespace MoFEM;
 
 // template <int DIM> struct ElementsAndOps {};
@@ -406,6 +408,75 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
     boost::shared_ptr<MatrixDouble> defGradPtr;
   };
 
+  template <int DIM_0, int DIM_1>
+  struct OpCalculatePiolaIncompressibleNH : public ForcesAndSourcesCore::UserDataOperator {
+    OpCalculatePiolaIncompressibleNH(double shear_modulus, double bulk_modulus, double m_u, double lambda_lamme,
+                     boost::shared_ptr<MatrixDouble> first_piola_ptr,
+                     boost::shared_ptr<MatrixDouble> def_grad_ptr,
+                     boost::shared_ptr<MatrixDouble> inv_def_grad_ptr,
+                     boost::shared_ptr<VectorDouble> det)
+        : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPLAST),
+          shearModulus(shear_modulus),
+          bulkModulus(bulk_modulus), mU(m_u), lammeLambda(lambda_lamme), firstPiolaPtr(first_piola_ptr),
+          defGradPtr(def_grad_ptr), invDefGradPtr(inv_def_grad_ptr), dEt(det) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data) {
+      MoFEMFunctionBegin;
+      // Define Indicies
+      FTensor::Index<'i', SPACE_DIM> i;
+      FTensor::Index<'j', SPACE_DIM> j;
+      FTensor::Index<'k', SPACE_DIM> k;
+      FTensor::Index<'l', SPACE_DIM> l;
+
+      // Define Kronecker Delta
+      constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
+
+      // Number of Gauss points
+      const size_t nb_gauss_pts = getGaussPts().size2();
+
+      // Resize Piola
+      firstPiolaPtr->resize(DIM_0 * DIM_1, nb_gauss_pts, false);//ignatios check
+      firstPiolaPtr->clear();
+
+      // Extract matrix from data matrix
+      auto t_P = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*firstPiolaPtr);
+      auto t_F = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*defGradPtr);
+      auto t_inv_F = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*invDefGradPtr);
+      auto t_det = getFTensor0FromVec<1>(*dEt);
+      const double two_o_three = 2. / 3.;
+      const double one_o_three = 1. / 3.;
+      const double bulk_mod = &bulkModulus;
+      const double shear_mod = &shearModulus;
+      for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      //Nearly incompressible NH
+
+      //volumetric part 
+      t_P(i, j) = bulk_mod * (t_det - 1.) * t_det * t_inv_F(j, i);
+      //deviatoric part
+      t_P(i, j) += shear_mod * pow(t_det, two_o_three) * ( t_F(i,j) - one_o_three * (t_F(l,k) * t_F(l,k) ) * t_inv_F(j, i)   );
+       
+      ++t_F;
+      ++t_P;
+      ++t_inv_F;
+      ++t_det;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    double shearModulus;
+    double bulkModulus;
+    double mU;
+    double lammeLambda;
+    boost::shared_ptr<MatrixDouble> firstPiolaPtr;
+    boost::shared_ptr<MatrixDouble> defGradPtr;
+    boost::shared_ptr<MatrixDouble> invDefGradPtr;
+    boost::shared_ptr<VectorDouble> dEt;
+  };
+
 template <int DIM_0, int DIM_1>
   struct OpCalculateTranspose : public ForcesAndSourcesCore::UserDataOperator {
     OpCalculateTranspose(boost::shared_ptr<MatrixDouble> in_ptr,
@@ -758,12 +829,46 @@ MoFEMErrorCode Example::boundaryCondition() {
 }
 //! [Boundary condition]
 
+typedef struct _RKTableau *RKTableau;
+struct _RKTableau {
+  char *name;
+  PetscInt order; /* Classical approximation order of the method i */
+  PetscInt s; /* Number of stages                                           */
+  PetscBool FSAL;       /* flag to indicate if tableau is FSAL       */
+  PetscInt pinterp;     /* Interpolation order     */
+  PetscReal *A, *b, *c; /* Tableau */
+  PetscReal *bembed;    /* Embedded formula of order one less (order-1)    */
+  PetscReal *binterp;   /* Dense output formula   */
+  PetscReal
+      ccfl; /* Placeholder for CFL coefficient relative to forward Euler  */
+};
+typedef struct _RKTableauLink *RKTableauLink;
+struct _RKTableauLink {
+  struct _RKTableau tab;
+  RKTableauLink next;
+};
+
+static RKTableauLink RKTableauList;
+typedef struct {
+  RKTableau tableau;
+  Vec *Y;            /* States computed during the step */
+  Vec *YdotRHS;      /* Function evaluations for the non-stiff part */
+  PetscScalar *work; /* Scalar work */
+  PetscReal stage_time;
+  // TSStepStatus status;
+  } TS_RK;
+
 MoFEMErrorCode TSPrePostProc::tsPostStage(TS ts, PetscReal stagetime, PetscInt stageindex, Vec* Y) {
   MoFEMFunctionBegin;
 // cerr << "tsPostStage " <<"\n";
 if (auto ptr = tsPrePostProc.lock()) {
+    auto &m_field = ptr->fsRawPtr->mField;
+    auto *simple = m_field.getInterface<Simple>();
+    auto *pipeline_mng = m_field.getInterface<PipelineManager>();
 
-    int size;
+    // int n_size;
+    // CHKERR TSSSPGetNumStages(ts, &n_size);
+
     // CHKERR VecGetSize(ptr->T, &size);
     // CHKERR VecGhostUpdateBegin(ptr->T, INSERT_VALUES, SCATTER_FORWARD);
     // CHKERR VecGhostUpdateEnd(ptr->T, INSERT_VALUES, SCATTER_FORWARD);
@@ -772,24 +877,32 @@ if (auto ptr = tsPrePostProc.lock()) {
     // CHKERR VecView(ptr->T, PETSC_VIEWER_STDOUT_WORLD);
     
 
-    auto &m_field = ptr->fsRawPtr->mField;
     auto fb = m_field.getInterface<FieldBlas>();
     double dt;
     CHKERR TSGetTimeStep(ts, &dt);
     double time;
     CHKERR TSGetTime(ts, &time);
-    PetscPrintf(PETSC_COMM_WORLD, "Timestep %e time %e\n", dt, time);
+    // PetscPrintf(PETSC_COMM_WORLD, "Timestep %e time %e\n", dt, time);
+    
+    // TS_RK *rk = (TS_RK *)(getPetscObject(ts))->data;
+
+    // int ns = rk->tableau->s;
+   PetscInt num_stages;
+    Vec *stage_solutions;
+
+    CHKERR TSGetStages(ts, &num_stages, &stage_solutions);
+    PetscPrintf(PETSC_COMM_WORLD, "Pseudo timestep %d time %e\n", num_stages, time);
     // double pseudo_time_step;
     // CHKERR TSPseudoComputeTimeStep(ts, &pseudo_time_step);
-
+    const double inv_num_step = 1. / (double)num_stages;
     CHKERR fb->fieldCopy(1., "x_1", "x_2");
     CHKERR fb->fieldAxpy(dt, "V", "x_2");
     CHKERR fb->fieldCopy(1., "x_2", "x_1");
     
-    CHKERR fb->fieldCopy(-1./dt, "F_0", "F_dot");
-    CHKERR fb->fieldAxpy(1./dt, "F", "F_dot");
+    CHKERR fb->fieldCopy(-inv_num_step/dt, "F_0", "F_dot");
+    CHKERR fb->fieldAxpy(inv_num_step/dt, "F", "F_dot");
     CHKERR fb->fieldCopy(1., "F", "F_0");
-    
+
     // PetscPrintf(PETSC_COMM_WORLD, "Timestep %e time %e pseudo-time-step %e\n", dt, time, pseudo_time_step);
     //v = (x_t+1 - x_t) / Δt
     //x_t+1 = Δt * v + x_t 
@@ -814,6 +927,8 @@ if (auto ptr = tsPrePostProc.lock()) {
     double time;
     CHKERR TSGetTime(ts, &time);
 
+   
+    
 }
   MoFEMFunctionReturn(0);
 }
@@ -825,7 +940,6 @@ MoFEMErrorCode TSPrePostProc::tsPreStep(TS ts) {
     auto &m_field = ptr->fsRawPtr->mField;
     auto *simple = m_field.getInterface<Simple>();
     auto *pipeline_mng = m_field.getInterface<PipelineManager>();
-    ;
 
     double dt;
     CHKERR TSGetTimeStep(ts, &dt);
@@ -1054,20 +1168,9 @@ MoFEMErrorCode Example::assembleSystem() {
   };
   auto minus_one = [](const double, const double, const double) { return -1.; };
 
-  // OpCalculateTensor2FieldValues_General(
-  //   const std::string field_name,
-  //   boost::shared_ptr<
-  //       ublas::matrix<double, ublas::row_major, DoubleAllocator>>
-  //       data_ptr,
-  //   SmartPetscObj<Vec> data_vec, const EntityType zero_type = MBVERTEX)
-  //   : ForcesAndSourcesCore::UserDataOperator(
-  //         field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
-  //     dataPtr(data_ptr), zeroType(zero_type), dataVec(data_vec) {
   auto mat_dot_F_tensor_ptr = boost::make_shared<MatrixDouble>();
     pip.push_back(new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>(
         "F_dot", mat_dot_F_tensor_ptr));
-
-  // pip.push_back(new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>("F", mat_dot_F_tensor_ptr, v_f_dot));
 
   // Calculate Gradient of Spatial Positions
   auto mat_x_grad_ptr = boost::make_shared<MatrixDouble>();
@@ -1080,51 +1183,28 @@ MoFEMErrorCode Example::assembleSystem() {
       mat_F_tensor_ptr, mat_F_stab_ptr, mat_dot_F_tensor_ptr, tau,
       mat_x_grad_ptr, mat_v_grad_ptr));
 
-auto mat_P_stab_ptr = boost::make_shared<MatrixDouble>();
-  pip.push_back(new OpCalculatePiola<SPACE_DIM, SPACE_DIM>(
-      shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_stab_ptr,
-      mat_F_stab_ptr));
+  auto mat_P_stab_ptr = boost::make_shared<MatrixDouble>();
+  if (true) {
+
+    pip.push_back(new OpCalculatePiola<SPACE_DIM, SPACE_DIM>(
+        shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_stab_ptr,
+        mat_F_stab_ptr));
+  } else {
+    auto inv_F = boost::make_shared<MatrixDouble>();
+    auto det_ptr = boost::make_shared<VectorDouble>();
+
+    pip.push_back(
+        new OpInvertMatrix<SPACE_DIM>(mat_F_stab_ptr, det_ptr, inv_F));
+    
+  }
 
   pip.push_back(new OpGradTimesTensor2("V", mat_P_stab_ptr, minus_one));
   // pip.push_back(new OpGradTimesPiola("V", mat_P_stab_ptr, one));
 
   pip.push_back(new OpRhsTestPiola("F", mat_v_grad_ptr, one));
 
-  // CHKERR add_rho_block(pip, "MAT_RHO", Sev::inform);
-
-  // auto mat_acceleration_ptr = boost::make_shared<MatrixDouble>();
-  // // Apply inertia
-  // pip.push_back(new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>(
-  //     "V", mat_acceleration_ptr));
-  // pip.push_back(new OpInertiaForce("V", mat_acceleration_ptr, get_rho));
-
-  // CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForceVector>::add(
-  //     pip, mField, "V", {},
-  //     {boost::make_shared<TimeScaleVector<SPACE_DIM>>("-time_vector_file",
-  //                                                     true)},
-  //     "BODY_FORCE", Sev::inform);
-
   MoFEMFunctionReturn(0);
   };
-
-  
-  
-  // CHKERR apply_rhs(pipeline_mng->getCastExplicitDomainRhsFE());
-  
-  // pipeline_mng->getDomainExplicitRhsFE().reset();
-  auto u_t = createDMVector(simple->getDM());
-  pipeline_mng->getDomainExplicitRhsFE()->ts_ctx = TSMethod::CTX_TSSETIFUNCTION;
-  pipeline_mng->getDomainExplicitRhsFE()->ts_u_t = u_t;
-  pipeline_mng->getDomainExplicitRhsFE()->data_ctx = PetscData::CtxSetX_T;
-  // auto u_t = smartVectorDuplicate(pipeline_mng->getDomainExplicitRhsFE()->ts_F);
-  // Add hook to the element to calculate g.
-  // pipeline_mng->getDomainExplicitRhsFE()->preProcessHook = [&]() {
-  //   MoFEMFunctionBegin;
-  //   // pipeline_mng->getDomainExplicitRhsFE()->ts_ctx = TSMethod::CTX_TSSETIFUNCTION;
-    
-    
-  //   MoFEMFunctionReturn(0);
-  // };
 
   CHKERR apply_rhs(pipeline_mng->getOpDomainExplicitRhsPipeline(), u_t);
 
