@@ -722,7 +722,7 @@ MoFEMErrorCode Example::boundaryCondition() {
       Sev::inform);
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * (approx_order) + 2;
+    return 8 * (approx_order);
   };
 
   CHKERR pipeline_mng->setBoundaryExplicitRhsIntegrationRule(integration_rule);
@@ -1109,7 +1109,7 @@ auto mat_P_stab_ptr = boost::make_shared<MatrixDouble>();
   CHKERR apply_rhs(pipeline_mng->getOpDomainExplicitRhsPipeline(), u_t);
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order + 2;
+    return 8 * approx_order;
   };
   CHKERR pipeline_mng->setDomainExplicitRhsIntegrationRule(integration_rule);
   // CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
@@ -1383,7 +1383,7 @@ MoFEMErrorCode Example::solveSystem() {
     vol_mass_ele->B = M;
 
     auto integration_rule = [](int, int, int approx_order) {
-      return 2 * approx_order+2;
+      return 8 * approx_order;
     };
     
     vol_mass_ele->getRuleHook = integration_rule;
