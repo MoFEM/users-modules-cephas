@@ -1093,7 +1093,7 @@ MoFEMErrorCode Example::assembleSystem() {
     return sin(time * omega * M_PI);
   };
 
-  auto apply_rhs = [&](auto &pip, SmartPetscObj<Vec> &v_f_dot) {
+  auto apply_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
 
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
@@ -1206,7 +1206,7 @@ MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionReturn(0);
   };
 
-  CHKERR apply_rhs(pipeline_mng->getOpDomainExplicitRhsPipeline(), u_t);
+  CHKERR apply_rhs(pipeline_mng->getOpDomainExplicitRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order;
