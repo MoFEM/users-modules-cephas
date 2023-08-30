@@ -373,13 +373,12 @@ struct Monitor : public FEMethod {
       MoFEMFunctionReturn(0);
     };
 
-    MOFEM_LOG("CONTACT", Sev::inform)
-        << "Write file at time " << ts_t << " write step " << sTEP;
-
     int se = 1;
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_every", &se, PETSC_NULL);
 
     if (!(ts_step % se)) {
+      MOFEM_LOG("CONTACT", Sev::inform)
+        << "Write file at time " << ts_t << " write step " << sTEP;
       CHKERR post_proc();
     }
     CHKERR calculate_traction();
