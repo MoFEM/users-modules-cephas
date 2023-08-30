@@ -700,8 +700,18 @@ addMatBlockOps(MoFEM::Interface &m_field,
     }
   };
 
-  double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
-  double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+  double E = young_modulus;
+  double nu = poisson_ratio;
+
+  CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "hencky_", "", "none");
+  CHKERR PetscOptionsScalar("-young_modulus", "Young modulus", "", E, &E,
+                            PETSC_NULL);
+  CHKERR PetscOptionsScalar("-poisson_ratio", "poisson ratio", "", nu, &nu,
+                            PETSC_NULL);
+  ierr = PetscOptionsEnd();
+
+  double bulk_modulus_K = E / (3 * (1 - 2 * nu));
+  double shear_modulus_G = E / (2 * (1 + nu));
   pip.push_back(new OpMatBlocks(
       field_name, mat_D_Ptr, bulk_modulus_K, shear_modulus_G, m_field, sev,
 
