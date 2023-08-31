@@ -288,7 +288,7 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
                    boost::shared_ptr<MatrixDouble> grad_vel_ptr)
       : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPLAST),
         defGradPtr(def_grad_ptr), defGradStabPtr(def_grad_stab_ptr),
-        defGradDotPtr(def_grad_dot_ptr), tauFPtr(tau_F_ptr), xiF(xi_F_ptr)
+        defGradDotPtr(def_grad_dot_ptr), tauFPtr(tau_F_ptr), xiF(xi_F_ptr),
         gradxPtr(grad_x_ptr), gradVelPtr(grad_vel_ptr) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
