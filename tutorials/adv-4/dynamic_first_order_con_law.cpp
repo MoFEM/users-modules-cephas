@@ -1162,7 +1162,7 @@ MoFEMErrorCode Example::assembleSystem() {
     CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-tau", &tau,
                                PETSC_NULL);
 
-  double tau = 0.;
+  double xi = 0.;
     CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-xi", &xi,
                                PETSC_NULL);
    
