@@ -283,11 +283,12 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
                    boost::shared_ptr<MatrixDouble> def_grad_stab_ptr,
                    boost::shared_ptr<MatrixDouble> def_grad_dot_ptr,
                    double tau_F_ptr,
+                   double xi_F_ptr,
                    boost::shared_ptr<MatrixDouble> grad_x_ptr,
                    boost::shared_ptr<MatrixDouble> grad_vel_ptr)
       : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPLAST),
         defGradPtr(def_grad_ptr), defGradStabPtr(def_grad_stab_ptr),
-        defGradDotPtr(def_grad_dot_ptr), tauFPtr(tau_F_ptr),
+        defGradDotPtr(def_grad_dot_ptr), tauFPtr(tau_F_ptr), xiF(xi_F_ptr)
         gradxPtr(grad_x_ptr), gradVelPtr(grad_vel_ptr) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
@@ -312,7 +313,7 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
     
     // tau_F = alpha deltaT
     auto tau_F = tauFPtr;
-    double xi_F = 0.1;
+    double xi_F = xiF;
     auto t_gradx = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*gradxPtr);
     auto t_gradVel = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*gradVelPtr);
 
@@ -337,6 +338,7 @@ struct OpCalculateFStab : public ForcesAndSourcesCore::UserDataOperator {
   }
   private:
     double tauFPtr;
+    double xiF;
     boost::shared_ptr<MatrixDouble> defGradPtr;
     boost::shared_ptr<MatrixDouble> defGradStabPtr;
     boost::shared_ptr<MatrixDouble> defGradDotPtr;
@@ -1159,6 +1161,10 @@ MoFEMErrorCode Example::assembleSystem() {
   double tau = 0.2;
     CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-tau", &tau,
                                PETSC_NULL);
+
+  double tau = 0.;
+    CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-xi", &xi,
+                               PETSC_NULL);
    
   
   // Calculate P stab
@@ -1180,7 +1186,7 @@ MoFEMErrorCode Example::assembleSystem() {
 
   auto mat_F_stab_ptr = boost::make_shared<MatrixDouble>();
   pip.push_back(new OpCalculateFStab<SPACE_DIM, SPACE_DIM>(
-      mat_F_tensor_ptr, mat_F_stab_ptr, mat_dot_F_tensor_ptr, tau,
+      mat_F_tensor_ptr, mat_F_stab_ptr, mat_dot_F_tensor_ptr, tau, xi,
       mat_x_grad_ptr, mat_v_grad_ptr));
 
   auto mat_P_stab_ptr = boost::make_shared<MatrixDouble>();
