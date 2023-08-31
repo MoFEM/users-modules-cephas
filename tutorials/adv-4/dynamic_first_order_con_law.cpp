@@ -894,7 +894,7 @@ if (auto ptr = tsPrePostProc.lock()) {
     PetscPrintf(PETSC_COMM_WORLD, "Pseudo timestep %d time %e\n", num_stages, time);
     // double pseudo_time_step;
     // CHKERR TSPseudoComputeTimeStep(ts, &pseudo_time_step);
-    const double inv_num_step = 1. / (double)num_stages;
+    const double inv_num_step = (double)num_stages;
     CHKERR fb->fieldCopy(1., "x_1", "x_2");
     CHKERR fb->fieldAxpy(dt, "V", "x_2");
     CHKERR fb->fieldCopy(1., "x_2", "x_1");
