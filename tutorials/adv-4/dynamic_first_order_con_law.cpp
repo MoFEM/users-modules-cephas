@@ -43,11 +43,6 @@ using BoundaryEle =
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using SetPtsData = FieldEvaluatorInterface::SetPtsData;
 
-using OpMassV = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpMass<1, SPACE_DIM>;
-using OpMassF = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpMass<1, SPACE_DIM * SPACE_DIM>;
-
 using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
@@ -775,8 +770,11 @@ MoFEMErrorCode Example::boundaryCondition() {
 
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
-  auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
   auto time_scale = boost::make_shared<TimeScale>();
+
+  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
+      simple->getProblemName(), "V");
 
   PetscBool sin_time_function = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-sin_time_function",
@@ -792,17 +790,11 @@ MoFEMErrorCode Example::boundaryCondition() {
   };
 
   CHKERR pipeline_mng->setBoundaryExplicitRhsIntegrationRule(integration_rule);
-
-  pipeline_mng->getBoundaryExplicitRhsFE().reset();
-  CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-      pipeline_mng->getOpBoundaryExplicitRhsPipeline(), {NOSPACE});
-
+  // CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+  //     pipeline_mng->getOpBoundaryExplicitRhsPipeline(), {NOSPACE});
   CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
       pipeline_mng->getOpBoundaryExplicitRhsPipeline(), mField, "V",
       {}, "FORCE", Sev::inform);
-
-  CHKERR bc_mng->removeBlockDOFsOnEntities<DisplacementCubitBcData>(
-      simple->getProblemName(), "V");
 
   MoFEMFunctionReturn(0);
 }
@@ -843,8 +835,8 @@ MoFEMErrorCode TSPrePostProc::tsPostStage(TS ts, PetscReal stagetime,
   // cerr << "tsPostStage " <<"\n";
   if (auto ptr = tsPrePostProc.lock()) {
     auto &m_field = ptr->fsRawPtr->mField;
-    auto *simple = m_field.getInterface<Simple>();
-    auto *pipeline_mng = m_field.getInterface<PipelineManager>();
+    auto simple = m_field.getInterface<Simple>();
+    auto pipeline_mng = m_field.getInterface<PipelineManager>();
 
     // int n_size;
     // CHKERR TSSSPGetNumStages(ts, &n_size);
@@ -1276,132 +1268,157 @@ private:
 //! [Solve]
 MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
-  auto *simple = mField.getInterface<Simple>();
-  auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>();
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto dm = simple->getDM();
 
   // Setup postprocessing
-  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      post_proc_fe->getOpPtrVector(), {H1});
-  auto u_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<SPACE_DIM>("V", u_ptr));
-  auto X_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", X_ptr));
+  auto create_post_proc_fe = [&]() {
+    auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        post_proc_fe->getOpPtrVector(), {H1});
+    auto u_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>("V", u_ptr));
+    auto X_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", X_ptr));
 
-  auto x_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<SPACE_DIM>("x_1", x_ptr));
+    auto x_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>("x_1", x_ptr));
 
-  // Calculate unknown F
-  auto mat_H_tensor_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>(
-          "F", mat_H_tensor_ptr));
+    // Calculate unknown F
+    auto mat_H_tensor_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>(
+            "F", mat_H_tensor_ptr));
 
-  // Calculate P
-  auto mat_P_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculatePiola<SPACE_DIM, SPACE_DIM>(
-          shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_ptr,
-          mat_H_tensor_ptr));
+    // Calculate P
+    auto mat_P_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculatePiola<SPACE_DIM, SPACE_DIM>(
+            shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_ptr,
+            mat_H_tensor_ptr));
 
-  auto mat_F_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateDeformationGradient<SPACE_DIM, SPACE_DIM>(
-          mat_F_ptr, mat_H_tensor_ptr));
+    auto mat_F_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateDeformationGradient<SPACE_DIM, SPACE_DIM>(
+            mat_F_ptr, mat_H_tensor_ptr));
 
-  auto mat_v_grad_ptr = boost::make_shared<MatrixDouble>();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("V",
-                                                               mat_v_grad_ptr));
+    auto mat_v_grad_ptr = boost::make_shared<MatrixDouble>();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+            "V", mat_v_grad_ptr));
 
-  using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
+    using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-  post_proc_fe->getOpPtrVector().push_back(
+    post_proc_fe->getOpPtrVector().push_back(
 
-      new OpPPMap(
+        new OpPPMap(
 
-          post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-          {},
+            {},
 
-          {{"V", u_ptr}, {"GEOMETRY", X_ptr}, {"x", x_ptr}},
+            {{"V", u_ptr}, {"GEOMETRY", X_ptr}, {"x", x_ptr}},
 
-          {{"FIRST_PIOLA", mat_P_ptr},
-           {"F", mat_F_ptr},
-           {"V_grad", mat_v_grad_ptr}},
+            {{"FIRST_PIOLA", mat_P_ptr},
+             {"F", mat_F_ptr},
+             {"V_grad", mat_v_grad_ptr}},
 
-          {}
+            {}
 
-          )
+            )
 
-  );
+    );
+    return post_proc_fe;
+  };
+
+  auto post_proc_fe = create_post_proc_fe();
 
   // Add monitor to time solver
 
-  auto rho_ptr = boost::make_shared<double>(rho);
-  auto get_rho = [rho_ptr](const double, const double, const double) {
-    return *rho_ptr;
-  };
-
-  SmartPetscObj<Mat> M;   ///< Mass matrix
-  SmartPetscObj<KSP> ksp; ///< Linear solver
-  // SmartPetscObj<Vector> lumpVec;
+  // auto rho_ptr = boost::make_shared<double>(rho);
+  // auto get_rho = [rho_ptr](const double, const double, const double) {
+  //   return *rho_ptr;
+  // };
 
   // boost::shared_ptr<CommonData> data(new CommonData());
 
-  auto ts_pre_post_proc = boost::make_shared<TSPrePostProc>();
-  tsPrePostProc = ts_pre_post_proc;
+  auto assemble_mass = [&]() {
+    auto M = createDMMatrix(dm);
+    CHKERR MatZeroEntries(M);
+    boost::shared_ptr<DomainEle> vol_mass_ele(new DomainEle(mField));
+    vol_mass_ele->B = M;
+    auto integration_rule = [](int, int, int approx_order) {
+      return 2 * approx_order + 1;
+    };
+    vol_mass_ele->getRuleHook = integration_rule;
 
-  CHKERR DMCreateMatrix_MoFEM(dm, M);
-  CHKERR MatZeroEntries(M);
+    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+        vol_mass_ele->getOpPtrVector(), {H1});
+    // CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+    //     pipeline_mng->getOpDomainExplicitRhsPipeline(), {H1}, "GEOMETRY");
+    // auto energy_consistency = [&](const double, const double, const double) {
+    //   return 3. * bulk_modulus_K;
+    // };
 
-  boost::shared_ptr<DomainEle> vol_mass_ele(new DomainEle(mField));
+    // using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    //     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+    using OpMassV = FormsIntegrators<DomainEleOp>::Assembly<
+        PETSC>::BiLinearForm<GAUSS>::OpMass<1, SPACE_DIM>;
+    using OpMassF = FormsIntegrators<DomainEleOp>::Assembly<
+        PETSC>::BiLinearForm<GAUSS>::OpMass<1, SPACE_DIM * SPACE_DIM>;
 
-  vol_mass_ele->B = M;
+    // auto mat_D_ptr = boost::make_shared<MatrixDouble>();
+    // double shear_modulus_G = 1;
+    // double bulk_modulus_K = 1;
+    // auto set_material_stiffness = [&]() {
+    //   FTensor::Index<'i', SPACE_DIM> i;
+    //   FTensor::Index<'j', SPACE_DIM> j;
+    //   FTensor::Index<'k', SPACE_DIM> k;
+    //   FTensor::Index<'l', SPACE_DIM> l;
+    //   constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+    //   double A = (SPACE_DIM == 2)
+    //                  ? 2 * shear_modulus_G /
+    //                        (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
+    //                  : 1;
+    //   auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
+    //   t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
+    //                     A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
+    //                         t_kd(i, j) * t_kd(k, l);
+    // };
+    // //! [Calculate elasticity tensor]
+    // constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+    // mat_D_ptr->resize(size_symm * size_symm, 1);
+    // set_material_stiffness();
 
-  auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order;
+    // vol_mass_ele->getOpPtrVector().push_back(new OpK("V", "V", mat_D_ptr));
+    vol_mass_ele->getOpPtrVector().push_back(new OpMassV("V", "V"));
+    vol_mass_ele->getOpPtrVector().push_back(new OpMassF("F", "F"));
+    CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(),
+                                    vol_mass_ele);
+    CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
+    return M;
   };
 
-  vol_mass_ele->getRuleHook = integration_rule;
+  auto M = assemble_mass();
 
-  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-      vol_mass_ele->getOpPtrVector(), {H1});
-  // CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-  //     pipeline_mng->getOpDomainExplicitRhsPipeline(), {H1}, "GEOMETRY");
-  auto energy_consistency = [&](const double, const double, const double) {
-    return 3. * bulk_modulus_K;
-  };
-  auto one = [&](const double, const double, const double) { return 1.; };
-  vol_mass_ele->getOpPtrVector().push_back(new OpMassV("V", "V", one));
-  vol_mass_ele->getOpPtrVector().push_back(new OpMassF("F", "F"));
-
-  // vol_mass_ele->getOpPtrVector().push_back(new
-  // OpCalculateExplicitMass<SPACE_DIM>("V", "V", M, get_rho));
-  // vol_mass_ele->getOpPtrVector().push_back(new
-  // OpCalculateExplicitMass<SPACE_DIM*SPACE_DIM>("F", "F", M));
-
-  CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(), vol_mass_ele);
-  CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
-  CHKERR MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
-
-  auto lumpVec = createDMVector(simple->getDM());
-  CHKERR MatGetRowSum(M, lumpVec);
+  // auto lumpVec = createDMVector(simple->getDM());
+  // CHKERR MatGetRowSum(M, lumpVec);
 
   // double sum;
   // CHKERR VecSum(lumpVec, &sum);
 
   // PetscPrintf(PETSC_COMM_WORLD, "Volume!: %e\n", sum);
 
-  CHKERR VecReciprocal(lumpVec);
+  // CHKERR VecReciprocal(lumpVec);
 
-  CHKERR MatZeroEntries(M);
-  CHKERR MatDiagonalSet(M, lumpVec, INSERT_VALUES);
+  // CHKERR MatZeroEntries(M);
+  // CHKERR MatDiagonalSet(M, lumpVec, INSERT_VALUES);
 
   // CHKERR VecView(lumpVec, PETSC_VIEWER_STDOUT_WORLD);
 
@@ -1412,84 +1429,81 @@ MoFEMErrorCode Example::solveSystem() {
   // MatView(M,PETSC_VIEWER_STDOUT_WORLD);
   // Create and septup KSP (linear solver), we need this to calculate g(t,u) =
   // M^-1G(t,u)
-  ksp = createKSP(mField.get_comm());
+
+  MOFEM_LOG("WORLD", Sev::inform) << "Set UP KSP";
+
+  // SmartPetscObj<Vector> lumpVec;
+  auto ksp = createKSP(mField.get_comm());
   CHKERR KSPSetOperators(ksp, M, M);
   CHKERR KSPSetFromOptions(ksp);
   CHKERR KSPSetUp(ksp);
 
+  MOFEM_LOG("WORLD", Sev::inform) << "Create TS";
   auto ts = pipeline_mng->createTSEX(dm);
 
   auto set_essential_nc = [&]() {
-    MoFEMFunctionBegin;
     auto time_scale = boost::make_shared<TimeScale>();
     auto fe_essential = boost::make_shared<FEMethod>();
     fe_essential->preProcessHook = EssentialPreProc<DisplacementCubitBcData>(
         mField, fe_essential, {time_scale});
     boost::shared_ptr<FEMethod> null;
     auto ts_ctx_ptr = getDMTsCtx(dm);
-
-    // HERE IS BUG IN CORE, SHOULD BE getPreProcessRHSFunction, BUT I WILL
-    // LEVE IT LIKE THAT UNTILL FIX IN CORE. Ignatios this bug do not affected your prev impl.
-    ts_ctx_ptr->getPreProcessRHSJacobian().push_front(fe_essential);
-    MoFEMFunctionReturn(0);
+    // ts_ctx_ptr->getPreProcessRHSFunction().push_front(fe_essential);
+    return fe_essential;
   };
 
-  auto solve_boundary_for_g = [&]() {
-    MoFEMFunctionBegin;
-
-    auto fe_folve_for_g = boost::make_shared<FEMethod>();
+  auto solve_mass_for_g = [&]() {
+    auto fe_solve_for_g = boost::make_shared<FEMethod>();
     auto ts_ctx_ptr = getDMTsCtx(dm);
 
     auto hook = [&]() {
       MoFEMFunctionBegin;
 
       MOFEM_LOG("WORLD", Sev::inform)
-          << "Post proc for g";
+          << "Post proc for g " << *(fe_solve_for_g->vecAssembleSwitch);
 
-      // if (*(fe_folve_for_g->vecAssembleSwitch)) {
-        // *(fe_folve_for_g->vecAssembleSwitch) = false;
+      if (*(fe_solve_for_g->vecAssembleSwitch)) {
+        *(fe_solve_for_g->vecAssembleSwitch) = false;
 
-        CHKERR VecGhostUpdateBegin(fe_folve_for_g->ts_F, ADD_VALUES,
+        CHKERR VecGhostUpdateBegin(fe_solve_for_g->ts_F, ADD_VALUES,
                                    SCATTER_REVERSE);
-        // CHKERR VecGhostUpdateEnd(fe_folve_for_g->ts_F, ADD_VALUES,
-        //                          SCATTER_REVERSE);
-        // CHKERR VecAssemblyBegin(fe_folve_for_g->ts_F);
-        // CHKERR VecAssemblyEnd(fe_folve_for_g->ts_F);
-        // double sum_2;
-        // CHKERR VecSum(fe_folve_for_g->ts_F, &sum_2);
+        CHKERR VecGhostUpdateEnd(fe_solve_for_g->ts_F, ADD_VALUES,
+                                 SCATTER_REVERSE);
+        CHKERR VecAssemblyBegin(fe_solve_for_g->ts_F);
+        CHKERR VecAssemblyEnd(fe_solve_for_g->ts_F);
 
-        // PetscPrintf(PETSC_COMM_WORLD, "Area_2!: %e\n", sum_2);
+        double sum_2;
+        CHKERR VecSum(fe_solve_for_g->ts_F, &sum_2);
 
-        // auto D = smartVectorDuplicate(fe_folve_for_g->ts_F);
-        // // cerr << "ksp.use_count() " <<  ksp.use_count() <<"\n";
-        // // auto ptr_ksp = ksp();
-        // // CHKERR KSPSolve(ksp, fe_folve_for_g->ts_F,
-        // // D);
-        // CHKERR MatMult(M, fe_folve_for_g->ts_F, D);
+        PetscPrintf(PETSC_COMM_WORLD, "Area_2!: %e\n", sum_2);
+
+        auto D = vectorDuplicate(fe_solve_for_g->ts_F);
+        // cerr << "ksp.use_count() " <<  ksp.use_count() <<"\n";
+        // auto ptr_ksp = ksp();
+        CHKERR KSPSolve(ksp, fe_solve_for_g->ts_F, D);
+        // CHKERR MatMult(M, fe_solve_for_g->ts_F, D);
         // CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
         // CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-        // CHKERR VecCopy(D, fe_folve_for_g->ts_F);
+        // CHKERR VecCopy(D, fe_solve_for_g->ts_F);
 
-        // CHKERR DMoFEMMeshToLocalVector(dm, fe_folve_for_g->ts_F,
-        //                                INSERT_VALUES, SCATTER_FORWARD);
-        // CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
-        // CHKERR post_proc_fe->writeFile("test_solve_for_g.h5m");
+        CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+        CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_fe);
+        CHKERR post_proc_fe->writeFile("test_solve_for_g.h5m");
 
-        // SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID, "stop");
-      // }
+        SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID, "stop");
+      }
       MoFEMFunctionReturn(0);
     };
 
     boost::shared_ptr<FEMethod> null;
-    fe_folve_for_g->postProcessHook = hook;
-    // HERE IS BUG IN CORE, SHOULD BE getPostProcessRHSFunction, BUT I WILL LEVE IT LIKE THAT UNTILL FIX IN CORE
-    ts_ctx_ptr->getPostProcessRHSJacobian().push_back(fe_folve_for_g);
+    fe_solve_for_g->postProcessHook = hook;
+    ts_ctx_ptr->getPostProcessRHSFunction().push_back(fe_solve_for_g);
 
-    MoFEMFunctionReturn(0);
+    return fe_solve_for_g;
   };
 
-  CHKERR set_essential_nc();
-  CHKERR solve_boundary_for_g();
+  auto fe_essential = set_essential_nc();
+  auto fe_mas_g = solve_mass_for_g();
 
   // Field eval
   PetscBool field_eval_flag = PETSC_TRUE;
@@ -1543,6 +1557,9 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR TSSetFromOptions(ts);
 
   auto fb = mField.getInterface<FieldBlas>();
+
+  auto ts_pre_post_proc = boost::make_shared<TSPrePostProc>();
+  tsPrePostProc = ts_pre_post_proc;
 
   CHKERR TSSetPostStage(ts, TSPrePostProc::tsPostStage);
   CHKERR TSSetPostStep(ts, TSPrePostProc::tsPostStep);
