@@ -1,5 +1,5 @@
 #ifndef EXECUTABLE_DIMENSION
-#define EXECUTABLE_DIMENSION 2
+#define EXECUTABLE_DIMENSION 3
 #endif
 
 #include <MoFEM.hpp>
@@ -62,7 +62,10 @@ public:
   OpAlpha(std::string field_name, boost::shared_ptr<MatrixDouble> grad_ptr,
           SmartPetscObj<Vec> alpha_vec, boost::shared_ptr<Range> ents_ptr)
       : IntEleOp(field_name, SideEleOp::OPROW), gradPtr(grad_ptr),
-        petscVec(alpha_vec), entsPtr(ents_ptr) {}
+        petscVec(alpha_vec), entsPtr(ents_ptr) {
+    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+    doEntities[MBVERTEX] = true;
+  }
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -71,26 +74,30 @@ public:
 
     const auto fe_ent = getFEEntityHandle();
     const auto nb_gauss_pts = getGaussPts().size2();
-    PetscScalar *alphaArray;
-    CHKERR VecGetArray(petscVec, &alphaArray);
 
     auto t_field_grad = getFTensor1FromMat<SPACE_DIM>(*(gradPtr));
+    auto t_w = getFTensor0IntegrationWeight();
     auto t_normal = getFTensor1NormalsAtGaussPts();
+    const double area = getMeasure();
+    double alphaPart = 0;
 
     for (const auto &entity : *entsPtr) {
       if (entity == fe_ent) {
+
         for (int gg = 0; gg != nb_gauss_pts; gg++) {
           FTensor::Tensor1<double, SPACE_DIM> t_r;
           t_r(i) = t_normal(i);
           t_r.normalize();
-          alphaArray[gg] += -(t_field_grad(i) * t_r(i));
+          alphaPart += -(t_field_grad(i) * t_r(i)) * t_w * area;
+          // std::cout << alphaPart << std::endl;
           ++t_field_grad;
           ++t_normal;
+          ++t_w;
         }
       }
     }
-
-    CHKERR VecRestoreArray(petscVec, &alphaArray);
+    int index = 0;
+    CHKERR ::VecSetValues(petscVec, 1, &index, &alphaPart, ADD_VALUES);
 
     MoFEMFunctionReturn(0);
   }

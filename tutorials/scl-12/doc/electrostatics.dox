@@ -1,0 +1,188 @@
+/*! \page basic_tutorials_poisson_nonhomogeneous SCL-12: Electrostatics
+
+\note Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d
+and \ref basic_tutorials_mesh_generation_3d (for the 3D extension
+implementation) 
+
+<br>
+
+
+
+The plain program for both the implementation of the UDOs (\c *.hpp) and the
+main program (\c *.cpp) are as follows:
+
+The fundamentals of electrostatics are based on Coulomb's law, especially for the effect and properties of stationary or slow-moving electric charges. \cite{maxwell} explained the effects of the electric field based on Maxwell's differential equations, given by:
+\begin{eqnarray}
+\nabla\times\bm{E} \quad &=&-\frac{\partial\bm{\bm{B}}}{\partial t}\quad \text{(Faraday's law of electromagnetic induction)}\label{eq:faraday} \\
+-\nabla\times\bm{\bm{D}}\quad &=& \frac{\partial{\bm{E}}}{\partial t} \quad \text{(Ampère's Law)} \label{eq:ampere} \\ 
+\nabla\cdot\bm{E}\quad &=& \frac{\rho}{\varepsilon_o} \quad \text{(Gauss's law for electric fields)}\label{eq:gauss-electric}\\
+\nabla\cdot\bm{\bm{B}}\quad &=& \quad 0\quad \text{(Gauss's Law for magnetic fields)} \label{eq:gauss-magnetic}
+\label{eq:Maxwells_law}
+\end{eqnarray}
+In the above, $\bm{E}$ denotes the  Electric field vector, $\bm{B}$ is the magnetic induction vector, $\bm{\rho}$ is the volumetric charge. For linear dielectric material, $\bm{D}$ represents the electric displacement field which is also a function of permittivity ($\varepsilon_0$) of the material in the vacuum and $\bm{\bm{E}}$, such that
+\begin{equation}
+    \bm{D}=\varepsilon_0 \bm{E}
+    \label{eq: Electric Displacement}
+\end{equation}
+%%
+In the absence of magnetic field, and for electrostatics(time-independent), Maxwell's eqns. can be rewritten as: 
+\begin{equation}
+\bm{\nabla}\times\bm{E}  = 0 \quad \mathrm{and} \quad
+\nabla\cdot\bm{\bm{E}} =  \frac{\rho}{\varepsilon_o}
+\label{electric field}.
+\end{equation}
+In addition, eqn. \eqref{eq:gauss-electric} indicated paths of $\bm{E}$  always extend from the positive charge as the source and converge towards negative charges as sinks. A similar phenomenon on two Gaussian surfaces has been marked in fig. 1. These phenomena are well understood from Gauss's line charge and Poisson's problem.  Besides, electric potential $({\phi})$  defines the amount of work done in moving a unit of positive charge from a reference point to the given point against $\bm{E}$.\\
+Here, the curl of the electric field vector is zero, there exists a scaler potential $\phi$, such that 
+\begin{equation}
+   \bm{\bm{E}}=-{\nabla\phi},
+    \label{eq:scalar_potential}
+\end{equation}
+%%%
+which is a linear relation for the dielectric body. Moreover, by nullifying the volumetric charges, we can write
+\begin{equation}
+    {\nabla}\cdot(\varepsilon\bm{E})  = 0,
+    \label{eq: Gauss Electric}
+\end{equation}
+Finally, from eqn. \eqref{eq:scalar_potential} the above can be rewritten as
+\begin{equation}
+    {\nabla}\cdot(\varepsilon{\nabla}\phi)= 0
+\end{equation}
+  \begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.5]{images/E_Field.png}
+    \caption{Electric Field Due to the Positive and Negative Charge}
+    \label{fig:E_Field}
+  \end{figure}
+%%
+
+%\end{Theory}
+
+
+\subsection{Electrostatic Model}
+The electric and magnetic field in  eqns. \ref{eq:faraday}--\ref{eq:gauss-magnetic} are also independent and admittedly similar. Thus the solutions are individual and  indistinguishable. Therefore, we can focus on understanding and solving the electric field. \\
+Let's consider a region with two domains $\Omega_{\text{1}}$ and $\Omega_{\text{2}}$. To clarify,  such an electrostatics model has been illustrated in Fig  \eqref{fig:potato} where an interface, $\Gamma_{\text{int}}$ has also been considered between the domains. Here,  it is possessed by positive charges which are accumulated only on the surfaces by themselves as shown in Fig. 1. However, $\Gamma_{\mathrm{int}}$ should be the line/curve or surface for 2D and 3D problems respectively.  Here, we will solve for the unknown potential field, $\phi$  towards the $\Gamma_\phi$. Thus, it is considered a boundary-valued problem with   $\Gamma_{\text{int}}$.
+  \begin{figure}[H] % htb
+    \centering
+    \includegraphics[scale=0.2]{images/potato1.png}
+    \caption{Boundary Conditions}
+    \label{fig:potato}
+  \end{figure}
+%%
+
+%\begin{boundary conditions on a charged interface"}
+\subsubsection{Boundary Conditions on Charged Interface}
+The direction of $\bm{E}$  points from the positive charges. Correspondingly, the direction of $(\bm{D})$ is the same as the direction of the $(\bm{E})$ in the medium. Additionally, the amount of charge per unit of the surface is called surface charge density, denoted as $(\bm{\sigma_s})$.  Besides, the electric jump at the interface or the displacement $(\bm{D})$ of the electric field over the interface can be written as:\\
+
+\[
+\llbracket\bm{\bm{D}}\rrbracket = ||\varepsilon_1\vec{{E}} - \varepsilon_2\overline{\vec{{E}}}||
+\]
+\subsubsection{Governing Equations}
+Based on the approximations and boundary conditions, the problem statement is summarised as follows:\\
+Find $\bm{\phi} \in H^1(\Omega)$ such that,
+\[
+\bm{\nabla} \cdot (\epsilon \bm{\nabla}\phi) = 0 \quad \text{in } \Omega_1, \Omega_2, \text{ and } \Gamma_{\text{int}}; 
+\]
+where,
+\begin{itemize}
+\item Dirichlet B.C.: $\bm{\phi}(x, y, z) = \phi_0$
+
+\item 
+Neumann B.C.:$\hspace{.3cm} \bm{\nabla}\bm{\phi}\cdot\hat{\mathbf{n}} = 0 \quad \text{on } \Gamma_n $
+
+\item 
+Interface Condition: $ \hspace{0.3cm}
+\sigma_s = 
+    \begin{aligned}
+        &\llbracket\varepsilon_1{{E}_1 - \varepsilon_2{E}_2} \rrbracket \cdot\hat{\mathbf{n}}
+    \end{aligned}
+$
+\label{eq:BC}
+\end{itemize}
+%%%
+Here, $\hat{\mathbf{n}}$ is the outward unit normal vector to the boundary.
+
+
+\subsection{Weak form}
+To derive the weak form we assume the solution $\bm{\phi}$ and the scalar test function $\bm{\delta \omega}$ is regular $\forall\bm{\delta \omega}$ in $\Omega$ and $\bm{\Gamma_{\text{int}}}$. We are considering the space for $\bm{\delta \omega}$ is $H^1_0(\Omega)=\{\bm{\delta \omega} \in H^1(\Omega) \mid \bm{\delta \omega}=0 \text{ on } \partial\,\Gamma_{\text{int}}\}$.
+Thus the following weak function has been obtained simply by multiplying the strong from by $\mathbbm{\delta\omega}$ and integrating over the domain and then integrating by part on the appropriate boundary conditions in section \eqref{eq:BC}.Here, $\epsilon$ is $\varepsilon_1, \varepsilon_2$, and $\varepsilon_3$ for $\Omega_1, \Omega_2$ and $\Gamma_{\text{int}}$ respectively. 
+\begin{equation}
+\int_{\Omega_{1,2}} \nabla \cdot (\epsilon \nabla \phi) \, \delta \omega\, d\Omega = 0\quad\quad;\forall\bm{\delta \omega} \in H^1_0(\Omega) 
+\end{equation}
+%%%%%%%%%%%
+Next, according to Divergence and Green's theorem from vector calculus the above eqn. becomes \\
+\begin{equation}
+ -\int_{\Omega_1} \varepsilon_1 \nabla\phi \cdot \nabla \delta\omega \, d\Omega_1 - \int_{\Omega_2} \varepsilon_2 \nabla\phi \cdot \nabla \delta\omega \, d\Omega_2 + \cancelto{0}{\int_{\Gamma_{\text{n}}} \varepsilon_{1} \nabla\phi \cdot\bm{\hat{n}} \, \delta\omega \, d\Gamma_{\text{n}}} + \int_{\Gamma_{\text{int}}} \varepsilon_3 \nabla\phi \cdot\bm{\hat{n}} \, \delta\omega \, d\Gamma_{\text{int}} = 0
+\end{equation}
+After considering equations eqn. \eqref{eq: Electric Displacement} \&  \eqref{electric field} and incorporating the appropriate boundary conditions from section \eqref{eq:BC}, the aforementioned expression can be rewrite as follows:
+\begin{equation}
+\int_{\Omega_{1,2}} \epsilon_{1,2}\,\nabla\phi\cdot\nabla{\delta \omega}, d\Omega - \int_{\Gamma_{\text{int}}} (\varepsilon_1{{E}_1 - \varepsilon_2{E}_2})\,\cdot\bm{\hat{n}}\,\delta \omega\, d\Gamma_{\text{int}} =0
+\end{equation}
+\begin{equation}
+\quad\int_{\Omega{1,2}} \epsilon_{1,2}\,\nabla\phi\cdot\nabla {\delta \omega}, d\Omega  = \int_{\Gamma_{\text{int}}} \mathbf\,\sigma_s\,{\delta \omega}\, d\Gamma_{\text{int}}
+\label{eq: Weak form}
+\end{equation}
+ After discretisation later in the next section \ref{subsec: discretization} can be compared with the general FEM framework $\bm{K}d = \bm{F}$, where, K is a matrix, d is the solution term on the field and F denotes the vectors.
+
+\section{Implementation}
+This section is more favourable for the developers to understand a general Finite Element Method(FEM) process and the development of code using MoFEM. Generally, the main goal regarding simple problems is to solve them for the exact function $\phi$. In order to achieve it in FEM, an approximate $\phi^{\text{apx}}$ has been taken into account followed by the discretisation process. 
+ \subsection{Discretization} %% by which operator?
+ \label{subsec: discretization}
+ In Finite Elements, geometric approximation of the continuous domain is typically represented by mesh or elements, such as triangles or quadrilaterals in 2D problems, or tetrahedral or hexahedral in 3D problems.\\
+ In this regard, to apply the weak form including the boundary condition throughout the mesh we need to know only two components of any geometry and mathematical functions to approximate the unknown field:(i) the base function $(\mathcal{N}_j)$  and (ii) degrees of freedoms of $(\bm\bar{u_j})$  corresponding to nodes which should have physical meaning and element connectivity where $\bm\bar{u_j} = {{[u_1, u_2, u_3... ....u_n]}}^T$ is the vector of unknowns. Summing up the products of these two at every element represents an approximation ($\phi^{\textit{apx}}$) of $\phi$.
+
+\begin{align}
+\bm{\phi} \approx \phi^{\textit{apx}} &= \sum_{j=0}^{P-1} \mathcal{N}_j \bar{u}_j \,\text{and,}\\
+{\delta \omega_i} &= \sum_{i=0}^{P-1}\mathcal{N}_i \bar{u}_j
+\end{align}
+In the above, \((P-1)\) represents the total number of shape functions being used in the approximation. And the solution of $\phi^{\textit{apx}}$ can easily obtain with the help of MoFEM after importing the geometry which will be discussed later at the beginning of the section \ref{subsec:operation}.\\
+%%%
+Again, it is important to understand that the weak form in eqn.\eqref{eq: Weak form} must be satisfied for all test functions $\bm{\delta \omega}$. Since it has to be true with the arbitrary choice of $\bm{\delta \omega_i}$. So, substituting \(\phi\) and \(\delta\omega\) into the weak form, the discretized formulation of the problem is as in the following,
+\begin{equation}
+\bigintsss_{\Omega^{e}} \epsilon\,\nabla\left(\sum_{j=0}^{P-1}\mathcal{N}_j \bar{u}_j\right)\cdot\nabla \left(\sum_{i=0}^{P-1}\mathcal{N}_i \bar{u}_j\right)\, d\Omega^{e}  =  \bigintsss_{\Gamma^{e}_{\text{int}}} \mathbf{\sigma_s}\,\left(\sum_{i=0}^{P-1}\mathcal{N}_i \bar{u}_j\right)\, d\Gamma^{e}_{\text{int}}
+\label{eq:Dicritized_form1}
+\end{equation}
+%%
+Moving $\bar{u_j}$ outside of the parentheses and rearranging the eqn., we can distribute $\bar{u_j}$ across the terms inside the summation as follows,
+\begin{equation}
+\displaystyle\sum_{j=0}^{P-1}\left(\bigintsss_{\Omega^{e}} \epsilon\,\nabla\mathcal{N}_i \cdot\nabla \mathcal{N}_j\, d\Omega^{e} \right) \bar{u}_j =  \bigintsss_{\Gamma^{e}_{\text{int}}} \mathbf{\sigma_s}\,\left(\sum_{i=0}^{P-1}\mathcal{N}_i \bar{u}_j\right)\, d\Gamma^{e}_{\text{int}}
+\label{eq:Dicritized_form2}
+\end{equation}
+%%
+Now comparing the \textit{RHS} vector and \textit{LHS} matrix of the above-discretized form can be considered with the symmetric matrix $K^e_{\text{ij}}$ over the domain and vector $\bm{F^e_i}$ over the interface. Thus,
+\begin{align}
+\bm{K^e_{\text{ij}}} &= \bigintsss_{\Omega^{e}} \epsilon_\text{rel}\,\nabla\mathcal{N}_i \cdot\nabla \mathcal{N}_j\, d\Omega^{e} \\
+\bm{F^e_i} &= \bigintsss_{\Gamma^{e}_{\text{int}}} \mathbf{\sigma_s}\,\mathcal{N}_i\, d\Gamma^{e}_{\text{int}}
+\end{align}
+Here, i and j represent the matrix component at the row and column. 
+\subsection{Gauss integration}
+\label{subsec: Integral Methods and Techniques}
+In this case, the integral forms look symmetric but it is still difficult to evaluate such integration over a complex shape and field (x, y, z). In this regard, Gauss's quadrature full integration scheme is used and such computational works including the  parametric mapping(described in \href{http://mofem.eng.gla.ac.uk/mofem/html/integration.html}{tutorial-1)}, even in  a finite sense over all the elements is done using MoFEM. 
+%%
+At this stage, after mapping and multiplying the Jacobians \(J_g^e\), the eqn. of  $K^e_{\text{ij}}$ and $F^e_i$ become:
+\begin{align}
+\bm{K^e_{\text{ij}}} &= \bigintssss_{\Omega^{e}} \epsilon\,\nabla\mathcal{N}_i \cdot\nabla \mathcal{N}_j\, d\Omega^{e} \approx  \displaystyle\sum_{q}^{P-1}\epsilon\,\nabla\mathcal{N}_i x_q \cdot\nabla \mathcal{N}_j x_q\,\bm{W_q}\,\ ||J_g^e|| \\
+\bm{F^e_i} &= \bigintssss_{\Gamma^{e}_{\text{int}}} \mathbf{\sigma_s}\,\mathcal{N}_i\, d\Gamma^{e}_{\text{int}}\approx  \displaystyle\sum_{q}^{P-1} \mathbf{\sigma_s}\,\mathcal{N}_i\,\bm{W_q}\,\ ||J_g^e|| \\
+\end{align}
+In these eqns., \(x_q\) represents the spatial coordinates of the quadrature point, while \(W_q\) denotes the corresponding weights of the point. Hereby, for parametric mapping, we also need to calculate the \(J_g^e\). In general, it usually provides the rate of change of a vector-valued function with respect to its input variables. In the same way, in FEM, \(‖J_g^e‖\) corresponds to the determinant of the Jacobian Matrix and captures the transformation from physical coordinates to parent coordinates for the elements i.e. for triangular elements, this determinant is equivalent to the area of each element.
+
+
+ \section{Operation}
+ \label{subsec:operation}
+ The model, mesh and boundary conditions can be generated as .cub or .msh file and uploaded to the MoFEM server using Terminal or \href{http://cactus.eng.gla.ac.uk:9001/user/}{Jupyterhub}. MoFEM, itself reads the mesh entities and applies the shape functions and nodal coordinates from the uploaded file. To some extent, some parts of the operations are done with the help of different packages as discussed in the  \href{http://mofem.eng.gla.ac.uk/mofem/html/lessons_introduction.html}{MoFEM Interface} tutorial. However, the in-built MoFEM operators in the core manage all these packages by themselves for user support. 
+ To avoid the repetition of description for "Electrostatic3DHomogeneousOperators" and for our problem, 
+, the common functions and operators are discussed in short below:\\
+\begin{itemize}
+ \item MoFEMErrorCode: This is complementary to PETSC error codes. These are defined in include/petsc error.h. The names are defined in err.c
+ \item doWork: Do work is the main function to create tye containers to do operations for different arguments or funtions inside it.
+ \item MoFEMFunctionBegin:It is the First executable line of each MoFEM function, used for error handling.
+ \item  MoFEMFunctionReturn(0):ast executable line of each PETSc function used for error handling. It returns 0 when there is 
+ \item  CHKERR: It checks the Inline errors to show/handle???? the error code on PETSC, MOAB or MOFEM.
+ \item  OpFaceEle: Operator to work with face elements.
+ \item  VolEle: Operator to work with the volume of the elements.
+\subsection basic_tutorials_electrostatics_impl_udo Implementation of User Data Operators (*.hpp)
+
+\include electrostatics.hpp
+
+\subsection basic_tutorials_poisson_homogeneous_impl_main Implementation of the main program (*.cpp) 
+
+\include electrostatics.cpp
