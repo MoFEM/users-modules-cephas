@@ -20,7 +20,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = EntitiesFieldData::EntData;
 
 using OpHdivHdiv = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpMass<3, 3>;
+    GAUSS>::OpMass<3, 2>;
 using OpHdivU = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMixDivTimesScalar<2>;
 using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
@@ -38,10 +38,13 @@ private:
   Simple *simpleInterface;
 
   Range domainEntities;
-  double errorIndicatorIntegral;
-  int totalElementNumber;
+  double totErrorIndicator;
+  double maxErrorIndicator;
+
+
+  double thetaParam;
+  double indicTolerance;
   int initOrder;
-  int refIterNum;
 
   //! [Analytical function]
   static double analyticalFunction(const double x, const double y,
@@ -103,7 +106,7 @@ private:
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode checkError(int iter_num = 0);
-  MoFEMErrorCode refineOrder();
+  MoFEMErrorCode refineOrder(int iter_num = 0);
   MoFEMErrorCode solveRefineLoop();
   MoFEMErrorCode outputResults(int iter_num = 0);
 
@@ -113,11 +116,12 @@ private:
     boost::shared_ptr<MatrixDouble> approxFlux;
     SmartPetscObj<Vec> petscVec;
 
+    double maxErrorIndicator;
+
     enum VecElements {
       ERROR_L2_NORM = 0,
       ERROR_H1_SEMINORM,
-      ERROR_INDICATOR,
-      TOTAL_NUMBER,
+      ERROR_INDICATOR_TOTAL,
       LAST_ELEMENT
     };
   };
@@ -142,7 +146,6 @@ MoFEMErrorCode MixedPoisson::runProblem() {
   MoFEMFunctionBegin;
   CHKERR readMesh();
   CHKERR setupProblem();
-  CHKERR setIntegrationRules();
   CHKERR createCommonData();
   CHKERR solveRefineLoop();
   MoFEMFunctionReturn(0);
@@ -169,8 +172,8 @@ MoFEMErrorCode MixedPoisson::setupProblem() {
   CHKERR mField.get_moab().get_number_entities_by_type(0, MBQUAD, nb_quads);
   auto base = AINSWORTH_LEGENDRE_BASE;
   if (nb_quads) {
-    // AINSWORTH_LEGENDRE_BASE is not implemented for HDIV/HCURL space on quads 
-    base = DEMKOWICZ_JACOBI_BASE;  
+    // AINSWORTH_LEGENDRE_BASE is not implemented for HDIV/HCURL space on quads
+    base = DEMKOWICZ_JACOBI_BASE;
   }
 
   // Note that in 2D case HDIV and HCURL spaces are isomorphic, and therefore
@@ -178,9 +181,13 @@ MoFEMErrorCode MixedPoisson::setupProblem() {
   // are be obtained after rotation of HCURL base vectors by a right angle
   CHKERR simpleInterface->addDomainField("Q", HCURL, base, 1);
 
-  refIterNum = 0;
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-ref_iter_num", &refIterNum,
-                            PETSC_NULL);
+  thetaParam = 0.5;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-theta", &thetaParam, PETSC_NULL);
+
+  indicTolerance = 1e-3;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-indic_tol", &indicTolerance,
+                             PETSC_NULL);
+
   initOrder = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &initOrder, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder("U", initOrder);
@@ -201,7 +208,7 @@ MoFEMErrorCode MixedPoisson::setupProblem() {
 MoFEMErrorCode MixedPoisson::setIntegrationRules() {
   MoFEMFunctionBegin;
 
-  auto rule = [](int, int, int p) -> int { return 2 * p + 2; };
+  auto rule = [](int, int, int p) -> int { return 2 * p; };
 
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule);
@@ -215,13 +222,13 @@ MoFEMErrorCode MixedPoisson::setIntegrationRules() {
 MoFEMErrorCode MixedPoisson::createCommonData() {
   MoFEMFunctionBegin;
   commonDataPtr = boost::make_shared<CommonData>();
-  PetscInt ghosts[4] = {0, 1, 2, 3};
+  PetscInt ghosts[3] = {0, 1, 2};
   if (!mField.get_comm_rank())
     commonDataPtr->petscVec =
-        createGhostVector(mField.get_comm(), 4, 4, 0, ghosts);
+        createGhostVector(mField.get_comm(), 3, 3, 0, ghosts);
   else
     commonDataPtr->petscVec =
-        createGhostVector(mField.get_comm(), 0, 4, 4, ghosts);
+        createGhostVector(mField.get_comm(), 0, 3, 3, ghosts);
   commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
   commonDataPtr->approxValsGrad = boost::make_shared<MatrixDouble>();
   commonDataPtr->approxFlux = boost::make_shared<MatrixDouble>();
@@ -277,22 +284,28 @@ MoFEMErrorCode MixedPoisson::solveSystem() {
 //! [Solve]
 
 //! [Refine]
-MoFEMErrorCode MixedPoisson::refineOrder() {
+MoFEMErrorCode MixedPoisson::refineOrder(int iter_num) {
   MoFEMFunctionBegin;
   Tag th_error_ind, th_order;
   CHKERR getTagHandle(mField, "ERROR_INDICATOR", MB_TYPE_DOUBLE, th_error_ind);
   CHKERR getTagHandle(mField, "ORDER", MB_TYPE_INTEGER, th_order);
 
   std::vector<Range> refinement_levels;
-  refinement_levels.resize(refIterNum + 1);
+  refinement_levels.resize(iter_num + 1);
+  // cout << "Proc " << mField.get_comm_rank() << " Refinement level 0 number of
+  // 2D elements "
+  //      << domainEntities.subset_by_dimension(2).size() << endl;
+  // cout << "Proc " << mField.get_comm_rank() << " Mean error "  <<
   for (auto ent : domainEntities) {
     double err_indic = 0;
     CHKERR mField.get_moab().tag_get_data(th_error_ind, &ent, 1, &err_indic);
+    // cout << "Proc " << mField.get_comm_rank() << " Error indicator "
+    //      << err_indic << endl;
     int order, new_order;
     CHKERR mField.get_moab().tag_get_data(th_order, &ent, 1, &order);
     new_order = order + 1;
     Range refined_ents;
-    if (err_indic > errorIndicatorIntegral / totalElementNumber) {
+    if (err_indic > thetaParam * maxErrorIndicator) {
       refined_ents.insert(ent);
       Range adj;
       CHKERR mField.get_moab().get_adjacencies(&ent, 1, 1, false, adj,
@@ -306,9 +319,19 @@ MoFEMErrorCode MixedPoisson::refineOrder() {
   for (int ll = 1; ll < refinement_levels.size(); ll++) {
     CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
         refinement_levels[ll]);
-    CHKERR mField.set_field_order(refinement_levels[ll], "U", initOrder + ll);
-    CHKERR mField.set_field_order(refinement_levels[ll], "Q",
-                                  initOrder + ll + 1);
+    // cout << "Proc " << mField.get_comm_rank() << " Refinement level " << ll
+    //      << " number of 2D elements "
+    //      << refinement_levels[ll].subset_by_dimension(2).size() << endl;
+    if (initOrder + ll > 8) {
+      MOFEM_LOG("EXAMPLE", Sev::warning)
+          << "setting approximation order higher than 8 is not currently "
+             "supported"
+          << endl;
+    } else {
+      CHKERR mField.set_field_order(refinement_levels[ll], "U", initOrder + ll);
+      CHKERR mField.set_field_order(refinement_levels[ll], "Q",
+                                    initOrder + ll + 1);
+    }
   }
 
   CHKERR mField.getInterface<CommInterface>()->synchroniseFieldEntities("Q");
@@ -326,17 +349,27 @@ MoFEMErrorCode MixedPoisson::refineOrder() {
 MoFEMErrorCode MixedPoisson::solveRefineLoop() {
   MoFEMFunctionBegin;
   CHKERR assembleSystem();
+  CHKERR setIntegrationRules();
   CHKERR solveSystem();
   CHKERR checkError();
   CHKERR outputResults();
 
-  for (int ii = 0; ii < refIterNum; ii++) {
-    CHKERR refineOrder();
+  int iter_num = 1;
+  while (fabs(indicTolerance) > DBL_EPSILON &&
+         totErrorIndicator > indicTolerance) {
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Refinement iteration " << iter_num;
 
+    CHKERR refineOrder(iter_num);
     CHKERR assembleSystem();
+    CHKERR setIntegrationRules();
     CHKERR solveSystem();
-    CHKERR checkError(ii + 1);
-    CHKERR outputResults(ii + 1);
+    CHKERR checkError(iter_num);
+    CHKERR outputResults(iter_num);
+
+    iter_num++;
+    if (iter_num > 20)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_OPERATION_UNSUCCESSFUL,
+                  "Too many refinement iterations");
   }
   MoFEMFunctionReturn(0);
 }
@@ -363,25 +396,39 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpError(commonDataPtr, mField));
 
+  commonDataPtr->maxErrorIndicator = 0;
   CHKERR VecZeroEntries(commonDataPtr->petscVec);
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR VecAssemblyBegin(commonDataPtr->petscVec);
   CHKERR VecAssemblyEnd(commonDataPtr->petscVec);
+  CHKERR VecGhostUpdateBegin(commonDataPtr->petscVec, INSERT_VALUES,
+                             SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(commonDataPtr->petscVec, INSERT_VALUES,
+                           SCATTER_FORWARD);
+
+  MPI_Allreduce(&commonDataPtr->maxErrorIndicator, &maxErrorIndicator, 1,
+                MPI_DOUBLE, MPI_MAX, mField.get_comm());
 
   const double *array;
   CHKERR VecGetArrayRead(commonDataPtr->petscVec, &array);
   MOFEM_LOG("EXAMPLE", Sev::inform)
-      << "Global error L2 norm: " << std::sqrt(array[0]);
+      << "Global error indicator (max): " << commonDataPtr->maxErrorIndicator;
   MOFEM_LOG("EXAMPLE", Sev::inform)
-      << "Global error H1 seminorm: " << std::sqrt(array[1]);
+      << "Global error indicator (total): "
+      << std::sqrt(array[CommonData::ERROR_INDICATOR_TOTAL]);
   MOFEM_LOG("EXAMPLE", Sev::inform)
-      << "Global error indicator: " << std::sqrt(array[2]);
+      << "Global error L2 norm: "
+      << std::sqrt(array[CommonData::ERROR_L2_NORM]);
   MOFEM_LOG("EXAMPLE", Sev::inform)
-      << "Total number of elements: " << (int)array[3];
+      << "Global error H1 seminorm: "
+      << std::sqrt(array[CommonData::ERROR_H1_SEMINORM]);
 
-  errorIndicatorIntegral = array[2];
-  totalElementNumber = (int)array[3];
+  totErrorIndicator = std::sqrt(array[CommonData::ERROR_INDICATOR_TOTAL]);
   CHKERR VecRestoreArrayRead(commonDataPtr->petscVec, &array);
+
+  // cout << "Proc " << mField.get_comm_rank() << " Error indicator integral "
+  // << totalErrorIndicator << endl; cout << "Proc " << mField.get_comm_rank()
+  // << " Total element number " << totalElementNumber << endl;
 
   std::vector<Tag> tag_handles;
   tag_handles.resize(4);
@@ -503,21 +550,29 @@ MoFEMErrorCode MixedPoisson::OpError::doWork(int side, EntityType type,
                                     th_error_h1);
   CHKERR MixedPoisson::getTagHandle(mField, "ERROR_INDICATOR", MB_TYPE_DOUBLE,
                                     th_error_ind);
-  CHKERR mField.get_moab().tag_set_data(th_error_l2, &ent, 1, &error_l2);
-  CHKERR mField.get_moab().tag_set_data(th_error_h1, &ent, 1, &error_h1);
-  CHKERR mField.get_moab().tag_set_data(th_error_ind, &ent, 1, &error_ind);
+
+  double error_l2_norm = sqrt(error_l2);
+  double error_h1_seminorm = sqrt(error_h1);
+  double error_ind_local = sqrt(error_ind);
+  CHKERR mField.get_moab().tag_set_data(th_error_l2, &ent, 1, &error_l2_norm);
+  CHKERR mField.get_moab().tag_set_data(th_error_h1, &ent, 1,
+                                        &error_h1_seminorm);
+  CHKERR mField.get_moab().tag_set_data(th_error_ind, &ent, 1,
+                                        &error_ind_local);
+
+  if (error_ind_local > commonDataPtr->maxErrorIndicator)
+    commonDataPtr->maxErrorIndicator = error_ind_local;
 
   int index = CommonData::ERROR_L2_NORM;
-  constexpr std::array<int, 4> indices = {
+  constexpr std::array<int, CommonData::LAST_ELEMENT> indices = {
       CommonData::ERROR_L2_NORM, CommonData::ERROR_H1_SEMINORM,
-      CommonData::ERROR_INDICATOR, CommonData::TOTAL_NUMBER};
-  std::array<double, 4> values;
+      CommonData::ERROR_INDICATOR_TOTAL};
+  std::array<double, CommonData::LAST_ELEMENT> values;
   values[0] = error_l2;
   values[1] = error_h1;
   values[2] = error_ind;
-  values[3] = 1.;
-  CHKERR VecSetValues(commonDataPtr->petscVec, 4, indices.data(), values.data(),
-                      ADD_VALUES);
+  CHKERR VecSetValues(commonDataPtr->petscVec, CommonData::LAST_ELEMENT,
+                      indices.data(), values.data(), ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
 //! [OpError]

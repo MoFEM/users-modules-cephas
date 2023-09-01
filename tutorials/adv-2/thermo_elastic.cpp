@@ -344,7 +344,7 @@ MoFEMErrorCode ThermoElasticProblem::addMatBlockOps(
       for (auto &b : blockData) {
 
         if (b.blockEnts.find(getFEEntityHandle()) != b.blockEnts.end()) {
-          *expansionPtr = b.extension;
+          *expansionPtr = b.expansion;
           *conductivityPtr = b.conductivity;
           *capacityPtr = b.capacity;
           MoFEMFunctionReturnHot(0);
@@ -360,7 +360,7 @@ MoFEMErrorCode ThermoElasticProblem::addMatBlockOps(
 
   private:
     struct BlockData {
-      double extension;
+      double expansion;
       double conductivity;
       double capacity;
       Range blockEnts;
@@ -451,9 +451,9 @@ MoFEMErrorCode ThermoElasticProblem::setupProblem() {
   CHKERR simple->addBoundaryField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-  CHKERR simple->setFieldOrder("U", order);
-  CHKERR simple->setFieldOrder("FLUX", order);
-  CHKERR simple->setFieldOrder("T", order - 1);
+  CHKERR simple->setFieldOrder("U", order + 1);
+  CHKERR simple->setFieldOrder("FLUX", order + 1);
+  CHKERR simple->setFieldOrder("T", order);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }
@@ -691,9 +691,9 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     pipeline.push_back(new OpUnSetBc("FLUX"));
 
     CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpHeatSource>::add(
-        pipeline, mField, "T", {time_scale}, "HEAT_SOURCE", Sev::inform);
+        pipeline, mField, "T", {}, "HEAT_SOURCE", Sev::inform);
     CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpBodyForce>::add(
-        pipeline, mField, "U", {time_scale}, "BODY_FORCE", Sev::inform);
+        pipeline, mField, "U", {}, "BODY_FORCE", Sev::inform);
     CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpSetTemperatureRhs>::add(
         pipeline, mField, "T", vec_temp_ptr, "SETTEMP", Sev::inform);
 
@@ -748,11 +748,11 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     pipeline.push_back(new OpSetBc("FLUX", true, boundary_marker));
 
     CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
-        pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {time_scale},
+        pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {},
         "FORCE", Sev::inform);
 
     CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpTemperatureBC>::add(
-        pipeline_mng->getOpBoundaryRhsPipeline(), mField, "FLUX", {time_scale},
+        pipeline_mng->getOpBoundaryRhsPipeline(), mField, "FLUX", {},
         "TEMPERATURE", Sev::inform);
 
     pipeline.push_back(new OpUnSetBc("FLUX"));
@@ -763,7 +763,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>::
         AddEssentialToPipeline<OpEssentialFluxRhs>::add(
             mField, pipeline, simple->getProblemName(), "FLUX", mat_flux_ptr,
-            {time_scale});
+            {});
 
     MoFEMFunctionReturn(0);
   };
@@ -782,12 +782,12 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
 
   auto get_bc_hook_rhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainRhsFE(), {time_scale});
+        mField, pipeline_mng->getDomainRhsFE(), {});
     return hook;
   };
   auto get_bc_hook_lhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainLhsFE(), {time_scale});
+        mField, pipeline_mng->getDomainLhsFE(), {});
     return hook;
   };
 

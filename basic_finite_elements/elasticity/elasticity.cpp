@@ -519,6 +519,14 @@ int main(int argc, char *argv[]) {
                                                          "DISPLACEMENT");
       CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN",
                                                           "DISPLACEMENT");
+      // if (m_field.check_field("TEMP")) {
+      //   CHKERR m_field.modify_finite_element_add_field_row("POST_PROC_SKIN",
+      //                                                      "TEMP");
+      //   CHKERR m_field.modify_finite_element_add_field_col("POST_PROC_SKIN",
+      //                                                      "TEMP");
+      //   CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN",
+      //                                                       "TEMP");
+      // }                                                    
       CHKERR m_field.modify_finite_element_add_field_data(
           "POST_PROC_SKIN", "MESH_NODE_POSITIONS");
       CHKERR m_field.add_ents_to_finite_element_by_dim(proc_skin, 2,
@@ -959,6 +967,10 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
       CHKERR post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
+      if (m_field.check_field("TEMP")) {
+        CHKERR post_proc.addFieldValuesPostProc("TEMP");
+        CHKERR post_proc.addFieldValuesGradientPostProc("TEMP");
+      }
       // Add problem specific operator on element to post-process stresses
       post_proc.getOpPtrVector().push_back(new PostProcHookStress(
           m_field, post_proc.postProcMesh, post_proc.mapGaussPts,
@@ -1104,7 +1116,7 @@ int main(int argc, char *argv[]) {
           o1_skin << "out_skin" << sit->step_number << ".h5m";
           if (!test_nb)
             CHKERR post_proc_skin.writeFile(o1_skin.str().c_str());
-          MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done ...";
+          MOFEM_LOG("ELASTIC", Sev::inform) << "done ...";
         }
       } else {
 
@@ -1168,7 +1180,7 @@ int main(int argc, char *argv[]) {
         CHKERR DMoFEMLoopFiniteElements(dm, "POST_PROC_SKIN", &post_proc_skin);
         if (!test_nb)
           CHKERR post_proc_skin.writeFile("out_skin.h5m");
-        MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done";
+        MOFEM_LOG("ELASTIC", Sev::inform) << "done";
       }
 
       // Destroy vector, no needed any more
