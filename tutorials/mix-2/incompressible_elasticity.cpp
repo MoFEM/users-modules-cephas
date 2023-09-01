@@ -1,22 +1,27 @@
 /* The above code is a preprocessor directive in C++ that checks if the macro
 "EXECUTABLE_DIMENSION" has been defined. If it has not been defined, it is set
 to 3" */
-#ifndef EXECUTABLE_DIMENSION
-#define EXECUTABLE_DIMENSION 3
-#endif
+// #ifndef EXECUTABLE_DIMENSION
+// #define EXECUTABLE_DIMENSION 3
+// #endif
+
 
 #include <MoFEM.hpp>
 #include <MatrixFunction.hpp>
 
-#ifdef PYTHON_SFD
-#include <boost/python.hpp>
-#include <boost/python/def.hpp>
-namespace bp = boost::python;
-#endif
+// #ifdef PYTHON_SFD
+// #include <boost/python.hpp>
+// #include <boost/python/def.hpp>
+// namespace bp = boost::python;
+// #endif
 
 using namespace MoFEM;
 
-constexpr AssemblyType AT = AssemblyType::SCHUR; //< selected assembly type
+constexpr int SPACE_DIM =
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
+
+constexpr AssemblyType AT = (SCHUR_ASSEMBLE) ? AssemblyType::SCHUR : AssemblyType::PETSC; //< selected assembly type
+
 constexpr IntegrationType IT =
     IntegrationType::GAUSS; //< selected integration type
 constexpr CoordinateTypes coord_type = CARTESIAN;
@@ -34,8 +39,6 @@ template <> struct ElementsAndOps<3> : PipelineManager::ElementsAndOpsByDim<3> {
 constexpr FieldSpace ElementsAndOps<2>::CONTACT_SPACE;
 constexpr FieldSpace ElementsAndOps<3>::CONTACT_SPACE;
 
-constexpr int SPACE_DIM =
-    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 /* The above code is defining an alias `EntData` for the type
 `EntitiesFieldData::EntData`. This is a C++ syntax for creating a new name for

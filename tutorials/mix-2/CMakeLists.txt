@@ -3,6 +3,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-2/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../adv-0/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../adv-1/src)
+
+include_directories(${MoFEM_INSTALL_DIR}/third_party/phg-quadrule)
 
 set(permissions_default 
   OWNER_WRITE 
@@ -36,9 +39,11 @@ if(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
     incompressible_3d ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
 
   set_target_properties(
-    incompressible_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DPYTHON_SFD") 
+    incompressible_2d PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1 -DPYTHON_SFD")
   set_target_properties(
-    incompressible_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DPYTHON_SFD") 
+    incompressible_3d PROPERTIES COMPILE_FLAGS 
+    "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1 -DPYTHON_SFD") 
 
   target_link_libraries(incompressible_2d 
     ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
