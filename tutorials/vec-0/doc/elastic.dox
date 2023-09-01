@@ -75,16 +75,16 @@ By substituting the above definitions into the weak form, the global system\f$ \
 The Gauss quadrature is utilised to calculate the integrals. 
 
 \section tutorial_elastic_code_dissection Implementation
-In this section we will focus on the procedure to setup and solve vector-valued problems like elasticity in MoFEM using MoFEM::Simple and Form Integrators, which are template UDOs used for common operations.  
-The code developed for this example can be compiled for both 2D and 3D cases by assigning the constant variable *EXECUTABLE_DIMENSION* in the *CMakeFiles.txt* prior to compilation and is used throughout the code to define the constant variable *SPACE_DIM* which is used as a template paramenter to assign the dimension of the executable.  :
+In this section we will focus on the procedure to setup and solve vector-valued problems such as elasticity in MoFEM using MoFEM::Simple and Form Integrators, which are template UDOs used for common operations.  
+The code developed for this example can be compiled for both 2D and 3D cases by assigning the input parameter *EXECUTABLE_DIMENSION* in the *CMakeFiles.txt* prior to compilation and is used throughout the code to define the constant variable *SPACE_DIM* which is used as a template paramenter to assign the dimension of the executable:
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Define dimension
 
-Based on *SPACE_DIM* an appropriate type of elements is defined in the following snippet:
+Based on *SPACE_DIM* appropriate element types are defined in the following snippet for example, *DomainEle* in 2D are defined as faces while in 3D they are defined as volumes:
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Define entities
 
-The main program consists of a series of functions when invoking the function Example::runProblem():
+The main program then consists of a series of functions when invoking the function Example::runProblem():
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Run problem
 
@@ -99,7 +99,7 @@ The space selected for displacement field U is `H1` and dimension is *SPACE_DIM*
 Additionally, we define command line parameters *-base* and *-order* that specify the base and order of our base respectively with `AINSWORTH_LEGENDRE_BASE` and 2nd order selected by default.
 
 \subsection tutorial_elastic_dirichlet Essential boundary conditions
-The next function, Example::boundaryCondition() is used to apply homogeneous Dirichlet boundary conditions for our problem by utilise MoFEM's utility to remove degrees of freedom from a problem through the BcManager interface.
+The next function, Example::boundaryCondition() is used to apply homogeneous Dirichlet boundary conditions for our problem by utilise MoFEM's utility to remove degrees of freedom from a problem through the *BcManager* interface.
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Boundary condition
 
@@ -110,17 +110,17 @@ For the examples considered in this tutorial, the provided meshes contain only o
 
 \subsection tutorial_elastic_pushing_operators Pushing operators to pipeline
 
-The next function of the main program, Example::assembleSystem() is responsible for defining pipelines used to evaluate linear and bilinear forms of the system (refer to \ref User data operators table) and assembly of the global matrices and vectors.
+The next function of the main program, Example::assembleSystem() is responsible for defining pipelines used to evaluate linear and bilinear forms of the system (refer to \ref user_data_operators_table) and assembly of the global matrices and vectors.
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Push operators to pipeline
 
 \subsubsection tutorial_elastic_integration_rule Integration rule
-The first part of this function sets and pushes the integration rule for the finite element method to the pipeline.
+The first part of this function, sets and pushes the integration rule for the finite element method to the pipeline.
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Integration rule
 
 \subsubsection tutorial_elastic_pushing_stiffness_matrix Pushing domain stiffness matrix
-The second part of this function first calculates the local elasticity tensor `addMatBlockOps` then pushes the LHS stiffness matrix using alias `OpK` to the LHS pipeline.
+The second part of this function, first calculates the local elasticity tensor through `addMatBlockOps` function depending on the `MAT_ELASTIC` block defined in the mesh file, then pushes the LHS stiffness matrix using alias `OpK` to the LHS pipeline.
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Push domain stiffness matrix to pipeline
 
@@ -144,7 +144,7 @@ Using the FTensor::Index type these formulas can be directly implemented using E
 
 Note that depending on *SPACE_DIM* our code will appropriately sum over all the indices and set coefficient \f$ A \f$ for plane stress or 3D case.
 
-The last operator `OpK` integrates the bilinear form: 
+The operator `OpK` integrates the bilinear form: 
 
 \f[
 \begin{align}
@@ -166,7 +166,7 @@ More info about available Form Integrators can be found in \ref user_data_operat
 The next part of the Example::assembleSystem() function calculates the internal forces for the system which is required to enforce the boundary conditions (refer to \ref basic_tutorials_poisson_homogeneous ). For elastic problems, this requires calculating the displacement gradient \f$ \nabla \mathbf u \f$, strain \f$ \boldsymbol \varepsilon \f$ and stress \f$ \boldsymbol \sigma \f$ of the system by pushing the relevant operatiors to the RHS pipeline.
 \snippet users_modules/tutorials/vec-0/elastic.cpp Push Internal forces
 This is achieved by pushing a series of operators as follows:
-- `OpCalculateVectorFieldGradient` computes the gradient of the obtained displacement field \f$ \nabla \mathbf u^{h}=\sum_{m=0}^{N-1} \nabla \phi_m \bar{\mathbf u}_m \f$
+- `OpCalculateVectorFieldGradient` computes the gradient of the displacement field \f$ \nabla \mathbf u^{h}=\sum_{m=0}^{N-1} \nabla \phi_m \bar{\mathbf u}_m \f$
 - `OpSymmetrizeTensor` symmetrises the previously computed gradient to compute small strain tensor \f$ \boldsymbol \varepsilon = \frac{1}{2} (\nabla \mathbf u^\text{T} + \nabla \mathbf u)  \f$
 - `OpTensorTimesSymmetricTensor` is another form integrator that computes Cauchy stress:  \f$ \boldsymbol \sigma = \mathbb D : \boldsymbol \varepsilon \f$
 
@@ -233,21 +233,16 @@ will do the following steps
   \code
   ./elastic_3d -file_name beam_3D.cub -order 2
   \endcode
-  where the mesh is partitioned into two parts and then the
-  program is run using two processors (the same number of partitions) with
-  fourth order polynomial of approximation.
+  where a second order polynomial of approximation is selected.
 
 This will produce *out_elastic.h5m* file which we can convert using 
 \code
   mbconvert out_elastic.h5m out_elastic_3D.vtk
 \endcode
 
-The file *out_elastic_3D.vtk* can be opened in Paraview. Using the filter `WarpByScalar` allows to visualise the deformation as shown in \ref figure3_output "Figure 3". 
+The file *out_elastic_3D.vtk* can be opened in Paraview. Using the filter `WarpByVector` allows to visualise the deformation as shown in \ref figure3_output "Figure 3". 
 
-We can also compute 2D case of the beam. In order to do that, change the below variable:
-\snippet users_modules/tutorials/vec-0/elastic.cpp Define dimension
-
-to the value equal to 2 and compile the code (in your build directory) using `make` command. You should be able then to compute 2D variant as follows
+We can also compute 2D case of the beam. Following the same process as that for 3D with the commands:
 \code
   ./elastic_2d -file_name beam_2D.cub -order 2
 \endcode
