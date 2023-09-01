@@ -226,15 +226,7 @@ MoFEMErrorCode Incompressible::setupProblem() {
 
   // Note: For tets we have only H1 Ainsworth base, for Hex we have only H1
   // Demkowicz base. We need to implement Demkowicz H1 base on tet.
-  CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
-  CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
-  CHKERR simple->addDomainField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
-                                SPACE_DIM);
-  CHKERR simple->addBoundaryField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
-                                  SPACE_DIM);
   CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
-
-  CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
 
   // Adding fields related to incompressible elasticiy
@@ -247,7 +239,6 @@ MoFEMErrorCode Incompressible::setupProblem() {
   // Choose either Crouzeix-Raviart element:
   if (isDiscontinuousPressure) {
     CHKERR simple->addDomainField("P", L2, base, 1);
-    CHKERR simple->addBoundaryField("P", L2, base, 1);
     CHKERR simple->setFieldOrder("P", order - 2);
   } else {
     // ... or Taylor-Hood element:
@@ -303,10 +294,6 @@ MoFEMErrorCode Incompressible::setupProblem() {
                                  PSTATUS_NOT, -1, &boundary_ents);
     return boundary_ents;
   };
-
-  auto boundary_ents = filter_true_skin(filter_blocks(get_skin()));
-  CHKERR simple->setFieldOrder("SIGMA", 0);
-  CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
 
   CHKERR simple->setUp();
 
@@ -397,17 +384,6 @@ MoFEMErrorCode Incompressible::bC() {
                                              "REMOVE_ALL", f, 0, 3);
   }
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
-                                           "SIGMA", 0, 0, false, true);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
-                                           "SIGMA", 1, 1, false, true);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
-                                           "SIGMA", 2, 2, false, true);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
-                                           "SIGMA", 0, 3, false, true);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(
-      simple->getProblemName(), "NO_CONTACT", "SIGMA", 0, 3, false, true);
-
   // Note remove has to be always before push. Then node marking will be
   // corrupted.
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
@@ -440,10 +416,6 @@ MoFEMErrorCode Incompressible::OPs() {
                                                           "GEOMETRY");
     MoFEMFunctionReturn(0);
   };
-
-  auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
-  henky_common_data_ptr->matDPtr = boost::make_shared<MatrixDouble>();
-  henky_common_data_ptr->matGradPtr = boost::make_shared<MatrixDouble>();
 
   auto add_domain_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
