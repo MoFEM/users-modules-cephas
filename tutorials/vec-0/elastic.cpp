@@ -191,10 +191,11 @@ MoFEMErrorCode Example::addMatBlockOps(
         FTensor::Index<'k', SPACE_DIM> k;
         FTensor::Index<'l', SPACE_DIM> l;
         constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-        double A = (SPACE_DIM == 2)
-                       ? 2 * shear_modulus_G /
-                             (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
-                       : 1;
+        double A = 1.;
+        // (SPACE_DIM == 2)
+        //                ? 2 * shear_modulus_G /
+        //                      (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
+        //                : 1;
         auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
         t_D(i, j, k, l) =
             2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
