@@ -372,7 +372,6 @@ MoFEMErrorCode Example::gettingNorms() {
   auto dm = simple->getDM();
 
   auto post_proc_norm_fe = boost::make_shared<DomainEle>(mField);
-  auto norms_vec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
 
   auto post_proc_norm_rule_hook = [](int, int, int p) -> int { return 2 * p; };
   post_proc_norm_fe->getRuleHook = post_proc_norm_rule_hook;
@@ -380,21 +379,36 @@ MoFEMErrorCode Example::gettingNorms() {
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       post_proc_norm_fe->getOpPtrVector(), {H1});
 
+  enum NORMS { U_NORM_L2 = 0, PIOLA_NORM, LAST_NORM };
+  auto norms_vec =
+      createVectorMPI(mField.get_comm(), LAST_NORM, PETSC_DETERMINE);
+  CHKERR VecZeroEntries(norms_vec);
+
   auto u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_norm_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
   post_proc_norm_fe->getOpPtrVector().push_back(
-      new OpCalcNormL2Tesnosr1<SPACE_DIM>("U", u_ptr, norms_vec,
-                                          mField.get_comm_rank()));
+      new OpCalcNormL2Tensor1<SPACE_DIM>("U", u_ptr, norms_vec, U_NORM_L2));
+
+  auto common_ptr = commonDataFactory<SPACE_DIM, GAUSS, DomainEleOp>(
+      mField, post_proc_norm_fe->getOpPtrVector(), "U", "MAT_ELASTIC",
+      Sev::inform);
+
+  post_proc_norm_fe->getOpPtrVector().push_back(new OpCalcNormL2Tesnosr2<3, 3>(
+      "U", common_ptr->getMatFirstPiolaStress(), norms_vec, PIOLA_NORM));
 
   CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_norm_fe);
 
   CHKERR VecAssemblyBegin(norms_vec);
   CHKERR VecAssemblyEnd(norms_vec);
-  double norm_u2;
-  CHKERR VecSum(norms_vec, &norm_u2);
-  MOFEM_LOG("EXAMPLE", Sev::inform) << "norm_u: " << std::sqrt(norm_u2);
+  const double *norms;
+  CHKERR VecGetArrayRead(norms_vec, &norms);
+  MOFEM_LOG("EXAMPLE", Sev::inform)
+      << "norm_u: " << std::sqrt(norms[U_NORM_L2]);
+  MOFEM_LOG("EXAMPLE", Sev::inform)
+      << "norm_piola: " << std::sqrt(norms[PIOLA_NORM]);
+  CHKERR VecRestoreArrayRead(norms_vec, &norms);
 
   MoFEMFunctionReturn(0);
 }
