@@ -913,7 +913,6 @@ struct SetUpSchurImpl : public SetUpSchur {
   MoFEMErrorCode setUp(SmartPetscObj<TS> solver);
 
 private:
-  MoFEMErrorCode setEntities();
   MoFEMErrorCode setOperator();
   MoFEMErrorCode setPC(PC pc);
 
@@ -956,9 +955,9 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
           "possible only is PC is set up twice");
     }
 
+    subDM = createSubDM();
     A = createDMMatrix(dm);
     P = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
-    subDM = createSubDM();
     S = createDMMatrix(subDM);
     CHKERR MatSetBlockSize(S, SPACE_DIM);
 
@@ -970,14 +969,9 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
 
   } else {
     MOFEM_LOG("INCOMP_ELASTICITY", Sev::inform) << "No Schur pc";
-
-    pip->getOpBoundaryLhsPipeline().push_front(new OpSchurAssembleBegin());
-    pip->getOpBoundaryLhsPipeline().push_back(
-        new OpSchurAssembleEnd<SCHUR_DGESV>({}, {}, {}, {}, {}));
     pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
     pip->getOpDomainLhsPipeline().push_back(
         new OpSchurAssembleEnd<SCHUR_DGESV>({}, {}, {}, {}, {}));
-
     auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
     post_proc_schur_lhs_ptr->postProcessHook = [this,
                                                 post_proc_schur_lhs_ptr]() {
