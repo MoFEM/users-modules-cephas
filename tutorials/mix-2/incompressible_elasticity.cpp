@@ -1,7 +1,7 @@
 /**
  * @file incompressible_elasticity.cpp
  * @brief Incompressible elasticity problem
-*/
+ */
 
 #include <MoFEM.hpp>
 
@@ -39,15 +39,16 @@ using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
 
 struct MonitorIncompressible : public FEMethod {
 
-  MonitorIncompressible(SmartPetscObj<DM> dm,
-          std::pair<boost::shared_ptr<PostProcEle>,
-                    boost::shared_ptr<SkinPostProcEle>>
-              pair_post_proc_fe,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
-      : dM(dm),  uXScatter(ux_scatter),
-        uYScatter(uy_scatter), uZScatter(uz_scatter) {
+  MonitorIncompressible(
+      SmartPetscObj<DM> dm,
+      std::pair<boost::shared_ptr<PostProcEle>,
+                boost::shared_ptr<SkinPostProcEle>>
+          pair_post_proc_fe,
+      std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
+      std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
+      std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
+      : dM(dm), uXScatter(ux_scatter), uYScatter(uy_scatter),
+        uZScatter(uz_scatter) {
     postProcFe = pair_post_proc_fe.first;
     skinPostProcFe = pair_post_proc_fe.second;
   };
@@ -74,8 +75,8 @@ struct MonitorIncompressible : public FEMethod {
         CHKERR DMoFEMLoopFiniteElements(dM, "bFE", skinPostProcFe,
                                         getCacheWeakPtr());
         CHKERR skinPostProcFe->writeFile(
-            "out_skin_incomp_elasticity_" + boost::lexical_cast<std::string>(ts_step) +
-            ".h5m");
+            "out_skin_incomp_elasticity_" +
+            boost::lexical_cast<std::string>(ts_step) + ".h5m");
       }
       MoFEMFunctionReturn(0);
     };
@@ -164,8 +165,8 @@ typename MoFEM::OpBaseImpl<AT, DomainEleOpStab>::MatSetValuesHook
 using OpDomainGradTimesTensor = FormsIntegrators<DomainEleOp>::Assembly<
     AT>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 
-using OpDivDeltaUTimesP = FormsIntegrators<DomainEleOp>::Assembly<AT>::LinearForm<
-    GAUSS>::OpMixDivTimesU<1, SPACE_DIM, SPACE_DIM>;
+using OpDivDeltaUTimesP = FormsIntegrators<DomainEleOp>::Assembly<
+    AT>::LinearForm<GAUSS>::OpMixDivTimesU<1, SPACE_DIM, SPACE_DIM>;
 
 using OpBaseTimesScalarValues = FormsIntegrators<DomainEleOp>::Assembly<
     AT>::LinearForm<GAUSS>::OpBaseTimesScalar<1>;
@@ -175,12 +176,12 @@ using OpBaseTimesScalarValues = FormsIntegrators<DomainEleOp>::Assembly<
 //! [Operators used for RHS incompressible elasticity]
 
 // This assemble A-matrix
-using OpMassPressure = FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
-        GAUSS>::OpMass<1, 1>;
-// This assemble B-matrix (preconditioned)
-using OpMassPressureStab =
-    FormsIntegrators<DomainEleOpStab>::Assembly<AT>::BiLinearForm<GAUSS>::OpMass<1,
+using OpMassPressure =
+    FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<GAUSS>::OpMass<1,
                                                                              1>;
+// This assemble B-matrix (preconditioned)
+using OpMassPressureStab = FormsIntegrators<DomainEleOpStab>::Assembly<
+    AT>::BiLinearForm<GAUSS>::OpMass<1, 1>;
 //! [Operators used for RHS incompressible elasticity]
 
 int order = 2;
@@ -212,7 +213,6 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
-
 };
 
 template <int DIM>
@@ -238,10 +238,8 @@ struct OpCalculateLameStress : public ForcesAndSourcesCore::UserDataOperator {
     const size_t nb_gauss_pts = getGaussPts().size2();
 
     stressPtr->resize((DIM * (DIM + 1)) / 2, nb_gauss_pts);
-    auto t_stress =
-      getFTensor2SymmetricFromMat<DIM>(*(stressPtr));
-    auto t_strain =
-      getFTensor2SymmetricFromMat<DIM>(*(strainPtr));
+    auto t_stress = getFTensor2SymmetricFromMat<DIM>(*(stressPtr));
+    auto t_strain = getFTensor2SymmetricFromMat<DIM>(*(strainPtr));
     auto t_pressure = getFTensor0FromVec(*(pressurePtr));
 
     const double l_mu = mU;
@@ -289,8 +287,8 @@ MoFEMErrorCode Incompressible::setupProblem() {
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_discontinuous_pressure",
                              &isDiscontinuousPressure, PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_a_t_petsc_fieldsplit",
-                             &isATPetscFieldsplit, PETSC_NULL);                             
-                             
+                             &isATPetscFieldsplit, PETSC_NULL);
+
   MOFEM_LOG("INCOMP_ELASTICITY", Sev::inform) << "Order " << order;
   MOFEM_LOG("INCOMP_ELASTICITY", Sev::inform) << "Geom order " << geom_order;
 
@@ -416,9 +414,10 @@ MoFEMErrorCode Incompressible::createCommonData() {
         << "Poisson_ratio " << poisson_ratio;
 
     mu = young_modulus / (2. + 2. * poisson_ratio);
-    const double lambda_denom = (1. + poisson_ratio ) * (1. - 2. * poisson_ratio);
+    const double lambda_denom =
+        (1. + poisson_ratio) * (1. - 2. * poisson_ratio);
     lambda = young_modulus * poisson_ratio / lambda_denom;
-    
+
     MoFEMFunctionReturn(0);
   };
 
@@ -463,7 +462,6 @@ MoFEMErrorCode Incompressible::bC() {
   CHKERR bc_mng->pushMarkDOFsOnEntities<DisplacementCubitBcData>(
       simple->getProblemName(), "U");
 
-
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -488,7 +486,7 @@ MoFEMErrorCode Incompressible::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
-    
+
     //! [Operators used for incompressible elasticity]
     using OpGradSymTensorGrad =
         FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
@@ -520,13 +518,13 @@ MoFEMErrorCode Incompressible::OPs() {
     };
     if (lambda > 0)
       pip.push_back(new OpMassPressure("P", "P", get_lambda_reciprocal));
-      if (AT != AssemblyType::SCHUR) {
-        double eps_stab = 1e-4;
-        CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-eps_stab", &eps_stab,
-                                     PETSC_NULL);
-        pip.push_back(new OpMassPressureStab(
-            "P", "P", [eps_stab](double, double, double) { return eps_stab; }));
-      }
+    if (AT != AssemblyType::SCHUR) {
+      double eps_stab = 1e-4;
+      CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-eps_stab", &eps_stab,
+                                   PETSC_NULL);
+      pip.push_back(new OpMassPressureStab(
+          "P", "P", [eps_stab](double, double, double) { return eps_stab; }));
+    }
 
     MoFEMFunctionReturn(0);
   };
@@ -551,7 +549,8 @@ MoFEMErrorCode Incompressible::OPs() {
         "U", grad_u_ptr));
 
     auto strain_ptr = boost::make_shared<MatrixDouble>();
-    pip.push_back(new OpSymmetrizeTensor<SPACE_DIM>("U", grad_u_ptr, strain_ptr));
+    pip.push_back(
+        new OpSymmetrizeTensor<SPACE_DIM>("U", grad_u_ptr, strain_ptr));
 
     auto get_four_mu = [](const double, const double, const double) {
       return -2. * mu;
@@ -560,14 +559,11 @@ MoFEMErrorCode Incompressible::OPs() {
       return -1.;
     };
 
-    pip.push_back(new OpDomainGradTimesTensor(
-        "U", strain_ptr, get_four_mu));
+    pip.push_back(new OpDomainGradTimesTensor("U", strain_ptr, get_four_mu));
 
-    pip.push_back(new OpDivDeltaUTimesP(
-        "U", pressure_ptr, minus_one));
+    pip.push_back(new OpDivDeltaUTimesP("U", pressure_ptr, minus_one));
 
-    pip.push_back(new OpBaseTimesScalarValues(
-        "P", div_u_ptr, minus_one));
+    pip.push_back(new OpBaseTimesScalarValues("P", div_u_ptr, minus_one));
 
     auto get_lambda_reciprocal = [](const double, const double, const double) {
       return 1. / lambda;
@@ -578,7 +574,6 @@ MoFEMErrorCode Incompressible::OPs() {
 
     MoFEMFunctionReturn(0);
   };
-
 
   CHKERR add_domain_base_ops(pip_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_base_ops(pip_mng->getOpDomainRhsPipeline());
@@ -678,8 +673,8 @@ MoFEMErrorCode Incompressible::tsSolve() {
           new OpSymmetrizeTensor<SPACE_DIM>("U", grad_u_ptr, strain_ptr));
 
       auto stress_ptr = boost::make_shared<MatrixDouble>();
-      pip.push_back(new OpCalculateLameStress<SPACE_DIM>(mu, stress_ptr,
-                                                         strain_ptr, pressure_ptr));
+      pip.push_back(new OpCalculateLameStress<SPACE_DIM>(
+          mu, stress_ptr, strain_ptr, pressure_ptr));
 
       pip.push_back(
 
@@ -812,14 +807,13 @@ MoFEMErrorCode Incompressible::tsSolve() {
     MoFEMFunctionReturnHot(0);
   };
 
-
   auto set_schur_pc = [&](auto solver) {
     boost::shared_ptr<SetUpSchur> schur_ptr;
     if (AT == AssemblyType::SCHUR) {
       schur_ptr = SetUpSchur::createSetUpSchur(mField);
       CHKERR schur_ptr->setUp(solver);
     } else {
-      if(isATPetscFieldsplit)
+      if (isATPetscFieldsplit)
         CHKERR set_fieldsplit_preconditioner_ts(solver);
     }
     return schur_ptr;
