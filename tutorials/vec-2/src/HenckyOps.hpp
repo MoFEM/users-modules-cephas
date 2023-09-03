@@ -174,7 +174,7 @@ struct OpCalculateEigenValsImpl<DIM, GAUSS, DomainEleOp> : public DomainEleOp {
         for (int jj = 0; jj != DIM; jj++)
           eigen_vec(ii, jj) = C(ii, jj);
 
-      CHKERR computeEigenValuesSymmetric<DIM>(eigen_vec, eig);
+      CHKERR computeEigenValuesSymmetric(eigen_vec, eig);
       for (auto ii = 0; ii != DIM; ++ii)
         eig(ii) = std::max(std::numeric_limits<double>::epsilon(), eig(ii));
 
@@ -700,8 +700,18 @@ addMatBlockOps(MoFEM::Interface &m_field,
     }
   };
 
-  double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
-  double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+  double E = young_modulus;
+  double nu = poisson_ratio;
+
+  CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "hencky_", "", "none");
+  CHKERR PetscOptionsScalar("-young_modulus", "Young modulus", "", E, &E,
+                            PETSC_NULL);
+  CHKERR PetscOptionsScalar("-poisson_ratio", "poisson ratio", "", nu, &nu,
+                            PETSC_NULL);
+  ierr = PetscOptionsEnd();
+
+  double bulk_modulus_K = E / (3 * (1 - 2 * nu));
+  double shear_modulus_G = E / (2 * (1 + nu));
   pip.push_back(new OpMatBlocks(
       field_name, mat_D_Ptr, bulk_modulus_K, shear_modulus_G, m_field, sev,
 
