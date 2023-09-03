@@ -173,8 +173,6 @@ using OpBaseTimesScalarValues = FormsIntegrators<DomainEleOp>::Assembly<
 
 //! [Operators used for RHS incompressible elasticity]
 
-//! [Operators used for RHS incompressible elasticity]
-
 // This assemble A-matrix
 using OpMassPressure =
     FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<GAUSS>::OpMass<1,
@@ -753,28 +751,18 @@ MoFEMErrorCode Incompressible::tsSolve() {
     // Add boundary condition scaling
     auto time_scale = boost::make_shared<TimeScale>();
 
-    auto get_bc_hook_rhs = [&]() {
-      EssentialPreProc<DisplacementCubitBcData> hook(mField, pre_proc_ptr,
-                                                     {time_scale}, false);
-      return hook;
-    };
-    pre_proc_ptr->preProcessHook = get_bc_hook_rhs();
-
-    auto get_post_proc_hook_rhs = [&]() {
-      return EssentialPostProcRhs<DisplacementCubitBcData>(
-          mField, post_proc_rhs_ptr, 1.);
-    };
-    auto get_post_proc_hook_lhs = [&]() {
-      return EssentialPostProcLhs<DisplacementCubitBcData>(
-          mField, post_proc_lhs_ptr, 1.);
-    };
-    post_proc_rhs_ptr->postProcessHook = get_post_proc_hook_rhs();
-
+    pre_proc_ptr->preProcessHook = EssentialPreProc<DisplacementCubitBcData>(
+        mField, pre_proc_ptr, {time_scale}, false);
+    post_proc_rhs_ptr->postProcessHook =
+        EssentialPostProcRhs<DisplacementCubitBcData>(mField, post_proc_rhs_ptr,
+                                                      1.);
     ts_ctx_ptr->getPreProcessIFunction().push_front(pre_proc_ptr);
     ts_ctx_ptr->getPreProcessIJacobian().push_front(pre_proc_ptr);
     ts_ctx_ptr->getPostProcessIFunction().push_back(post_proc_rhs_ptr);
     if (AT != AssemblyType::SCHUR) {
-      post_proc_lhs_ptr->postProcessHook = get_post_proc_hook_lhs();
+      post_proc_lhs_ptr->postProcessHook =
+          EssentialPostProcLhs<DisplacementCubitBcData>(mField,
+                                                        post_proc_lhs_ptr, 1.);
       ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_lhs_ptr);
     }
     MoFEMFunctionReturn(0);
@@ -838,7 +826,6 @@ MoFEMErrorCode Incompressible::tsSolve() {
   CHKERR set_time_monitor(dm, solver);
   CHKERR TSSetSolution(solver, D);
   auto schur_pc_ptr = set_schur_pc(solver);
-
   CHKERR TSSetUp(solver);
   CHKERR TSSolve(solver, NULL);
 
@@ -1013,7 +1000,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
   // Domain
   pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
   pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DGESV>(
-      {"P"}, {nullptr}, {ao_up}, {S}, {false}, false));
+      {"P"}, {nullptr}, {ao_up}, {S}, {true}));
 
   auto pre_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
   auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
