@@ -385,7 +385,7 @@ MoFEMErrorCode Example::gettingNorms() {
       new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
   post_proc_norm_fe->getOpPtrVector().push_back(
-      new OpCalcNormL2Tesnosr1<SPACE_DIM>("U", u_ptr, norms_vec,
+      new OpCalcNormL2Tensor1<SPACE_DIM>("U", u_ptr, norms_vec,
                                           mField.get_comm_rank()));
 
   CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_norm_fe);
