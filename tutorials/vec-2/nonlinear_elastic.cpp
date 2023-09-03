@@ -68,6 +68,7 @@ private:
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
+  MoFEMErrorCode gettingNorms();
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 };
@@ -80,6 +81,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR boundaryCondition();
   CHKERR assembleSystem();
   CHKERR solveSystem();
+  CHKERR gettingNorms();
   CHKERR outputResults();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
@@ -361,6 +363,42 @@ MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionReturn(0);
 }
 //! [Solve]
+
+//! [Getting norms]
+MoFEMErrorCode Example::gettingNorms() {
+  MoFEMFunctionBegin;
+
+  auto *simple = mField.getInterface<Simple>();
+  auto dm = simple->getDM();
+
+  auto post_proc_norm_fe = boost::make_shared<DomainEle>(mField);
+  auto norms_vec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
+
+  auto post_proc_norm_rule_hook = [](int, int, int p) -> int { return 2 * p; };
+  post_proc_norm_fe->getRuleHook = post_proc_norm_rule_hook;
+
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      post_proc_norm_fe->getOpPtrVector(), {H1});
+
+  auto u_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_norm_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+
+  post_proc_norm_fe->getOpPtrVector().push_back(
+      new OpCalcNormL2Tesnosr1<SPACE_DIM>("U", u_ptr, norms_vec,
+                                          mField.get_comm_rank()));
+
+  CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_norm_fe);
+
+  CHKERR VecAssemblyBegin(norms_vec);
+  CHKERR VecAssemblyEnd(norms_vec);
+  double norm_u2;
+  CHKERR VecSum(norms_vec, &norm_u2);
+  MOFEM_LOG("EXAMPLE", Sev::inform) << "norm_u: " << std::sqrt(norm_u2);
+
+  MoFEMFunctionReturn(0);
+}
+//! [Getting norms]
 
 //! [Postprocessing results]
 MoFEMErrorCode Example::outputResults() {
