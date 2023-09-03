@@ -149,7 +149,7 @@ struct MonitorIncompressible : public FEMethod {
       double max, min;
       CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
       CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
-      MOFEM_LOG_C("PLASTICITY", Sev::inform,
+      MOFEM_LOG_C("INCOMP_ELASTICITY", Sev::inform,
                   "%s time %3.4e min %3.4e max %3.4e", msg.c_str(), ts_t, min,
                   max);
       MoFEMFunctionReturn(0);
@@ -269,6 +269,7 @@ double lambda = 1.;
 double scale = 1.;
 
 PetscBool isDiscontinuousPressure = PETSC_FALSE;
+PetscBool isATPetscFieldsplit = PETSC_FALSE;
 
 namespace ContactOps {
 double cn_contact = 0.1;
@@ -312,6 +313,8 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
+  boost::shared_ptr<DomainEle> reactionFe;
+
 #ifdef PYTHON_SFD
   boost::shared_ptr<SDFPython> sdfPythonPtr;
 #endif
@@ -322,6 +325,56 @@ private:
       return scale * MoFEM::TimeScale::getScale(time);
     };
   };
+};
+
+template <int DIM>
+struct OpCalculateLameStress : public ForcesAndSourcesCore::UserDataOperator {
+  OpCalculateLameStress(double m_u, boost::shared_ptr<MatrixDouble> stress_ptr,
+                        boost::shared_ptr<MatrixDouble> strain_ptr,
+                        boost::shared_ptr<VectorDouble> pressure_ptr)
+      : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPLAST), mU(m_u),
+        stressPtr(stress_ptr), strainPtr(strain_ptr),
+        pressurePtr(pressure_ptr) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+    // Define Indicies
+    FTensor::Index<'i', SPACE_DIM> i;
+    FTensor::Index<'j', SPACE_DIM> j;
+
+    // Define Kronecker Delta
+    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<double>();
+
+    // Number of Gauss points
+    const size_t nb_gauss_pts = getGaussPts().size2();
+
+    stressPtr->resize((DIM * (DIM + 1)) / 2, nb_gauss_pts);
+    auto t_stress =
+      getFTensor2SymmetricFromMat<DIM>(*(stressPtr));
+    auto t_strain =
+      getFTensor2SymmetricFromMat<DIM>(*(strainPtr));
+    auto t_pressure = getFTensor0FromVec(*(pressurePtr));
+
+    const double l_mu = mU;
+    // Extract matrix from data matrix
+    for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      t_stress(i, j) = t_pressure * t_kd(i, j) + 2. * l_mu * t_strain(i, j);
+
+      ++t_strain;
+      ++t_stress;
+      ++t_pressure;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  double mU;
+  boost::shared_ptr<MatrixDouble> stressPtr;
+  boost::shared_ptr<MatrixDouble> strainPtr;
+  boost::shared_ptr<VectorDouble> pressurePtr;
 };
 
 //! [Run problem]
@@ -347,6 +400,9 @@ MoFEMErrorCode Incompressible::setupProblem() {
                             PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_discontinuous_pressure",
                              &isDiscontinuousPressure, PETSC_NULL);
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_a_t_petsc_fieldsplit",
+                             &isATPetscFieldsplit, PETSC_NULL);                             
+                             
   MOFEM_LOG("INCOMP_ELASTICITY", Sev::inform) << "Order " << order;
   MOFEM_LOG("INCOMP_ELASTICITY", Sev::inform) << "Geom order " << geom_order;
 
@@ -393,7 +449,6 @@ MoFEMErrorCode Incompressible::setupProblem() {
   } else {
     // ... or Taylor-Hood element:
     CHKERR simple->addDomainField("P", H1, base, 1);
-    CHKERR simple->addBoundaryField("P", H1, base, 1);
     CHKERR simple->setFieldOrder("P", order - 1);
   }
 
@@ -494,11 +549,11 @@ MoFEMErrorCode Incompressible::createCommonData() {
     // if (is_scale) {
     //   scale /= young_modulus;
     // }
-cerr << "young_modulus " << young_modulus << "\n";
     mu = young_modulus / (2. + 2. * poisson_ratio);
     const double lambda_denom = (1. + poisson_ratio ) * (1. - 2. * poisson_ratio);
     lambda = young_modulus * poisson_ratio / lambda_denom;
-
+    cerr << "young_modulus " << young_modulus << "\n";
+    
     MOFEM_LOG("INCOMP_ELASTICITY", Sev::inform) << "Scale " << scale;
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_quasi_static",
@@ -546,7 +601,7 @@ MoFEMErrorCode Incompressible::bC() {
   
   auto time_scale = boost::make_shared<TimeScale>();
   CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
-        pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {time_scale},
+        pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {},
         "FORCE", Sev::inform);
 
   MoFEMFunctionReturn(0);
@@ -602,19 +657,30 @@ MoFEMErrorCode Incompressible::OPs() {
     constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
     auto t_mat = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
-    t_mat(i, j, k, l) = 2. * mu * ((t_kd(i, k) ^ t_kd(j, l)) / 2.);
+    t_mat(i, j, k, l) = -2. * mu * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
 
     pip.push_back(new OpMixScalarTimesDiv(
-        "P", "U", [](const double, const double, const double) { return 1.; },
+        "P", "U", [](const double, const double, const double) { return -1.; },
         true, false));
     pip.push_back(new OpGradSymTensorGrad("U", "U", mat_D_ptr));
 
     auto get_lambda_reciprocal =
           [&](const double, const double, const double) {
-            double rec_lambda = -1./lambda;
+            double rec_lambda = 1./lambda;
+            if(isinf(rec_lambda))
+              rec_lambda = 0.;
+            
             return rec_lambda;
           };
       pip.push_back(new OpMassPressure("P", "P", get_lambda_reciprocal));
+
+      if (AT != AssemblyType::SCHUR) {
+        double eps_stab = 1e-4;
+        CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-eps_stab", &eps_stab,
+                                     PETSC_NULL);
+        pip.push_back(new OpMassPressure(
+            "P", "P", [eps_stab](double, double, double) { return eps_stab; }));
+      }
 
     //-------------------------------------------------------------------------
 
@@ -700,21 +766,28 @@ MoFEMErrorCode Incompressible::OPs() {
 
     auto get_four_mu =
           [&](const double, const double, const double) {
-            return 4. * mu;
+            return - 2. * mu;
           };
+
+    auto minus_one = [&](const double, const double, const double) {
+      return -1.;
+    };
 
     pip.push_back(new OpDomainGradTimesTensor(
         "U", strain_ptr, get_four_mu));
 
     pip.push_back(new OpDivDeltaUTimesP(
-        "U", pressure_ptr));
+        "U", pressure_ptr, minus_one));
 
     pip.push_back(new OpBaseTimesScalarValues(
-        "P", div_u_ptr));
+        "P", div_u_ptr, minus_one));
     
     auto get_lambda_reciprocal =
           [&](const double, const double, const double) {
-            double rec_lambda = -1./lambda;
+            double rec_lambda = 1./lambda;
+              if(isinf(rec_lambda))
+                rec_lambda = 0.;
+
             return rec_lambda;
           };
 
@@ -827,6 +900,8 @@ MoFEMErrorCode Incompressible::OPs() {
   CHKERR pip_mng->setBoundaryRhsIntegrationRule(integration_rule_boundary);
   CHKERR pip_mng->setBoundaryLhsIntegrationRule(integration_rule_boundary);
 
+  reactionFe = boost::make_shared<DomainEle>(mField);
+
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pip]
@@ -880,48 +955,25 @@ MoFEMErrorCode Incompressible::tsSolve() {
     auto pp_fe = boost::make_shared<PostProcEle>(mField);
     auto &pip = pp_fe->getOpPtrVector();
 
-    auto pressure_ptr = boost::make_shared<VectorDouble>();
-    pip.push_back(new OpCalculateScalarFieldValues("P", pressure_ptr));
-
-    auto div_u_ptr = boost::make_shared<VectorDouble>();
-    pip.push_back(
-        new OpCalculateDivergenceVectorFieldValues<SPACE_DIM>("U", div_u_ptr));
-
-    auto grad_u_ptr = boost::make_shared<MatrixDouble>();
-    pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", grad_u_ptr));
-
-    auto strain_ptr = boost::make_shared<MatrixDouble>();
-    pip.push_back(new OpSymmetrizeTensor<SPACE_DIM>("U", grad_u_ptr, strain_ptr));
-
     auto get_four_mu =
           [&](const double, const double, const double) {
             return 4. * mu;
           };
 
-    pip.push_back(new OpDomainGradTimesTensor(
-        "U", strain_ptr, get_four_mu));
-    
     auto get_lambda_reciprocal =
           [&](const double, const double, const double) {
             double rec_lambda = -1./lambda;
+            if(isinf(rec_lambda))
+                rec_lambda = 0.;
             return rec_lambda;
           };
 
     auto push_vol_ops = [this](auto &pip) {
+      MoFEMFunctionBegin;
       CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
                                                             "GEOMETRY");
 
-      auto [common_plastic_ptr, common_henky_ptr] =
-          PlasticOps::createCommonPlasticOps<SPACE_DIM, IT, DomainEleOp>(
-              mField, "MAT_PLASTIC", pip, "U", "EP", "TAU", 1., Sev::inform);
-
-      if (common_henky_ptr) {
-        if (common_plastic_ptr->mGradPtr != common_henky_ptr->matGradPtr)
-          CHK_THROW_MESSAGE(MOFEM_DATA_INCONSISTENCY, "Wrong pointer for grad");
-      }
-
-      return std::make_pair(common_plastic_ptr, common_henky_ptr);
+      MoFEMFunctionReturn(0);
     };
 
     auto push_vol_post_proc_ops = [this](auto &pp_fe, auto &&p) {
@@ -929,7 +981,7 @@ MoFEMErrorCode Incompressible::tsSolve() {
 
       auto &pip = pp_fe->getOpPtrVector();
 
-      auto [common_plastic_ptr, common_henky_ptr] = p;
+      // auto [common_plastic_ptr, common_henky_ptr] = p;
 
       using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
@@ -939,29 +991,42 @@ MoFEMErrorCode Incompressible::tsSolve() {
       auto u_ptr = boost::make_shared<MatrixDouble>();
       pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
-        pip.push_back(
+      auto pressure_ptr = boost::make_shared<VectorDouble>();
+      pip.push_back(new OpCalculateScalarFieldValues("P", pressure_ptr));
 
-            new OpPPMap(
+      auto div_u_ptr = boost::make_shared<VectorDouble>();
+      pip.push_back(new OpCalculateDivergenceVectorFieldValues<SPACE_DIM>(
+          "U", div_u_ptr));
 
-                pp_fe->getPostProcMesh(), pp_fe->getMapGaussPts(),
+      auto grad_u_ptr = boost::make_shared<MatrixDouble>();
+      pip.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+          "U", grad_u_ptr));
 
-                {{"PLASTIC_SURFACE",
-                  common_plastic_ptr->getPlasticSurfacePtr()},
-                 {"PLASTIC_MULTIPLIER",
-                  common_plastic_ptr->getPlasticTauPtr()}},
+      auto strain_ptr = boost::make_shared<MatrixDouble>();
+      pip.push_back(
+          new OpSymmetrizeTensor<SPACE_DIM>("U", grad_u_ptr, strain_ptr));
 
-                {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
+      auto stress_ptr = boost::make_shared<MatrixDouble>();
+      pip.push_back(new OpCalculateLameStress<SPACE_DIM>(mu, stress_ptr,
+                                                         strain_ptr, pressure_ptr));
 
-                {},
+      pip.push_back(
 
-                {{"STRAIN", common_plastic_ptr->mStrainPtr},
-                 {"STRESS", common_plastic_ptr->mStressPtr},
-                 {"PLASTIC_STRAIN", common_plastic_ptr->getPlasticStrainPtr()},
-                 {"PLASTIC_FLOW", common_plastic_ptr->getPlasticFlowPtr()}}
+          new OpPPMap(
 
-                )
+              pp_fe->getPostProcMesh(), pp_fe->getMapGaussPts(),
 
-        );
+              {{"P", pressure_ptr}},
+
+              {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
+
+              {},
+
+              {{"STRAIN", strain_ptr}, {"STRESS", stress_ptr}}
+
+              )
+
+      );
 
       MoFEMFunctionReturn(0);
     };
@@ -1005,8 +1070,6 @@ MoFEMErrorCode Incompressible::tsSolve() {
     boost::shared_ptr<MonitorIncompressible> monitor_ptr(
         new MonitorIncompressible(dm, create_post_process_elements(), reactionFe, uXScatter,
                     uYScatter, uZScatter));
-    // boost::shared_ptr<Monitor> monitor_ptr(
-    //     new Monitor(dm, uXScatter, uYScatter, uZScatter));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
@@ -1085,7 +1148,8 @@ MoFEMErrorCode Incompressible::tsSolve() {
       schur_ptr = SetUpSchur::createSetUpSchur(mField);
       CHKERR schur_ptr->setUp(solver);
     } else {
-      CHKERR set_fieldsplit_preconditioner_ts(solver);
+      if(isATPetscFieldsplit)
+        CHKERR set_fieldsplit_preconditioner_ts(solver);
     }
     return schur_ptr;
   };
@@ -1109,11 +1173,12 @@ MoFEMErrorCode Incompressible::tsSolve() {
     CHKERR TSSetFromOptions(solver);
 
     auto D = createDMVector(dm);
+    
+    CHKERR set_section_monitor(solver);
+    CHKERR set_time_monitor(dm, solver);
+    CHKERR TSSetSolution(solver, D);
     auto schur_pc_ptr = set_schur_pc(solver);
 
-    // CHKERR set_section_monitor(solver);
-    // CHKERR set_time_monitor(dm, solver);
-    CHKERR TSSetSolution(solver, D);
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
   } else {
@@ -1319,7 +1384,7 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
 
   using B =
       FormsIntegrators<BoundaryEleOpStab>::Assembly<SCHUR>::BiLinearForm<IT>;
-  using OpMassStab = B::OpMass<1, 1>;
+  using OpMassStab = B::OpMass<1, SPACE_DIM * SPACE_DIM>;
 
   auto pip = mField.getInterface<PipelineManager>();
   // Boundary
@@ -1403,7 +1468,7 @@ MoFEMErrorCode SetUpSchurImpl::setPC(PC pc) {
   auto simple = mField.getInterface<Simple>();
   SmartPetscObj<IS> is;
   mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-      simple->getProblemName(), ROW, "P", 0, 1/*SPACE_DIM*/, is);
+      simple->getProblemName(), ROW, "P", 0, 1, is);
   CHKERR PCFieldSplitSetIS(pc, NULL, is);
   CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
   MoFEMFunctionReturn(0);
