@@ -768,41 +768,46 @@ MoFEMErrorCode Incompressible::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  auto set_fieldsplit_preconditioner_ksp = [&](auto ksp) {
-    MoFEMFunctionBeginHot;
-    PC pc;
-    CHKERR KSPGetPC(ksp, &pc);
-    PetscBool is_pcfs = PETSC_FALSE;
-    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
-    if (is_pcfs == PETSC_TRUE) {
-      auto bc_mng = mField.getInterface<BcManager>();
-      auto name_prb = simple->getProblemName();
-      SmartPetscObj<IS> is_u;
-      CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-          name_prb, ROW, "U", 0, SPACE_DIM, is_u);
-      CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
-    }
-    MoFEMFunctionReturnHot(0);
-  };
-
-  auto set_fieldsplit_preconditioner_ts = [&](auto solver) {
-    MoFEMFunctionBeginHot;
-    SNES snes;
-    CHKERR TSGetSNES(solver, &snes);
-    KSP ksp;
-    CHKERR SNESGetKSP(snes, &ksp);
-    CHKERR set_fieldsplit_preconditioner_ksp(ksp);
-    MoFEMFunctionReturnHot(0);
-  };
-
   auto set_schur_pc = [&](auto solver) {
     boost::shared_ptr<SetUpSchur> schur_ptr;
     if (AT == AssemblyType::SCHUR) {
       schur_ptr = SetUpSchur::createSetUpSchur(mField);
       CHKERR schur_ptr->setUp(solver);
     } else {
-      if (isATPetscFieldsplit)
-        CHKERR set_fieldsplit_preconditioner_ts(solver);
+      if (isATPetscFieldsplit) {
+
+        auto set_fieldsplit_preconditioner_ts = [&](auto solver) {
+          MoFEMFunctionBeginHot;
+          SNES snes;
+          CHKERR TSGetSNES(solver, &snes);
+          KSP ksp;
+          CHKERR SNESGetKSP(snes, &ksp);
+
+          auto set_fieldsplit_preconditioner_ksp = [&](auto ksp) {
+            MoFEMFunctionBeginHot;
+            PC pc;
+            CHKERR KSPGetPC(ksp, &pc);
+            PetscBool is_pcfs = PETSC_FALSE;
+            PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+            if (is_pcfs == PETSC_TRUE) {
+              auto bc_mng = mField.getInterface<BcManager>();
+              auto name_prb = simple->getProblemName();
+              SmartPetscObj<IS> is_u;
+              CHKERR mField.getInterface<ISManager>()
+                  ->isCreateProblemFieldAndRank(name_prb, ROW, "U", 0,
+                                                SPACE_DIM, is_u);
+              CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
+            }
+            MoFEMFunctionReturnHot(0);
+          };
+
+          CHKERR set_fieldsplit_preconditioner_ksp(ksp);
+          MoFEMFunctionReturnHot(0);
+        };
+
+        CHK_MOAB_THROW(set_fieldsplit_preconditioner_ts(solver),
+                       "set fieldsplit preconditioner");
+      }
     }
     return schur_ptr;
   };
