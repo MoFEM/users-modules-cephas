@@ -368,11 +368,17 @@ MoFEMErrorCode Example::solveSystem() {
 MoFEMErrorCode Example::gettingNorms() {
   MoFEMFunctionBegin;
 
-  auto *simple = mField.getInterface<Simple>();
+  auto simple = mField.getInterface<Simple>();
   auto dm = simple->getDM();
 
+  auto T = createDMVector(simple->getDM());
+  CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
+                                 SCATTER_FORWARD);
+  double nrm2;
+  CHKERR VecNorm(T, NORM_2, &nrm2);
+  MOFEM_LOG("EXAMPLE", Sev::inform) << "Solution norm " << nrm2;
+
   auto post_proc_norm_fe = boost::make_shared<DomainEle>(mField);
-  auto norms_vec = createSmartVectorMPI(mField.get_comm(), PETSC_DECIDE, 1);
 
   auto post_proc_norm_rule_hook = [](int, int, int p) -> int { return 2 * p; };
   post_proc_norm_fe->getRuleHook = post_proc_norm_rule_hook;
@@ -380,21 +386,43 @@ MoFEMErrorCode Example::gettingNorms() {
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       post_proc_norm_fe->getOpPtrVector(), {H1});
 
+  enum NORMS { U_NORM_L2 = 0, PIOLA_NORM, LAST_NORM };
+  auto norms_vec =
+      createVectorMPI(mField.get_comm(),
+                      (mField.get_comm_rank() == 0) ? LAST_NORM : 0, LAST_NORM);
+  CHKERR VecZeroEntries(norms_vec);
+
   auto u_ptr = boost::make_shared<MatrixDouble>();
   post_proc_norm_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
 
   post_proc_norm_fe->getOpPtrVector().push_back(
-      new OpCalcNormL2Tensor1<SPACE_DIM>("U", u_ptr, norms_vec,
-                                          mField.get_comm_rank()));
+      new OpCalcNormL2Tensor1<SPACE_DIM>(u_ptr, norms_vec, U_NORM_L2));
 
-  CHKERR DMoFEMLoopFiniteElements(dm, "dFE", post_proc_norm_fe);
+  auto common_ptr = commonDataFactory<SPACE_DIM, GAUSS, DomainEleOp>(
+      mField, post_proc_norm_fe->getOpPtrVector(), "U", "MAT_ELASTIC",
+      Sev::inform);
+
+  post_proc_norm_fe->getOpPtrVector().push_back(
+      new OpCalcNormL2Tensor2<SPACE_DIM, SPACE_DIM>(
+          common_ptr->getMatFirstPiolaStress(), norms_vec, PIOLA_NORM));
+
+  CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(),
+                                  post_proc_norm_fe);
 
   CHKERR VecAssemblyBegin(norms_vec);
   CHKERR VecAssemblyEnd(norms_vec);
-  double norm_u2;
-  CHKERR VecSum(norms_vec, &norm_u2);
-  MOFEM_LOG("EXAMPLE", Sev::inform) << "norm_u: " << std::sqrt(norm_u2);
+
+  MOFEM_LOG_CHANNEL("SELF"); // Clear channel from old tags
+  if (mField.get_comm_rank() == 0) {
+    const double *norms;
+    CHKERR VecGetArrayRead(norms_vec, &norms);
+    MOFEM_TAG_AND_LOG("SELF", Sev::inform, "example")
+        << "norm_u: " << std::scientific << std::sqrt(norms[U_NORM_L2]);
+    MOFEM_TAG_AND_LOG("SELF", Sev::inform, "example")
+        << "norm_piola: " << std::scientific << std::sqrt(norms[PIOLA_NORM]);
+    CHKERR VecRestoreArrayRead(norms_vec, &norms);
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -408,13 +436,13 @@ MoFEMErrorCode Example::outputResults() {
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-test", &test_nb, &test_flg);
 
   if (test_flg) {
-    auto *simple = mField.getInterface<Simple>();
+    auto simple = mField.getInterface<Simple>();
     auto T = createDMVector(simple->getDM());
     CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                    SCATTER_FORWARD);
     double nrm2;
     CHKERR VecNorm(T, NORM_2, &nrm2);
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Regression norm " << nrm2;
+    MOFEM_LOG("EXAMPLE", Sev::verbose) << "Regression norm " << nrm2;
     double regression_value = 0;
     switch (test_nb) {
     case 1:
