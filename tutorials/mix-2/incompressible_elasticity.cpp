@@ -523,8 +523,7 @@ MoFEMErrorCode Incompressible::OPs() {
 //! [Solve]
 struct SetUpSchur {
   static boost::shared_ptr<SetUpSchur>
-  createSetUpSchur(MoFEM::Interface &m_field, SmartPetscObj<Mat> A,
-                   SmartPetscObj<Mat> P);
+  createSetUpSchur(MoFEM::Interface &m_field);
   virtual MoFEMErrorCode setUp(SmartPetscObj<TS> solver) = 0;
 
 protected:
@@ -750,7 +749,7 @@ MoFEMErrorCode Incompressible::tsSolve() {
 
     if (is_pcfs == PETSC_TRUE) {
       if (AT == AssemblyType::SCHUR) {
-        schur_ptr = SetUpSchur::createSetUpSchur(mField, A, B);
+        schur_ptr = SetUpSchur::createSetUpSchur(mField);
         CHK_MOAB_THROW(schur_ptr->setUp(solver), "setup schur preconditioner");
       } else {
         auto set_pcfieldsplit_preconditioned_ts = [&](auto solver) {
@@ -857,9 +856,7 @@ int main(int argc, char *argv[]) {
 
 struct SetUpSchurImpl : public SetUpSchur {
 
-  SetUpSchurImpl(MoFEM::Interface &m_field, SmartPetscObj<Mat> A,
-                 SmartPetscObj<Mat> P)
-      : SetUpSchur(), mField(m_field), A(A), P(P) {}
+  SetUpSchurImpl(MoFEM::Interface &m_field) : SetUpSchur(), mField(m_field) {}
   virtual ~SetUpSchurImpl() { S.reset(); }
   MoFEMErrorCode setUp(SmartPetscObj<TS> solver);
 
@@ -869,8 +866,6 @@ private:
 
   SmartPetscObj<DM> createSubDM();
 
-  SmartPetscObj<Mat> A;
-  SmartPetscObj<Mat> P;
   SmartPetscObj<Mat> S;
 
   MoFEM::Interface &mField;
@@ -951,11 +946,9 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
     CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
         mField, post_proc_schur_lhs_ptr, 1, S, ao_up)();
 
-    // #ifndef NDEBUG
-    CHKERR print_mat_norm(A, "A");
-    CHKERR print_mat_norm(P, "P");
+#ifndef NDEBUG
     CHKERR print_mat_norm(S, "S");
-    // #endif // NDEBUG
+#endif // NDEBUG
     MoFEMFunctionReturn(0);
   };
 
@@ -973,7 +966,6 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
 }
 
 boost::shared_ptr<SetUpSchur>
-SetUpSchur::createSetUpSchur(MoFEM::Interface &m_field, SmartPetscObj<Mat> A,
-                             SmartPetscObj<Mat> P) {
-  return boost::shared_ptr<SetUpSchur>(new SetUpSchurImpl(m_field, A, P));
+SetUpSchur::createSetUpSchur(MoFEM::Interface &m_field) {
+  return boost::shared_ptr<SetUpSchur>(new SetUpSchurImpl(m_field));
 }
