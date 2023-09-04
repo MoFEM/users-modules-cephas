@@ -1147,17 +1147,17 @@ int main(int argc, char *argv[]) {
                     m_field.get_comm_rank(), nullptr, MF_EXIST, QUIET);
             if (scalar_field_ptr->size()) {
               auto t_temp = getFTensor0FromVec(*scalar_field_ptr);
-              MOFEM_LOG("ELASTIC_SYNC", Sev::verbose)
+              MOFEM_LOG("ELASTIC_SYNC", Sev::inform)
                   << "Eval point TEMP: " << t_temp;
             }
             if (vector_field_ptr->size1()) {
               auto t_disp = getFTensor1FromMat<3>(*vector_field_ptr);
-              MOFEM_LOG("ELASTIC_SYNC", Sev::verbose)
+              MOFEM_LOG("ELASTIC_SYNC", Sev::inform)
                   << "Eval point DISPLACEMENT_X: " << t_disp(0);
             }
             if (tensor_field_ptr->size1()) {
               auto t_disp_grad = getFTensor2FromMat<3, 3>(*tensor_field_ptr);
-              MOFEM_LOG("ELASTIC_SYNC", Sev::verbose)
+              MOFEM_LOG("ELASTIC_SYNC", Sev::inform)
                   << "Eval point DISPLACEMENT_GRAD_XX: " << t_disp_grad(0, 0);
             }
 
