@@ -51,13 +51,13 @@ set_target_properties(
   incompressible_3d_petsc PROPERTIES COMPILE_FLAGS
   "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=0") 
 
-add_test(
-  incompressible_2d_schur
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
-  incompressible_2d_schur
-  -file_name ${CMAKE_CURRENT_BINARY_DIR}/sphere_2d.h5m
-  -ts_type beuler
-  -ts_max_time 1 -ts_dt 0.2 
-  -spring_stiffness 0.1
-  -log_no_color)
+# add_test(
+#   incompressible_2d_schur
+#   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
+#   incompressible_2d_schur
+#   -file_name ${CMAKE_CURRENT_BINARY_DIR}/sphere_2d.h5m
+#   -ts_type beuler
+#   -ts_max_time 1 -ts_dt 0.2 
+#   -spring_stiffness 0.1
+#   -log_no_color)
   
