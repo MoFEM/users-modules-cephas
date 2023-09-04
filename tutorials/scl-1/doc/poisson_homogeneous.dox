@@ -29,9 +29,8 @@ how_to_compile_program.
 
 \subsection basic_tutorials_poisson_homogeneous_problem The problem
 
-In this practical example, that actually solves something using MoFEM, we
-will solve a simple Poisson's equation in 2D with homogeneous boundary condition
-(zero boundary values). The physical example of this equation is that you
+In this tutorial we
+will solve a simple Poisson's equation with homogeneous(uniform in space) boundary condition using MoFEM. The physical example of this equation is that you
 have a membrane that is fixed at its boundary and it experiences a uniformly
 distributed force on its surface, then you are asked to estimate the
 displacement of the membrane. The strong form of the problem as follows 
@@ -45,17 +44,16 @@ displacement of the membrane. The strong form of the problem as follows
 \f]
 where \f$ { \Omega} \f$ denotes the domain occupied by the body and
 \f$ \partial { \Omega} \f$ is the boundary of the domain.
-Additionally, \f$ f \f$ is the source function and \f$ {\bf x} \f$ is the position in
-\f$ {x-y} \f$ space of a point in the domain.
+Additionally, \f$ f \f$ is the source function and \f$ {\bf x} \f$ is the position in 2D or 3D space of a point in the domain.
 
-For a Poisson problem, on rectangle domains, homogenous boundary conditions and source
+Let consdier a Poisson problem on a rectangle domain with homogenous boundary conditions and source
 function \f$ f \f$, the analytical solution can be found. However, as the first practice with MoFEM, we are solving it numerically using
 a finite element approach. This is done by subdividing the domain into multiple
 elements, building piece-wise approximations, and solving a discrete problem.
 
 As you may have already learned from the basic finite element method, in order
-to approximate the field \f$ u \f$ of the problem equation, we need to 
-derive the weak form. The procedure to achieve it is as follows
+to approximate a field \f$ u \f$ of the problem equation. We need to 
+derive the weak form it. The procedure to achieve it is as follows
 
 - First, multiplying both sides of the equation by a *test* function \f$ \delta u \f$
   and then integrate over the domain \f$ \Omega \f$
@@ -150,13 +148,11 @@ of element stiffness matrix and element force vector are calculated as
 \f]
 One thing we can notice here is that the matrix \f$ {\bf K} \f$ is symmetric which means there will be opportunity to save time later in the implementation.
 
-
-
 We are almost at the place where we can start the implementation, but still, you
 may ask how computers can handle the integral terms. Of course, we will not ask
 computers to calculate the integrals directly in an infinite sense, instead it
 is done using *quadrature* which is in a finite sense and commonly used in
-finite element method. In order word, the integrals are approximated by the sum
+finite element method. In other word, the integrals are approximated by the sum
 of a set of points on each element along with their weights as follows
 \f[
   \begin{align}
@@ -203,7 +199,6 @@ an iterative solver
 to solve for \f$ {\bf U} \f$ and apply steps to postprocess the solution and
 visualise it.
 
-
 \section basic_tutorials_poisson_homogeneous_implementation Implementation 
 
 An immediate question you may have regarding the implementation is how to
@@ -235,16 +230,15 @@ vector \f$ {\bf F} \f$. These essential processes of computation and assembling
 will be handled by two different UDOs which separately deal with the matrix and
 vector. They are:
 
-1. Poisson2DHomogeneousOperators::OpDomainLhsMatrixK: It is responsible for 
+1. Poisson2DHomogeneousOperators::OpDomainLhsMatrixK is responsible for 
    calculating and assembly of the left-hand-side matrix \f$ {\bf K} \f$
    
-2. Poisson2DHomogeneousOperators::OpDomainRhsVectorF: It is responsible to
+2. Poisson2DHomogeneousOperators::OpDomainRhsVectorF is responsible to
    calculation and assembly of the right-hand-side vector \f$ {\bf F} \f$
 
 Before going into details of the implementation of the two UDOs in
-poisson_2d_homogeneous.hpp, let's have a look at the first few lines of code of
-the file that includes some libraries for finite element implementation, some
-aliases, and declaration/initialisation as commented below. The dimension(2D/3D) of the problem can be assihned from the EXECUTABLE_DIMENSION which will discuss later.
+poisson_2d_homogeneous.hpp, let's have a look at the first few lines of code file that includes some libraries for finite element implementation. The code is based on C++ libraries with advanced
+aliases, and declaration/initialisation. Apart from that, the dimension(2D/3D) of the problem can easily be assihned from the EXECUTABLE_DIMENSION which will discuss later.
 
 \code 
 // Define name if it has not been defined yet
@@ -280,15 +274,16 @@ const double body_source = 5.;
 \endcode
 
 
-Next, we will look in details how the following two main User Defined Operator(UDO)s of the problem can be implemented.
+Next, Users can also learn a general structure  of any UDOs implemented in MoFEM to many extend. So, we will look in details how the following two main User Defined Operator(UDO)s of the problem can be implemented.
 
 1. **OpDomainLhsMatrixK** and
 2. **OpDomainRhsVectorF**
+
 \subsubsection OpDomainLhsMatrixK
 This UDO is responsible for the calculation and assembly of the left-hand-side matrix \f$ {\bf K} \f$
 
 First, let's look at the structure of this UDO to calculate matrix \f$
-{\bf K} \f$. Users can also learn a general structure  of any UDOs implemented in MoFEM as follows.
+{\bf K} \f$. 
 
 \code 
 struct OpDomainLhsMatrixK : public AssemblyDomainEleOp {
@@ -306,11 +301,9 @@ public:
 };
 \endcode
 
-We have the class `OpDomainLhsMatrixK` that is inherited from `AssemblyDomainEleOp` which
-is the alias of the base  chain of template specialization 
-FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase. This operator also accelerate the process of assembling local matrix to global matrix.
-Here, the forms integrators using the DomainEleOp type as a template parameter to assembly using the PETSc library.
-This newly created class has two public objects `OpDomainLhsMatrixK()` and
+We have the class `OpDomainLhsMatrixK` that is inherited from `AssemblyDomainEleOp` which is the alias of the base chain of specialized template FormsIntegrators<DomainEleOp>::Assembly<PETSC>::OpBase. This operator also accelerate the process of assembling local matrix to global matrix.
+Here, the forms integrators using the DomainEleOp type is a templated parameter to assembly using the PETSc library.
+Here, the newly created class has two public objects `OpDomainLhsMatrixK()` and
 `iNtegrate` which can be accessed from outside of the class. This follows the concept of [data
 encapsulation](https://en.wikipedia.org/wiki/Encapsulation_(computer_programming))
 to hide values and objects inside the class as much as possible. We will discuss
@@ -324,12 +317,12 @@ a little more details of those four objects of the class in the followings
 \endcode
   This public member function has two input arguments which are the
   row_field_name and col_field_name carrying the names of the field for row and
-  column, respectively. In general, these two field names can be different. In
+  column, respectively. In general, these two field names can be different.But in
   this particular case of Poisson's problem with homogeneous boundary condition,
-  we have considered the same field name of "U" for both row and
-  column. OpFaceEle::OPROWCOL because we assemble stiffness matrix that has data
-  on both row and column. In this regrad, our matrix
-  \f$ K \f$ is symmetric. If we want we could code sYmm = true inside the closing bracket{} to assemble and store data of half of the matrix. However, here we are considering the full matrix.
+  we have considered the same field named as "U" for both row and
+  column.In this way, OpFaceEle::OPROWCOL because we assemble stiffness matrix that has data
+  on both row and column. In this case, our matrix
+  \f$ K \f$ is symmetric but if we want we could code sYmm = true inside the closing bracket{} to assemble and store data of half of the matrix. However, here we are considering the full matrix.
 
 - `iNtegrate`
 \code
@@ -342,9 +335,9 @@ a little more details of those four objects of the class in the followings
 \endcode
   This public member function is the core part of the UDO implementation. It
   decides how to calculate the local matrix components and how to assemble them
-  to the global matrix. All of the mathematical derivations that we did in the
+  to the global matrix. All mathematical derivations that we did in the
   previous section of this tutorial will be implemented in this function. More
-  discussion on this essential function will be given below.
+  discussion on other essential function of it is stating below:
 
 - `locMat` <br>
   This private member object of type MatrixDouble is used to
@@ -406,11 +399,10 @@ MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
 
 First, let's discuss the structure of this function
 
-For specific tasks, such as solving a 2D or 3D Poisson problem, the code utilizes different elements (edges, faces, volumes). For example, the DomainEle::UserDataOperator is used to assemble using the forms integrator AssemblyDomainEleOp. This can be seen in the code, particularly in the struct OpDomainLhsMatrixK.
+For specific tasks, the data structure is adapted based on the problem's dimension. Such as solving a 2D or 3D Poisson problem, the code can utilize different entities types  e.g. edges, faces, volumes. For example, the entities or elements are provided accordingly using PipelineManager::ElementsAndOpsByDim<SPACE_DIM> which is aliased as ElementsAndOps.The DomainEle::UserDataOperator is used to assemble using the forms integrator AssemblyDomainEleOp. This can be seen in the code, particularly in the struct OpDomainLhsMatrixK.
+ The function's parameters of iNtegrate are row_data and col_data are referencing to objects of type EntitiesFieldData::EntData. These parameters make ready the data related to degrees of freedom, basis function values, and field values for the rows and columns of the operation. 
 
-The data structure is adapted based on the problem's dimension. The entities or elements are provided accordingly using PipelineManager::ElementsAndOpsByDim<SPACE_DIM> which is aliased as ElementsAndOps. The function's parameters of iNtegrate are row_data and col_data. These are references to objects of type EntitiesFieldData::EntData. These parameters make ready the data related to degrees of freedom, basis function values, and field values for the rows and columns of the operation. 
-
-In MoFEM, functions are written with error handling using keywords like MoFEMErrorCode, MoFEMFunctionBegin, and MoFEMFunctionReturn(0). These indicate the execution of functions and the success or failure of the operation. These arguments are used to handle errors like try() or catch() systematically.
+In MoFEM, functions are written with check and error handling using keywords like MoFEMErrorCode, MoFEMFunctionBegin, and MoFEMFunctionReturn(0). These indicate the execution of functions and the success or failure of the operation. These arguments are used to handle errors like try() or catch() in basic c++ systematically.
 
 Now, moving into the main implementation of `iNtegrate()` function, we will see
 information about the number of DOFs on row and column are extracted from the
@@ -738,24 +730,23 @@ implementation for the current problem is as follows
  
 To ensure the code's accessibility for applying boundary conditions, it's essential to generate a mesh that includes the required attributes or values. Specifically, blocks in the mesh must be labeled with the name "BOUNDARY_CONDITION". In cases where multiple boundary conditions are involved, you can assign distinct names using numbers, such as "BOUNDARY_CONDITION_1", "BOUNDARY_CONDITION_2", "BOUNDARY_CONDITION_3", and so on. This naming scheme helps in distinguishing and applying different boundary conditions to their respective blocks within the mesh.
 
-Though the application procedure is straightforward but the underlying process of applying these boundary conditions is not immediately obvious. Here, if we consider the matrix multiplication \f$ {\bf K u} \f$. Here \f$ {\bf u} \f$ is the actual solution vector thus \f$ {u} = [u_1, u_2, u_3, u_4, \ldots, u_n] \f$ .Further, we are essentially eliminating the DoFs associated with entities that are part of the "BOUNDARY_CONDITION" blocksets from the solution vector \f$ {\bf u} \f$. In this context lets say the \f$ {\bf u} \f$, is now  \f$ \bf{u_o} \f$ which represents the initial solution vector after removing the DOF from BC. for example,  \f$ {u_0} = [u_1, u_2, u_3,.. .. u_\text{n-m}, 0 ,0\ldots, 0] \f$.However, it is important to note that we need to reintroduce these removed DoFs later on to make the solution admissible for the boundary values as well. To accomplish this, we  incorporate an additional vector \f$ {\bf u^e} \f$ with the current \f$ {\bf K u_o} \f$, as shown in equation (13). This approach will allow us to streamline the procedure and ensure that the removed degrees of freedom are properly reintegrated into the calculations.
+Though the application procedure is straightforward but the underlying process of applying these boundary conditions is not immediately obvious. Here, if we consider the matrix multiplication \f$ {\bf K U} \f$ where \f$ {\bf U} \f$ is the actual solution vector thus \f$ {u} = [u_1, u_2, u_3, u_4, \ldots, u_n] \f$. Further, we are essentially eliminating the DoFs associated with entities that are part of the "BOUNDARY_CONDITION" blocksets. In this context, lets say the \f$ {\bf U} \f$, is now  \f$ \bf{u_o} \f$ which represents the initial solution vector after removing the DOF from BC. for example,  \f$ {u_0} = [u_1, u_2, u_3,.. .. u_\text{n-m}, 0 ,0\ldots, 0] \f$. However, it is important to note that we need to reintroduce these removed DoFs later on to make the solution admissible for the boundary values as well. To accomplish this, we will incorporate an additional vector \f$ {\bf u^e} \f$ with the current \f$ {\bf K u_o} \f$, as in (14). This approach will allow us to streamline the procedure and ensure that the removed degrees of freedom are properly reintegrated into the calculations.
 
-However, to simplify this cumulative process, we address it during the assembling phase in the upcoming sub-section. 
+However, to simplify this cumulative process, we will address rest of the part during the assembling phase in the upcoming sub-section.
 
 
 \subsubsection basic_tutorials_poisson_homogeneous_assemble assembleSystem() 
 
 This part is about the function that is responsible for the assembling of the
-system of equations. In between, we will zlso see the code for setting the DOFs to the BC. 
+system of equations. In between, we will also go through the code for setting the DOFs to the BC. 
 
 
-Besides, at the beginning of the section \ref basic_tutorials_poisson_homogeneous_implementation, we were
-mentioning *two important concepts* in MoFEM, namely **UDO** and **Pipeline**.
+Besides, at the beginning of the section \ref basic_tutorials_poisson_homogeneous_assemble,  recall the *two important concepts* in MoFEM, namely **UDO** and **Pipeline**.
 While how the implementation of UDOs has been shown in \ref
 basic_tutorials_poisson_homogeneous_udo, here you will see how the implemented
-UDOs are *pushed* to the **Pipeline**
+UDOs are *pushed* to the **Pipeline**.
 
-Apart from pushing UDOs to the main program, assembleSystem function is also responsible for setting operators for KSP solver (iterative linear solver provided by PETSc) from the implemented pipelines. The full source code for the function is as follows:
+Apart from pushing UDOs to the main program,  \ref basic_tutorials_poisson_homogeneous_assemble ()function is mainly responsible for setting operators implementing to the pipelines for KSP solver (iterative linear solver provided by PETSc). The full source code for the function is as follows:
 
 \snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Assemble system
 
@@ -784,14 +775,18 @@ It is to be noted that the procedure to calculate the inverse of
 Jacobian with the presence of the gradient of approximation function is needed
 but it is done automatically and user does not have to manually add codes to push any operators calculating the inverse of Jacobian.
 
-- Third, pushing the implemented UDO to Pipeline that is responsible for the
-calculation of the RHS vector. In this part, we are modifying the global matrix \f$ \bf{K u} \f$ using a finite element object named 'fe'. This operation is done by the lamda function 'set_values_to_bc_dofs'. To illustrate this, we can foresee our matrix equation that accounts for boundary conditions as follows:
+- Third, pushing the implemented UDO to RhS Pipeline we need to worl for boundary. Previously, we modified the global matrix \f$ \bf{K U} \f$ in `boundaryCondition()` and got \f$ \bf{u_o}\f$. And we were waiting for impose the removed DoFs to get the admissibale soltuon using a finite element object named 'fe'. Here,  this operation is done by the lamda function 'set_values_to_bc_dofs'. To illustrate this, we can foresee our matrix equation as follows:
+\f[
+  \begin{equation}
+    \bf {KU}= f 
+  \end{equation}
+\f]
 \f[
   \begin{equation}
     \bf {K(u_0 + u_e)}= f
   \end{equation}
 \f]
- \f$ u_e \f$ is a zeros vector but we need to includ those removed degrees of freedom in it. For example, 
+ \f$ u_e \f$ is a zeros vector but we superimposed those removed degrees of freedom in it. For example, 
  \f[
 \begin{equation}
 {\mathbf { u}_e} = \left[ 
@@ -808,12 +803,10 @@ calculation of the RHS vector. In this part, we are modifying the global matrix 
 \label{eq:u_e}
 \end{equation}
 \f]
-Here, DBC= DOFs of BOUNDARY_CONDITION Blockset.
 
-But to do that, we enforced the following code snippet. first we get the reference of \f$ \bf{u}\f$ to the initial \f$ \bf{u_0}\f$ from fe. Then using 'get_bc_hook' as preprocessing of object 'fe' to set the boundary condition values to same indices of \f$ \bf{u_e} \f$. Practically, it is done to create an admissible matrix \f$ \bf {K^*} \f$ for a certain moment which is also equivalent to `f` term with the values of \f$ \mathbf {u_e}\f$. 
+Here, *DBC* = DOFs of BOUNDARY_CONDITION Blockset.
+And to do that, we enforced the following code snippet. First we get the reference of DoFs for BC to the initial \f$ \bf{u_0}\f$ from fe. Then using 'get_bc_hook' as preprocessing of object 'fe' to set the boundary condition values to same indices of \f$ \bf{u_e} \f$. Practically, it is done to create an matrix \f$ \bf {K^*} \f$ for a certain moment to get our admissible solution.
 \code
-   // Push operators to the Pipeline that is responsible for calculating RHS
-
    auto set_values_to_bc_dofs = [&](auto &fe) {
       auto get_bc_hook = [&]() {
         EssentialPreProc<TemperatureCubitBcData> hook(mField, fe, {});
@@ -822,10 +815,14 @@ But to do that, we enforced the following code snippet. first we get the referen
       fe->preProcessHook = get_bc_hook();
     };
 \endcode
- For the current homogenous problem we are applying zero boundary condition. Thus, all the values of \f$ \bf {u_e} \f$ is zero. So the remainings is \f$ \bf {K u_0} = \bf {f}\f$. However, in case of non-zero BCs we also need to consider  \f$\bf {K^*  u_e}\f$ in the next part in addition to get \f$\bf {K  u}\f$ where,
+A short note:
+<BLOCKQUOTE>
+ For the current homogenous problem, if we consider zero boundary condition, that endsup with all the values of \f$ \bf {u_e} \f$ as zero. So then the remainings from the equation (15) is \f$ \bf {K u_0} = \bf {f}\f$. However, in case of non-zero BCs we must consider \f$\bf {K  u_e}\f$ in the next part to get \f$\bf {K u_0}\f$ where,
+</BLOCKQUOTE>
+
  \f[
   \begin{equation}
-    \bf {K  u}= f - \bf {K^* u_e}
+    \bf {K  u_0} = f - \bf {K^* u_e}
   \end{equation}
 \f]
   So  the rest of the code should be organised as follows:
@@ -858,9 +855,9 @@ But to do that, we enforced the following code snippet. first we get the referen
     MoFEMFunctionReturn(0);
 }
 \endcode
-Here, the lamda function calculate_residual_from_set_values_on_bc is to get the \f$\bf {K^*  u_e}\f$ amtrix.  To achieve this, the  OpInternal alias haas been introduced. Here. the `OpInternal` integrator serves a dual purpose: it assembles the matrix and undertakes integration, effectively performing a linear multiplication; much like what's depicted in equation (11).
+Here, the lamda function calculate_residual_from_set_values_on_bc is to get the \f$\bf {K^*(u_o + u_e)}\f$.  To achieve this, the  OpInternal alias haas been introduced. Here. the `OpInternal` integrator serves a dual purpose: it assembles the matrix and undertakes integration, effectively performing a linear multiplication; much like what's depicted in equation (11).
 
-Upon pushing OpInternal to the pipeline manager, -1 is passed alongside \f$ \bf {u_e} \f$. This step is critical as it make as to get \f$ \bf K {u} \f$ finally as in equation (14). However, for any non-zero BCs we need to pass the value instead of -1. We can even pass it as a lamda function i.e.   
+Upon pushing OpInternal to the pipeline manager, -1 is passed as it is alongside . This step is critical as it make as to get \f$ \bf K {U} \f$ finally as in equation (14). However, for any non-zero BCs we need to pass the value instead of -1. We can even pass it as a lamda function i.e.   
 \code
 auto bc_values = [&](double, double, double) constexpr {
         return -2;
@@ -869,7 +866,7 @@ auto bc_values = [&](double, double, double) constexpr {
           new OpInternal(field_name, grad_u_vals_ptr, bc_values);
 \endcode
   
- In summery, the first part of the code is structured based on specified boundary values. The rest involves operations related to the gradient calculation of a scalar field, assembly of linear forms, handling and generating a vector field for the right-hand side. Here you can see, we do not need derivative of the approximation function to calculate force vector in UDO `OpDomainRhsVectorF`. Consequently, the operators for recalculating inverse of Jacobian is not needed as well as it is integrated with MoFEM.
+To surmmerise, the first part of the code is structured based on specified boundary values. The rest involves operations related to the gradient calculation of a scalar field, assembly of linear forms, handling and generating a vector field for the right-hand side. Here you can see, we do not need derivative of the approximation function to calculate force vector in UDO `OpDomainRhsVectorF`. Consequently, the operators for recalculating inverse of Jacobian is not needed as well as it is integrated with MoFEM.
 
 \subsubsection basic_tutorials_poisson_homogeneous_intergration setIntegrationRules() 
 
