@@ -73,7 +73,7 @@ constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
-PetscBool is_plain_stress;
+PetscBool is_plain_stress = PETSC_TRUE;
 
 struct Example {
 
@@ -301,7 +301,6 @@ MoFEMErrorCode Example::setupProblem() {
   };
   CHKERR project_ho_geometry();
 
-  is_plain_stress = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-plane_stress", &is_plain_stress,
                              PETSC_NULL);
 
