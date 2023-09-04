@@ -136,7 +136,6 @@ typename MoFEM::OpBaseImpl<AT, DomainEleOpStab>::MatSetValuesHook
         [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
            const EntitiesFieldData::EntData &row_data,
            const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
-          cerr << op_ptr->getKSPA() << " " << op_ptr->getKSPB() << endl;
           return MatSetValues<AssemblyTypeSelector<AT>>(
               op_ptr->getKSPB(), row_data, col_data, m, ADD_VALUES);
         };
@@ -698,6 +697,9 @@ MoFEMErrorCode Incompressible::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
+  SmartPetscObj<Mat> A;
+  SmartPetscObj<Mat> B;
+
   auto set_schur_pc = [&](auto solver) {
     SNES snes;
     CHKERR TSGetSNES(solver, &snes);
@@ -710,46 +712,48 @@ MoFEMErrorCode Incompressible::tsSolve() {
     boost::shared_ptr<SetUpSchur> schur_ptr;
     auto ts_ctx_ptr = getDMTsCtx(simple->getDM());
 
-    if (is_pcfs == PETSC_TRUE) {
-      auto A = createDMMatrix(simple->getDM());
-      auto B = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
-      CHK_MOAB_THROW(
-          TSSetIJacobian(solver, A, B, TsSetIJacobian, ts_ctx_ptr.get()),
-          "set operators");
-      auto pre_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
-      auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
-      pre_proc_schur_lhs_ptr->preProcessHook = [pre_proc_schur_lhs_ptr]() {
-        MoFEMFunctionBegin;
-        MOFEM_LOG("INCOMP_ELASTICITY", Sev::verbose) << "Lhs Zero matrices";
-        CHKERR MatZeroEntries(pre_proc_schur_lhs_ptr->A);
-        CHKERR MatZeroEntries(pre_proc_schur_lhs_ptr->B);
-        MoFEMFunctionReturn(0);
-      };
-      post_proc_schur_lhs_ptr->postProcessHook = [this,
-                                                  post_proc_schur_lhs_ptr]() {
-        MoFEMFunctionBegin;
-        MOFEM_LOG("INCOMP_ELASTICITY", Sev::verbose) << "Lhs Assemble Begin";
-        *(post_proc_schur_lhs_ptr->matAssembleSwitch) = false;
-        CHKERR MatAssemblyBegin(post_proc_schur_lhs_ptr->A, MAT_FINAL_ASSEMBLY);
-        CHKERR MatAssemblyEnd(post_proc_schur_lhs_ptr->A, MAT_FINAL_ASSEMBLY);
-        CHKERR MatAssemblyBegin(post_proc_schur_lhs_ptr->B, MAT_FINAL_ASSEMBLY);
-        CHKERR MatAssemblyEnd(post_proc_schur_lhs_ptr->B, MAT_FINAL_ASSEMBLY);
-        CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
-            mField, post_proc_schur_lhs_ptr, 1.,
-            SmartPetscObj<Mat>(post_proc_schur_lhs_ptr->A))();
-        CHKERR MatAXPY(post_proc_schur_lhs_ptr->B, 1,
-                       post_proc_schur_lhs_ptr->A, SAME_NONZERO_PATTERN);
-        MOFEM_LOG("INCOMP_ELASTICITY", Sev::verbose) << "Lhs Assemble End";
-        MoFEMFunctionReturn(0);
-      };
-      ts_ctx_ptr->getPreProcessIJacobian().push_front(pre_proc_schur_lhs_ptr);
-      ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_schur_lhs_ptr);
+    A = createDMMatrix(simple->getDM());
+    B = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
 
+    CHK_MOAB_THROW(
+        TSSetIJacobian(solver, A, B, TsSetIJacobian, ts_ctx_ptr.get()),
+        "set operators");
+    auto pre_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
+    auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
+    pre_proc_schur_lhs_ptr->preProcessHook = [pre_proc_schur_lhs_ptr]() {
+      MoFEMFunctionBegin;
+      MOFEM_LOG("INCOMP_ELASTICITY", Sev::verbose) << "Lhs Zero matrices";
+      CHKERR MatZeroEntries(pre_proc_schur_lhs_ptr->A);
+      CHKERR MatZeroEntries(pre_proc_schur_lhs_ptr->B);
+      MoFEMFunctionReturn(0);
+    };
+    post_proc_schur_lhs_ptr->postProcessHook = [this,
+                                                post_proc_schur_lhs_ptr]() {
+      MoFEMFunctionBegin;
+      MOFEM_LOG("INCOMP_ELASTICITY", Sev::verbose) << "Lhs Assemble Begin";
+      *(post_proc_schur_lhs_ptr->matAssembleSwitch) = false;
+      CHKERR MatAssemblyBegin(post_proc_schur_lhs_ptr->A, MAT_FINAL_ASSEMBLY);
+      CHKERR MatAssemblyEnd(post_proc_schur_lhs_ptr->A, MAT_FINAL_ASSEMBLY);
+      CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
+          mField, post_proc_schur_lhs_ptr, 1.,
+          SmartPetscObj<Mat>(post_proc_schur_lhs_ptr->A, true))();
+
+      CHKERR MatAssemblyBegin(post_proc_schur_lhs_ptr->B, MAT_FINAL_ASSEMBLY);
+      CHKERR MatAssemblyEnd(post_proc_schur_lhs_ptr->B, MAT_FINAL_ASSEMBLY);
+      CHKERR MatAXPY(post_proc_schur_lhs_ptr->B, 1, post_proc_schur_lhs_ptr->A,
+                     SAME_NONZERO_PATTERN);
+      MOFEM_LOG("INCOMP_ELASTICITY", Sev::verbose) << "Lhs Assemble End";
+      MoFEMFunctionReturn(0);
+    };
+    ts_ctx_ptr->getPreProcessIJacobian().push_front(pre_proc_schur_lhs_ptr);
+    ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_schur_lhs_ptr);
+
+    if (is_pcfs == PETSC_TRUE) {
       if (AT == AssemblyType::SCHUR) {
         schur_ptr = SetUpSchur::createSetUpSchur(mField, A, B);
         CHK_MOAB_THROW(schur_ptr->setUp(solver), "setup schur preconditioner");
       } else {
-        auto set_fieldsplit_preconditioner_ts = [&](auto solver) {
+        auto set_pcfieldsplit_preconditioned_ts = [&](auto solver) {
           MoFEMFunctionBegin;
           auto bc_mng = mField.getInterface<BcManager>();
           auto name_prb = simple->getProblemName();
@@ -759,20 +763,15 @@ MoFEMErrorCode Incompressible::tsSolve() {
           CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_p);
           MoFEMFunctionReturn(0);
         };
-        CHK_MOAB_THROW(set_fieldsplit_preconditioner_ts(solver),
-                       "set fieldsplit preconditioner");
+        CHK_MOAB_THROW(set_pcfieldsplit_preconditioned_ts(solver),
+                       "set pcfieldsplit preconditioned");
       }
-      return boost::make_tuple(schur_ptr, A, B);
+      return schur_ptr; // boost::make_tuple(schur_ptr, A, B);
     }
 
-    auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
-    post_proc_schur_lhs_ptr->postProcessHook =
-        EssentialPostProcLhs<DisplacementCubitBcData>(
-            mField, post_proc_schur_lhs_ptr, 1.);
-    ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_schur_lhs_ptr);
-
-    return boost::make_tuple(schur_ptr, SmartPetscObj<Mat>(),
-                             SmartPetscObj<Mat>());
+    return schur_ptr;
+    // return boost::make_tuple(schur_ptr, SmartPetscObj<Mat>(),
+    //                          SmartPetscObj<Mat>());
   };
 
   auto dm = simple->getDM();
@@ -792,7 +791,7 @@ MoFEMErrorCode Incompressible::tsSolve() {
 
   CHKERR set_section_monitor(solver);
   CHKERR set_time_monitor(dm, solver);
-  auto [schur_pc_ptr, A, B] = set_schur_pc(solver);
+  auto schur_pc_ptr = set_schur_pc(solver);
 
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetUp(solver);
@@ -947,6 +946,8 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
       MoFEMFunctionReturn(0);
     };
 
+    CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
     CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
         mField, post_proc_schur_lhs_ptr, 1, S, ao_up)();
 
