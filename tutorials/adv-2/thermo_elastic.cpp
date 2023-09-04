@@ -476,8 +476,14 @@ MoFEMErrorCode ThermoElasticProblem::setupProblem() {
   if (doEvalField) {
     fieldEvalData =
         mField.getInterface<FieldEvaluatorInterface>()->getData<DomainEle>();
-    CHKERR mField.getInterface<FieldEvaluatorInterface>()->buildTree2D(
-        fieldEvalData, simple->getDomainFEName());
+
+    if constexpr (SPACE_DIM == 3) {
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->buildTree3D(
+          fieldEvalData, simple->getDomainFEName());
+    } else {
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->buildTree2D(
+          fieldEvalData, simple->getDomainFEName());
+    }
 
     fieldEvalData->setEvalPoints(fieldEvalCoords.data(), 1);
     auto no_rule = [](int, int, int) { return -1; };
@@ -941,14 +947,21 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
           ".h5m");
 
       if (doEvalField) {
-        CHKERR mField.getInterface<FieldEvaluatorInterface>()
-            ->evalFEAtThePoint2D(fieldEvalCoords.data(), 1e-12,
-                                 simple->getProblemName(),
-                                 simple->getDomainFEName(), fieldEvalData,
-                                 mField.get_comm_rank(), mField.get_comm_rank(),
-                                 nullptr, MF_EXIST, QUIET);
-
-        cout << scalarFieldPtr->size() << endl;
+        if constexpr (SPACE_DIM == 3) {
+          CHKERR mField.getInterface<FieldEvaluatorInterface>()
+              ->evalFEAtThePoint3D(
+                  fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
+                  simple->getDomainFEName(), fieldEvalData,
+                  mField.get_comm_rank(), mField.get_comm_rank(), nullptr,
+                  MF_EXIST, QUIET);
+        } else {
+          CHKERR mField.getInterface<FieldEvaluatorInterface>()
+              ->evalFEAtThePoint2D(
+                  fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
+                  simple->getDomainFEName(), fieldEvalData,
+                  mField.get_comm_rank(), mField.get_comm_rank(), nullptr,
+                  MF_EXIST, QUIET);
+        }
 
         if (scalarFieldPtr->size()) {
           auto t_temp = getFTensor0FromVec(*scalarFieldPtr);
