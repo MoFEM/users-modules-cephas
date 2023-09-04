@@ -696,9 +696,6 @@ MoFEMErrorCode Incompressible::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  SmartPetscObj<Mat> A;
-  SmartPetscObj<Mat> B;
-
   auto set_schur_pc = [&](auto solver) {
     SNES snes;
     CHKERR TSGetSNES(solver, &snes);
@@ -711,8 +708,8 @@ MoFEMErrorCode Incompressible::tsSolve() {
     boost::shared_ptr<SetUpSchur> schur_ptr;
     auto ts_ctx_ptr = getDMTsCtx(simple->getDM());
 
-    A = createDMMatrix(simple->getDM());
-    B = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
+    auto A = createDMMatrix(simple->getDM());
+    auto B = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
 
     CHK_MOAB_THROW(
         TSSetIJacobian(solver, A, B, TsSetIJacobian, ts_ctx_ptr.get()),
@@ -765,12 +762,10 @@ MoFEMErrorCode Incompressible::tsSolve() {
         CHK_MOAB_THROW(set_pcfieldsplit_preconditioned_ts(solver),
                        "set pcfieldsplit preconditioned");
       }
-      return schur_ptr; // boost::make_tuple(schur_ptr, A, B);
+      return boost::make_tuple(schur_ptr, A, B);
     }
 
-    return schur_ptr;
-    // return boost::make_tuple(schur_ptr, SmartPetscObj<Mat>(),
-    //                          SmartPetscObj<Mat>());
+    return boost::make_tuple(schur_ptr, A, B);
   };
 
   auto dm = simple->getDM();
@@ -790,7 +785,7 @@ MoFEMErrorCode Incompressible::tsSolve() {
 
   CHKERR set_section_monitor(solver);
   CHKERR set_time_monitor(dm, solver);
-  auto schur_pc_ptr = set_schur_pc(solver);
+  auto [schur_pc_ptr, A, B] = set_schur_pc(solver);
 
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetUp(solver);
