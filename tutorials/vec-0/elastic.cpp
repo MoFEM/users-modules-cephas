@@ -73,7 +73,7 @@ constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
-PetscBool is_plain_stress = PETSC_TRUE;
+PetscBool is_plain_strain = PETSC_FALSE;
 
 struct Example {
 
@@ -198,7 +198,7 @@ MoFEMErrorCode Example::addMatBlockOps(
         FTensor::Index<'l', SPACE_DIM> l;
         constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
         double A = 1.;
-        if (SPACE_DIM == 2 && is_plain_stress) {
+        if (SPACE_DIM == 2 && !is_plain_strain) {
           A = 2 * shear_modulus_G /
               (bulk_modulus_K + (4. / 3.) * shear_modulus_G);
         }
@@ -301,7 +301,7 @@ MoFEMErrorCode Example::setupProblem() {
   };
   CHKERR project_ho_geometry();
 
-  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-plane_stress", &is_plain_stress,
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-plane_strain", &is_plain_strain,
                              PETSC_NULL);
 
   int coords_dim = SPACE_DIM;
