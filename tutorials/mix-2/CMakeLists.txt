@@ -29,69 +29,27 @@ tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 tutorials_copy_and_install("*.py" "${permissions_execute}")
 
-if(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE) 
+tutorials_build_and_install(
+  incompressible_2d_schur ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
+tutorials_build_and_install(
+  incompressible_3d_schur ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
 
-  include_directories(${_Python_INCLUDE_DIR})
+set_target_properties(
+  incompressible_2d_schur PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1")
+set_target_properties(
+  incompressible_3d_schur PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1")
 
-  tutorials_build_and_install(
-    incompressible_2d_schur ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
-  tutorials_build_and_install(
-    incompressible_3d_schur ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
+tutorials_build_and_install(
+  incompressible_2d_petsc ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
+tutorials_build_and_install(
+  incompressible_3d_petsc ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
 
-  set_target_properties(
-    incompressible_2d_schur PROPERTIES COMPILE_FLAGS 
-    "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1 -DPYTHON_SFD")
-  set_target_properties(
-    incompressible_3d_schur PROPERTIES COMPILE_FLAGS 
-    "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1 -DPYTHON_SFD") 
-
-  target_link_libraries(incompressible_2d_schur 
-    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
-  target_link_libraries(incompressible_3d_schur 
-    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
-
-  tutorials_build_and_install(
-    incompressible_2d_petsc ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
-  tutorials_build_and_install(
-    incompressible_3d_petsc ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
-  
-  set_target_properties(
-    incompressible_2d_petsc PROPERTIES COMPILE_FLAGS 
-    "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=0 -DPYTHON_SFD")
-  set_target_properties(
-    incompressible_3d_petsc PROPERTIES COMPILE_FLAGS 
-    "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=0 -DPYTHON_SFD") 
-  
-  target_link_libraries(incompressible_2d_petsc 
-    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
-  target_link_libraries(incompressible_3d_petsc 
-    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
-
-else (Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
-
-  tutorials_build_and_install(
-    incompressible_2d_schur ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
-  tutorials_build_and_install(
-    incompressible_3d_schur ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
-
-  set_target_properties(
-    incompressible_2d_schur PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=1")
-  set_target_properties(
-    incompressible_3d_schur PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1")
-
-  tutorials_build_and_install(
-    incompressible_2d_petsc ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
-  tutorials_build_and_install(
-    incompressible_3d_petsc ${CMAKE_CURRENT_SOURCE_DIR}/incompressible_elasticity.cpp)
-
-  set_target_properties(
-    incompressible_2d_petsc PROPERTIES COMPILE_FLAGS
-    "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=0")
-  set_target_properties(
-    incompressible_3d_petsc PROPERTIES COMPILE_FLAGS
-    "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=0") 
-
-endif(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
+set_target_properties(
+  incompressible_2d_petsc PROPERTIES COMPILE_FLAGS
+  "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=0")
+set_target_properties(
+  incompressible_3d_petsc PROPERTIES COMPILE_FLAGS
+  "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=0") 
 
 add_test(
   incompressible_2d_schur

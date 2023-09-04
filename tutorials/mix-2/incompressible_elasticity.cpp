@@ -27,16 +27,6 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 using SkinPostProcEle = PostProcBrokenMeshInMoab<BoundaryEle>;
 
-using DomainNaturalBC =
-    NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
-using OpBodyForce =
-    DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
-using BoundaryNaturalBC =
-    NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
-using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
-
-//! [Specialisation for assembly]
-
 struct MonitorIncompressible : public FEMethod {
 
   MonitorIncompressible(
@@ -127,15 +117,6 @@ typename MoFEM::OpBaseImpl<AT, DomainEleOp>::MatSetValuesHook
               op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
         };
 
-template <>
-typename MoFEM::OpBaseImpl<AT, BoundaryEleOp>::MatSetValuesHook
-    MoFEM::OpBaseImpl<AT, BoundaryEleOp>::matSetValuesHook =
-        [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
-           const EntitiesFieldData::EntData &row_data,
-           const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
-          return MatSetValues<AssemblyTypeSelector<AT>>(
-              op_ptr->getKSPA(), row_data, col_data, m, ADD_VALUES);
-        };
 
 /**
  * @brief Element used to specialise assembly
@@ -156,31 +137,12 @@ typename MoFEM::OpBaseImpl<AT, DomainEleOpStab>::MatSetValuesHook
         [](ForcesAndSourcesCore::UserDataOperator *op_ptr,
            const EntitiesFieldData::EntData &row_data,
            const EntitiesFieldData::EntData &col_data, MatrixDouble &m) {
+
+            cerr << op_ptr->getKSPA() << " " << op_ptr->getKSPB() << endl;
           return MatSetValues<AssemblyTypeSelector<AT>>(
               op_ptr->getKSPB(), row_data, col_data, m, ADD_VALUES);
         };
 //! [Specialisation for assembly]
-
-//! [Operators used for RHS incompressible elasticity]
-using OpDomainGradTimesTensor = FormsIntegrators<DomainEleOp>::Assembly<
-    AT>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
-
-using OpDivDeltaUTimesP = FormsIntegrators<DomainEleOp>::Assembly<
-    AT>::LinearForm<GAUSS>::OpMixDivTimesU<1, SPACE_DIM, SPACE_DIM>;
-
-using OpBaseTimesScalarValues = FormsIntegrators<DomainEleOp>::Assembly<
-    AT>::LinearForm<GAUSS>::OpBaseTimesScalar<1>;
-
-//! [Operators used for RHS incompressible elasticity]
-
-// This assemble A-matrix
-using OpMassPressure =
-    FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<GAUSS>::OpMass<1,
-                                                                             1>;
-// This assemble B-matrix (preconditioned)
-using OpMassPressureStab = FormsIntegrators<DomainEleOpStab>::Assembly<
-    AT>::BiLinearForm<GAUSS>::OpMass<1, 1>;
-//! [Operators used for RHS incompressible elasticity]
 
 int order = 2;
 int geom_order = 1;
@@ -190,7 +152,6 @@ inline static double mu;
 inline static double lambda;
 
 PetscBool isDiscontinuousPressure = PETSC_FALSE;
-PetscBool isATPetscFieldsplit = PETSC_FALSE;
 
 struct Incompressible {
 
@@ -284,8 +245,6 @@ MoFEMErrorCode Incompressible::setupProblem() {
                             PETSC_NULL);
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_discontinuous_pressure",
                              &isDiscontinuousPressure, PETSC_NULL);
-  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_a_t_petsc_fieldsplit",
-                             &isATPetscFieldsplit, PETSC_NULL);
 
   MOFEM_LOG("INCOMP_ELASTICITY", Sev::inform) << "Order " << order;
   MOFEM_LOG("INCOMP_ELASTICITY", Sev::inform) << "Geom order " << geom_order;
@@ -319,7 +278,7 @@ MoFEMErrorCode Incompressible::setupProblem() {
   CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
   CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
 
-  // Adding fields related to incompressible elasticiy
+  // Adding fields related to incompressible elasticity
   // Add displacement domain and boundary fields
   CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
   CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
@@ -339,50 +298,6 @@ MoFEMErrorCode Incompressible::setupProblem() {
   // Add geometry data field
   CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
   CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
-
-  auto get_skin = [&]() {
-    Range body_ents;
-    CHKERR mField.get_moab().get_entities_by_dimension(0, SPACE_DIM, body_ents);
-    Skinner skin(&mField.get_moab());
-    Range skin_ents;
-    CHKERR skin.find_skin(0, body_ents, false, skin_ents);
-    return skin_ents;
-  };
-
-  auto filter_blocks = [&](auto skin) {
-    Range contact_range;
-    for (auto m :
-         mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
-
-             (boost::format("%s(.*)") % "INCOMP_ELASTICITY").str()
-
-                 ))
-
-    ) {
-      MOFEM_LOG("INCOMP_ELASTICITY", Sev::inform)
-          << "Find contact block set:  " << m->getName();
-      auto meshset = m->getMeshset();
-      CHKERR mField.get_moab().get_entities_by_dimension(meshset, SPACE_DIM - 1,
-                                                         contact_range, true);
-
-      MOFEM_LOG("SYNC", Sev::inform)
-          << "Nb entities in contact surface: " << contact_range.size();
-      MOFEM_LOG_SYNCHRONISE(mField.get_comm());
-      CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
-          contact_range);
-      skin = intersect(skin, contact_range);
-    }
-    return skin;
-  };
-
-  auto filter_true_skin = [&](auto skin) {
-    Range boundary_ents;
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-    CHKERR pcomm->filter_pstatus(skin, PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                                 PSTATUS_NOT, -1, &boundary_ents);
-    return boundary_ents;
-  };
 
   CHKERR simple->setUp();
 
@@ -438,6 +353,14 @@ MoFEMErrorCode Incompressible::bC() {
     return 2 * (approx_order - 1);
   };
 
+  using DomainNaturalBC =
+      NaturalBC<DomainEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+  using OpBodyForce =
+      DomainNaturalBC::OpFlux<NaturalMeshsetType<BLOCKSET>, 1, SPACE_DIM>;
+  using BoundaryNaturalBC =
+      NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
+  using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
+
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
   CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
       pipeline_mng->getOpBoundaryRhsPipeline(), {NOSPACE}, "GEOMETRY");
@@ -485,12 +408,20 @@ MoFEMErrorCode Incompressible::OPs() {
   auto add_domain_ops_lhs = [&](auto &pip) {
     MoFEMFunctionBegin;
 
+    // This assemble A-matrix
+    using OpMassPressure = FormsIntegrators<DomainEleOp>::Assembly<
+        AT>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+    // This assemble B-matrix (preconditioned)
+    using OpMassPressureStab = FormsIntegrators<DomainEleOpStab>::Assembly<
+        AT>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+    //! [Operators used for RHS incompressible elasticity]
+
     //! [Operators used for incompressible elasticity]
     using OpGradSymTensorGrad =
-        FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+        FormsIntegrators<DomainEleOp>::Assembly<AT>::BiLinearForm<
             IT>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
     using OpMixScalarTimesDiv = FormsIntegrators<DomainEleOp>::Assembly<
-        PETSC>::BiLinearForm<IT>::OpMixScalarTimesDiv<SPACE_DIM, coord_type>;
+        AT>::BiLinearForm<IT>::OpMixScalarTimesDiv<SPACE_DIM, coord_type>;
     //! [Operators used for incompressible elasticity]
 
     auto mat_D_ptr = boost::make_shared<MatrixDouble>();
@@ -507,22 +438,24 @@ MoFEMErrorCode Incompressible::OPs() {
     t_mat(i, j, k, l) = -2. * mu * ((t_kd(i, k) ^ t_kd(j, l)) / 4.);
 
     pip.push_back(new OpMixScalarTimesDiv(
-        "P", "U", [](const double, const double, const double) { return -1.; },
+        "P", "U",
+        [](const double, const double, const double) constexpr { return -1.; },
         true, false));
     pip.push_back(new OpGradSymTensorGrad("U", "U", mat_D_ptr));
 
-    auto get_lambda_reciprocal = [](const double, const double, const double) {
-      return 1. / lambda;
-    };
-    if (lambda > 0)
-      pip.push_back(new OpMassPressure("P", "P", get_lambda_reciprocal));
-    if (AT != AssemblyType::SCHUR) {
-      double eps_stab = 1e-4;
-      CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-eps_stab", &eps_stab,
-                                   PETSC_NULL);
+    // auto get_lambda_reciprocal = [](const double, const double, const double)
+    // {
+    //   return 1. / lambda;
+    // };
+    // if (poisson_ratio < 0.5)
+    //   pip.push_back(new OpMassPressure("P", "P", get_lambda_reciprocal));
+
+    double eps_stab = 0;
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-eps_stab", &eps_stab,
+                                 PETSC_NULL);
+    if (eps_stab > 0)
       pip.push_back(new OpMassPressureStab(
           "P", "P", [eps_stab](double, double, double) { return eps_stab; }));
-    }
 
     MoFEMFunctionReturn(0);
   };
@@ -530,10 +463,17 @@ MoFEMErrorCode Incompressible::OPs() {
   auto add_domain_ops_rhs = [&](auto &pip) {
     MoFEMFunctionBegin;
 
-    //! [Only used for dynamics]
-    using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
-        AT>::LinearForm<IT>::OpBaseTimesVector<1, SPACE_DIM, 1>;
-    //! [Only used for dynamics]
+    //! [Operators used for RHS incompressible elasticity]
+    using OpDomainGradTimesTensor = FormsIntegrators<DomainEleOp>::Assembly<
+        AT>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+
+    using OpDivDeltaUTimesP = FormsIntegrators<DomainEleOp>::Assembly<
+        AT>::LinearForm<GAUSS>::OpMixDivTimesU<1, SPACE_DIM, SPACE_DIM>;
+
+    using OpBaseTimesScalarValues = FormsIntegrators<DomainEleOp>::Assembly<
+        AT>::LinearForm<GAUSS>::OpBaseTimesScalar<1>;
+
+    //! [Operators used for RHS incompressible elasticity]
 
     auto pressure_ptr = boost::make_shared<VectorDouble>();
     pip.push_back(new OpCalculateScalarFieldValues("P", pressure_ptr));
@@ -566,10 +506,10 @@ MoFEMErrorCode Incompressible::OPs() {
     auto get_lambda_reciprocal = [](const double, const double, const double) {
       return 1. / lambda;
     };
-    if (lambda > 0.)
-      pip.push_back(new OpBaseTimesScalarValues("P", pressure_ptr,
-                                                get_lambda_reciprocal));
-
+    // if (poisson_ratio < 0.5) {
+    //   pip.push_back(new OpBaseTimesScalarValues("P", pressure_ptr,
+    //                                             get_lambda_reciprocal));
+    // }
     MoFEMFunctionReturn(0);
   };
 
@@ -772,42 +712,39 @@ MoFEMErrorCode Incompressible::tsSolve() {
     boost::shared_ptr<SetUpSchur> schur_ptr;
     if (AT == AssemblyType::SCHUR) {
       schur_ptr = SetUpSchur::createSetUpSchur(mField);
-      CHKERR schur_ptr->setUp(solver);
+      CHK_MOAB_THROW(schur_ptr->setUp(solver), "setup schur preconditioner");
     } else {
-      if (isATPetscFieldsplit) {
 
-        auto set_fieldsplit_preconditioner_ts = [&](auto solver) {
+      auto set_fieldsplit_preconditioner_ts = [&](auto solver) {
+        MoFEMFunctionBeginHot;
+        SNES snes;
+        CHKERR TSGetSNES(solver, &snes);
+        KSP ksp;
+        CHKERR SNESGetKSP(snes, &ksp);
+
+        auto set_fieldsplit_preconditioner_ksp = [&](auto ksp) {
           MoFEMFunctionBeginHot;
-          SNES snes;
-          CHKERR TSGetSNES(solver, &snes);
-          KSP ksp;
-          CHKERR SNESGetKSP(snes, &ksp);
-
-          auto set_fieldsplit_preconditioner_ksp = [&](auto ksp) {
-            MoFEMFunctionBeginHot;
-            PC pc;
-            CHKERR KSPGetPC(ksp, &pc);
-            PetscBool is_pcfs = PETSC_FALSE;
-            PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
-            if (is_pcfs == PETSC_TRUE) {
-              auto bc_mng = mField.getInterface<BcManager>();
-              auto name_prb = simple->getProblemName();
-              SmartPetscObj<IS> is_u;
-              CHKERR mField.getInterface<ISManager>()
-                  ->isCreateProblemFieldAndRank(name_prb, ROW, "U", 0,
-                                                SPACE_DIM, is_u);
-              CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_u);
-            }
-            MoFEMFunctionReturnHot(0);
-          };
-
-          CHKERR set_fieldsplit_preconditioner_ksp(ksp);
+          PC pc;
+          CHKERR KSPGetPC(ksp, &pc);
+          PetscBool is_pcfs = PETSC_FALSE;
+          PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+          if (is_pcfs == PETSC_TRUE) {
+            auto bc_mng = mField.getInterface<BcManager>();
+            auto name_prb = simple->getProblemName();
+            SmartPetscObj<IS> is_p;
+            CHKERR mField.getInterface<ISManager>()
+                ->isCreateProblemFieldAndRank(name_prb, ROW, "P", 0, 1, is_p);
+            CHKERR PCFieldSplitSetIS(pc, PETSC_NULL, is_p);
+          }
           MoFEMFunctionReturnHot(0);
         };
 
-        CHK_MOAB_THROW(set_fieldsplit_preconditioner_ts(solver),
-                       "set fieldsplit preconditioner");
-      }
+        CHKERR set_fieldsplit_preconditioner_ksp(ksp);
+        MoFEMFunctionReturnHot(0);
+      };
+
+      CHK_MOAB_THROW(set_fieldsplit_preconditioner_ts(solver),
+                     "set fieldsplit preconditioner");
     }
     return schur_ptr;
   };
@@ -829,8 +766,9 @@ MoFEMErrorCode Incompressible::tsSolve() {
 
   CHKERR set_section_monitor(solver);
   CHKERR set_time_monitor(dm, solver);
-  CHKERR TSSetSolution(solver, D);
   auto schur_pc_ptr = set_schur_pc(solver);
+
+  CHKERR TSSetSolution(solver, D);
   CHKERR TSSetUp(solver);
   CHKERR TSSolve(solver, NULL);
 
@@ -934,6 +872,11 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
   PC pc;
   CHKERR KSPGetPC(ksp, &pc);
 
+  A = createDMMatrix(dm);
+  P = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
+  auto ts_ctx_ptr = getDMTsCtx(dm);
+  CHKERR TSSetIJacobian(solver, A, P, TsSetIJacobian, ts_ctx_ptr.get());
+
   PetscBool is_pcfs = PETSC_FALSE;
   PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
   if (is_pcfs) {
@@ -948,14 +891,8 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
     }
 
     subDM = createSubDM();
-    A = createDMMatrix(dm);
-    P = matDuplicate(A, MAT_DO_NOT_COPY_VALUES);
     S = createDMMatrix(subDM);
-    CHKERR MatSetBlockSize(S, SPACE_DIM);
-
-    auto ts_ctx_ptr = getDMTsCtx(dm);
-    CHKERR TSSetIJacobian(solver, A, P, TsSetIJacobian, ts_ctx_ptr.get());
-
+    // CHKERR MatSetBlockSize(S, SPACE_DIM);
     CHKERR setOperator();
     CHKERR setPC(pc);
 
@@ -965,16 +902,14 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
     pip->getOpDomainLhsPipeline().push_back(
         new OpSchurAssembleEnd<SCHUR_DGESV>({}, {}, {}, {}, {}));
     auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
-    post_proc_schur_lhs_ptr->postProcessHook = [this,
-                                                post_proc_schur_lhs_ptr]() {
-      MoFEMFunctionBegin;
-      CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
-          mField, post_proc_schur_lhs_ptr, 1.)();
-      MoFEMFunctionReturn(0);
-    };
+    post_proc_schur_lhs_ptr->postProcessHook =
+        EssentialPostProcLhs<DisplacementCubitBcData>(
+            mField, post_proc_schur_lhs_ptr, 1.);
     auto ts_ctx_ptr = getDMTsCtx(dm);
     ts_ctx_ptr->getPostProcessIJacobian().push_back(post_proc_schur_lhs_ptr);
   }
+
+  
   MoFEMFunctionReturn(0);
 }
 
@@ -1004,8 +939,8 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
 
   // Domain
   pip->getOpDomainLhsPipeline().push_front(new OpSchurAssembleBegin());
-  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DGESV>(
-      {"P"}, {nullptr}, {ao_up}, {S}, {true}));
+  pip->getOpDomainLhsPipeline().push_back(new OpSchurAssembleEnd<SCHUR_DSYSV>(
+      {"P"}, {nullptr}, {ao_up}, {S}, {false}, false));
 
   auto pre_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
   auto post_proc_schur_lhs_ptr = boost::make_shared<FEMethod>();
@@ -1024,36 +959,37 @@ MoFEMErrorCode SetUpSchurImpl::setOperator() {
     MoFEMFunctionBegin;
     MOFEM_LOG("INCOMP_ELASTICITY", Sev::verbose) << "Lhs Assemble End";
 
-    *post_proc_schur_lhs_ptr->matAssembleSwitch = false;
+    *(post_proc_schur_lhs_ptr->matAssembleSwitch) = false;
 
     auto print_mat_norm = [this](auto a, std::string prefix) {
       MoFEMFunctionBegin;
       double nrm;
       CHKERR MatNorm(a, NORM_FROBENIUS, &nrm);
-      MOFEM_LOG("INCOMP_ELASTICITY", Sev::noisy) << prefix << " norm = " << nrm;
+      MOFEM_LOG("INCOMP_ELASTICITY", Sev::verbose)
+          << prefix << " norm = " << nrm;
       MoFEMFunctionReturn(0);
     };
 
     CHKERR MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
-    CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
-        mField, post_proc_schur_lhs_ptr, 1, A)();
-
     CHKERR MatAssemblyBegin(P, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(P, MAT_FINAL_ASSEMBLY);
     CHKERR MatAXPY(P, 1, A, SAME_NONZERO_PATTERN);
-
     CHKERR MatAssemblyBegin(S, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(S, MAT_FINAL_ASSEMBLY);
 
     CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
+        mField, post_proc_schur_lhs_ptr, 1, A)();
+    CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
+        mField, post_proc_schur_lhs_ptr, 1, P)();
+    CHKERR EssentialPostProcLhs<DisplacementCubitBcData>(
         mField, post_proc_schur_lhs_ptr, 1, S, ao_up)();
 
-#ifndef NDEBUG
+    // #ifndef NDEBUG
     CHKERR print_mat_norm(A, "A");
     CHKERR print_mat_norm(P, "P");
     CHKERR print_mat_norm(S, "S");
-#endif // NDEBUG
+    // #endif // NDEBUG
 
     MOFEM_LOG("INCOMP_ELASTICITY", Sev::verbose) << "Lhs Assemble Finish";
     MoFEMFunctionReturn(0);
@@ -1071,7 +1007,7 @@ MoFEMErrorCode SetUpSchurImpl::setPC(PC pc) {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
   SmartPetscObj<IS> is;
-  mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
+  CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
       simple->getProblemName(), ROW, "P", 0, 1, is);
   CHKERR PCFieldSplitSetIS(pc, NULL, is);
   CHKERR PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_USER, S);
