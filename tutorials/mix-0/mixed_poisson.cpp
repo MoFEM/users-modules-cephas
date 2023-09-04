@@ -41,7 +41,6 @@ private:
   double totErrorIndicator;
   double maxErrorIndicator;
 
-
   double thetaParam;
   double indicTolerance;
   int initOrder;
@@ -292,15 +291,10 @@ MoFEMErrorCode MixedPoisson::refineOrder(int iter_num) {
 
   std::vector<Range> refinement_levels;
   refinement_levels.resize(iter_num + 1);
-  // cout << "Proc " << mField.get_comm_rank() << " Refinement level 0 number of
-  // 2D elements "
-  //      << domainEntities.subset_by_dimension(2).size() << endl;
-  // cout << "Proc " << mField.get_comm_rank() << " Mean error "  <<
   for (auto ent : domainEntities) {
     double err_indic = 0;
     CHKERR mField.get_moab().tag_get_data(th_error_ind, &ent, 1, &err_indic);
-    // cout << "Proc " << mField.get_comm_rank() << " Error indicator "
-    //      << err_indic << endl;
+
     int order, new_order;
     CHKERR mField.get_moab().tag_get_data(th_order, &ent, 1, &order);
     new_order = order + 1;
@@ -319,9 +313,7 @@ MoFEMErrorCode MixedPoisson::refineOrder(int iter_num) {
   for (int ll = 1; ll < refinement_levels.size(); ll++) {
     CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
         refinement_levels[ll]);
-    // cout << "Proc " << mField.get_comm_rank() << " Refinement level " << ll
-    //      << " number of 2D elements "
-    //      << refinement_levels[ll].subset_by_dimension(2).size() << endl;
+
     if (initOrder + ll > 8) {
       MOFEM_LOG("EXAMPLE", Sev::warning)
           << "setting approximation order higher than 8 is not currently "
@@ -367,9 +359,9 @@ MoFEMErrorCode MixedPoisson::solveRefineLoop() {
     CHKERR outputResults(iter_num);
 
     iter_num++;
-    if (iter_num > 20)
-          SETERRQ(PETSC_COMM_SELF, MOFEM_OPERATION_UNSUCCESSFUL,
-                  "Too many refinement iterations");
+    if (iter_num > 100)
+      SETERRQ(PETSC_COMM_SELF, MOFEM_OPERATION_UNSUCCESSFUL,
+              "Too many refinement iterations");
   }
   MoFEMFunctionReturn(0);
 }
@@ -425,10 +417,6 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
 
   totErrorIndicator = std::sqrt(array[CommonData::ERROR_INDICATOR_TOTAL]);
   CHKERR VecRestoreArrayRead(commonDataPtr->petscVec, &array);
-
-  // cout << "Proc " << mField.get_comm_rank() << " Error indicator integral "
-  // << totalErrorIndicator << endl; cout << "Proc " << mField.get_comm_rank()
-  // << " Total element number " << totalElementNumber << endl;
 
   std::vector<Tag> tag_handles;
   tag_handles.resize(4);
