@@ -906,6 +906,7 @@ MoFEMErrorCode SetUpSchurImpl::setUp(SmartPetscObj<TS> solver) {
 
   subDM = create_sub_dm();
   S = createDMMatrix(subDM);
+  CHKERR MatSetBlockSize(S, SPACE_DIM);
 
   auto dm_is = getDMSubData(subDM)->getSmartRowIs();
   auto ao_up = createAOMappingIS(dm_is, PETSC_NULL);
