@@ -736,9 +736,9 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     pipeline.push_back(new OpUnSetBc("FLUX"));
 
     CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpHeatSource>::add(
-        pipeline, mField, "T", {}, "HEAT_SOURCE", Sev::inform);
+        pipeline, mField, "T", {time_scale}, "HEAT_SOURCE", Sev::inform);
     CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpBodyForce>::add(
-        pipeline, mField, "U", {}, "BODY_FORCE", Sev::inform);
+        pipeline, mField, "U", {time_scale}, "BODY_FORCE", Sev::inform);
     CHKERR DomainNaturalBCRhs::AddFluxToPipeline<OpSetTemperatureRhs>::add(
         pipeline, mField, "T", vec_temp_ptr, "SETTEMP", Sev::inform);
 
@@ -793,11 +793,11 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     pipeline.push_back(new OpSetBc("FLUX", true, boundary_marker));
 
     CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
-        pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {}, "FORCE",
+        pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {time_scale}, "FORCE",
         Sev::inform);
 
     CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpTemperatureBC>::add(
-        pipeline_mng->getOpBoundaryRhsPipeline(), mField, "FLUX", {},
+        pipeline_mng->getOpBoundaryRhsPipeline(), mField, "FLUX", {time_scale},
         "TEMPERATURE", Sev::inform);
 
     pipeline.push_back(new OpUnSetBc("FLUX"));
@@ -808,7 +808,7 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
     CHKERR EssentialBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>::
         AddEssentialToPipeline<OpEssentialFluxRhs>::add(
             mField, pipeline, simple->getProblemName(), "FLUX", mat_flux_ptr,
-            {});
+            {time_scale});
 
     MoFEMFunctionReturn(0);
   };
@@ -827,12 +827,12 @@ MoFEMErrorCode ThermoElasticProblem::OPs() {
 
   auto get_bc_hook_rhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainRhsFE(), {});
+        mField, pipeline_mng->getDomainRhsFE(), {time_scale});
     return hook;
   };
   auto get_bc_hook_lhs = [&]() {
     EssentialPreProc<DisplacementCubitBcData> hook(
-        mField, pipeline_mng->getDomainLhsFE(), {});
+        mField, pipeline_mng->getDomainLhsFE(), {time_scale});
     return hook;
   };
 
@@ -965,18 +965,18 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
 
         if (scalarFieldPtr->size()) {
           auto t_temp = getFTensor0FromVec(*scalarFieldPtr);
-          MOFEM_LOG("ThermoElasticSync", Sev::verbose)
+          MOFEM_LOG("ThermoElasticSync", Sev::inform)
               << "Eval point T: " << t_temp;
         }
         if (vectorFieldPtr->size1()) {
           auto t_disp = getFTensor1FromMat<SPACE_DIM>(*vectorFieldPtr);
-          MOFEM_LOG("ThermoElasticSync", Sev::verbose)
+          MOFEM_LOG("ThermoElasticSync", Sev::inform)
               << "Eval point U_X: " << t_disp(0);
         }
         if (tensorFieldPtr->size1()) {
           auto t_disp_grad =
               getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*tensorFieldPtr);
-          MOFEM_LOG("ThermoElasticSync", Sev::verbose)
+          MOFEM_LOG("ThermoElasticSync", Sev::inform)
               << "Eval point U_GRAD_XX: " << t_disp_grad(0, 0);
         }
 
