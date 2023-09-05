@@ -1151,14 +1151,17 @@ int main(int argc, char *argv[]) {
                   << "Eval point TEMP: " << t_temp;
             }
             if (vector_field_ptr->size1()) {
+              FTensor::Index<'i', 3> i;
               auto t_disp = getFTensor1FromMat<3>(*vector_field_ptr);
               MOFEM_LOG("ELASTIC_SYNC", Sev::inform)
-                  << "Eval point DISPLACEMENT_X: " << t_disp(0);
+                  << "Eval point DISPLACEMENT magnitude: "
+                  << sqrt(t_disp(i) * t_disp(i));
             }
             if (tensor_field_ptr->size1()) {
+              FTensor::Index<'i', 3> i;
               auto t_disp_grad = getFTensor2FromMat<3, 3>(*tensor_field_ptr);
               MOFEM_LOG("ELASTIC_SYNC", Sev::inform)
-                  << "Eval point DISPLACEMENT_GRAD_XX: " << t_disp_grad(0, 0);
+                  << "Eval point DISPLACEMENT_GRAD trace: " << t_disp_grad(i, i);
             }
 
             MOFEM_LOG_SYNCHRONISE(m_field.get_comm());

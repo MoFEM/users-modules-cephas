@@ -969,15 +969,17 @@ MoFEMErrorCode ThermoElasticProblem::tsSolve() {
               << "Eval point T: " << t_temp;
         }
         if (vectorFieldPtr->size1()) {
+          FTensor::Index<'i', SPACE_DIM> i;
           auto t_disp = getFTensor1FromMat<SPACE_DIM>(*vectorFieldPtr);
           MOFEM_LOG("ThermoElasticSync", Sev::inform)
-              << "Eval point U_X: " << t_disp(0);
+              << "Eval point U magnitude: " << sqrt(t_disp(i) * t_disp(i));
         }
         if (tensorFieldPtr->size1()) {
+          FTensor::Index<'i', SPACE_DIM> i;
           auto t_disp_grad =
               getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*tensorFieldPtr);
           MOFEM_LOG("ThermoElasticSync", Sev::inform)
-              << "Eval point U_GRAD_XX: " << t_disp_grad(0, 0);
+              << "Eval point U_GRAD trace: " << t_disp_grad(i, i);
         }
 
         MOFEM_LOG_SYNCHRONISE(mField.get_comm());
