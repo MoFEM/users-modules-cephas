@@ -815,8 +815,8 @@ MoFEMErrorCode TSPrePostProc::tsPostStage(TS ts, PetscReal stagetime,
     Vec *stage_solutions;
 
     CHKERR TSGetStages(ts, &num_stages, &stage_solutions);
-    PetscPrintf(PETSC_COMM_WORLD, "Pseudo timestep %d time %e\n", num_stages,
-                time);
+    PetscPrintf(PETSC_COMM_WORLD, "Pseudo timestep %d time %e dt %e\n", num_stages,
+                time, dt);
     // double pseudo_time_step;
     // CHKERR TSPseudoComputeTimeStep(ts, &pseudo_time_step);
     const double inv_num_step = (double)num_stages;
@@ -1169,7 +1169,7 @@ struct Monitor : public FEMethod {
           boost::shared_ptr<SetPtsData> pass_field_eval_data)
       : dM(dm), mField(m_field), postProc(post_proc),
         postProcBdy(post_proc_bdry), velocityFieldPtr(velocity_field_ptr),
-        x2FieldPtr(x2_field_ptr), geometryFieldPtr(x2_field_ptr),
+        x2FieldPtr(x2_field_ptr), geometryFieldPtr(geometry_field_ptr),
         fieldEvalCoords(pass_field_eval_coords),
         fieldEvalData(pass_field_eval_data){};
   MoFEMErrorCode postProcess() {
@@ -1196,9 +1196,11 @@ struct Monitor : public FEMethod {
       auto t_geom = getFTensor1FromMat<SPACE_DIM>(*geometryFieldPtr);
       PetscPrintf(PETSC_COMM_WORLD, "Velocities x: %e y: %e z: %e\n", t_vel(0),
                   t_vel(1), t_vel(2));
+      double u_x = t_x2_field(0) - t_geom(0);
+      double u_y = t_x2_field(1) - t_geom(1);
+      double u_z = t_x2_field(2) - t_geom(2);
       PetscPrintf(PETSC_COMM_WORLD, "Displacement x: %e y: %e z: %e\n",
-                  (t_x2_field(0) - t_geom(0)), (t_x2_field(1) - t_geom(1)),
-                  (t_x2_field(2) - t_geom(2)));
+                  u_x, u_y, u_z);
       // cerr << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " <<
       // t_p(2) <<"\n"; MOFEM_LOG("EXAMPLE", Sev::noisy)
       //     << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " <<
@@ -1489,11 +1491,11 @@ MoFEMErrorCode Example::solveSystem() {
     geometry_field_ptr = boost::make_shared<MatrixDouble>();
     spatial_position_field_ptr = boost::make_shared<MatrixDouble>();
     fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<3>("V", velocity_field_ptr));
+        new OpCalculateVectorFieldValues<SPACE_DIM>("V", velocity_field_ptr));
     fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<3>("GEOMETRY", geometry_field_ptr));
+        new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", geometry_field_ptr));
     fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<3>("x_2", spatial_position_field_ptr));
+        new OpCalculateVectorFieldValues<SPACE_DIM>("x_2", spatial_position_field_ptr));
   }
 
   auto post_proc_domain = [&]() {
