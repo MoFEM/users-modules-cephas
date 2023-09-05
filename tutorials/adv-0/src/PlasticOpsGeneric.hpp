@@ -89,8 +89,12 @@ inline double trace(FTensor::Tensor2_symmetric<T, 3> &t_stress) {
 };
 
 template <typename T, int DIM>
-inline auto deviator(FTensor::Tensor2_symmetric<T, SPACE_DIM> &t_stress,
-                     double trace, FTensor::Number<DIM>) {
+inline auto deviator(
+
+    FTensor::Tensor2_symmetric<T, DIM> &t_stress, double trace,
+    FTensor::Tensor2_symmetric<double, DIM> &t_alpha, FTensor::Number<DIM>
+
+) {
   FTensor::Tensor2_symmetric<double, 3> t_dev;
   t_dev(I, J) = 0;
   for (int ii = 0; ii != DIM; ++ii)
@@ -99,17 +103,22 @@ inline auto deviator(FTensor::Tensor2_symmetric<T, SPACE_DIM> &t_stress,
   t_dev(0, 0) -= trace;
   t_dev(1, 1) -= trace;
   t_dev(2, 2) -= trace;
+  for (int ii = 0; ii != DIM; ++ii)
+    for (int jj = ii; jj != DIM; ++jj)
+      t_dev(ii, jj) -= t_alpha(ii, jj);
   return t_dev;
 };
 
 template <typename T>
-inline auto deviator(FTensor::Tensor2_symmetric<T, 2> &t_stress, double trace) {
-  return deviator(t_stress, trace, FTensor::Number<2>());
+inline auto deviator(FTensor::Tensor2_symmetric<T, 2> &t_stress, double trace,
+                     FTensor::Tensor2_symmetric<double, 2> &&t_alpha) {
+  return deviator(t_stress, trace, t_alpha, FTensor::Number<2>());
 };
 
 template <typename T>
-inline auto deviator(FTensor::Tensor2_symmetric<T, 3> &t_stress, double trace) {
-  return deviator(t_stress, trace, FTensor::Number<3>());
+inline auto deviator(FTensor::Tensor2_symmetric<T, 3> &t_stress, double trace,
+                     FTensor::Tensor2_symmetric<double, 3> &&t_alpha) {
+  return deviator(t_stress, trace, t_alpha, FTensor::Number<3>());
 };
 
 template <int DIM>
@@ -227,17 +236,17 @@ inline auto diff_plastic_flow_dstrain(
   return t_diff_flow;
 };
 
-inline double constrain_diff_sign(double x) {
-  const auto y = x / zeta;
-  if (y > std::numeric_limits<float>::max_exponent10 ||
-      y < std::numeric_limits<float>::min_exponent10) {
-    return 0;
-  } else {
-    const auto e = std::exp(y);
-    const auto ep1 = e + 1;
-    return (2 / zeta) * (e / (ep1 * ep1));
-  }
-};
+// inline double constrain_diff_sign(double x) {
+//   const auto y = x / zeta;
+//   if (y > std::numeric_limits<float>::max_exponent10 ||
+//       y < std::numeric_limits<float>::min_exponent10) {
+//     return 0;
+//   } else {
+//     const auto e = std::exp(y);
+//     const auto ep1 = e + 1;
+//     return (2 / zeta) * (e / (ep1 * ep1));
+//   }
+// };
 
 inline double constrian_sign(double x) {
   const auto y = x / zeta;
@@ -266,7 +275,7 @@ inline double constrain_abs(double x) {
 
 inline double w(double eqiv, double dot_tau, double f, double sigma_y,
                 double sigma_Y) {
-  return (f - sigma_y) / sigma_Y + cn1 * (dot_tau * std::sqrt(eqiv));
+  return (f - sigma_y) / sigma_Y + cn1 * (eqiv);
 };
 
 /**
@@ -282,21 +291,20 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
  */
 inline double constraint(double eqiv, double dot_tau, double f, double sigma_y,
                          double abs_w, double vis_H, double sigma_Y) {
-  return vis_H * dot_tau + (sigma_Y / 2) * ((cn0 * (dot_tau - eqiv) +
-                                             cn1 * (std::sqrt(eqiv) * dot_tau) -
-                                             (f - sigma_y) / sigma_Y) -
-                                            abs_w);
+  return vis_H * dot_tau +
+         (sigma_Y / 2) * ((cn0 * (dot_tau - eqiv) + cn1 * (eqiv) -
+                           (f - sigma_y) / sigma_Y) -
+                          abs_w);
 };
 
-inline double diff_constrain_ddot_tau(double sign, double eqiv, double vis_H,
-                                      double sigma_Y) {
-  return vis_H + (sigma_Y / 2) * (cn0 + cn1 * std::sqrt(eqiv) * (1 - sign));
+inline double diff_constrain_ddot_tau(double sign, double eqiv, double dot_tau,
+                                      double vis_H, double sigma_Y) {
+  return vis_H + (sigma_Y / 2) * (cn0);
 };
 
 inline double diff_constrain_deqiv(double sign, double eqiv, double dot_tau,
                                    double sigma_Y) {
-  return (sigma_Y / 2) *
-         (-cn0 + cn1 * dot_tau * (0.5 / std::sqrt(eqiv)) * (1 - sign));
+  return (sigma_Y / 2) * (-cn0 + cn1 * (1 - sign));
 };
 
 inline auto diff_constrain_df(double sign) { return (-1 - sign) / 2; };
@@ -408,20 +416,36 @@ MoFEMErrorCode OpCalculatePlasticSurfaceImpl<DIM, GAUSS, DomainEleOp>::doWork(
   const size_t nb_gauss_pts = commonDataPtr->mStressPtr->size2();
   auto t_stress =
       getFTensor2SymmetricFromMat<DIM>(*(commonDataPtr->mStressPtr));
+  auto t_plastic_strain =
+      getFTensor2SymmetricFromMat<DIM>(commonDataPtr->plasticStrain);
 
   commonDataPtr->plasticSurface.resize(nb_gauss_pts, false);
   commonDataPtr->plasticFlow.resize(size_symm, nb_gauss_pts, false);
   auto t_flow = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->plasticFlow);
 
+  auto &params = commonDataPtr->blockParams;
+
   for (auto &f : commonDataPtr->plasticSurface) {
-    f = platsic_surface(deviator(t_stress, trace(t_stress)));
+
+    f = platsic_surface(
+
+        deviator(
+            t_stress, trace(t_stress),
+            kinematic_hardening(t_plastic_strain, params[CommonData::C1_k]))
+
+    );
+
     auto t_flow_tmp =
         plastic_flow(f,
 
-                     deviator(t_stress, trace(t_stress)),
+                     deviator(t_stress, trace(t_stress),
+                              kinematic_hardening(t_plastic_strain,
+                                                  params[CommonData::C1_k])),
 
                      diff_deviator(diff_tensor(FTensor::Number<DIM>())));
     t_flow(i, j) = t_flow_tmp(i, j);
+
+    ++t_plastic_strain;
     ++t_flow;
     ++t_stress;
   }
@@ -463,6 +487,8 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
   FTensor::Index<'l', DIM> l;
   FTensor::Index<'m', DIM> m;
   FTensor::Index<'n', DIM> n;
+  
+  auto &params = commonDataPtr->blockParams; ///< material parameters
 
   const size_t nb_gauss_pts = DomainEleOp::getGaussPts().size2();
   auto t_w = DomainEleOp::getFTensor0IntegrationWeight();
@@ -470,6 +496,8 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
   auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
   auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
   auto t_flow = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->plasticFlow);
+  auto t_plastic_strain =
+      getFTensor2SymmetricFromMat<DIM>(commonDataPtr->plasticStrain);
   auto t_plastic_strain_dot =
       getFTensor2SymmetricFromMat<DIM>(commonDataPtr->plasticStrainDot);
   auto t_stress =
@@ -488,10 +516,14 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
   t_flow_dir_dstrain(i, j, k, l) =
       t_flow_dir_dstress(i, j, m, n) * t_D_Op(m, n, k, l);
 
+
+  auto t_alpha_dir =
+      kinematic_hardening_dplastic_strain<DIM>(params[CommonData::C1_k]);
+
   commonDataPtr->resC.resize(nb_gauss_pts, false);
   commonDataPtr->resCdTau.resize(nb_gauss_pts, false);
   commonDataPtr->resCdStrain.resize(size_symm, nb_gauss_pts, false);
-  commonDataPtr->resCdStrainDot.resize(size_symm, nb_gauss_pts, false);
+  commonDataPtr->resCdPlasticStrain.resize(size_symm, nb_gauss_pts, false);
   commonDataPtr->resFlow.resize(size_symm, nb_gauss_pts, false);
   commonDataPtr->resFlowDtau.resize(size_symm, nb_gauss_pts, false);
   commonDataPtr->resFlowDstrain.resize(size_symm * size_symm, nb_gauss_pts,
@@ -502,26 +534,24 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
   commonDataPtr->resC.clear();
   commonDataPtr->resCdTau.clear();
   commonDataPtr->resCdStrain.clear();
-  commonDataPtr->resCdStrainDot.clear();
+  commonDataPtr->resCdPlasticStrain.clear();
   commonDataPtr->resFlow.clear();
   commonDataPtr->resFlowDtau.clear();
   commonDataPtr->resFlowDstrain.clear();
   commonDataPtr->resFlowDstrainDot.clear();
 
-  auto &params = commonDataPtr->blockParams;
-
   auto t_res_c = getFTensor0FromVec(commonDataPtr->resC);
   auto t_res_c_dtau = getFTensor0FromVec(commonDataPtr->resCdTau);
   auto t_res_c_dstrain =
       getFTensor2SymmetricFromMat<DIM>(commonDataPtr->resCdStrain);
-  auto t_res_c_dstrain_dot =
-      getFTensor2SymmetricFromMat<DIM>(commonDataPtr->resCdStrainDot);
+  auto t_res_c_plastic_strain =
+      getFTensor2SymmetricFromMat<DIM>(commonDataPtr->resCdPlasticStrain);
   auto t_res_flow = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->resFlow);
   auto t_res_flow_dtau =
       getFTensor2SymmetricFromMat<DIM>(commonDataPtr->resFlowDtau);
   auto t_res_flow_dstrain =
       getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->resFlowDstrain);
-  auto t_res_flow_dstrain_dot =
+  auto t_res_flow_dplastic_strain =
       getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->resFlowDstrainDot);
 
   auto next = [&]() {
@@ -529,16 +559,17 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
     ++t_tau_dot;
     ++t_f;
     ++t_flow;
+    ++t_plastic_strain;
     ++t_plastic_strain_dot;
     ++t_stress;
     ++t_res_c;
     ++t_res_c_dtau;
     ++t_res_c_dstrain;
-    ++t_res_c_dstrain_dot;
+    ++t_res_c_plastic_strain;
     ++t_res_flow;
     ++t_res_flow_dtau;
     ++t_res_flow_dstrain;
-    ++t_res_flow_dstrain_dot;
+    ++t_res_flow_dplastic_strain;
     ++t_w;
   };
 
@@ -554,11 +585,11 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
 
     for (auto &f : commonDataPtr->plasticSurface) {
       auto eqiv = equivalent_strain_dot(t_plastic_strain_dot);
-      const auto ww =
-          w(eqiv, t_tau_dot, t_f,
-            hardening(t_tau, params[CommonData::H], params[CommonData::QINF],
-                      params[CommonData::BISO], params[CommonData::SIGMA_Y]),
-            params[CommonData::SIGMA_Y]);
+      const auto ww = w(
+          eqiv, t_tau_dot, t_f,
+          iso_hardening(t_tau, params[CommonData::H], params[CommonData::QINF],
+                        params[CommonData::BISO], params[CommonData::SIGMA_Y]),
+          params[CommonData::SIGMA_Y]);
       const auto sign_ww = constrian_sign(ww);
 
       ++nb_points_on_elem;
@@ -606,11 +637,11 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
                                                   FTensor::Number<DIM>());
 
     const auto sigma_y =
-        hardening(t_tau, params[CommonData::H], params[CommonData::QINF],
+        iso_hardening(t_tau, params[CommonData::H], params[CommonData::QINF],
                   params[CommonData::BISO], params[CommonData::SIGMA_Y]);
     const auto d_sigma_y =
-        hardening_dtau(t_tau, params[CommonData::H], params[CommonData::QINF],
-                       params[CommonData::BISO]);
+        iso_hardening_dtau(t_tau, params[CommonData::H],
+                           params[CommonData::QINF], params[CommonData::BISO]);
 
     auto ww = w(eqiv, t_tau_dot, t_f, sigma_y, params[CommonData::SIGMA_Y]);
     auto abs_ww = constrain_abs(ww);
@@ -618,14 +649,22 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
 
     auto c = constraint(eqiv, t_tau_dot, t_f, sigma_y, abs_ww,
                         params[CommonData::VIS_H], params[CommonData::SIGMA_Y]);
-    auto c_dot_tau = diff_constrain_ddot_tau(
-        sign_ww, eqiv, params[CommonData::VIS_H], params[CommonData::SIGMA_Y]);
+    auto c_dot_tau = diff_constrain_ddot_tau(sign_ww, eqiv, t_tau_dot,
+                                             params[CommonData::VIS_H],
+                                             params[CommonData::SIGMA_Y]);
     auto c_equiv = diff_constrain_deqiv(sign_ww, eqiv, t_tau_dot,
                                         params[CommonData::SIGMA_Y]);
     auto c_sigma_y = diff_constrain_dsigma_y(sign_ww);
     auto c_f = diff_constrain_df(sign_ww);
 
-    auto t_dev_stress = deviator(t_stress, trace(t_stress));
+    auto t_dev_stress = deviator(
+
+        t_stress, trace(t_stress),
+
+        kinematic_hardening(t_plastic_strain, params[CommonData::C1_k])
+
+    );
+
     FTensor::Tensor2_symmetric<double, DIM> t_flow_dir;
     t_flow_dir(k, l) = 1.5 * (t_dev_stress(I, J) * t_diff_deviator(I, J, k, l));
     FTensor::Tensor2_symmetric<double, DIM> t_flow_dstrain;
@@ -637,12 +676,17 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
       t_diff_res(i, j) = c_f * t_flow_dstrain(i, j);
     };
 
-    auto get_res_c_dstrain_dot = [&](auto &t_diff_res) {
-      t_diff_res(i, j) = (DomainEleOp::getTSa() * c_equiv) * t_diff_eqiv(i, j);
+    auto get_res_c_dplastic_strain = [&](auto &t_diff_res) {
+      t_diff_res(i, j) = (this->getTSa() * c_equiv) * t_diff_eqiv(i, j);
+      t_diff_res(k, l) -= c_f * t_flow(i, j) * t_alpha_dir(i, j, k, l);
     };
 
     auto get_res_c_dtau = [&]() {
-      return DomainEleOp::getTSa() * c_dot_tau + c_sigma_y * d_sigma_y;
+      return this->getTSa() * c_dot_tau + c_sigma_y * d_sigma_y;
+    };
+
+    auto get_res_c_plastic_strain = [&](auto &t_diff_res) {
+      t_diff_res(k, l) = -c_f * t_flow(i, j) * t_alpha_dir(i, j, k, l);
     };
 
     auto get_res_flow = [&](auto &t_res_flow) {
@@ -653,7 +697,7 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
 
     auto get_res_flow_dtau = [&](auto &t_res_flow_dtau) {
       const auto da = d_sigma_y;
-      const auto db = DomainEleOp::getTSa();
+      const auto db = this->getTSa();
       t_res_flow_dtau(k, l) =
           da * t_plastic_strain_dot(k, l) - db * t_flow_dir(k, l);
     };
@@ -663,22 +707,25 @@ MoFEMErrorCode OpCalculatePlasticityImpl<DIM, GAUSS, DomainEleOp>::doWork(
       t_res_flow_dstrain(m, n, k, l) = -t_flow_dir_dstrain(m, n, k, l) * b;
     };
 
-    auto get_res_flow_dstrain_dot = [&](auto &t_res_flow_dstrain_dot) {
+    auto get_res_flow_dplastic_strain = [&](auto &t_res_flow_dplastic_strain) {
       const auto a = sigma_y;
-      t_res_flow_dstrain_dot(m, n, k, l) =
-          (a * DomainEleOp::getTSa()) * t_diff_plastic_strain(m, n, k, l);
+      t_res_flow_dplastic_strain(m, n, k, l) =
+          (a * this->getTSa()) * t_diff_plastic_strain(m, n, k, l);
+      const auto b = t_tau_dot;
+      t_res_flow_dplastic_strain(m, n, i, j) +=
+          (t_flow_dir_dstrain(m, n, k, l) * t_alpha_dir(k, l, i, j)) * b;
     };
 
     t_res_c = get_res_c();
     get_res_flow(t_res_flow);
 
-    if (DomainEleOp::getTSCtx() == TSMethod::TSContext::CTX_TSSETIJACOBIAN) {
+    if (this->getTSCtx() == TSMethod::TSContext::CTX_TSSETIJACOBIAN) {
       t_res_c_dtau = get_res_c_dtau();
       get_res_c_dstrain(t_res_c_dstrain);
-      get_res_c_dstrain_dot(t_res_c_dstrain_dot);
+      get_res_c_dplastic_strain(t_res_c_plastic_strain);
       get_res_flow_dtau(t_res_flow_dtau);
       get_res_flow_dstrain(t_res_flow_dstrain);
-      get_res_flow_dstrain_dot(t_res_flow_dstrain_dot);
+      get_res_flow_dplastic_strain(t_res_flow_dplastic_strain);
     }
 
     next();
@@ -691,22 +738,20 @@ template <int DIM, typename DomainEleOp>
 struct OpPlasticStressImpl<DIM, GAUSS, DomainEleOp> : public DomainEleOp {
   OpPlasticStressImpl(const std::string field_name,
                       boost::shared_ptr<CommonData> common_data_ptr,
-                      boost::shared_ptr<MatrixDouble> mDPtr,
-                      const double scale = 1);
+                      boost::shared_ptr<MatrixDouble> mDPtr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<MatrixDouble> mDPtr;
-  const double scaleStress;
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
 template <int DIM, typename DomainEleOp>
 OpPlasticStressImpl<DIM, GAUSS, DomainEleOp>::OpPlasticStressImpl(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<MatrixDouble> m_D_ptr, const double scale)
+    boost::shared_ptr<MatrixDouble> m_D_ptr)
     : DomainEleOp(field_name, DomainEleOp::OPROW),
-      commonDataPtr(common_data_ptr), scaleStress(scale), mDPtr(m_D_ptr) {
+      commonDataPtr(common_data_ptr), mDPtr(m_D_ptr) {
   // Operator is only executed for vertices
   std::fill(&DomainEleOp::doEntities[MBEDGE],
             &DomainEleOp::doEntities[MBMAXTYPE], false);
@@ -737,7 +782,6 @@ OpPlasticStressImpl<DIM, GAUSS, DomainEleOp>::doWork(int side, EntityType type,
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
     t_stress(i, j) =
         t_D(i, j, k, l) * (t_strain(k, l) - t_plastic_strain(k, l));
-    t_stress(i, j) /= scaleStress;
     ++t_strain;
     ++t_plastic_strain;
     ++t_stress;
@@ -944,13 +988,13 @@ OpCalculatePlasticFlowLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
 
   auto t_res_flow_dstrain =
       getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->resFlowDstrain);
-  auto t_res_flow_dstrain_dot =
+  auto t_res_flow_dplastic_strain =
       getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->resFlowDstrainDot);
   auto t_L = symm_L_tensor(FTensor::Number<DIM>());
 
   auto next = [&]() {
     ++t_res_flow_dstrain;
-    ++t_res_flow_dstrain_dot;
+    ++t_res_flow_dplastic_strain;
   };
 
   auto t_w = AssemblyDomainEleOp::getFTensor0IntegrationWeight();
@@ -961,7 +1005,7 @@ OpCalculatePlasticFlowLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
 
     FTensor::Tensor2<double, size_symm, size_symm> t_res_mat;
     t_res_mat(O, L) =
-        alpha * (t_L(i, j, O) * ((t_res_flow_dstrain_dot(i, j, k, l) -
+        alpha * (t_L(i, j, O) * ((t_res_flow_dplastic_strain(i, j, k, l) -
                                   t_res_flow_dstrain(i, j, k, l)) *
                                  t_L(k, l, L)));
     next();
@@ -1002,8 +1046,8 @@ private:
   boost::shared_ptr<MatrixDouble> mDPtr;
 };
 
-template <int DIM, typename AssembleDomainEleOp>
-struct OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssembleDomainEleOp>
+template <int DIM, typename AssemblyDomainEleOp>
+struct OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssemblyDomainEleOp>
     : public AssemblyDomainEleOp {
   OpCalculatePlasticFlowLhs_dTAUImpl(
       const std::string row_field_name, const std::string col_field_name,
@@ -1054,11 +1098,11 @@ OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
   constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
   FTensor::Index<'L', size_symm> L;
 
-  const auto nb_integration_pts = getGaussPts().size2();
+  const auto nb_integration_pts = AssemblyDomainEleOp::getGaussPts().size2();
   const size_t nb_row_base_functions = row_data.getN().size2();
   auto &locMat = AssemblyDomainEleOp::locMat;
 
-  const auto type = getFEType();
+  const auto type = AssemblyDomainEleOp::getFEType();
   const auto nb_nodes = moab::CN::VerticesPerEntity(type);
 
   auto t_res_flow_dtau =
@@ -1068,10 +1112,10 @@ OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
 
   auto next = [&]() { ++t_res_flow_dtau; };
 
-  auto t_w = getFTensor0IntegrationWeight();
+  auto t_w = AssemblyDomainEleOp::getFTensor0IntegrationWeight();
   auto t_row_base = row_data.getFTensor0N();
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-    double alpha = getMeasure() * t_w;
+    double alpha = AssemblyDomainEleOp::getMeasure() * t_w;
     ++t_w;
     FTensor::Tensor1<double, size_symm> t_res_vec;
     t_res_vec(L) = alpha * (t_res_flow_dtau(i, j) * t_L(i, j, L));
@@ -1099,10 +1143,10 @@ OpCalculatePlasticFlowLhs_dTAUImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
 template <int DIM, typename AssemblyDomainEleOp>
 struct OpCalculateConstraintsLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>
     : public AssemblyDomainEleOp {
-  OpCalculateConstraintsLhs_dEPImpl(const std::string row_field_name,
-                                const std::string col_field_name,
-                                boost::shared_ptr<CommonData> common_data_ptr,
-                                boost::shared_ptr<MatrixDouble> mat_D_ptr);
+  OpCalculateConstraintsLhs_dEPImpl(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr,
+      boost::shared_ptr<MatrixDouble> mat_D_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 
@@ -1150,12 +1194,12 @@ OpCalculateConstraintsLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
 
   auto t_c_dstrain =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resCdStrain);
-  auto t_c_dstrain_dot =
-      getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resCdStrainDot);
+  auto t_c_dplastic_strain =
+      getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->resCdPlasticStrain);
 
   auto next = [&]() {
     ++t_c_dstrain;
-    ++t_c_dstrain_dot;
+    ++t_c_dplastic_strain;
   };
 
   auto t_L = symm_L_tensor(FTensor::Number<SPACE_DIM>());
@@ -1167,7 +1211,8 @@ OpCalculateConstraintsLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
     ++t_w;
 
     FTensor::Tensor1<double, size_symm> t_res_vec;
-    t_res_vec(L) = t_L(i, j, L) * (t_c_dstrain_dot(i, j) - t_c_dstrain(i, j));
+    t_res_vec(L) =
+        t_L(i, j, L) * (t_c_dplastic_strain(i, j) - t_c_dstrain(i, j));
     next();
 
     auto t_mat = get_mat_scalar_dtensor_sym(AssemblyDomainEleOp::locMat,
@@ -1193,9 +1238,9 @@ OpCalculateConstraintsLhs_dEPImpl<DIM, GAUSS, AssemblyDomainEleOp>::iNtegrate(
 template <typename AssemblyDomainEleOp>
 struct OpCalculateConstraintsLhs_dTAUImpl<GAUSS, AssemblyDomainEleOp>
     : public AssemblyDomainEleOp {
-  OpCalculateConstraintsLhs_dTAUImpl(const std::string row_field_name,
-                                 const std::string col_field_name,
-                                 boost::shared_ptr<CommonData> common_data_ptr);
+  OpCalculateConstraintsLhs_dTAUImpl(
+      const std::string row_field_name, const std::string col_field_name,
+      boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode iNtegrate(EntitiesFieldData::EntData &row_data,
                            EntitiesFieldData::EntData &col_data);
 

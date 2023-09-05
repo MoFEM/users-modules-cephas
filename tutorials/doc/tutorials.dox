@@ -421,6 +421,12 @@ continuing with the one you are most excited about.
         </td>
   </tr>
 
+   <tr valign="top">
+        <td width="350px">\subpage tutorial_ep</td>
+        <td> Mixed formulation for large strain elasticity
+        <br/> *Keywords:* H-div space, Schur complement, ADOL-C (automatic differentiation)
+        </td>
+  </tr>
 
 </table>
 

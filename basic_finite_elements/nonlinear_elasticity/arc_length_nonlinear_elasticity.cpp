@@ -602,9 +602,9 @@ int main(int argc, char *argv[]) {
     }
 
     SnesCtx::FEMethodsSequence &loops_to_do_Rhs =
-        snes_ctx.get_loops_to_do_Rhs();
-    snes_ctx.get_preProcess_to_do_Rhs().push_back(my_dirichlet_bc);
-    snes_ctx.get_preProcess_to_do_Rhs().push_back(&pre_post_method);
+        snes_ctx.getComputeRhs();
+    snes_ctx.getPreProcComputeRhs().push_back(my_dirichlet_bc);
+    snes_ctx.getPreProcComputeRhs().push_back(&pre_post_method);
     loops_to_do_Rhs.push_back(
         SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeRhs()));
 
@@ -652,12 +652,12 @@ int main(int argc, char *argv[]) {
         SnesCtx::PairNameFEMethodPtr("NONE", &assemble_F_lambda));
     loops_to_do_Rhs.push_back(
         SnesCtx::PairNameFEMethodPtr("ARC_LENGTH", &arc_method));
-    snes_ctx.get_postProcess_to_do_Rhs().push_back(&pre_post_method);
-    snes_ctx.get_postProcess_to_do_Rhs().push_back(my_dirichlet_bc);
+    snes_ctx.getPostProcComputeRhs().push_back(&pre_post_method);
+    snes_ctx.getPostProcComputeRhs().push_back(my_dirichlet_bc);
 
     SnesCtx::FEMethodsSequence &loops_to_do_Mat =
-        snes_ctx.get_loops_to_do_Mat();
-    snes_ctx.get_preProcess_to_do_Mat().push_back(my_dirichlet_bc);
+        snes_ctx.getSetOperators();
+    snes_ctx.getPreProcSetOperators().push_back(my_dirichlet_bc);
     loops_to_do_Mat.push_back(
         SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeLhs()));
 
@@ -668,7 +668,7 @@ int main(int argc, char *argv[]) {
         SnesCtx::PairNameFEMethodPtr("NEUMANN_FE", &fe_neumann));
     loops_to_do_Mat.push_back(
         SnesCtx::PairNameFEMethodPtr("ARC_LENGTH", &arc_method));
-    snes_ctx.get_postProcess_to_do_Mat().push_back(my_dirichlet_bc);
+    snes_ctx.getPostProcSetOperators().push_back(my_dirichlet_bc);
 
     CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
         "ELASTIC_MECHANICS", COL, D, INSERT_VALUES, SCATTER_FORWARD);
