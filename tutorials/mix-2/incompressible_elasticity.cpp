@@ -26,7 +26,19 @@ using BoundaryEle =
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 using SkinPostProcEle = PostProcBrokenMeshInMoab<BoundaryEle>;
+using SetPtsData = FieldEvaluatorInterface::SetPtsData;
 
+// struct DomainBCs {};
+// struct BoundaryBCs {};
+
+// using DomainRhsBCs = NaturalBC<DomainEleOp>::Assembly<AT>::LinearForm<IT>;
+// using OpDomainRhsBCs = DomainRhsBCs::OpFlux<DomainBCs, 1, SPACE_DIM>;
+// using BoundaryRhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::LinearForm<IT>;
+// using OpBoundaryRhsBCs = BoundaryRhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
+// using BoundaryLhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::BiLinearForm<IT>;
+// using OpBoundaryLhsBCs = BoundaryLhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
+
+PetscBool doEvalField;
 struct MonitorIncompressible : public FEMethod {
 
   MonitorIncompressible(
@@ -36,9 +48,13 @@ struct MonitorIncompressible : public FEMethod {
           pair_post_proc_fe,
       std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
       std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
-      std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
+      std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter,
+      std::array<double, SPACE_DIM> pass_field_eval_coords,
+      boost::shared_ptr<SetPtsData> pass_field_eval_data,
+      boost::shared_ptr<MatrixDouble> vec_field_ptr)
       : dM(dm), uXScatter(ux_scatter), uYScatter(uy_scatter),
-        uZScatter(uz_scatter) {
+        uZScatter(uz_scatter), fieldEvalCoords(pass_field_eval_coords),
+        fieldEvalData(pass_field_eval_data), vecFieldPtr(vec_field_ptr) {
     postProcFe = pair_post_proc_fe.first;
     skinPostProcFe = pair_post_proc_fe.second;
   };
@@ -51,6 +67,37 @@ struct MonitorIncompressible : public FEMethod {
 
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
+    auto *simple = m_field_ptr->getInterface<Simple>();
+
+    if (doEvalField) {
+      if (SPACE_DIM == 3) {
+        CHKERR m_field_ptr->getInterface<FieldEvaluatorInterface>()
+            ->evalFEAtThePoint3D(
+                fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
+                simple->getDomainFEName(), fieldEvalData,
+                m_field_ptr->get_comm_rank(), m_field_ptr->get_comm_rank(),
+                getCacheWeakPtr().lock(), MF_EXIST, QUIET);
+      } else {
+        CHKERR m_field_ptr->getInterface<FieldEvaluatorInterface>()
+            ->evalFEAtThePoint2D(
+                fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
+                simple->getDomainFEName(), fieldEvalData,
+                m_field_ptr->get_comm_rank(), m_field_ptr->get_comm_rank(),
+                getCacheWeakPtr().lock(), MF_EXIST, QUIET);
+      }
+
+      if (vecFieldPtr->size1()) {
+        auto t_disp = getFTensor1FromMat<SPACE_DIM>(*vecFieldPtr);
+        if constexpr (SPACE_DIM == 2)
+          MOFEM_LOG("SYNC", Sev::inform)
+              << "U_X: " << t_disp(0) << " U_Y: " << t_disp(1);
+        else
+          MOFEM_LOG("SYNC", Sev::inform)
+              << "U_X: " << t_disp(0) << " U_Y: " << t_disp(1)
+              << " U_Z: " << t_disp(2);
+      }
+    }
+    MOFEM_LOG_SEVERITY_SYNC(m_field_ptr->get_comm(), Sev::inform);
 
     auto make_vtk = [&]() {
       MoFEMFunctionBegin;
@@ -102,6 +149,9 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
+  std::array<double, SPACE_DIM> fieldEvalCoords;
+  boost::shared_ptr<SetPtsData> fieldEvalData;
+  boost::shared_ptr<MatrixDouble> vecFieldPtr;
 };
 
 // Assemble to A matrix, by default, however, some terms are assembled only to
@@ -357,7 +407,7 @@ MoFEMErrorCode Incompressible::bC() {
   using BoundaryNaturalBC =
       NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
   using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
-
+  
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
   CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
       pipeline_mng->getOpBoundaryRhsPipeline(), {NOSPACE}, "GEOMETRY");
@@ -365,6 +415,7 @@ MoFEMErrorCode Incompressible::bC() {
   CHKERR BoundaryNaturalBC::AddFluxToPipeline<OpForce>::add(
       pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {time_scale},
       "FORCE", Sev::inform);
+
   //! [Define gravity vector]
   CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
       pipeline_mng->getOpDomainRhsPipeline(), mField, "U", {time_scale},
@@ -505,6 +556,7 @@ MoFEMErrorCode Incompressible::OPs() {
       pip.push_back(new OpBaseTimesScalarValues("P", pressure_ptr,
                                                 get_lambda_reciprocal));
     }
+
     MoFEMFunctionReturn(0);
   };
 
@@ -664,11 +716,42 @@ MoFEMErrorCode Incompressible::tsSolve() {
     return std::make_pair(vol_post_proc(), skin_post_proc());
   };
 
+  boost::shared_ptr<SetPtsData> field_eval_data;
+  boost::shared_ptr<MatrixDouble> vector_field_ptr;
+
+  std::array<double, SPACE_DIM> field_eval_coords;
+  int coords_dim = SPACE_DIM;
+  CHKERR PetscOptionsGetRealArray(NULL, NULL, "-field_eval_coords",
+                                  field_eval_coords.data(), &coords_dim,
+                                  &doEvalField);
+
+  if (doEvalField) {
+    vector_field_ptr = boost::make_shared<MatrixDouble>();
+    field_eval_data =
+        mField.getInterface<FieldEvaluatorInterface>()->getData<DomainEle>();
+    if constexpr (SPACE_DIM == 3) {
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->buildTree3D(
+          field_eval_data, simple->getDomainFEName());
+    } else {
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->buildTree2D(
+          field_eval_data, simple->getDomainFEName());
+    }
+
+    field_eval_data->setEvalPoints(field_eval_coords.data(), 1);
+    auto no_rule = [](int, int, int) { return -1; };
+    auto field_eval_fe_ptr = field_eval_data->feMethodPtr.lock();
+    field_eval_fe_ptr->getRuleHook = no_rule;
+    field_eval_fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>("U", vector_field_ptr));
+  }
+
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
     boost::shared_ptr<MonitorIncompressible> monitor_ptr(
-        new MonitorIncompressible(dm, create_post_process_elements(), uXScatter,
-                                  uYScatter, uZScatter));
+        new MonitorIncompressible(SmartPetscObj<DM>(dm, true),
+                                  create_post_process_elements(), uXScatter,
+                                  uYScatter, uZScatter, field_eval_coords,
+                                  field_eval_data, vector_field_ptr));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
