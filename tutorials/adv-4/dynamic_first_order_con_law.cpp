@@ -877,13 +877,13 @@ struct Monitor : public FEMethod {
       //             u_x, u_y, u_z);
        MOFEM_LOG("SYNC", Sev::inform)
               << "Velocities x: " << t_vel(0) << " y: "
-              << t_vel(1) << " y: "
+              << t_vel(1) << " z: "
               << t_vel(2) << "\n";
       MOFEM_LOG("SYNC", Sev::inform)
               << "Displacement x: " << u_x << " y: "
-              << u_y << " y: "
+              << u_y << " z: "
               << u_z << "\n";
-      MOFEM_LOG_SEVERITY_SYNC(mField.get_comm(), Sev::inform);
+      
       // cerr << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " <<
       // t_p(2) <<"\n"; MOFEM_LOG("EXAMPLE", Sev::noisy)
       //     << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " <<
@@ -907,8 +907,9 @@ struct Monitor : public FEMethod {
       };
       CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(
           print_vets, "V", &ents);
-      MOFEM_LOG_SEVERITY_SYNC(mField.get_comm(), Sev::inform);
+      
     }
+    MOFEM_LOG_SEVERITY_SYNC(mField.get_comm(), Sev::inform);
 
     PetscBool print_volume = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-print_volume", &print_volume, PETSC_NULL);
