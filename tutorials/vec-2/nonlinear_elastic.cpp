@@ -31,6 +31,23 @@ using BoundaryNaturalBC =
     NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
 using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
 
+template <int DIM> struct PostProcEleByDim;
+
+template <> struct PostProcEleByDim<2> {
+  using PostProcEleDomain = PostProcBrokenMeshInMoabBase<DomainEle>;
+  using PostProcEleBdy = PostProcBrokenMeshInMoabBase<BoundaryEle>;
+  using SideEle = PipelineManager::ElementsAndOpsByDim<2>::FaceSideEle;
+};
+
+template <> struct PostProcEleByDim<3> {
+  using PostProcEleDomain = PostProcBrokenMeshInMoabBase<BoundaryEle>;
+  using PostProcEleBdy = PostProcBrokenMeshInMoabBase<BoundaryEle>;
+  using SideEle = PipelineManager::ElementsAndOpsByDim<3>::FaceSideEle;
+};
+
+using SideEle = PostProcEleByDim<SPACE_DIM>::SideEle;
+using PostProcEleBdy = PostProcEleByDim<SPACE_DIM>::PostProcEleBdy;
+
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.3;
 
@@ -51,6 +68,7 @@ private:
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
+  MoFEMErrorCode gettingNorms();
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 };
@@ -63,6 +81,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR boundaryCondition();
   CHKERR assembleSystem();
   CHKERR solveSystem();
+  CHKERR gettingNorms();
   CHKERR outputResults();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
@@ -193,13 +212,13 @@ MoFEMErrorCode Example::assembleSystem() {
  * to output results to the hard drive.
  */
 struct Monitor : public FEMethod {
-  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc)
+  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEleBdy> post_proc)
       : dM(dm), postProc(post_proc){};
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
+      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProc);
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
     }
@@ -208,7 +227,7 @@ struct Monitor : public FEMethod {
 
 private:
   SmartPetscObj<DM> dM;
-  boost::shared_ptr<PostProcEle> postProc;
+  boost::shared_ptr<PostProcEleBdy> postProc;
 };
 
 //! [Solve]
@@ -221,27 +240,32 @@ MoFEMErrorCode Example::solveSystem() {
   auto ts = pipeline_mng->createTSIM();
 
   // Setup postprocessing
-  auto create_post_proc_fe = [dm, this]() {
-    auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+  auto create_post_proc_fe = [dm, this, simple]() {
+    auto post_proc_ele_domain = [dm, this](auto &pip_domain) {
+      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip_domain, {H1});
+      auto common_ptr = commonDataFactory<SPACE_DIM, GAUSS, DomainEleOp>(
+          mField, pip_domain, "U", "MAT_ELASTIC", Sev::inform);
+      return common_ptr;
+    };
 
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-        post_proc_fe->getOpPtrVector(), {H1});
-
-    auto common_ptr = commonDataFactory<SPACE_DIM, GAUSS, DomainEleOp>(
-        mField, post_proc_fe->getOpPtrVector(), "U", "MAT_ELASTIC",
-        Sev::inform);
-
+    auto post_proc_fe_bdy = boost::make_shared<
+        typename PostProcEleByDim<SPACE_DIM>::PostProcEleBdy>(mField);
     auto u_ptr = boost::make_shared<MatrixDouble>();
-    post_proc_fe->getOpPtrVector().push_back(
+    post_proc_fe_bdy->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+    auto op_loop_side =
+        new OpLoopSide<SideEle>(mField, simple->getDomainFEName(), SPACE_DIM);
+    auto common_ptr = post_proc_ele_domain(op_loop_side->getOpPtrVector());
+    post_proc_fe_bdy->getOpPtrVector().push_back(op_loop_side);
 
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
-    post_proc_fe->getOpPtrVector().push_back(
+    post_proc_fe_bdy->getOpPtrVector().push_back(
 
         new OpPPMap(
 
-            post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+            post_proc_fe_bdy->getPostProcMesh(),
+            post_proc_fe_bdy->getMapGaussPts(),
 
             {},
 
@@ -255,7 +279,7 @@ MoFEMErrorCode Example::solveSystem() {
             )
 
     );
-    return post_proc_fe;
+    return post_proc_fe_bdy;
   };
 
   auto add_extra_finite_elements_to_ksp_solver_pipelines = [&]() {
@@ -340,6 +364,70 @@ MoFEMErrorCode Example::solveSystem() {
 }
 //! [Solve]
 
+//! [Getting norms]
+MoFEMErrorCode Example::gettingNorms() {
+  MoFEMFunctionBegin;
+
+  auto simple = mField.getInterface<Simple>();
+  auto dm = simple->getDM();
+
+  auto T = createDMVector(simple->getDM());
+  CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
+                                 SCATTER_FORWARD);
+  double nrm2;
+  CHKERR VecNorm(T, NORM_2, &nrm2);
+  MOFEM_LOG("EXAMPLE", Sev::inform) << "Solution norm " << nrm2;
+
+  auto post_proc_norm_fe = boost::make_shared<DomainEle>(mField);
+
+  auto post_proc_norm_rule_hook = [](int, int, int p) -> int { return 2 * p; };
+  post_proc_norm_fe->getRuleHook = post_proc_norm_rule_hook;
+
+  CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
+      post_proc_norm_fe->getOpPtrVector(), {H1});
+
+  enum NORMS { U_NORM_L2 = 0, PIOLA_NORM, LAST_NORM };
+  auto norms_vec =
+      createVectorMPI(mField.get_comm(),
+                      (mField.get_comm_rank() == 0) ? LAST_NORM : 0, LAST_NORM);
+  CHKERR VecZeroEntries(norms_vec);
+
+  auto u_ptr = boost::make_shared<MatrixDouble>();
+  post_proc_norm_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_ptr));
+
+  post_proc_norm_fe->getOpPtrVector().push_back(
+      new OpCalcNormL2Tensor1<SPACE_DIM>(u_ptr, norms_vec, U_NORM_L2));
+
+  auto common_ptr = commonDataFactory<SPACE_DIM, GAUSS, DomainEleOp>(
+      mField, post_proc_norm_fe->getOpPtrVector(), "U", "MAT_ELASTIC",
+      Sev::inform);
+
+  post_proc_norm_fe->getOpPtrVector().push_back(
+      new OpCalcNormL2Tensor2<SPACE_DIM, SPACE_DIM>(
+          common_ptr->getMatFirstPiolaStress(), norms_vec, PIOLA_NORM));
+
+  CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(),
+                                  post_proc_norm_fe);
+
+  CHKERR VecAssemblyBegin(norms_vec);
+  CHKERR VecAssemblyEnd(norms_vec);
+
+  MOFEM_LOG_CHANNEL("SELF"); // Clear channel from old tags
+  if (mField.get_comm_rank() == 0) {
+    const double *norms;
+    CHKERR VecGetArrayRead(norms_vec, &norms);
+    MOFEM_TAG_AND_LOG("SELF", Sev::inform, "example")
+        << "norm_u: " << std::scientific << std::sqrt(norms[U_NORM_L2]);
+    MOFEM_TAG_AND_LOG("SELF", Sev::inform, "example")
+        << "norm_piola: " << std::scientific << std::sqrt(norms[PIOLA_NORM]);
+    CHKERR VecRestoreArrayRead(norms_vec, &norms);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+//! [Getting norms]
+
 //! [Postprocessing results]
 MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
@@ -348,13 +436,13 @@ MoFEMErrorCode Example::outputResults() {
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-test", &test_nb, &test_flg);
 
   if (test_flg) {
-    auto *simple = mField.getInterface<Simple>();
+    auto simple = mField.getInterface<Simple>();
     auto T = createDMVector(simple->getDM());
     CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                    SCATTER_FORWARD);
     double nrm2;
     CHKERR VecNorm(T, NORM_2, &nrm2);
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Regression norm " << nrm2;
+    MOFEM_LOG("EXAMPLE", Sev::verbose) << "Regression norm " << nrm2;
     double regression_value = 0;
     switch (test_nb) {
     case 1:

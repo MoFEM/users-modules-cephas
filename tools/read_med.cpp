@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
     MOFEM_LOG_TAG("WORLD", "read_med")
     MOFEM_LOG("WORLD", Sev::inform)
         << "Print all meshsets (old and added from meshsets "
-           "configurational file";
+           "configurational file)";
     for (auto cit = meshsets_interface_ptr->getBegin();
          cit != meshsets_interface_ptr->getEnd(); cit++)
       MOFEM_LOG("WORLD", Sev::inform) << *cit;

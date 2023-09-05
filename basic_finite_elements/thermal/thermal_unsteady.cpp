@@ -55,6 +55,7 @@ struct MonitorPostProc : public FEMethod {
 
   bool iNit;
   int pRT;
+  PetscBool saveSkin;
 
   MonitorPostProc(MoFEM::Interface &m_field)
       : FEMethod(), mField(m_field), postProc(m_field), skinPostProc(m_field),
@@ -67,6 +68,9 @@ struct MonitorPostProc : public FEMethod {
     if (flg != PETSC_TRUE) {
       pRT = 1;
     }
+    saveSkin = PETSC_TRUE;
+    CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-my_save_skin",
+                             &saveSkin, PETSC_NULL);
   }
 
   MoFEMErrorCode preProcess() {
@@ -105,11 +109,13 @@ struct MonitorPostProc : public FEMethod {
       // std::ostringstream sss;
       // sss << "out_thermal_" << step << ".h5m";
       // CHKERR postProc.writeFile(sss.str().c_str());
-      CHKERR mField.loop_finite_elements("DMTHERMAL", "POST_PROC_SKIN",
-                                         skinPostProc);
-      std::ostringstream sss;
-      sss << "out_skin_" << step << ".h5m";
-      CHKERR skinPostProc.writeFile(sss.str().c_str());
+      if (saveSkin) {
+        CHKERR mField.loop_finite_elements("DMTHERMAL", "POST_PROC_SKIN",
+                                          skinPostProc);
+        std::ostringstream sss;
+        sss << "out_skin_" << step << ".h5m";
+        CHKERR skinPostProc.writeFile(sss.str().c_str());
+      }
     }
     MoFEMFunctionReturn(0);
   }
@@ -442,6 +448,11 @@ int main(int argc, char *argv[]) {
   Range thermal_element_ents;
   CHKERR m_field.get_finite_element_entities_by_dimension("THERMAL_FE", 3,
                                                          thermal_element_ents);
+
+  PetscBool save_skin = PETSC_TRUE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-my_save_skin",
+                             &save_skin, PETSC_NULL);
+
   Skinner skin(&m_field.get_moab());
   Range skin_faces; // skin faces from 3d ents
   CHKERR skin.find_skin(0, thermal_element_ents, false, skin_faces);
@@ -453,14 +464,17 @@ int main(int argc, char *argv[]) {
   } else {
     proc_skin = skin_faces;
   }
-  CHKERR m_field.add_finite_element("POST_PROC_SKIN");
-  CHKERR m_field.modify_finite_element_add_field_row("POST_PROC_SKIN", "TEMP");
-  CHKERR m_field.modify_finite_element_add_field_col("POST_PROC_SKIN", "TEMP");
-  CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN", "TEMP");
-  CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN",
-                                                     "MESH_NODE_POSITIONS");
-  CHKERR m_field.add_ents_to_finite_element_by_dim(proc_skin, 2,
-                                                  "POST_PROC_SKIN");
+
+  if (save_skin) {
+    CHKERR m_field.add_finite_element("POST_PROC_SKIN");
+    CHKERR m_field.modify_finite_element_add_field_row("POST_PROC_SKIN", "TEMP");
+    CHKERR m_field.modify_finite_element_add_field_col("POST_PROC_SKIN", "TEMP");
+    CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN", "TEMP");
+    CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN",
+                                                      "MESH_NODE_POSITIONS");
+    CHKERR m_field.add_ents_to_finite_element_by_dim(proc_skin, 2,
+                                                    "POST_PROC_SKIN");
+  }
 
   // build finite elemnts
   CHKERR m_field.build_finite_elements();
@@ -504,7 +518,9 @@ int main(int argc, char *argv[]) {
   CHKERR DMMoFEMAddElement(dm, "THERMAL_FLUX_FE");
   CHKERR DMMoFEMAddElement(dm, "THERMAL_CONVECTION_FE");
   CHKERR DMMoFEMAddElement(dm, "THERMAL_RADIATION_FE");
-  CHKERR DMMoFEMAddElement(dm, "POST_PROC_SKIN");
+  if (save_skin)
+    CHKERR DMMoFEMAddElement(dm, "POST_PROC_SKIN");
+    
 #ifdef __GROUND_SURFACE_TEMPERATURE_HPP
   if (ground_temperature_analysis) {
     CHKERR DMMoFEMAddElement(dm, "GROUND_SURFACE_FE");

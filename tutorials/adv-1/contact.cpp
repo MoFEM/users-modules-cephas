@@ -705,7 +705,7 @@ MoFEMErrorCode Contact::tsSolve() {
     boost::shared_ptr<SetUpSchur> schur_ptr;
     if (AT == AssemblyType::SCHUR) {
       schur_ptr = SetUpSchur::createSetUpSchur(mField);
-      CHKERR schur_ptr->setUp(solver);
+      CHK_MOAB_THROW(schur_ptr->setUp(solver), "SetUpSchur::setUp");
     }
     return schur_ptr;
   };

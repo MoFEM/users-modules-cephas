@@ -124,6 +124,11 @@ int main(int argc, char *argv[]) {
   LogManager::setLog("ELASTIC");
   MOFEM_LOG_TAG("ELASTIC", "elasticity")
 
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmSync(), "ELASTIC_SYNC"));
+  LogManager::setLog("ELASTIC_SYNC");
+  MOFEM_LOG_TAG("ELASTIC_SYNC", "elastic_sync");
+
   try {
 
     PetscBool flg_block_config, flg_file;
@@ -519,6 +524,14 @@ int main(int argc, char *argv[]) {
                                                          "DISPLACEMENT");
       CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN",
                                                           "DISPLACEMENT");
+      if (m_field.check_field("TEMP")) {
+        // CHKERR m_field.modify_finite_element_add_field_row("POST_PROC_SKIN",
+        //                                                    "TEMP");
+        // CHKERR m_field.modify_finite_element_add_field_col("POST_PROC_SKIN",
+        //                                                    "TEMP");
+        CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN",
+                                                            "TEMP");
+      }                                                    
       CHKERR m_field.modify_finite_element_add_field_data(
           "POST_PROC_SKIN", "MESH_NODE_POSITIONS");
       CHKERR m_field.add_ents_to_finite_element_by_dim(proc_skin, 2,
@@ -938,9 +951,12 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc_skin.addFieldValuesPostProc("MESH_NODE_POSITIONS");
       CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
           "DISPLACEMENT", "ELASTIC", data_at_pts->hMat, true);
-    CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
-
+      CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
           "MESH_NODE_POSITIONS", "ELASTIC", data_at_pts->HMat, false);
+      if (m_field.check_field("TEMP")) {
+        CHKERR post_proc_skin.addFieldValuesPostProc("TEMP");
+        CHKERR post_proc_skin.addFieldValuesGradientPostProc("TEMP");
+      }
       post_proc_skin.getOpPtrVector().push_back(
           new HookeElement::OpPostProcHookeElement<
               FaceElementForcesAndSourcesCore>(
@@ -959,6 +975,10 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
       CHKERR post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
+      if (m_field.check_field("TEMP")) {
+        CHKERR post_proc.addFieldValuesPostProc("TEMP");
+        CHKERR post_proc.addFieldValuesGradientPostProc("TEMP");
+      }
       // Add problem specific operator on element to post-process stresses
       post_proc.getOpPtrVector().push_back(new PostProcHookStress(
           m_field, post_proc.postProcMesh, post_proc.mapGaussPts,
@@ -999,6 +1019,40 @@ int main(int argc, char *argv[]) {
     CHKERR set_post_proc_tets(post_proc);
     CHKERR set_post_proc_prisms(prism_post_proc);
     CHKERR set_post_proc_edge(post_proc_edge);
+
+    PetscBool field_eval_flag = PETSC_FALSE;
+    std::array<double, 3> field_eval_coords;
+    boost::shared_ptr<FieldEvaluatorInterface::SetPtsData> field_eval_data;
+    PetscInt coords_dim = 3;
+    CHKERR PetscOptionsGetRealArray(NULL, NULL, "-field_eval_coords",
+                                    field_eval_coords.data(), &coords_dim,
+                                    &field_eval_flag);
+
+    auto scalar_field_ptr = boost::make_shared<VectorDouble>();
+    auto vector_field_ptr = boost::make_shared<MatrixDouble>();
+    auto tensor_field_ptr = boost::make_shared<MatrixDouble>();
+
+    if (field_eval_flag) {
+      field_eval_data = m_field.getInterface<FieldEvaluatorInterface>()
+                            ->getData<VolumeElementForcesAndSourcesCore>();
+      CHKERR m_field.getInterface<FieldEvaluatorInterface>()->buildTree3D(
+          field_eval_data, "ELASTIC");
+
+      field_eval_data->setEvalPoints(field_eval_coords.data(), 1);
+      auto no_rule = [](int, int, int) { return -1; };
+
+      auto field_eval_fe_ptr = field_eval_data->feMethodPtr.lock();
+      field_eval_fe_ptr->getRuleHook = no_rule;
+
+      if (m_field.check_field("TEMP")) {
+        field_eval_fe_ptr->getOpPtrVector().push_back(
+            new OpCalculateScalarFieldValues("TEMP", scalar_field_ptr));
+      }
+      field_eval_fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>("DISPLACEMENT", vector_field_ptr));
+       field_eval_fe_ptr->getOpPtrVector().push_back(
+         new OpCalculateVectorFieldGradient<3, 3>("DISPLACEMENT", tensor_field_ptr));
+    }
 
     // Temperature field is defined on the mesh
     if (m_field.check_field("TEMP")) {
@@ -1085,6 +1139,33 @@ int main(int argc, char *argv[]) {
           // Save data on mesh
           CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
 
+          if (field_eval_flag) {
+            CHKERR m_field.getInterface<FieldEvaluatorInterface>()
+                ->evalFEAtThePoint3D(
+                    field_eval_coords.data(), 1e-12, "ELASTIC_PROB", "ELASTIC",
+                    field_eval_data, m_field.get_comm_rank(),
+                    m_field.get_comm_rank(), nullptr, MF_EXIST, QUIET);
+            if (scalar_field_ptr->size()) {
+              auto t_temp = getFTensor0FromVec(*scalar_field_ptr);
+              MOFEM_LOG("ELASTIC_SYNC", Sev::inform)
+                  << "Eval point TEMP: " << t_temp;
+            }
+            if (vector_field_ptr->size1()) {
+              FTensor::Index<'i', 3> i;
+              auto t_disp = getFTensor1FromMat<3>(*vector_field_ptr);
+              MOFEM_LOG("ELASTIC_SYNC", Sev::inform)
+                  << "Eval point DISPLACEMENT magnitude: "
+                  << sqrt(t_disp(i) * t_disp(i));
+            }
+            if (tensor_field_ptr->size1()) {
+              FTensor::Index<'i', 3> i;
+              auto t_disp_grad = getFTensor2FromMat<3, 3>(*tensor_field_ptr);
+              MOFEM_LOG("ELASTIC_SYNC", Sev::inform)
+                  << "Eval point DISPLACEMENT_GRAD trace: " << t_disp_grad(i, i);
+            }
+
+            MOFEM_LOG_SYNCHRONISE(m_field.get_comm());
+          }
 
           // Post-process results
           if (is_post_proc_volume == PETSC_TRUE) {
@@ -1101,10 +1182,10 @@ int main(int argc, char *argv[]) {
           CHKERR DMoFEMLoopFiniteElements(dm, "POST_PROC_SKIN",
                                           &post_proc_skin);
           std::ostringstream o1_skin;
-          o1_skin << "out_skin" << sit->step_number << ".h5m";
+          o1_skin << "out_skin_" << sit->step_number << ".h5m";
           if (!test_nb)
             CHKERR post_proc_skin.writeFile(o1_skin.str().c_str());
-          MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done ...";
+          MOFEM_LOG("ELASTIC", Sev::inform) << "done ...";
         }
       } else {
 
@@ -1168,7 +1249,7 @@ int main(int argc, char *argv[]) {
         CHKERR DMoFEMLoopFiniteElements(dm, "POST_PROC_SKIN", &post_proc_skin);
         if (!test_nb)
           CHKERR post_proc_skin.writeFile("out_skin.h5m");
-        MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done";
+        MOFEM_LOG("ELASTIC", Sev::inform) << "done";
       }
 
       // Destroy vector, no needed any more
