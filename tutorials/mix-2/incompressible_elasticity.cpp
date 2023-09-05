@@ -89,14 +89,15 @@ struct MonitorIncompressible : public FEMethod {
       if (vecFieldPtr->size1()) {
         auto t_disp = getFTensor1FromMat<SPACE_DIM>(*vecFieldPtr);
         if constexpr (SPACE_DIM == 2)
-          MOFEM_LOG("FieldEvaluator", Sev::inform)
+          MOFEM_LOG("SYNC", Sev::inform)
               << "U_X: " << t_disp(0) << " U_Y: " << t_disp(1);
         else
-          MOFEM_LOG("FieldEvaluator", Sev::inform)
+          MOFEM_LOG("SYNC", Sev::inform)
               << "U_X: " << t_disp(0) << " U_Y: " << t_disp(1)
               << " U_Z: " << t_disp(2);
       }
     }
+    MOFEM_LOG_SEVERITY_SYNC(m_field_ptr->get_comm(), Sev::inform);
 
     auto make_vtk = [&]() {
       MoFEMFunctionBegin;
@@ -407,10 +408,6 @@ MoFEMErrorCode Incompressible::bC() {
       NaturalBC<BoundaryEleOp>::Assembly<PETSC>::LinearForm<GAUSS>;
   using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
   
-  struct BoundaryBCs {};
-  using BoundaryRhsBCs = NaturalBC<BoundaryEleOp>::Assembly<AT>::LinearForm<IT>;
-  using OpBoundaryRhsBCs = BoundaryRhsBCs::OpFlux<BoundaryBCs, 1, SPACE_DIM>;
-
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
   CHKERR AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
       pipeline_mng->getOpBoundaryRhsPipeline(), {NOSPACE}, "GEOMETRY");
@@ -419,9 +416,6 @@ MoFEMErrorCode Incompressible::bC() {
       pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {time_scale},
       "FORCE", Sev::inform);
 
-  CHKERR BoundaryRhsBCs::AddFluxToPipeline<OpBoundaryRhsBCs>::add(
-      pipeline_mng->getOpBoundaryRhsPipeline(), mField, "U", {time_scale}, Sev::inform);
-  
   //! [Define gravity vector]
   CHKERR DomainNaturalBC::AddFluxToPipeline<OpBodyForce>::add(
       pipeline_mng->getOpDomainRhsPipeline(), mField, "U", {time_scale},
