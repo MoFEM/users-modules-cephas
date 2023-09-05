@@ -1071,12 +1071,10 @@ MoFEMErrorCode Example::solveSystem() {
 
   vol_mass_ele->getRuleHook = integration_rule;
 
-  auto energy_consistency = [&](const double, const double, const double) {
-    return 3. * bulk_modulus_K;
-  };
+  
   vol_mass_ele->getOpPtrVector().push_back(new OpMassV("V", "V", get_rho));
   vol_mass_ele->getOpPtrVector().push_back(
-      new OpMassF("F", "F", energy_consistency));
+      new OpMassF("F", "F"));
 
   CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(), vol_mass_ele);
   CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
