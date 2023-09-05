@@ -100,7 +100,6 @@ using OpForce = BoundaryNaturalBC::OpFlux<NaturalForceMeshsets, 1, SPACE_DIM>;
 /** \brief Save field DOFS on vertices/tags
  */
 
-constexpr double rho = 1;
 constexpr double omega = 1.;
 constexpr double young_modulus = 1.;
 constexpr double poisson_ratio = 0.;
@@ -706,13 +705,8 @@ MoFEMErrorCode Example::assembleSystem() {
     return t_source;
   };
 
-  auto rho_ptr = boost::make_shared<double>(rho);
-
   // Get pointer to U_tt shift in domain element
-  auto get_rho = [rho_ptr](const double, const double, const double) {
-    return *rho_ptr;
-  };
-
+  
   // specific time scaling
   auto get_time_scale = [this](const double time) {
     return sin(time * omega * M_PI);
@@ -1051,9 +1045,11 @@ MoFEMErrorCode Example::solveSystem() {
 
   // Add monitor to time solver
 
-  auto rho_ptr = boost::make_shared<double>(rho);
-  auto get_rho = [rho_ptr](const double, const double, const double) {
-    return *rho_ptr;
+  double rho = 1.;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-density", &rho,
+                                 PETSC_NULL);
+  auto get_rho = [rho](const double, const double, const double) {
+    return rho;
   };
 
   SmartPetscObj<Mat> M;   ///< Mass matrix
@@ -1078,7 +1074,7 @@ MoFEMErrorCode Example::solveSystem() {
   auto energy_consistency = [&](const double, const double, const double) {
     return 3. * bulk_modulus_K;
   };
-  vol_mass_ele->getOpPtrVector().push_back(new OpMassV("V", "V"));
+  vol_mass_ele->getOpPtrVector().push_back(new OpMassV("V", "V", get_rho));
   vol_mass_ele->getOpPtrVector().push_back(
       new OpMassF("F", "F", energy_consistency));
 
