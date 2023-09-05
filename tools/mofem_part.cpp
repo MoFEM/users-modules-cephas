@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     PetscInt n_partas = 1;
     PetscBool create_lower_dim_ents = PETSC_TRUE;
     PetscInt dim = 3;
-    PetscInt adj_dim = 2;
+    PetscInt adj_dim = 0;
 
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "none", "none");
     CHKERRQ(ierr);
@@ -77,17 +77,24 @@ int main(int argc, char *argv[]) {
               "Dimension of entities to partition not found");
 
     CHKERR PetscOptionsInt("-dim", "entities dim", "", dim, &dim, PETSC_NULL);
-    adj_dim = dim - 1;
+    // adj_dim = dim - 1;
     CHKERR PetscOptionsInt("-adj_dim", "adjacency dim", "", adj_dim, &adj_dim,
                            PETSC_NULL);
     CHKERR PetscOptionsBool(
-        "-my_create_lower_dim_ents", "if tru create lower dimension entireties",
+        "-my_create_lower_dim_ents", "if true create lower dimension entireties",
         "", create_lower_dim_ents, &create_lower_dim_ents, PETSC_NULL);
     CHKERR PetscOptionsBool("-block_tags", "only block and meshsests tags", "",
                             only_tags, &only_tags, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
+
+    auto get_dim = [](const Range &ents) -> int {
+      for (int d : {3, 2, 1})
+        if (ents.num_of_dimension(d))
+          return d;
+      return 0;
+    };
 
     // Create MoFEM  database
     MoFEM::Core core(moab);
@@ -97,11 +104,27 @@ int main(int argc, char *argv[]) {
     CHKERR meshsets_interface_ptr->setMeshsetFromFile();
 
     MOFEM_LOG_CHANNEL("WORLD");
-    MOFEM_LOG_TAG("WORLD", "mofem_part")
-    for (CubitMeshSet_multiIndex::iterator cit =
-             meshsets_interface_ptr->getBegin();
-         cit != meshsets_interface_ptr->getEnd(); cit++)
+    MOFEM_LOG_TAG("WORLD", "mofem_part");
+    int min_dim = 3;
+    for (auto cit = meshsets_interface_ptr->getBegin();
+         cit != meshsets_interface_ptr->getEnd(); cit++) {
+      Range ents;
+      CHKERR m_field.get_moab().get_entities_by_handle(cit->getMeshset(), ents,
+                                                       true);
+      min_dim = std::min(min_dim, get_dim(ents));
       MOFEM_LOG("WORLD", Sev::inform) << *cit;
+    }
+
+    int g_dim; // global dimension
+    MPI_Allreduce(&min_dim, &g_dim, 1, MPI_INT, MPI_MIN, m_field.get_comm());
+    if (g_dim < adj_dim) {
+      MOFEM_LOG("WORLD", Sev::warning)
+          << "The minimum meshsets dimension is = " << min_dim;
+    }
+    if (adj_dim >= dim) {
+      MOFEM_LOG("WORLD", Sev::warning)
+          << "The -adj_dim >= dim, adj_dim = " << adj_dim << " dim = " << dim;
+    }
     MOFEM_LOG_CHANNEL("WORLD");
 
     {

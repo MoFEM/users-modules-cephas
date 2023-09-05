@@ -633,7 +633,7 @@ MoFEMErrorCode ThermoElasticProblem::bC() {
   MOFEM_LOG("SYNC", Sev::noisy) << remove_flux_ents << endl;
   MOFEM_LOG_SEVERITY_SYNC(mField.get_comm(), Sev::noisy);
 
-#ifdef NDEBUG
+#ifndef NDEBUG
 
   CHKERR save_range(
       mField.get_moab(),
