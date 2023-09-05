@@ -131,87 +131,9 @@ typedef boost::function<double(const double, const double, const double)>
 
 \subsection basic_tutorials_poisson_nonhomogeneous_UDOs User Defined Operators
 First, let's look at the structure of UDOs. Users can also learn a general structure of any UDOs implemented in MoFEM. For example, we can notice that our OpDomainLhs is similaar to the OpDomainLhsMatrixK operator in \ref basic_tutorials_poisson_homogeneous. However, Lets identify the differences bellow and then the further difference will be discussed: 
-\subsubsection OpDomainRhs OpDomainLhs()
-\code
-struct OpDomainLhs : public OpFaceEle {
-public:
-  OpDomainLhs(std::string row_field_name, std::string col_field_name)
-      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL) {
-    sYmm = true;
-  }
 
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data) {
-    MoFEMFunctionBegin;
-
-    const int nb_row_dofs = row_data.getIndices().size();
-    const int nb_col_dofs = col_data.getIndices().size();
-
-    if (nb_row_dofs && nb_col_dofs) {
-
-      locLhs.resize(nb_row_dofs, nb_col_dofs, false);
-      locLhs.clear();
-
-      // get element area
-      const double area = getMeasure();
-
-      // get number of integration points
-      const int nb_integration_points = getGaussPts().size2();
-      // get integration weights
-      auto t_w = getFTensor0IntegrationWeight();
-
-      // get derivatives of base functions on row
-      auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
-
-      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
-      for (int gg = 0; gg != nb_integration_points; gg++) {
-
-        const double a = t_w * area;
-
-        for (int rr = 0; rr != nb_row_dofs; ++rr) {
-          // get derivatives of base functions on column
-          auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
-
-          for (int cc = 0; cc != nb_col_dofs; cc++) {
-
-            locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
-
-            // move to the derivatives of the next base functions on column
-            ++t_col_diff_base;
-          }
-
-          // move to the derivatives of the next base functions on row
-          ++t_row_diff_base;
-        }
-
-        // move to the weight of the next integration point
-        ++t_w;
-      }
-
-      // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
-
-      // Fill value to local stiffness matrix ignoring boundary DOFs
-      CHKERR MatSetValues<MoFEM::EssentialBcStorage>(
-          getKSPB(), row_data, col_data, &locLhs(0, 0), ADD_VALUES);
-
-      // Fill values of symmetric local stiffness matrix
-      if (row_side != col_side || row_type != col_type) {
-        transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
-        noalias(transLocLhs) = trans(locLhs);
-        CHKERR MatSetValues<MoFEM::EssentialBcStorage>(
-            getKSPB(), col_data, row_data, &transLocLhs(0, 0), ADD_VALUES);
-      }
-    }
-
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
-  MatrixDouble locLhs, transLocLhs;
-};
-\endcode
+\subsubsection OpDomainLhs OpDomainLhs()
+ \snippet users_modules/tutorials/scl-2/src/poisson_2d_nonhomogeneous.hpp OpDomainLhs
 
 In the above, the class OpDomainLhs is inherited from OpFaceEle, which stands as the alias for the base class MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator. Within this class, there stands two public entities: OpDomainLhs() and doWork(). Here, the doWork() does the same as iNtegrate as in \ref basic_tutorials_poisson_homogeneous. However, the difference is that we are using a different lamda function to calculate the body source term. Alongside, we have got two private members named locLhs and transLocLhs. This follows the concept of data encapsulation to hide values and objects inside the class as much as possible.
 
@@ -234,72 +156,12 @@ The coding part is as follows:
 \endcode
 The function MatSetValues() is used to assemble the global matrix. This function sets values for the global matrix using inputs like getKSPB(), row_data, col_data, and the memory address of the local stiffness matrix's  and also first component &locLhs(0, 0). The ADD_VALUES flag is used to add values during the assembly. Transposing is performed for the symmetric global matrix  which is then solved using the iterative solver linear KSP.
 
+
 \subsubsection OpDomainRhs OpDomainRhs()
 The characterization of OpDomainRhs is straightforward and aligns with OpDomainRhsVectorF in the context of SCL-1 for solving Poisson's equation with homogeneous boundary conditions. However, there is a slightly difference in the body source term. The accompanying code snippet illustrates in the following:
-\code
-struct OpDomainRhs : public OpFaceEle {
-public:
-  OpDomainRhs(std::string field_name, ScalarFunc source_term_function)
-      : OpFaceEle(field_name, OpFaceEle::OPROW),
-        sourceTermFunc(source_term_function) {}
 
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-    MoFEMFunctionBegin;
+ \snippet users_modules/tutorials/scl-2/src/poisson_2d_nonhomogeneous.hpp OpDomainRhs
 
-    const int nb_dofs = data.getIndices().size();
-
-    if (nb_dofs) {
-
-      locRhs.resize(nb_dofs, false);
-      locRhs.clear();
-
-      // get element area
-      const double area = getMeasure();
-
-      // get number of integration points
-      const int nb_integration_points = getGaussPts().size2();
-      // get integration weights
-      auto t_w = getFTensor0IntegrationWeight();
-      // get coordinates of the integration point
-      auto t_coords = getFTensor1CoordsAtGaussPts();
-
-      // get base functions
-      auto t_base = data.getFTensor0N();
-
-      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL VECTOR
-      for (int gg = 0; gg != nb_integration_points; gg++) {
-
-        const double a = t_w * area;
-        double body_source =
-            sourceTermFunc(t_coords(0), t_coords(1), t_coords(2));
-
-        for (int rr = 0; rr != nb_dofs; rr++) {
-
-          locRhs[rr] += t_base * body_source * a;
-
-          // move to the next base function
-          ++t_base;
-        }
-
-        // move to the weight of the next integration point
-        ++t_w;
-        // move to the coordinates of the next integration point
-        ++t_coords;
-      }
-
-      // FILL VALUES OF THE GLOBAL VECTOR ENTRIES FROM THE LOCAL ONES
-      CHKERR VecSetValues<MoFEM::EssentialBcStorage>(
-          getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
-    }
-
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  ScalarFunc sourceTermFunc;
-  VectorDouble locRhs;
-};
-\endcode
  In the above, we can see a different body source term which is calculted by calling a lamda function sourceTermFunc() with coordinate(x, y, z) coordinates t_coords(0), t_coords(1), and t_coords(2) as arguments as follows: 
 \code 
 double body_source =
@@ -380,118 +242,26 @@ private:
   Range boundaryEntitiesForFieldsplit;
 };
 \endcode
-subsubsection readMesh readMesh()
+\subsubsection readMesh readMesh()
 Next, to read the mesh the function similar job as in MoFEMErrorCode Poisson2DNonhomogeneous::readMesh().
-\code
-MoFEMErrorCode Poisson2DNonhomogeneous::readMesh() {
-  MoFEMFunctionBegin;
-
-  CHKERR mField.getInterface(simpleInterface);
-  CHKERR simpleInterface->getOptions();
-  CHKERR simpleInterface->loadFile();
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
+ \snippet users_modules/tutorials/scl-2/poisson_2d_nonhomogeneous.cpp Read mesh
 
 \subsubsection setupProblem setupProblem()
  To setup the problemm, we need to include the field in our problem. Since we are considering both domain and boundary , so we have to aadd the domain and boundary field in the simpleInterface. Besides, we use methods like AINSWORTH_BERNSTEIN_BEZIER_BASE and H1 scalar space, where each shape function has 1 degree of freedom.
-\code
-MoFEMErrorCode Poisson2DNonhomogeneous::setupProblem() {
-  MoFEMFunctionBegin;
+ \snippet users_modules/tutorials/scl-2/poisson_2d_homogeneous.cpp Setup problem
 
-  CHKERR simpleInterface->addDomainField(domainField, H1,
-                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  CHKERR simpleInterface->addBoundaryField(domainField, H1,
-                                           AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
 
-  int oRder = 3;
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
-  CHKERR simpleInterface->setFieldOrder(domainField, oRder);
-
-  CHKERR simpleInterface->setUp();
-
-  MoFEMFunctionReturn(0);
-}
-\ endcode
 
 \subsubsection boundaryCondition boundaryCondition()
-Next, we need to discuss the detail for setting up boundary condition. This code involves marking degrees of freedom on boundary entities, merging markers, and obtaining entities for field splitting. Here is the code snippet in in the following: 
-\code
- MoFEMErrorCode Poisson2DNonhomogeneous::boundaryCondition() {
-  MoFEMFunctionBegin;
+Next, we need to discuss the detail for setting up boundary condition. This code involves marking degrees of freedom on boundary entities, merging markers, and obtaining entities for field splitting. Here is the code snippet in in the following:
+ \snippet users_modules/tutorials/scl-2/poisson_2d_nonhomogeneous.cpp Boundary condition
 
-  auto bc_mng = mField.getInterface<BcManager>();
-  CHKERR bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
-                                        "BOUNDARY_CONDITION", domainField, 0, 1,
-                                        true);
-
-  // merge markers from all blocksets "BOUNDARY_CONDITION"
-  boundaryMarker =
-      bc_mng->getMergedBlocksMarker({"BOUNDARY_CONDITION"});
-  // get entities on blocksets "BOUNDARY_CONDITION"
-  boundaryEntitiesForFieldsplit =
-      bc_mng->getMergedBlocksRange({"BOUNDARY_CONDITION"});
-
-  MoFEMFunctionReturn(0);
-} 
-\endcode
 Here, the line bc_mng->pushMarkDOFsOnEntities(...) is used to push the degrees of freedom (DOFs) onto entities only for marked blockset("BOUNDARY_CONDITION") . Then the blockset are accumulated as in container and assigned as a vector in boundaryMarker. The boundaryEntitiesForFieldsplit is to get the range/ IDs for the blocks including vertex, edges or faces. This is done to indicate the difference between the domain and boundary entities.
 
 
 \subsubsection assembleSystem assembleSystem()
 Now, our attention should be directed towards on MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem(). Because there is significant changes that happens comparing with the homogenous problem-SCL-1. Before going to that, first we add operators to the OpDomainLhsPipeline using the AddHOOps function considering scalar space H1. Then we need to set the boundary conditions using OpSetBc for domain, then push the main OpDomainLhs operator, and finally unset the boundary conditions using OpUnSetBc. We will discuss on it in detail after going through the the code snippet in the following:
-\code
-MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
-  MoFEMFunctionBegin;
-
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-
-  { // Push operators to the Pipeline that is responsible for calculating LHS of
-    // domain elements
-    CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
-        pipeline_mng->getOpDomainLhsPipeline(), {H1});
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetBc(domainField, true, boundaryMarker));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhs(domainField, domainField));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpUnSetBc(domainField));
-  }
-
-  { // Push operators to the Pipeline that is responsible for calculating RHS of
-    // domain elements
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpSetBc(domainField, true, boundaryMarker));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDomainRhs(domainField, sourceTermFunction));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpUnSetBc(domainField));
-  }
-
-  { // Push operators to the Pipeline that is responsible for calculating LHS of
-    // boundary elements
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpSetBc(domainField, false, boundaryMarker));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpBoundaryLhs(domainField, domainField));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpUnSetBc(domainField));
-  }
-
-  { // Push operators to the Pipeline that is responsible for calculating RHS of
-    // boundary elements
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpSetBc(domainField, false, boundaryMarker));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpBoundaryRhs(domainField, boundaryFunction));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpUnSetBc(domainField));
-  }
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
+ \snippet users_modules/tutorials/scl-2/poisson_2d_nonhomogeneous.cpp Assemble system
 
 Here, the set of process involves using the OpSetBc, OpUnSetBc, and primary operators to push back to the pipeline for assemblying the operators. Specifically, these operations are being carried out on the OpDomainLhsPipeline and OpBoundaryLhsPipeline for both domain and boundary respectively in the same way. So we are only describing for only one set of assemble process in the following: 
 
@@ -523,26 +293,8 @@ To recapitulate, OpSetBc() works for to skipping(marked 'true' to skip) the boun
 </BLOCKQUOTE>
 
 \subsubsection setIntegrationRules setIntegrationRules()
-Afterward, Having the computation of LHS and RHS is defined in the setIntegrationRules. The instructions for the functions setIntegrationRules() is same as it was in \ref basic_tutorials_poisson_homogeneous. 
-\code
-MoFEMErrorCode Poisson2DNonhomogeneous::setIntegrationRules() {
-  MoFEMFunctionBegin;
-
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-
-  auto domain_rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  auto domain_rule_rhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(domain_rule_lhs);
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(domain_rule_rhs);
-
-  auto boundary_rule_lhs = [](int, int, int p) -> int { return 2 * p; };
-  auto boundary_rule_rhs = [](int, int, int p) -> int { return 2 * p; };
-  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(boundary_rule_lhs);
-  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(boundary_rule_rhs);
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
+Afterward, Having the computation of LHS and RHS is defined in the setIntegrationRules. The instructions for the functions setIntegrationRules() is same as it was in \ref basic_tutorials_poisson_homogeneous.
+ \snippet users_modules/tutorials/scl-2/poisson_2d_nonhomogeneous.cpp Set integration rules 
 \subsubsection solveSystem solveSystem()
 
 For this problem , we devided our problem filed for domain and boundaries similar to Figure: 2
