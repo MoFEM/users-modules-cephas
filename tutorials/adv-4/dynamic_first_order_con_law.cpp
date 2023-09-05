@@ -856,12 +856,12 @@ struct Monitor : public FEMethod {
       CHKERR mField.getInterface<FieldEvaluatorInterface>()->evalFEAtThePoint3D(
           fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
           simple->getDomainFEName(), fieldEvalData, mField.get_comm_rank(),
-          mField.get_comm_rank(), nullptr, MF_EXIST, QUIET);
+          mField.get_comm_rank(), getCacheWeakPtr().lock(), MF_EXIST, QUIET);
     } else {
       CHKERR mField.getInterface<FieldEvaluatorInterface>()->evalFEAtThePoint2D(
           fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
           simple->getDomainFEName(), fieldEvalData, mField.get_comm_rank(),
-          mField.get_comm_rank(), nullptr, MF_EXIST, QUIET);
+          mField.get_comm_rank(), getCacheWeakPtr().lock(), MF_EXIST, QUIET);
     }
 
     if (velocityFieldPtr->size1()) {
