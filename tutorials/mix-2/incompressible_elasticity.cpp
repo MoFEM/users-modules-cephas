@@ -76,14 +76,14 @@ struct MonitorIncompressible : public FEMethod {
                 fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
                 simple->getDomainFEName(), fieldEvalData,
                 m_field_ptr->get_comm_rank(), m_field_ptr->get_comm_rank(),
-                nullptr, MF_EXIST, QUIET);
+                getCacheWeakPtr().lock(), MF_EXIST, QUIET);
       } else {
         CHKERR m_field_ptr->getInterface<FieldEvaluatorInterface>()
             ->evalFEAtThePoint2D(
                 fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
                 simple->getDomainFEName(), fieldEvalData,
                 m_field_ptr->get_comm_rank(), m_field_ptr->get_comm_rank(),
-                nullptr, MF_EXIST, QUIET);
+                getCacheWeakPtr().lock(), MF_EXIST, QUIET);
       }
 
       if (vecFieldPtr->size1()) {
