@@ -916,7 +916,9 @@ struct Monitor : public FEMethod {
     PetscBool print_skin = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-print_skin", &print_skin, PETSC_NULL);
 
-    constexpr int save_every_nth_step = 1;
+    int save_every_nth_step = 1;
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_step", &save_every_nth_step,
+                            PETSC_NULL);
     if (ts_step % save_every_nth_step == 0) {
 
       if (print_volume) {
