@@ -15,7 +15,7 @@ using namespace MoFEM;
 //! [Define dimension]
 constexpr int BASE_DIM = 1; //< Dimension of the base functions
 constexpr int SPACE_DIM =
-    EXECUTABLE_DIMENSION;   //< Space dimension of problem, mesh
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 constexpr AssemblyType A = (SCHUR_ASSEMBLE)
                                ? AssemblyType::SCHUR
                                : AssemblyType::PETSC; //< selected assembly type
@@ -73,6 +73,8 @@ constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
+PetscBool is_plain_strain = PETSC_FALSE;
+
 struct Example {
 
   Example(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -82,6 +84,10 @@ struct Example {
 private:
   MoFEM::Interface &mField;
 
+  PetscBool doEvalField;
+  std::array<double, SPACE_DIM> fieldEvalCoords;
+  boost::shared_ptr<FieldEvaluatorInterface::SetPtsData> fieldEvalData;
+  boost::shared_ptr<MatrixDouble> vectorFieldPtr;
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
@@ -191,10 +197,11 @@ MoFEMErrorCode Example::addMatBlockOps(
         FTensor::Index<'k', SPACE_DIM> k;
         FTensor::Index<'l', SPACE_DIM> l;
         constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-        double A = (SPACE_DIM == 2)
-                       ? 2 * shear_modulus_G /
-                             (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
-                       : 1;
+        double A = 1.;
+        if (SPACE_DIM == 2 && !is_plain_strain) {
+          A = 2 * shear_modulus_G /
+              (bulk_modulus_K + (4. / 3.) * shear_modulus_G);
+        }
         auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*mat_D_ptr);
         t_D(i, j, k, l) =
             2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
@@ -294,6 +301,36 @@ MoFEMErrorCode Example::setupProblem() {
   };
   CHKERR project_ho_geometry();
 
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-plane_strain", &is_plain_strain,
+                             PETSC_NULL);
+
+  int coords_dim = SPACE_DIM;
+  CHKERR PetscOptionsGetRealArray(NULL, NULL, "-field_eval_coords",
+                                  fieldEvalCoords.data(), &coords_dim,
+                                  &doEvalField);
+
+  if (doEvalField) {
+    vectorFieldPtr = boost::make_shared<MatrixDouble>();
+    fieldEvalData =
+        mField.getInterface<FieldEvaluatorInterface>()->getData<DomainEle>();
+
+    if constexpr (SPACE_DIM == 3) {
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->buildTree3D(
+          fieldEvalData, simple->getDomainFEName());
+    } else {
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->buildTree2D(
+          fieldEvalData, simple->getDomainFEName());
+    }
+
+    fieldEvalData->setEvalPoints(fieldEvalCoords.data(), 1);
+    auto no_rule = [](int, int, int) { return -1; };
+    auto field_eval_fe_ptr = fieldEvalData->feMethodPtr.lock();
+    field_eval_fe_ptr->getRuleHook = no_rule;
+
+    field_eval_fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>("U", vectorFieldPtr));
+  }
+
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
@@ -328,7 +365,6 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR pip->setDomainLhsIntegrationRule(integration_rule);
   CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule_bc);
   CHKERR pip->setBoundaryLhsIntegrationRule(integration_rule_bc);
-
 
   MoFEMFunctionReturn(0);
 }
@@ -428,12 +464,12 @@ MoFEMErrorCode Example::solveSystem() {
     pre_proc_rhs->preProcessHook = get_pre_proc_hook();
 
     auto get_post_proc_hook_rhs = [&]() {
-      return EssentialPostProcRhs<DisplacementCubitBcData>(mField, post_proc_rhs,
-                                                          1.);
+      return EssentialPostProcRhs<DisplacementCubitBcData>(mField,
+                                                           post_proc_rhs, 1.);
     };
     auto get_post_proc_hook_lhs = [&]() {
-      return EssentialPostProcLhs<DisplacementCubitBcData>(mField, post_proc_lhs,
-                                                          1.);
+      return EssentialPostProcLhs<DisplacementCubitBcData>(mField,
+                                                           post_proc_lhs, 1.);
     };
     post_proc_rhs->postProcessHook = get_post_proc_hook_rhs();
     post_proc_lhs->postProcessHook = get_post_proc_hook_lhs();
@@ -472,6 +508,33 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+  if (doEvalField) {
+    if constexpr (SPACE_DIM == 3) {
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->evalFEAtThePoint3D(
+          fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
+          simple->getDomainFEName(), fieldEvalData, mField.get_comm_rank(),
+          mField.get_comm_rank(), nullptr, MF_EXIST, QUIET);
+    } else {
+      CHKERR mField.getInterface<FieldEvaluatorInterface>()->evalFEAtThePoint2D(
+          fieldEvalCoords.data(), 1e-12, simple->getProblemName(),
+          simple->getDomainFEName(), fieldEvalData, mField.get_comm_rank(),
+          mField.get_comm_rank(), nullptr, MF_EXIST, QUIET);
+    }
+
+    if (vectorFieldPtr->size1()) {
+      auto t_disp = getFTensor1FromMat<SPACE_DIM>(*vectorFieldPtr);
+      if constexpr (SPACE_DIM == 2)
+        MOFEM_LOG("FieldEvaluator", Sev::inform)
+            << "U_X: " << t_disp(0) << " U_Y: " << t_disp(1);
+      else
+        MOFEM_LOG("FieldEvaluator", Sev::inform)
+            << "U_X: " << t_disp(0) << " U_Y: " << t_disp(1)
+            << " U_Z: " << t_disp(2);
+    }
+
+    MOFEM_LOG_SYNCHRONISE(mField.get_comm());
+  }
   MoFEMFunctionReturn(0);
 }
 //! [Solve]
@@ -671,7 +734,7 @@ MoFEMErrorCode Example::checkResults() {
 
   auto zero_residual_at_constrains = [&]() {
     MoFEMFunctionBegin;
-    auto  fe_post_proc_ptr = boost::make_shared<FEMethod>();
+    auto fe_post_proc_ptr = boost::make_shared<FEMethod>();
     auto get_post_proc_hook_rhs = [this, fe_post_proc_ptr, res]() {
       MoFEMFunctionBegin;
       CHKERR EssentialPreProcReaction<DisplacementCubitBcData>(
@@ -747,6 +810,11 @@ int main(int argc, char *argv[]) {
   auto core_log = logging::core::get();
   core_log->add_sink(
       LogManager::createSink(LogManager::getStrmWorld(), "TIMER"));
+
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmSync(), "FieldEvaluator"));
+  LogManager::setLog("FieldEvaluator");
+  MOFEM_LOG_TAG("FieldEvaluator", "field_eval");
 
   try {
 
@@ -864,7 +932,7 @@ MoFEMErrorCode SetUpSchurImpl::setUpSubDM() {
 MoFEMErrorCode SetUpSchurImpl::setOperator() {
   MoFEMFunctionBegin;
   auto pip = mField.getInterface<PipelineManager>();
-  
+
   // Boundary
   auto dm_is = getDMSubData(subDM)->getSmartRowIs();
   auto ao_up = createAOMappingIS(dm_is, PETSC_NULL);
