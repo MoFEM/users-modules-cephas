@@ -34,6 +34,16 @@ tutorials_build_and_install(
 set_target_properties(
   elastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=1")
 
+  tutorials_build_and_install(
+    elastic_2d_petsc ${CMAKE_CURRENT_SOURCE_DIR}/elastic.cpp)
+  set_target_properties(
+    elastic_2d_petsc PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DSCHUR_ASSEMBLE=0")
+  
+  tutorials_build_and_install(
+    elastic_3d_petsc ${CMAKE_CURRENT_SOURCE_DIR}/elastic.cpp)
+  set_target_properties(
+    elastic_3d_petsc PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DSCHUR_ASSEMBLE=0")  
+
 add_test(
   elastic
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
