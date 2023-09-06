@@ -8,13 +8,14 @@
 - idea of Boundary element in MoFEM and how to use it
 - handling of non-homogeneous boundary condition using least square approximation in MoFEM
 - process of implementing additional User Data Operators (UDOs) to calculate and assemble non-homogeneous boundary condition
+-implementation of *nonhomogeneous boundary* different ways in MoFEM.
 - practising on how to **push** the developed UDOs to the *Pipeline*
 
 
 \tableofcontents
 \section basic_tutorials_poisson_nonhomogeneous_introduction Introduction
 
-The focus of our current tutorial is on solving partial differential equations (PDEs) incorporating non-homogeneous Poisson's problem with non homogenous Dirichlet boundary conditions. While the 'SCL-1: Poisson's equation (homogeneous BC)' is designed for solving Dirichlet problems with homogeneous boundary conditions. This  tutuorial guides the methods to extend this to non-homogeneous cases. Here, the conditions refer to scenarios  where the solution has to coincide with a given function on the domain's boundary. The primary objective is to present MoFEM approaches for handling non-homogeneous Dirichlet problems integrating least square approximation, while establishing the necessary foundation as well. However, we would like to strictly suggest to undertand the operators(i.e. OpDomainLhsMatrixK and OpDomainRhsVectorF ) in SCL-1: Poisson's equation (homogeneous BC) before proceeding to this tutorial. 
+Primary focus of this tutorial is on solving partial differential equations (PDEs) incorporating non-homogeneous Poisson's problem in terms of non homogenous Dirichlet boundary conditions. While the `\ref basic_tutorials_poisson_homogeneous is designed for solving Dirichlet problems with homogeneous boundary conditions. This  tutorial guides the methods to extend this to non-homogeneous cases with least square approximations. Usually, the conditions refer to scenarios where the solution has to coincide with a given function on the domain's boundary. The main objective is to present MoFEM approaches for handling non-homogeneous Dirichlet problems integrating least square approximation, while establishing the necessary foundation as well. However, we would like to strictly suggest to undertand the operators(i.e. OpDomainLhsMatrixK and OpDomainRhsVectorF ) in SCL-1: Poisson's equation (homogeneous BC) before proceeding to this tutorial. 
 
 \subsection basic_tutorials_poisson_nonhomogeneous_problem Problem
 
