@@ -309,7 +309,7 @@ Afterwards, the computation of LHS and RHS is defined in the setIntegrationRules
  \snippet users_modules/tutorials/scl-2/poisson_2d_nonhomogeneous.cpp Set integration rules 
 \subsubsection solveSystem solveSystem()
 
-To solve the problem, to made ready our systems we divided it for domain and boundaries similar to Figure: 2
+To solve the problem, to made ready our systems we divided it for domain and boundaries similar to Figure: 2 where we can consider the subscripts D is for domain and B goes for boundary.
 \anchor figure_poisson_nonhomogeneous_problem
 \image html non-homogenous_poission_Matrix.png "Figure 1: Solving approach" width = 400px
 

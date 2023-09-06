@@ -727,7 +727,7 @@ implementation for the current problem is as follows
 
 \snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Boundary condition
 
-To ensure the code to reads the boundary conditions, it's essential to generate the mesh that includes the required attributes or values. Specifically, blocks in the mesh must be labelled with the name "BOUNDARY_CONDITION". In other cases where multiple boundary conditions are involved, you should assign distinct names using numbers, such as "BOUNDARY_CONDITION_1", "BOUNDARY_CONDITION_2", "BOUNDARY_CONDITION_3", and so on. This naming scheme helps in distinguishing and applying different boundary conditions to their respective blocks within the mesh.
+To ensure the code to read the boundary conditions, it's essential to generate the mesh that includes the required attributes or values. Specifically, blocks in the mesh must be labelled with the name "BOUNDARY_CONDITION". In other cases where multiple boundary conditions are involved, you should assign distinct names using numbers, such as "BOUNDARY_CONDITION_1", "BOUNDARY_CONDITION_2", "BOUNDARY_CONDITION_3", and so on. This naming scheme helps in distinguishing and applying different boundary conditions to their respective blocks within the mesh.
 
 Though the application procedure is pretty straightforward but the underlying process of applying these boundary conditions is not immediately obvious. Users can jump to the next section without understanding the underlying process of it.
 
