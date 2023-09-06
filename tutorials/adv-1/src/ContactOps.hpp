@@ -16,12 +16,13 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble contactTraction;
   MatrixDouble contactDisp;
 
-  VectorDouble sdfVals; ///< size is equal to number of gauss points on element
+  VectorDouble sdfVals;  ///< size is equal to number of gauss points on element
   MatrixDouble gradsSdf; ///< nb of rows is equals to dimension, and nb of cols
                          ///< is equals to number of gauss points on element
   MatrixDouble hessSdf;  ///< nb of rows is equals to nb of element of symmetric
                         ///< matrix, and nb of cols is equals to number of gauss
                         ///< points on element
+  VectorDouble constraintVals;
 
   static SmartPetscObj<Vec>
       totalTraction; // User have to release and create vector when appropiate.
@@ -62,7 +63,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
 
   inline auto sdfPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &sdfVals);
-  } 
+  }
 
   inline auto gradSdfPtr() {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(), &gradsSdf);
@@ -70,8 +71,11 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
 
   inline auto hessSdfPtr() {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(), &hessSdf);
-  } 
+  }
 
+  inline auto constraintPtr() {
+    return boost::shared_ptr<VectorDouble>(shared_from_this(), &constraintVals);
+  }
 };
 
 SmartPetscObj<Vec> CommonData::totalTraction;
@@ -387,7 +391,7 @@ inline double w(const double sdf, const double tn) {
 /**
  * @brief constrain function
  *
- * return 1 if negative sdn or positive tn
+ * return 1 if negative sdf or positive tn
  *
  * @param sdf signed distance
  * @param tn traction
@@ -442,24 +446,29 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::OpEvaluateSDFImpl(
 
 template <int DIM, typename BoundaryEleOp>
 MoFEMErrorCode
-OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(
-    int side, EntityType type, EntData &data) {
+OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(int side, EntityType type,
+                                                     EntData &data) {
   MoFEMFunctionBegin;
 
   const auto nb_gauss_pts = BoundaryEleOp::getGaussPts().size2();
   auto &sdf_vec = commonDataPtr->sdfVals;
   auto &grad_mat = commonDataPtr->gradsSdf;
   auto &hess_mat = commonDataPtr->hessSdf;
+  auto &constraint_vec = commonDataPtr->constraintVals;
+  auto &contactTraction_mat = commonDataPtr->contactTraction;
 
   sdf_vec.resize(nb_gauss_pts, false);
   grad_mat.resize(DIM, nb_gauss_pts, false);
   hess_mat.resize((DIM * (DIM + 1)) / 2, nb_gauss_pts, false);
+  constraint_vec.resize(nb_gauss_pts, false);
 
   auto t_total_traction = CommonData::getFTensor1TotalTraction();
+  auto t_traction = getFTensor1FromMat<DIM>(contactTraction_mat);
 
   auto t_sdf = getFTensor0FromVec(sdf_vec);
   auto t_grad_sdf = getFTensor1FromMat<DIM>(grad_mat);
   auto t_hess_sdf = getFTensor2SymmetricFromMat<DIM>(hess_mat);
+  auto t_constraint = getFTensor0FromVec(constraint_vec);
 
   auto t_disp = getFTensor1FromMat<DIM>(commonDataPtr->contactDisp);
   auto t_coords = BoundaryEleOp::getFTensor1CoordsAtGaussPts();
@@ -473,6 +482,8 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(
     ++t_hess_sdf;
     ++t_disp;
     ++t_coords;
+    ++t_traction;
+    ++t_constraint;
   };
 
   auto ts_time = BoundaryEleOp::getTStime();
@@ -493,17 +504,19 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
         t_total_traction(0), t_total_traction(1), t_total_traction(2));
 
+    auto tn = -t_traction(i) * t_grad_sdf_v(i);
+    auto c = constrain(sdf_v, tn);
+
     t_sdf = sdf_v;
     t_grad_sdf(i) = t_grad_sdf_v(i);
     t_hess_sdf(i, j) = t_hess_sdf_v(i, j);
+    t_constraint = c;
 
     next();
   }
 
-
   MoFEMFunctionReturn(0);
 }
-
 
 template <int DIM, typename AssemblyBoundaryEleOp>
 OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
@@ -965,6 +978,6 @@ MoFEMErrorCode opFactoryCalculateTraction(
   MoFEMFunctionReturn(0);
 }
 
-};     // namespace ContactOps
+}; // namespace ContactOps
 
 #endif // __CONTACTOPS_HPP__

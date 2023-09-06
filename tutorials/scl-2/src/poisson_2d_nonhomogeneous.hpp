@@ -18,7 +18,7 @@ FTensor::Index<'i', 2> i;
 
 typedef boost::function<double(const double, const double, const double)>
     ScalarFunc;
-
+//! [OpDomainLhs]
 struct OpDomainLhs : public OpFaceEle {
 public:
   OpDomainLhs(std::string row_field_name, std::string col_field_name)
@@ -97,7 +97,9 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   MatrixDouble locLhs, transLocLhs;
 };
+//! [OpDomainLhs]
 
+//! [OpDomainRhs]
 struct OpDomainRhs : public OpFaceEle {
 public:
   OpDomainRhs(std::string field_name, ScalarFunc source_term_function)
@@ -160,7 +162,9 @@ private:
   ScalarFunc sourceTermFunc;
   VectorDouble locRhs;
 };
+//! [OpDomainRhs]
 
+//! [OpBoundaryLhs]
 struct OpBoundaryLhs : public OpEdgeEle {
 public:
   OpBoundaryLhs(std::string row_field_name, std::string col_field_name)
@@ -233,7 +237,9 @@ public:
 private:
   MatrixDouble locBoundaryLhs, transLocBoundaryLhs;
 };
+//! [OpBoundaryLhs]
 
+//! [OpBoundaryRhs]
 struct OpBoundaryRhs : public OpEdgeEle {
 public:
   OpBoundaryRhs(std::string field_name, ScalarFunc boundary_function)
@@ -296,7 +302,7 @@ private:
   ScalarFunc boundaryFunc;
   VectorDouble locBoundaryRhs;
 };
-
+//! [OpBoundaryRhs]
 }; // namespace Poisson2DNonhomogeneousOperators
 
 #endif //__POISSON2DNONHOMOGENEOUS_HPP__
