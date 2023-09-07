@@ -11,16 +11,6 @@
 
 using namespace MoFEM;
 
-// template <int DIM> struct ElementsAndOps {};
-
-// template <> struct ElementsAndOps<2> {
-//   using DomainEle = FaceElementForcesAndSourcesCore;
-// };
-
-// template <> struct ElementsAndOps<3> {
-//   using DomainEle = VolumeElementForcesAndSourcesCore;
-// };
-
 template <typename T> inline double trace(FTensor::Tensor2<T, 2, 2> &t_stress) {
   constexpr double third = boost::math::constants::third<double>();
   return (t_stress(0, 0) + t_stress(1, 1));
@@ -407,45 +397,11 @@ struct TSPrePostProc {
   MoFEMErrorCode tsSetUp(TS ts);
 
   // SmartPetscObj<VecScatter> getScatter(Vec x, Vec y, enum FR fr);
-  SmartPetscObj<Vec> getSubVector();
-  SmartPetscObj<Vec> T;
-
-  SmartPetscObj<DM> solverSubDM;
-  SmartPetscObj<Vec> globSol;
   Example *fsRawPtr;
   static MoFEMErrorCode tsPostStage(TS ts, PetscReal stagetime,
                                     PetscInt stageindex, Vec *Y);
   static MoFEMErrorCode tsPostStep(TS ts);
-  static MoFEMErrorCode tsPreStep(TS ts);
-
-private:
-  /**
-   * @brief Pre process time step
-   *
-   * Refine mesh and update fields
-   *
-   * @param ts
-   * @return MoFEMErrorCode
-   */
-  // static MoFEMErrorCode tsPreProc(TS ts);
-
-  /**
-   * @brief Post process time step.
-   *
-   * Currently that function do not make anything major
-   *
-   * @param ts
-   * @return MoFEMErrorCode
-   */
-
-  SmartPetscObj<Vec> globRes; //< global residual
-  SmartPetscObj<Mat> subB;    //< sub problem tangent matrix
-  SmartPetscObj<KSP> subKSP;  //< sub problem KSP solver
-
-  boost::shared_ptr<SnesCtx>
-      snesCtxPtr; //< infernal data (context) for MoFEM SNES fuctions
-  boost::shared_ptr<TsCtx>
-      tsCtxPtr; //<  internal data (context) for MoFEM TS functions.
+  static MoFEMErrorCode tsPreStep(TS ts);  
 };
 
 static boost::weak_ptr<TSPrePostProc> tsPrePostProc;
@@ -705,8 +661,6 @@ MoFEMErrorCode Example::assembleSystem() {
     return t_source;
   };
 
-  // Get pointer to U_tt shift in domain element
-  
   // specific time scaling
   auto get_time_scale = [this](const double time) {
     return sin(time * omega * M_PI);
@@ -729,7 +683,7 @@ MoFEMErrorCode Example::assembleSystem() {
       FTensor::Index<'i', SPACE_DIM> i;
       MoFEMFunctionBegin;
       auto t_force = getFTensor1FromMat<SPACE_DIM, 0>(*gravity_vector_ptr);
-      double unit_weight = 1.;
+      double unit_weight = 0.;
       CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-unit_weight", &unit_weight,
                                  PETSC_NULL);
       t_force(i) = 0;
