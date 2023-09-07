@@ -43,11 +43,11 @@ Where, *f* is the source term of the body and `g` is denoted as boundary functio
 \image html poisson_nonhomogeneous_problem.png "Figure 1: Nonhomogeneous problem Statement. " width = 350px
 
 \section basic_tutorials_poisson_nonhomogeneous_numercial_scheme Numerical Scheme
-In the context of solving this partial differential equation (PDE), Galerkin finite element methods with least square approximation for enforcing the nonhomogeneous boundary condition has been implemented. In addition to that, we are utilizing it conforming finite element spaces with Least-Square approximation(LSA) for the boundary as follows:
+In the context of solving this partial differential equation (PDE), Galerkin finite element methods with least square approximation for enforcing the nonhomogeneous boundary condition has been implemented. In addition to that, we are utilizing it conforming finite element spaces with Least-Square approximation(LSA) for the boundary by minimizing the squared differences between the predicted values and the actual, similar to follows:
 \f[
 \frac{1}{2}\int_{\Gamma} (u - g(\mathbf{x}))^2 \,d\Gamma 
 \f]
-Remember, previously we derived weak form for homogeneous BC in \ref SCL-1: Poisson's equation (homogeneous BC).Following that integrating with LSA approch, we can write similar weak form for our current problem with domain (Ω) and boundary(Γ) as follows:
+Remember, previously we derived weak form for homogeneous BC in \ref SCL-1: Poisson's equation (homogeneous BC). Following that approch, we can write similar weak form for our current problem with domain (Ω) and boundary(Γ) as follows:
 
 \f[
 \begin{align}
@@ -60,7 +60,7 @@ Remember, previously we derived weak form for homogeneous BC in \ref SCL-1: Pois
    \end{align}
 \f]
 \subsection basic_tutorials_poisson_nonhomogeneous_approximation Approximation
-In the context of finite element method, we are utilizing two key components for entity-by-entity:
+In the context of finite element method, the problem will be solved numerically by approximating the scalar space \f$ H^1 \f$ by their discrete counterparts associated with our FE mesh of the computational domain \f$\Omega\f$. To do that, we are utilizing two key components to solve for entity-by-entity:
 (i) \f$N_{\alpha} \f$  and \f$N_{\beta} \f$ are the shape functions for the field variable and (ii) \f$\bar{u}_{\alpha}\f$ and \f$\bar{u}_{\beta}\f$ represent for 'n' number of DoF within that element to obtain the solution 'u'. There exist also for the test function denoted as \f$\delta u \f$ as represented below:
 \f[
 \begin{align}
@@ -97,7 +97,7 @@ and
 \f]
 
 
-The problem will be solved numerically by approximating the scalar space \f$ H^1 \f$ by their discrete counterparts associated with our FE mesh of the computational domain \f$\Omega\f$. The discretisation and implementation approach is similar as discussed in \ref basic_tutorials_poisson_homogeneous.
+ The discretisation and implementation approach is similar as discussed in \ref basic_tutorials_poisson_homogeneous.
 
 \subsection basic_tutorials_poisson_nonhomogeneous_problem_fomlation Problem formulation
 
