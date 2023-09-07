@@ -202,7 +202,7 @@ struct OpCalculatePiola : public ForcesAndSourcesCore::UserDataOperator {
 
       t_P(i, j) = shearModulus * (t_F(i, j) + t_F(j, i) - 2. * t_kd(i, j) -
                                   two_o_three * trace(t_F) * t_kd(i, j) +
-                                  two_o_three * trace_t_dk  * t_kd(i, j)) +
+                                  two_o_three * trace_t_dk * t_kd(i, j)) +
                   bulkModulus * trace(t_F) * t_kd(i, j) -
                   bulkModulus * trace_t_dk * t_kd(i, j);
 
@@ -225,12 +225,10 @@ private:
 template <int DIM>
 struct OpCalculateDisplacement : public ForcesAndSourcesCore::UserDataOperator {
   OpCalculateDisplacement(boost::shared_ptr<MatrixDouble> spatial_pos_ptr,
-                   boost::shared_ptr<MatrixDouble> reference_pos_ptr,
-                   boost::shared_ptr<MatrixDouble> u_ptr)
+                          boost::shared_ptr<MatrixDouble> reference_pos_ptr,
+                          boost::shared_ptr<MatrixDouble> u_ptr)
       : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPLAST),
-        xPtr(spatial_pos_ptr),
-        XPtr(reference_pos_ptr),
-        uPtr(u_ptr) {}
+        xPtr(spatial_pos_ptr), XPtr(reference_pos_ptr), uPtr(u_ptr) {}
 
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
@@ -401,7 +399,7 @@ struct TSPrePostProc {
   static MoFEMErrorCode tsPostStage(TS ts, PetscReal stagetime,
                                     PetscInt stageindex, Vec *Y);
   static MoFEMErrorCode tsPostStep(TS ts);
-  static MoFEMErrorCode tsPreStep(TS ts);  
+  static MoFEMErrorCode tsPreStep(TS ts);
 };
 
 static boost::weak_ptr<TSPrePostProc> tsPrePostProc;
@@ -529,7 +527,7 @@ MoFEMErrorCode Example::setupProblem() {
     return mField.loop_dofs("GEOMETRY", ent_method);
   };
   CHKERR project_ho_geometry();
-  
+
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
@@ -598,8 +596,8 @@ MoFEMErrorCode TSPrePostProc::tsPostStage(TS ts, PetscReal stagetime,
     Vec *stage_solutions;
 
     CHKERR TSGetStages(ts, &num_stages, &stage_solutions);
-    PetscPrintf(PETSC_COMM_WORLD, "Check timestep %d time %e dt %e\n", num_stages,
-                time, dt);
+    PetscPrintf(PETSC_COMM_WORLD, "Check timestep %d time %e dt %e\n",
+                num_stages, time, dt);
 
     const double inv_num_step = (double)num_stages;
     CHKERR fb->fieldCopy(1., "x_1", "x_2");
@@ -641,7 +639,6 @@ MoFEMErrorCode TSPrePostProc::tsPreStep(TS ts) {
     CHKERR TSGetTime(ts, &time);
     int step_num;
     CHKERR TSGetStepNumber(ts, &step_num);
-    
   }
   MoFEMFunctionReturn(0);
 }
@@ -695,6 +692,10 @@ MoFEMErrorCode Example::assembleSystem() {
       MoFEMFunctionReturn(0);
     };
 
+    CHKERR set_body_force();
+    pip.push_back(new OpBodyForce("V", gravity_vector_ptr,
+                                  [](double, double, double) { return 1.; }));
+
     // Calculate unknown F
     auto mat_H_tensor_ptr = boost::make_shared<MatrixDouble>();
     pip.push_back(new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>(
@@ -730,8 +731,8 @@ MoFEMErrorCode Example::assembleSystem() {
 
     auto mat_F_stab_ptr = boost::make_shared<MatrixDouble>();
     pip.push_back(new OpCalculateFStab<SPACE_DIM, SPACE_DIM>(
-          mat_F_tensor_ptr, mat_F_stab_ptr, mat_dot_F_tensor_ptr, tau, xi,
-          mat_x_grad_ptr, mat_v_grad_ptr));
+        mat_F_tensor_ptr, mat_F_stab_ptr, mat_dot_F_tensor_ptr, tau, xi,
+        mat_x_grad_ptr, mat_v_grad_ptr));
 
     PetscBool is_linear_elasticity = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_linear_elasticity",
@@ -749,10 +750,10 @@ MoFEMErrorCode Example::assembleSystem() {
       pip.push_back(
           new OpInvertMatrix<SPACE_DIM>(mat_F_stab_ptr, det_ptr, inv_F));
 
-        // OpCalculatePiolaIncompressibleNH
+      // OpCalculatePiolaIncompressibleNH
       pip.push_back(new OpCalculatePiolaIncompressibleNH<SPACE_DIM, SPACE_DIM>(
           shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_stab_ptr,
-          mat_F_stab_ptr, inv_F, det_ptr));  
+          mat_F_stab_ptr, inv_F, det_ptr));
     }
 
     pip.push_back(new OpGradTimesTensor2("V", mat_P_stab_ptr, minus_one));
@@ -816,26 +817,16 @@ struct Monitor : public FEMethod {
       auto t_vel = getFTensor1FromMat<SPACE_DIM>(*velocityFieldPtr);
       auto t_x2_field = getFTensor1FromMat<SPACE_DIM>(*x2FieldPtr);
       auto t_geom = getFTensor1FromMat<SPACE_DIM>(*geometryFieldPtr);
-      // PetscPrintf(PETSC_COMM_WORLD, "Velocities x: %e y: %e z: %e\n", t_vel(0),
-      //             t_vel(1), t_vel(2));
+
       double u_x = t_x2_field(0) - t_geom(0);
       double u_y = t_x2_field(1) - t_geom(1);
       double u_z = t_x2_field(2) - t_geom(2);
-      // PetscPrintf(PETSC_COMM_WORLD, "Displacement x: %e y: %e z: %e\n",
-      //             u_x, u_y, u_z);
-       MOFEM_LOG("SYNC", Sev::inform)
-              << "Velocities x: " << t_vel(0) << " y: "
-              << t_vel(1) << " z: "
-              << t_vel(2) << "\n";
+
       MOFEM_LOG("SYNC", Sev::inform)
-              << "Displacement x: " << u_x << " y: "
-              << u_y << " z: "
-              << u_z << "\n";
-      
-      // cerr << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " <<
-      // t_p(2) <<"\n"; MOFEM_LOG("EXAMPLE", Sev::noisy)
-      //     << "Velocities x: " << t_p(0) << " y: " << t_p(1) << " z: " <<
-      //     t_p(2);
+          << "Velocities x: " << t_vel(0) << " y: " << t_vel(1)
+          << " z: " << t_vel(2) << "\n";
+      MOFEM_LOG("SYNC", Sev::inform) << "Displacement x: " << u_x
+                                     << " y: " << u_y << " z: " << u_z << "\n";
     }
 
     for (auto m : mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(
@@ -855,19 +846,20 @@ struct Monitor : public FEMethod {
       };
       CHKERR mField.getInterface<FieldBlas>()->fieldLambdaOnEntities(
           print_vets, "V", &ents);
-      
     }
     MOFEM_LOG_SEVERITY_SYNC(mField.get_comm(), Sev::inform);
 
     PetscBool print_volume = PETSC_FALSE;
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-print_volume", &print_volume, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-print_volume", &print_volume,
+                               PETSC_NULL);
 
     PetscBool print_skin = PETSC_FALSE;
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-print_skin", &print_skin, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-print_skin", &print_skin,
+                               PETSC_NULL);
 
     int save_every_nth_step = 1;
-    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_step", &save_every_nth_step,
-                            PETSC_NULL);
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_step",
+                              &save_every_nth_step, PETSC_NULL);
     if (ts_step % save_every_nth_step == 0) {
 
       if (print_volume) {
@@ -921,8 +913,8 @@ MoFEMErrorCode Example::solveSystem() {
     auto mat_H_tensor_ptr = boost::make_shared<MatrixDouble>();
     pip.push_back(new OpCalculateTensor2FieldValues<SPACE_DIM, SPACE_DIM>(
         "F", mat_H_tensor_ptr));
-  
-  auto u_ptr = boost::make_shared<MatrixDouble>();
+
+    auto u_ptr = boost::make_shared<MatrixDouble>();
     pip.push_back(new OpCalculateDisplacement<SPACE_DIM>(x_ptr, X_ptr, u_ptr));
     // Calculate P
 
@@ -943,12 +935,11 @@ MoFEMErrorCode Example::solveSystem() {
       auto inv_F = boost::make_shared<MatrixDouble>();
       auto det_ptr = boost::make_shared<VectorDouble>();
 
-      pip.push_back(
-          new OpInvertMatrix<SPACE_DIM>(mat_F_ptr, det_ptr, inv_F));
+      pip.push_back(new OpInvertMatrix<SPACE_DIM>(mat_F_ptr, det_ptr, inv_F));
 
       pip.push_back(new OpCalculatePiolaIncompressibleNH<SPACE_DIM, SPACE_DIM>(
           shear_modulus_G, bulk_modulus_K, mu, lamme_lambda, mat_P_ptr,
-          mat_F_ptr, inv_F, det_ptr));  
+          mat_F_ptr, inv_F, det_ptr));
     }
 
     auto mat_v_grad_ptr = boost::make_shared<MatrixDouble>();
@@ -984,7 +975,8 @@ MoFEMErrorCode Example::solveSystem() {
 
             OpPPMap::DataMapMat{{"V", boundary_v_ptr},
                                 {"GEOMETRY", boundary_X_ptr},
-                                {"x", boundary_x_ptr}, {"U", boundary_u_ptr}},
+                                {"x", boundary_x_ptr},
+                                {"U", boundary_u_ptr}},
 
             OpPPMap::DataMapMat{{"FIRST_PIOLA", boundary_mat_P_ptr},
                                 {"F", boundary_mat_F_ptr}},
@@ -1000,8 +992,7 @@ MoFEMErrorCode Example::solveSystem() {
   // Add monitor to time solver
 
   double rho = 1.;
-  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-density", &rho,
-                                 PETSC_NULL);
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-density", &rho, PETSC_NULL);
   auto get_rho = [rho](const double, const double, const double) {
     return rho;
   };
@@ -1025,10 +1016,8 @@ MoFEMErrorCode Example::solveSystem() {
 
   vol_mass_ele->getRuleHook = integration_rule;
 
-  
   vol_mass_ele->getOpPtrVector().push_back(new OpMassV("V", "V", get_rho));
-  vol_mass_ele->getOpPtrVector().push_back(
-      new OpMassF("F", "F"));
+  vol_mass_ele->getOpPtrVector().push_back(new OpMassF("F", "F"));
 
   CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(), vol_mass_ele);
   CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
@@ -1040,13 +1029,6 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR MatZeroEntries(M);
   CHKERR MatDiagonalSet(M, lumpVec, INSERT_VALUES);
 
-  // CHKERR VecView(lumpVec, PETSC_VIEWER_STDOUT_WORLD);
-
-  // auto lumpVecCheck = createDMVector(simple->getDM());
-  // CHKERR MatGetRowSum(M, lumpVecCheck);
-  // CHKERR VecView(lumpVecCheck, PETSC_VIEWER_STDOUT_WORLD);
-
-  // MatView(M,PETSC_VIEWER_STDOUT_WORLD);
   // Create and septup KSP (linear solver), we need this to calculate g(t,u) =
   // M^-1G(t,u)
   ksp = createKSP(mField.get_comm());
@@ -1119,9 +1101,11 @@ MoFEMErrorCode Example::solveSystem() {
     fe_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>("V", velocity_field_ptr));
     fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", geometry_field_ptr));
+        new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY",
+                                                    geometry_field_ptr));
     fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<SPACE_DIM>("x_2", spatial_position_field_ptr));
+        new OpCalculateVectorFieldValues<SPACE_DIM>(
+            "x_2", spatial_position_field_ptr));
   }
 
   auto post_proc_domain = [&]() {
@@ -1144,7 +1128,8 @@ MoFEMErrorCode Example::solveSystem() {
 
             {{"V", boundary_v_ptr},
              {"GEOMETRY", boundary_X_ptr},
-             {"x", boundary_x_ptr}, {"U", boundary_u_ptr}},
+             {"x", boundary_x_ptr},
+             {"U", boundary_u_ptr}},
 
             {{"FIRST_PIOLA", boundary_mat_P_ptr}, {"F", boundary_mat_F_ptr}},
 
