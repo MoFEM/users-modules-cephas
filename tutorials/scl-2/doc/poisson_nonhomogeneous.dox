@@ -61,7 +61,7 @@ Remember, previously we derived weak form for homogeneous BC in \ref SCL-1: Pois
 \f]
 \subsection basic_tutorials_poisson_nonhomogeneous_approximation Approximation
 In the context of finite element method, the problem will be solved numerically by approximating the scalar space \f$ H^1 \f$ by their discrete counterparts associated with our FE mesh of the computational domain \f$\Omega\f$. To do that, we are utilizing two key components to solve for entity-by-entity:
-(i) \f$N_{\alpha} \f$  and \f$N_{\beta} \f$ are the shape functions for the field variable and (ii) \f$\bar{u}_{\alpha}\f$ and \f$\bar{u}_{\beta}\f$ represent for 'n' number of DoF within that element to obtain the solution 'u'. There exist also for the test function denoted as \f$\delta u \f$ as represented below:
+(i) \f$N_{\alpha} \f$  and \f$N_{\beta} \f$ are the shape functions for the field variable and (ii) \f$\bar{u}_{\alpha}\f$ and \f$\bar{u}_{\beta}\f$ represent for 'n' number of DoF within that element to obtain the solution 'u'. There also exists for the test function denoted as \f$\delta u \f$ as represented below:
 \f[
 \begin{align}
  u &= \sum_{\alpha=0}^{n-1} \mathbf{N}_{\alpha} \bar{u}_\alpha \,\text{and,}\\
