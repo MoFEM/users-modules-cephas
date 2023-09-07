@@ -30,7 +30,7 @@ how_to_compile_program.
 \subsection basic_tutorials_poisson_homogeneous_problem The problem
 
 In this tutorial we
-will solve a simple Poisson's equation with homogeneous(uniform in space) boundary condition using MoFEM. The physical example of this equation is that you
+will solve a simple Poisson's equation with homogeneous (uniform in space) boundary condition using MoFEM. The physical example of this equation is that you
 have a membrane that is fixed at its boundary and it experiences a uniformly
 distributed force on its surface, then you are asked to estimate the
 displacement of the membrane. The strong form of the problem as follows 
@@ -722,16 +722,16 @@ This function has
 
 \subsubsection basic_tutorials_poisson_homogeneous_bc boundaryCondition() 
 
-This function helps to deal with the boundary condition and its
+This function deals the boundary condition and its
 implementation for the current problem is as follows
 
 \snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Boundary condition
 
-To ensure the code to read the boundary conditions, it's essential to generate the mesh that includes the required attributes or values. Specifically, blocks in the mesh must be labelled with the name "BOUNDARY_CONDITION". In other cases where multiple boundary conditions are involved, you should assign distinct names using numbers, such as "BOUNDARY_CONDITION_1", "BOUNDARY_CONDITION_2", "BOUNDARY_CONDITION_3", and so on. This naming scheme helps in distinguishing and applying different boundary conditions to their respective blocks within the mesh.
+To ensure the code reads the boundary conditions, it's essential to generate the mesh that includes the required attributes or values. Specifically, blocks in the mesh must be labelled with the name "BOUNDARY_CONDITION". In other cases where multiple boundary conditions are involved, you should assign distinct names using numbers, such as "BOUNDARY_CONDITION_1", "BOUNDARY_CONDITION_2", "BOUNDARY_CONDITION_3", and so on. This naming scheme helps in distinguishing and applying different boundary conditions to their respective blocks within the mesh.
 
 Though the application procedure is pretty straightforward but the underlying process of applying these boundary conditions is not immediately obvious. Users can jump to the next section without understanding the underlying process of it.
 
-If we consider \f$ {\bf u} \f$ as the solution vector such that \f$ {u} = [u_1, u_2, u_3, u_4, \ldots, u_n] \f$, we will essentially eliminate the DoFs associated with entities that are part of the "BOUNDARY_CONDITION" blocksets. In this context, let's say the \f$ \bf{u_0} \f$ represents the initial vector after removing the DOF from BC. For example,  \f$ {u_0} = [u_1, u_2, u_3,.. .. u_\text{n-m}, 0 ,0\ldots, 0] \f$. However, we need to reintroduce these removed DoFs later on to make the solution admissible for the boundary values as well. To accomplish this, we will incorporate an additional vector \f$ {\bf u^e} \f$ with the current \f$ {\bf u_0} \f$, as in (14).
+If we consider \f$ {\bf u} \f$ as the solution vector such that \f$ {u} = [u_1, u_2, u_3, u_4, \ldots, u_n] \f$, we will essentially eliminate the DoFs associated with entities that are part of the "BOUNDARY_CONDITION" blocksets. In this context, let's say the \f$ \bf{u_0} \f$ represents the vector after removing the DOF from BC. For example,  \f$ {u_0} = [u_1, u_2, u_3,.. .. u_\text{n-m}, 0 ,0\ldots, 0] \f$. However, we need to reintroduce these removed DoFs later on to make the solution admissible for the boundary values as well. To accomplish this, we will incorporate an additional vector \f$ {\bf u^e} \f$ with the current \f$ {\bf u_0} \f$, as in (14).
 \f[
   \begin{equation}
     \bf {Ku}= f 
@@ -750,16 +750,14 @@ Here, \f$ u_e \f$ is a zeros vector but we will imposed those removed degrees of
 {0} &
 {0} &
 {0} &
-{u_\text{n-m} } &
 \ldots &
-\text{DBC} &
-\text{DBC} &
-\text{DBC} &
+{u_\text{n-m+1} } &
+{u_\text{n} } &
 \end{array} \right]
 \label{eq:u_e}
 \end{equation}
 \f]
-Here, *DBC* = DOFs of BOUNDARY_CONDITION Blockset.
+Here, \f$ u_\text{n-m+1} and u_\text{n} \f$ = DOFs of BOUNDARY_CONDITION Blockset.
 
 This approach will allow us to streamline the procedure and ensure that the removed degrees of freedom are properly reintegrated into the calculations. However, to simplify this cumulative process, we will address rest of the part during the assembling phase in the upcoming sub-section.
 
@@ -807,7 +805,7 @@ but it is done automatically and user does not have to manually add codes to pus
 - Third, previously in in `boundaryCondition()`, we modified \f$ \bf{u} \f$  and we were waiting to impose the removed DoFs to get the admissible solution. Here, this operation is done by the lamda function 'set_values_to_bc_dofs'. 
 
 
-We enforce the following code snippet to set dofs. First we get the reference \f$ \bf{u}\f$ for BC to the from fe. Then using 'get_bc_hook' as preprocessing of object 'fe' we set the boundary condition values to same indices of \f$ \bf{u_e} \f$.
+We enforce the following code snippet to set dofs. First we get the reference \f$ \bf{u}\f$ for BC. Then using 'get_bc_hook' as preprocessing of object 'fe' we set the boundary condition values to the indices of \f$ \bf{u_e} \f$.
 \code
    auto set_values_to_bc_dofs = [&](auto &fe) {
       auto get_bc_hook = [&]() {
@@ -852,7 +850,7 @@ Note:For the current homogenous problem, if we consider zero boundary condition,
     MoFEMFunctionReturn(0);
 }
 \endcode
-Here, the lamda function calculate_residual_from_set_values_on_bc is to get the \f$\bf {K^{u_e}}\f$.  Inside of it, the `OpInternal` integrator serves a dual purpose: it assembles the matrix and undertakes integration, effectively performing a linear multiplication. 
+Here, the lamda function `calculate_residual_from_set_values_on_bc` is to get the \f$\bf {K{u_e}}\f$.  Inside of it, the `OpInternal` integrator serves a dual purpose: it assembles the matrix and undertakes integration, effectively performing a linear multiplication. 
 Upon pushing OpInternal to the pipeline manager, -1 is passed as it is alongside \f$ \bf K {u_e} \f$  as in equation (17). 
 
 \f[
@@ -862,7 +860,7 @@ Upon pushing OpInternal to the pipeline manager, -1 is passed as it is alongside
 \f]
 
   
-Here you can see, we do not need derivative of the approximation function to calculate force vector in UDO `OpDomainRhsVectorF`. Consequently, the operators for recalculating inverse of Jacobian is not needed as well as it is integrated with MoFEM.
+We do not need derivative of the approximation function to calculate force vector in UDO `OpDomainRhsVectorF`. Consequently, the operators for recalculating inverse of Jacobian is not needed as well as it is integrated with MoFEM.
 
 \subsubsection basic_tutorials_poisson_homogeneous_intergration setIntegrationRules() 
 

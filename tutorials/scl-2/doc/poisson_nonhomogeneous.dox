@@ -14,15 +14,15 @@
 \tableofcontents
 \section basic_tutorials_poisson_nonhomogeneous_introduction Introduction
 
-The focus of our current tutorial is on solving Laplace-type partial differential equations (PDEs) incorporating with Poisson's problem with non-homogenous Dirichlet boundary conditions. While the \ref SCL-1: Poisson's equation (homogeneous BC) is designed for solving Dirichlet problems with homogeneous boundary conditions, this tutorial guides the methods to extend this to non-homogeneous cases and plot the solution.
+The focus of our current tutorial is on solving Laplace-type partial differential equations (PDEs) Poisson's problem with non-homogenous Dirichlet boundary conditions. While the \ref SCL-1: Poisson's equation (homogeneous BC) is designed for solving Dirichlet problems with homogeneous boundary conditions, this tutorial guides the methods to extend this to non-homogeneous cases and plot the solution.
 
-We are aiming to present MoFEM approaches for handling non-homogeneous Dirichlet problems in addition to the least square approximation while establishing your necessary foundation in MoFEM as well. Prior to that, we would like to suggest understanding the operators(i.e. OpDomainLhsMatrixK and OpDomainRhsVectorF) in \ref basic_tutorials_poisson_homogeneous before proceeding to this tutorial. 
+We are aiming to present MoFEM approaches for handling Dirichlet problems in addition to the least square approximation while establishing your necessary foundation in MoFEM as well. Prior to that, we would like to suggest understanding the operators(i.e. OpDomainLhsMatrixK and OpDomainRhsVectorF) in \ref basic_tutorials_poisson_homogeneous before proceeding to this tutorial. 
 
 \subsection basic_tutorials_poisson_nonhomogeneous_problem Problem
 
 We are demonstrating the approach to solve a simple Poisson problem with nonhomogenous and help you grasp the approch better. Here, we have denoted the domain as Ω, and Γ represents the Dirichlet boundary, as illustrated in Figure 1.
 
-Here, we are solving a sample problem to find  \f$\mathbf{u}\f$. such that:
+Here, we are solving a sample problem with nonhomogeneous BCs to find  \f$\mathbf{u}\f$. such that:
 
 `Domain Equation:`
 \f[
@@ -38,35 +38,68 @@ Here, we are solving a sample problem to find  \f$\mathbf{u}\f$. such that:
   \end{align}
 \f]
 
-Where, `f`is the source term of the body and `g` is denoted as boundary function. However, if `g` is a constant everywhere (i.e. 0), we speak of homogeneous boundary conditions but in this problem, we are considering funcion \f$g(\mathbf{x})\f$.
+Where, *f* is the source term of the body and `g` is denoted as boundary function. However, if `g` is a constant everywhere (i.e. 0), we speak of homogeneous boundary conditions but in this problem, we are considering a spatially varying funcion \f$g(\mathbf{x})\f$.
 \anchor figure_poisson_nonhomogeneous_problem
-\image html poisson_nonhomogeneous_problem.png "Figure 1: Nonhomogeneous problem Statement. " width = 300px
+\image html poisson_nonhomogeneous_problem.png "Figure 1: Nonhomogeneous problem Statement. " width = 350px
 
-To know about discretization, it is also recomemded to get the ideas from SCL-1: Poisson's equation (homogeneous BC). For dicretization, we are considering `n` number for nodes for  the solution `u` and test function \f$\delta u \f$ where
+\section basic_tutorials_poisson_nonhomogeneous_numercial_scheme Numerical Scheme
+In the context of solving this partial differential equation (PDE), Galerkin finite element methods with least square approximation for enforcing the nonhomogeneous boundary condition has been implemented. In addition to that, we are utilizing it conforming finite element spaces with Least-Square approximation(LSA) for the boundary as follows:
+\f[
+\frac{1}{2}\int_{\Gamma} (u - g(\mathbf{x}))^2 \,d\Gamma 
+\f]
+Remember, previously we derived weak form for homogeneous BC in \ref SCL-1: Poisson's equation (homogeneous BC).Following that integrating with LSA approch, we can write similar weak form for our current problem with domain (Ω) and boundary(Γ) as follows:
 
 \f[
 \begin{align}
- u &= \sum_{i=0}^{n-1} \mathbf{N}_i \bar{u}_i \,\text{and,}\\
-{\delta u} &= \sum_{j=0}^{n-1}\mathbf{N}_j \bar{u}_j
+\int_{\Omega} \nabla \delta u \cdot \nabla u \,d\Omega = \int_{\Omega} \delta u \,f(\mathbf{x})\,d\Omega \quad\text{and}
+\end{align}
+\f]
+\f[
+  \begin{align}
+   \int_{\Gamma} \delta u \cdot u \,d\Gamma =  \int_{\Gamma} \delta u \,g(\mathbf{x})\,d\Gamma
+   \end{align}
+\f]
+\subsection basic_tutorials_poisson_nonhomogeneous_approximation Approximation
+In the context of finite element method, we are utilizing two key components for entity-by-entity:
+(i) \f$N_{\alpha} \f$  and \f$N_{\beta} \f$ are the shape functions for the field variable and (ii) \f$\bar{u}_{\alpha}\f$ and \f$\bar{u}_{\beta}\f$ represent for 'n' number of DoF within that element to obtain the solution 'u'. There exist also for the test function denoted as \f$\delta u \f$ as represented below:
+\f[
+\begin{align}
+ u &= \sum_{\alpha=0}^{n-1} \mathbf{N}_{\alpha} \bar{u}_\alpha \,\text{and,}\\
+{\delta u} &= \sum_{\beta=0}^{n-1}\mathbf{{N}_{\beta}} \bar{u}_{\beta}
 \end{align}
 \f]
 
-\section basic_tutorials_poisson_nonhomogeneous_numercial_scheme Numerical Scheme
-In the context of solving this partial differential equation (PDE), the method of Galerkin finite element methods with least square approximation has been implemented. In addition to that, we are utilizing it conforming finite element spaces. For a better understanding the MoFEM, we are explaining the forms in two parts: domain and boundary where,
+Further, to assemble the element stiffness matrix  we are indicating  \f$\alpha\f$ for the row and \f$\beta\f$ for collum. A typical approximation can be understood well in tutorial \ref hierarchical_approximation_1. So, to approximate the fields based on the weak forms in equation (5) and (6) can be written as follows:
+\f[
+\begin{equation}
+    \sum_{\alpha=0}^{n-1} \sum_{\beta=0}^{n-1} \delta\bar{u}_{\beta} \left[\int_{\Omega} \nabla \mathbf{N}_{\alpha} \cdot \nabla \mathbf{N}_{\beta} \,d\Omega\right] \bar{u}_{\alpha} \,\,= \,\, \sum_{\beta=0}^{n-1} \delta \bar{u}_{\beta} \left[\int_{\Omega} f(\mathbf{x})\,\, \mathbf{N}_{\beta} \,d\Omega\right] \quad ;\,\forall \,\delta \bar{u}_{\beta}
+\end{equation}
+\f]
+and 
+
+\f[
+\begin{equation}
+    \sum_{\alpha=0}^{n-1} \sum_{\beta=0}^{n-1} \delta\bar{u}_{\beta} \left[\int_{\Gamma} \mathbf{N}_{\alpha} \cdot \mathbf{N}_{\beta} \,d\Gamma\right] \bar{u}_{\alpha} \,\,= \,\,\sum_{\beta=0}^{n-1} \delta \bar{u}_{\beta} \left[\int_{\Gamma} g(\mathbf{x})\,\, \mathbf{N}_{\beta} \,d\Gamma\right]\quad ;\forall \,\delta \bar{u}_{\beta}
+\end{equation}
+\f]
+For a better understanding these to MoFEM, we are explaining the forms in two parts: domain and boundary. So, to relate the above form with respective UDOs, we are naming the indivudual terms as follows,
 \f[
 \mathbf{A_k} =
-\int_{\Omega} \nabla \delta u \cdot \nabla u \,\ d\Omega\, \quad
-\mathbf{B_f} = \int_{\Gamma} \delta u \,\ f(\mathbf{x})\,\textrm{d}\Gamma\quad \text{for domain}, \\
+\int_{\Omega} \nabla \mathbf{N}_{\alpha} \cdot \nabla \mathbf{N}_{\beta} \,d\Omega, \quad
+\mathbf{B_f} = \int_{\Omega} f(\mathbf{x})\,\,\mathbf{N}_{\beta} \,d\Omega \text{ for domain},
 \f]
+
 and
+
 \f[
-\mathbf{C_k} = \int_{\Omega} \delta u \cdot u \,\ d\Omega\,\quad
-\mathbf{D_f} = \int_{\Gamma} \delta u \,\ g(\mathbf{x})\,d\Gamma \quad \text{for boundary}.
+\mathbf{C_k} = \int_{\Gamma} \mathbf{N}_{\alpha} \cdot \mathbf{N}_{\beta} \,d\Gamma, \quad
+\mathbf{D_f} = \int_{\Gamma} g(\mathbf{x})\,\, \mathbf{N}_{\beta} \,d\Gamma \text{ for boundary}.
 \f]
+
 
 The problem will be solved numerically by approximating the scalar space \f$ H^1 \f$ by their discrete counterparts associated with our FE mesh of the computational domain \f$\Omega\f$. The discretisation and implementation approach is similar as discussed in \ref basic_tutorials_poisson_homogeneous.
 
-\section basic_tutorials_poisson_nonhomogeneous_problem_fomlation Problem formulation
+\subsection basic_tutorials_poisson_nonhomogeneous_problem_fomlation Problem formulation
 
 Based on the above schemes,  we need to create 4 operators in MoFEM. Let's say we are naming those as follows: 
 <CENTER>
@@ -154,7 +187,7 @@ The code part is as follows:
         CHKERR MatSetValues<MoFEM::EssentialBcStorage>(
             getKSPB(), col_data, row_data, &transLocLhs(0, 0), ADD_VALUES);
 \endcode
-The function MatSetValues() is used to assemble into the global matrix. This function sets values for the global matrix using inputs like getKSPB(), row_data, col_data, and the memory address of the local stiffness matrix's and also address of the first component &locLhs(0, 0). The ADD_VALUES flag is used to add values during the assembly. Transposing is performed for the symmetric global matrix  which is then solved using the iterative solver linear KSP.
+The function MatSetValues() is used to assemble into the global matrix. This function sets values for the global matrix using inputs like getKSPB(), row_data, col_data, and the memory address of the local stiffness matrix's and also address of the first component &locLhs(0, 0). The ADD_VALUES flag is used to add values during the assembly. Transposing is performed for the symmetric global matrix  which is then solved using the iterative linear solver  KSP.
 
 
 \subsubsection OpDomainRhs OpDomainRhs()
@@ -196,7 +229,7 @@ If we compare OpBoundaryRhs operator, it closely resembles the OpDomainRhsVector
 \endcode
 
 \subsection basic_tutorials_poisson_nonhomogeneous_source_code  Main program (*.cpp)
-This main class Poisson2DNonhomogeneous contains functions each of which is responsible for a certain task as described in SCL-1. However, in this case, we need to declare two eigenfunctions as a global variable of `sourceTermFunction` and `boundaryFunction`. These functions are applicable for the operators OpDomainRhs and OpBoundaryRhs respectively. In addition to that, we have declared a vector type shared pointer 'boundaryMarker'. We will use and discuss it during applying the boundary condition. The code snippet is as follows: 
+This main class Poisson2DNonhomogeneous contains functions each of which is responsible for a certain task as described in SCL-1. However, in this case, we need to declare two functions as a global variable of `sourceTermFunction` and `boundaryFunction`. These functions are applicable for the operators OpDomainRhs and OpBoundaryRhs respectively. In addition to that, we have declared a vector type shared pointer 'boundaryMarker'. We will use and discuss it during applying the boundary condition. The code snippet is as follows: 
 \code
 struct Poisson2DNonhomogeneous {
 public:
@@ -249,7 +282,7 @@ Next, to read the mesh the function similar job as in MoFEMErrorCode Poisson2DNo
 
 \subsubsection setupProblem setupProblem()
   Since we are considering both domain and boundary, we need to add the domain and boundary field in the simpleInterface to setup the problem,. Besides, we have selected the polynomial base function as `AINSWORTH_BERNSTEIN_BEZIER_BASE` and \f$(\mathbf{H^1})\f$ scalar space, where each shape function has 1 degree of freedom.
-\ code
+\code
 MoFEMErrorCode Poisson2DNonhomogeneous::setupProblem() {
 MoFEMFunctionBegin;
 
@@ -272,17 +305,17 @@ MoFEMFunctionReturn(0);
 Next, we are proceeding to discuss the detail for setting up boundary condition. This code involves marking degrees of freedom on boundary entities, merging markers, and obtaining entities for field splitting in the following:
  \snippet users_modules/tutorials/scl-2/poisson_2d_nonhomogeneous.cpp Boundary condition
 
-The line bc_mng->pushMarkDOFsOnEntities(...) is used to collect the degrees of freedom (DOFs) of the entities only for marked block set("BOUNDARY_CONDITION"). Then, the block sets are accumulated as in container and assembled as a vector in boundaryMarker. The boundaryEntitiesForFieldsplit is to get the range/IDs for the blocks including vertex, edges or faces. This is done to indicate the difference between the domain and boundary entities.
+The line bc_mng->pushMarkDOFsOnEntities(...) is used to collect the degrees of freedom (DOFs) of the entities only for marked block set("BOUNDARY_CONDITION"). Then, the block sets are accumulated as in container and assemble in boundaryMarker. The boundaryEntitiesForFieldsplit is to get the range/IDs for the blocks including vertex, edges or faces. This is done to indicate the difference between the domain and boundary entities.
 
 
 \subsubsection assembleSystem assembleSystem()
-Now we are all set to focus  on assembling all the things to go for solving. Also, there is a significant change that happens compared with the SCL-1: Homogenous Poisson problem. Before going to that, first we add operators to the OpDomainLhsPipeline using the AddHOOps function considering scalar space H1. Then we need to set the boundary conditions using OpSetBc for the domain, then push the main OpDomainLhs operator, and finally unset the boundary conditions using OpUnSetBc. We will discuss it in detail after going through the code snippet in the following:
+Now we are all set to focus  on assembling all the things to the pipeline. Also, we find some changes that happens compared with the SCL-1: Homogenous Poisson problem. Before going to that, first we add operators to the OpDomainLhsPipeline using the AddHOOps function considering scalar space H1. Then we need to set the boundary conditions for the domain using OpSetBc. Then push the main OpDomainLhs operator, and finally unset the assembly settingusing OpUnSetBc. We will discuss it in detail after going through the code snippet in the following:
 
  \snippet users_modules/tutorials/scl-2/poisson_2d_nonhomogeneous.cpp Assemble system
 
 Here, the process involves using the OpSetBc, OpUnSetBc, and UDOs to push back to the pipeline for assembling RHS and LHS. Specifically, these operations are being carried out on the pipeline for the Domain and boundary in same way i.e. getOpDomainLhsPipeline(), OpBoundaryLhsPipeline. So we are only describing for only one set of assemble processes in the following: 
 
-The OpSetBc() object is responsible for assembling the boundary entities or everything except the boundary. In other words, if it is flagged 'true' it focuses exclusively on the domain entities and does not account for boundary entities tagged with the 'boundaryMarker.
+The OpSetBc() object is responsible for assembling only for the boundary entities or everything except the boundary. In other words, if it is flagged 'true' it focuses exclusively on the domain entities and does not account for boundary entities tagged with the 'boundaryMarker.
 \code
 { // Push operators to the Pipeline that is responsible for calculating LHS of
     // domain elements
@@ -301,7 +334,7 @@ The OpSetBc() object is responsible for assembling the boundary entities or ever
 For example, when we assemble for the boundary, first we use OpSetBc(), then add OpBoundaryLhs and OpUnSetBc to the `getOpBoundaryLhsPipeline()` and `getOpBoundaryLhsPipeline`. To be noted that it's important to set the flag as `false` here.
 
 <BLOCKQUOTE>
-To recapitulate, when we are assembling for the domain, OpSetBc() works for skipping(marked'true' to skip boundary) the boundary entities. On the other hand, it considers only the boundaries (marked 'false' to consider) when solving only for boundary. And then push the UDO. Then OpUnSetBc() is used to set the index to the entities as it was intially.
+To recapitulate, when we are assembling for the domain, OpSetBc() works for skipping(marked'true' to skip boundary) the boundary entities. On the other hand, it considers only the boundaries (marked 'false' to consider) when assemblying only for boundary. And then push the UDO. Then OpUnSetBc() is used to set the index to the entities as it was intially.
 </BLOCKQUOTE>
 
 \subsubsection setIntegrationRules setIntegrationRules()
@@ -309,7 +342,7 @@ Afterwards, the computation of LHS and RHS is defined in the setIntegrationRules
  \snippet users_modules/tutorials/scl-2/poisson_2d_nonhomogeneous.cpp Set integration rules 
 \subsubsection solveSystem solveSystem()
 
-To solve the problem, to made ready our systems we divided it for domain and boundaries similar to Figure: 2 where we can consider the subscripts D is for domain and B goes for boundary.
+To solve the problem, we  remember that we made our assembling systems ready using the set/unseting thing in boundaryCondition() for domain and boundaries as shown in Figure: 2 where we can consider the subscripts D is for domain and B goes for boundary.
 \anchor figure_poisson_nonhomogeneous_problem
 \image html non-homogenous_poission_Matrix.png "Figure 1: Solving approach" width = 400px
 
