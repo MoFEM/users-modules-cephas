@@ -5,15 +5,10 @@
 using namespace MoFEM;
 using namespace Poisson2DNonhomogeneousOperators;
 
-
 constexpr int SPACE_DIM = 2;
 using PostProcFaceEle =
     PostProcBrokenMeshInMoab<FaceElementForcesAndSourcesCore>;
-
-
-
 static char help[] = "...\n\n";
-
 struct Poisson2DNonhomogeneous {
 public:
   Poisson2DNonhomogeneous(MoFEM::Interface &m_field);
@@ -61,7 +56,7 @@ private:
 
 Poisson2DNonhomogeneous::Poisson2DNonhomogeneous(MoFEM::Interface &m_field)
     : domainField("U"), mField(m_field) {}
-
+//! [Read mesh]
 MoFEMErrorCode Poisson2DNonhomogeneous::readMesh() {
   MoFEMFunctionBegin;
 
@@ -71,7 +66,9 @@ MoFEMErrorCode Poisson2DNonhomogeneous::readMesh() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Read mesh]
 
+//! [Setup problem]
 MoFEMErrorCode Poisson2DNonhomogeneous::setupProblem() {
   MoFEMFunctionBegin;
 
@@ -79,7 +76,6 @@ MoFEMErrorCode Poisson2DNonhomogeneous::setupProblem() {
                                          AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
   CHKERR simpleInterface->addBoundaryField(domainField, H1,
                                            AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-
   int oRder = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
@@ -88,7 +84,9 @@ MoFEMErrorCode Poisson2DNonhomogeneous::setupProblem() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Setup problem]
 
+//! [Boundary condition]
 MoFEMErrorCode Poisson2DNonhomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
@@ -96,17 +94,17 @@ MoFEMErrorCode Poisson2DNonhomogeneous::boundaryCondition() {
   CHKERR bc_mng->pushMarkDOFsOnEntities(simpleInterface->getProblemName(),
                                         "BOUNDARY_CONDITION", domainField, 0, 1,
                                         true);
-
   // merge markers from all blocksets "BOUNDARY_CONDITION"
-  boundaryMarker =
-      bc_mng->getMergedBlocksMarker({"BOUNDARY_CONDITION"});
+  boundaryMarker = bc_mng->getMergedBlocksMarker({"BOUNDARY_CONDITION"});
   // get entities on blocksets "BOUNDARY_CONDITION"
   boundaryEntitiesForFieldsplit =
       bc_mng->getMergedBlocksRange({"BOUNDARY_CONDITION"});
 
   MoFEMFunctionReturn(0);
 }
+//! [Boundary condition]
 
+//! [Assemble system]
 MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
   MoFEMFunctionBegin;
 
@@ -156,7 +154,9 @@ MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Assemble system]
 
+//! [Set integration rules]
 MoFEMErrorCode Poisson2DNonhomogeneous::setIntegrationRules() {
   MoFEMFunctionBegin;
 
@@ -174,7 +174,9 @@ MoFEMErrorCode Poisson2DNonhomogeneous::setIntegrationRules() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Set integration rules]
 
+//! [Solve system]
 MoFEMErrorCode Poisson2DNonhomogeneous::solveSystem() {
   MoFEMFunctionBegin;
 
@@ -223,7 +225,9 @@ MoFEMErrorCode Poisson2DNonhomogeneous::solveSystem() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Solve system]
 
+//! [Output results]
 MoFEMErrorCode Poisson2DNonhomogeneous::outputResults() {
   MoFEMFunctionBegin;
 
@@ -242,10 +246,9 @@ MoFEMErrorCode Poisson2DNonhomogeneous::outputResults() {
 
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateScalarFieldValues(domainField, d_ptr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpPPMap(post_proc_fe->getPostProcMesh(),
-                  post_proc_fe->getMapGaussPts(), {{domainField, d_ptr}},
-                  {}, {}, {}));
+  post_proc_fe->getOpPtrVector().push_back(new OpPPMap(
+      post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+      {{domainField, d_ptr}}, {}, {}, {}));
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
   CHKERR pipeline_mng->loopFiniteElements();
