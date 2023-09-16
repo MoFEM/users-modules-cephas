@@ -1244,6 +1244,11 @@ auto solve_boundary_for_g = [&]() {
 
     CHKERR VecGetSubVector(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_is[0], &nested_vectors(0));
 
+    CHKERR VecGhostUpdateBegin(nested_vectors(0), INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(nested_vectors(0), INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecAssemblyBegin(nested_vectors(0));
+    CHKERR VecAssemblyEnd(nested_vectors(0));
+
 
     *(pipeline_mng->getBoundaryExplicitRhsFE()->vecAssembleSwitch) = false;
 
@@ -1266,6 +1271,11 @@ auto solve_boundary_for_g = [&]() {
     cerr << "\n\n\n\n\n (1) ##############      \n\n\n\n\n ";
     // CHKERR VecView(nested_vectors(1), PETSC_VIEWER_STDOUT_WORLD);
     CHKERR VecGetSubVector(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_is[1], &nested_vectors(1));
+    CHKERR VecGhostUpdateBegin(nested_vectors(1), INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(nested_vectors(1), INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecAssemblyBegin(nested_vectors(1));
+    CHKERR VecAssemblyEnd(nested_vectors(1));
+
     // CHKERR VecView(nested_vectors(0), PETSC_VIEWER_STDOUT_WORLD);
     CHKERR KSPSolve(ksp_FF, nested_vectors(1), D_FF);
     CHKERR VecGhostUpdateBegin(D_FF, INSERT_VALUES, SCATTER_FORWARD);
