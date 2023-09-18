@@ -402,11 +402,6 @@ struct TSPrePostProc {
                                     PetscInt stageindex, Vec *Y);
   static MoFEMErrorCode tsPostStep(TS ts);
   static MoFEMErrorCode tsPreStep(TS ts);
-  
-  boost::shared_ptr<SnesCtx>
-      snesCtxPtr; //< infernal data (context) for MoFEM SNES fuctions
-  boost::shared_ptr<TsCtx>
-      tsCtxPtr;   //<  internal data (context) for MoFEM TS functions.
 };
 
 static boost::weak_ptr<TSPrePostProc> tsPrePostProc;
@@ -416,11 +411,6 @@ struct LinMomTimeScale : public MoFEM::TimeScale {
   double getScale(const double time) {
     return sin(2. * M_PI * MoFEM::TimeScale::getScale(time));
   };
-};
-
-struct CommonData {
-  SmartPetscObj<Mat> M;   ///< Mass matrix
-  SmartPetscObj<KSP> ksp; ///< Linear solver
 };
 
 struct Example {
@@ -1024,7 +1014,7 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR DMMoFEMAddSubFieldCol(subdm, f.c_str());
     CHKERR DMMoFEMAddElement(subdm, simple->getDomainFEName().c_str());
 
-    // if (f == "V")
+    if (f == "V")
       CHKERR DMMoFEMAddElement(subdm, simple->getBoundaryFEName().c_str());
       
     CHKERR DMSetUp(subdm);
