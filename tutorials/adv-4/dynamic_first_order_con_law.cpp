@@ -1188,6 +1188,11 @@ auto solve_boundary_for_g = [&]() {
     CHKERR VecAssemblyEnd(D_VV);
     CHKERR VecCopy(D_VV, nested_vectors(0));
     
+    CHKERR VecScatterBegin(scctx, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(0), INSERT_VALUES,
+                           SCATTER_REVERSE);
+    CHKERR VecScatterEnd(scctx, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(0), INSERT_VALUES,
+                         SCATTER_REVERSE);
+    
     //BEGIN
   
   VecScatter scctx_2;
@@ -1210,6 +1215,12 @@ auto solve_boundary_for_g = [&]() {
     CHKERR VecAssemblyBegin(D_FF);
     CHKERR VecAssemblyEnd(D_FF);
     CHKERR VecCopy(D_FF, nested_vectors(1));
+
+    CHKERR VecScatterBegin(scctx, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(1), INSERT_VALUES,
+                           SCATTER_REVERSE);
+    CHKERR VecScatterEnd(scctx, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(1), INSERT_VALUES,
+                         SCATTER_REVERSE);
+    
 
     // VecScatter scctx_3;
     // CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
