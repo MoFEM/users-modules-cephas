@@ -1151,7 +1151,9 @@ auto solve_boundary_for_g = [&]() {
   MoFEMFunctionBegin;
   if (*(pipeline_mng->getBoundaryExplicitRhsFE()->vecAssembleSwitch)) {
 
-    
+    CHKERR VecZeroEntries(nested_vectors(0));
+    CHKERR VecZeroEntries(nested_vectors(1));
+
     CHKERR VecGhostUpdateBegin(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecAssemblyBegin(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
