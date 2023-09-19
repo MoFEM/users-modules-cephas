@@ -1290,8 +1290,8 @@ auto solve_boundary_for_g = [&]() {
     // cerr << "end\n";
     CHKERR VecScatterDestroy(&scctx);
     CHKERR VecScatterDestroy(&scctx_2);
-    CHKERR VecScatterDestroy(&scctx_3);
-    CHKERR VecScatterDestroy(&scctx_4);
+    // CHKERR VecScatterDestroy(&scctx_3);
+    // CHKERR VecScatterDestroy(&scctx_4);
 
   }
 
