@@ -1006,7 +1006,7 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR DMMoFEMCreateSubDM(subdm, dm, dm_name.c_str());
 
     CHKERR DMMoFEMSetSquareProblem(subdm, PETSC_TRUE);
-    CHKERR DMMoFEMSetDestroyProblem(subdm, PETSC_TRUE);
+    // CHKERR DMMoFEMSetDestroyProblem(subdm, PETSC_TRUE);
 
     CHKERR DMMoFEMAddSubFieldRow(subdm, f.c_str());
     CHKERR DMMoFEMAddSubFieldCol(subdm, f.c_str());
