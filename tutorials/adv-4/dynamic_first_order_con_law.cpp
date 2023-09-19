@@ -1182,8 +1182,8 @@ auto solve_boundary_for_g = [&]() {
     // CHKERR VecGhostUpdateEnd(nested_vectors(1), INSERT_VALUES, SCATTER_FORWARD);
     // CHKERR VecAssemblyBegin(nested_vectors(1));
     // CHKERR VecAssemblyEnd(nested_vectors(1));
-    // cerr << "before (1)\n";
-    // CHKERR VecView(nested_vectors(1),PETSC_VIEWER_STDOUT_WORLD);
+    cerr << "before (1)\n";
+    CHKERR VecView(nested_vectors(1),PETSC_VIEWER_STDOUT_WORLD);
 
     auto D_FF = vectorDuplicate(nested_vectors(1));
 
