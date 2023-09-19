@@ -188,7 +188,7 @@ struct OpCalculatePiola : public ForcesAndSourcesCore::UserDataOperator {
 
     // Define Kronecker Delta
     constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
-
+    
     // Number of Gauss points
     const size_t nb_gauss_pts = getGaussPts().size2();
 
@@ -761,8 +761,6 @@ MoFEMErrorCode Example::assembleSystem() {
 
   CHKERR apply_rhs(pipeline_mng->getOpDomainExplicitRhsPipeline());
 
-
-
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order;
   };
@@ -1041,7 +1039,6 @@ MoFEMErrorCode Example::solveSystem() {
 
   CHKERR DMCreateMatrix_MoFEM(dm_sub_FF, M_FF);
   CHKERR MatZeroEntries(M_FF);
-
   
   boost::shared_ptr<DomainEle> vol_mass_ele_VV(new DomainEle(mField));
   boost::shared_ptr<DomainEle> vol_mass_ele_FF(new DomainEle(mField));
@@ -1174,14 +1171,22 @@ auto solve_boundary_for_g = [&]() {
         simple->getProblemName(), ROW, nested_vectors(1), "SUB_FF", ROW,
         &scctx_2);
 
+    CHKERR VecScatterBegin(scctx_2, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(1), INSERT_VALUES,
+                           SCATTER_FORWARD);
+    CHKERR VecScatterEnd(scctx_2, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(1), INSERT_VALUES,
+                         SCATTER_FORWARD);
+    
+
     // CHKERR VecGhostUpdateBegin(nested_vectors(1), INSERT_VALUES,
     //                            SCATTER_FORWARD);
     // CHKERR VecGhostUpdateEnd(nested_vectors(1), INSERT_VALUES, SCATTER_FORWARD);
     // CHKERR VecAssemblyBegin(nested_vectors(1));
     // CHKERR VecAssemblyEnd(nested_vectors(1));
-  
+    // cerr << "before (1)\n";
+    // CHKERR VecView(nested_vectors(1),PETSC_VIEWER_STDOUT_WORLD);
+
     auto D_FF = vectorDuplicate(nested_vectors(1));
-    
+
     CHKERR KSPSolve(ksp_FF, nested_vectors(1), D_FF);
     CHKERR VecGhostUpdateBegin(D_FF, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D_FF, INSERT_VALUES, SCATTER_FORWARD);
@@ -1231,7 +1236,7 @@ auto solve_boundary_for_g = [&]() {
     // CHKERR VecView(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,PETSC_VIEWER_STDOUT_WORLD);
     // cerr << "(0)\n";
     // CHKERR VecView(nested_vectors(0),PETSC_VIEWER_STDOUT_WORLD);
-    // cerr << "(1)\n";
+    // cerr << "after (1)\n";
     // CHKERR VecView(nested_vectors(1),PETSC_VIEWER_STDOUT_WORLD);
     // cerr << "end\n";
     CHKERR VecScatterDestroy(&scctx);
