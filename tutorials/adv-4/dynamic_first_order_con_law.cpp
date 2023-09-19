@@ -1282,7 +1282,8 @@ auto solve_boundary_for_g = [&]() {
     //                       INSERT_VALUES, SCATTER_FORWARD);
 
     // CHKERR VecCopy(help_vec, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
-
+    
+    CHKERR VecZeroEntries(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
     VecScatter scctx_3;
     CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
         nested_vectors(0), "SUB_VV", ROW,
