@@ -604,9 +604,9 @@ MoFEMErrorCode TSPrePostProc::tsPostStage(TS ts, PetscReal stagetime,
     CHKERR fb->fieldAxpy(dt, "V", "x_2");
     CHKERR fb->fieldCopy(1., "x_2", "x_1");
 
-    CHKERR fb->fieldCopy(-inv_num_step / dt, "F_0", "F_dot");
-    CHKERR fb->fieldAxpy(inv_num_step / dt, "F", "F_dot");
-    CHKERR fb->fieldCopy(1., "F", "F_0");
+    // CHKERR fb->fieldCopy(-inv_num_step / dt, "F_0", "F_dot");
+    // CHKERR fb->fieldAxpy(inv_num_step / dt, "F", "F_dot");
+    // CHKERR fb->fieldCopy(1., "F", "F_0");
   }
   MoFEMFunctionReturn(0);
 }
@@ -1230,6 +1230,10 @@ VecScatter scctx_4;
     CHKERR VecAssemblyBegin(D_FF);
     CHKERR VecAssemblyEnd(D_FF);
     CHKERR VecCopy(D_FF, nested_vectors(1));
+
+    CHKERR mField.getInterface<VecManager>()->setOtherLocalGhostVector(
+      simple->getProblemName(), "F", "F_dot", ROW, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
+      SCATTER_REVERSE);
     
     CHKERR VecScatterBegin(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,  INSERT_VALUES,
                            SCATTER_FORWARD);
