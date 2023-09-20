@@ -1233,7 +1233,7 @@ VecScatter scctx_4;
 
     CHKERR mField.getInterface<VecManager>()->setOtherLocalGhostVector(
       simple->getProblemName(), "F", "F_dot", ROW, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
-      SCATTER_REVERSE);
+      SCATTER_FORWARD);
     
     CHKERR VecScatterBegin(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,  INSERT_VALUES,
                            SCATTER_FORWARD);
