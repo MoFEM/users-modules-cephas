@@ -1163,100 +1163,100 @@ SmartPetscObj<Mat> M_VV;   ///< Mass matrix
       CHKERR VecAssemblyEnd(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
       
     {
-//       VecScatter scctx;
-//     CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
-//         pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
-//         simple->getProblemName(), ROW, nested_vectors(0), "SUB_VV", ROW,
-//         &scctx);
+      VecScatter scctx;
+    CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
+        pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
+        simple->getProblemName(), ROW, nested_vectors(0), "SUB_VV", ROW,
+        &scctx);
 
-// VecScatter scctx_2;
-//     CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
-//         pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
-//         simple->getProblemName(), ROW, nested_vectors(1), "SUB_FF", ROW,
-//         &scctx_2);
+VecScatter scctx_2;
+    CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
+        pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
+        simple->getProblemName(), ROW, nested_vectors(1), "SUB_FF", ROW,
+        &scctx_2);
 
-// VecScatter scctx_3;
-//     CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
-//         nested_vectors(0), "SUB_VV", ROW,
-//         pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
-//         simple->getProblemName(), ROW, &scctx_3);
+VecScatter scctx_3;
+    CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
+        nested_vectors(0), "SUB_VV", ROW,
+        pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
+        simple->getProblemName(), ROW, &scctx_3);
         
-// VecScatter scctx_4;
-//     CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
-//         nested_vectors(1), "SUB_FF", ROW,
-//         pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
-//         simple->getProblemName(), ROW, &scctx_4);
+VecScatter scctx_4;
+    CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
+        nested_vectors(1), "SUB_FF", ROW,
+        pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
+        simple->getProblemName(), ROW, &scctx_4);
 
       
-//     CHKERR VecScatterBegin(scctx, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(0), INSERT_VALUES,
-//                            SCATTER_FORWARD);
-//     CHKERR VecScatterEnd(scctx, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(0), INSERT_VALUES,
-//                          SCATTER_FORWARD);
+    CHKERR VecScatterBegin(scctx, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(0), INSERT_VALUES,
+                           SCATTER_FORWARD);
+    CHKERR VecScatterEnd(scctx, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(0), INSERT_VALUES,
+                         SCATTER_FORWARD);
     
-//     CHKERR VecGhostUpdateBegin(nested_vectors(0), INSERT_VALUES,
-//                                SCATTER_FORWARD);
-//     CHKERR VecGhostUpdateEnd(nested_vectors(0), INSERT_VALUES, SCATTER_FORWARD);
-//     CHKERR VecAssemblyBegin(nested_vectors(0));
-//     CHKERR VecAssemblyEnd(nested_vectors(0));
+    CHKERR VecGhostUpdateBegin(nested_vectors(0), INSERT_VALUES,
+                               SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(nested_vectors(0), INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecAssemblyBegin(nested_vectors(0));
+    CHKERR VecAssemblyEnd(nested_vectors(0));
     
     
-//     auto D_VV = vectorDuplicate(nested_vectors(0));
+    auto D_VV = vectorDuplicate(nested_vectors(0));
     
-//     CHKERR KSPSolve(ksp_VV, nested_vectors(0), D_VV);
-//     CHKERR VecGhostUpdateBegin(D_VV, INSERT_VALUES, SCATTER_FORWARD);
-//     CHKERR VecGhostUpdateEnd(D_VV, INSERT_VALUES, SCATTER_FORWARD);
-//     CHKERR VecAssemblyBegin(D_VV);
-//     CHKERR VecAssemblyEnd(D_VV);
-//     CHKERR VecCopy(D_VV, nested_vectors(0));
-    
-
-    
-//     CHKERR VecScatterBegin(scctx_2, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(1), INSERT_VALUES,
-//                            SCATTER_FORWARD);
-//     CHKERR VecScatterEnd(scctx_2, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(1), INSERT_VALUES,
-//                          SCATTER_FORWARD);
-
-//     CHKERR VecGhostUpdateBegin(nested_vectors(1), INSERT_VALUES,
-//                                SCATTER_FORWARD);
-//     CHKERR VecGhostUpdateEnd(nested_vectors(1), INSERT_VALUES, SCATTER_FORWARD);
-//     CHKERR VecAssemblyBegin(nested_vectors(1));
-//     CHKERR VecAssemblyEnd(nested_vectors(1));
-
-//     auto D_FF = vectorDuplicate(nested_vectors(1));
-    
-//     CHKERR KSPSolve(ksp_FF, nested_vectors(1), D_FF);
-//     CHKERR VecGhostUpdateBegin(D_FF, INSERT_VALUES, SCATTER_FORWARD);
-//     CHKERR VecGhostUpdateEnd(D_FF, INSERT_VALUES, SCATTER_FORWARD);
-//     CHKERR VecAssemblyBegin(D_FF);
-//     CHKERR VecAssemblyEnd(D_FF);
-//     CHKERR VecCopy(D_FF, nested_vectors(1));
-    
-//     CHKERR VecScatterBegin(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,  INSERT_VALUES,
-//                            SCATTER_FORWARD);
-//     CHKERR VecScatterEnd(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
-//                          SCATTER_FORWARD);
-
-//     CHKERR VecScatterBegin(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
-//                            SCATTER_FORWARD);
-//     CHKERR VecScatterEnd(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
-//                          SCATTER_FORWARD);
-    
-//     CHKERR VecScatterDestroy(&scctx);
-//     CHKERR VecScatterDestroy(&scctx_2);
-//     CHKERR VecScatterDestroy(&scctx_3);
-//     CHKERR VecScatterDestroy(&scctx_4); 
-                         
-    }
-    
-    {
-      auto D_VV = vectorDuplicate(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
-    
-    CHKERR KSPSolve(ksp, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, D_VV);
+    CHKERR KSPSolve(ksp_VV, nested_vectors(0), D_VV);
     CHKERR VecGhostUpdateBegin(D_VV, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D_VV, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecAssemblyBegin(D_VV);
     CHKERR VecAssemblyEnd(D_VV);
-    CHKERR VecCopy(D_VV, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
+    CHKERR VecCopy(D_VV, nested_vectors(0));
+    
+
+    
+    CHKERR VecScatterBegin(scctx_2, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(1), INSERT_VALUES,
+                           SCATTER_FORWARD);
+    CHKERR VecScatterEnd(scctx_2, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(1), INSERT_VALUES,
+                         SCATTER_FORWARD);
+
+    CHKERR VecGhostUpdateBegin(nested_vectors(1), INSERT_VALUES,
+                               SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(nested_vectors(1), INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecAssemblyBegin(nested_vectors(1));
+    CHKERR VecAssemblyEnd(nested_vectors(1));
+
+    auto D_FF = vectorDuplicate(nested_vectors(1));
+    
+    CHKERR KSPSolve(ksp_FF, nested_vectors(1), D_FF);
+    CHKERR VecGhostUpdateBegin(D_FF, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D_FF, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecAssemblyBegin(D_FF);
+    CHKERR VecAssemblyEnd(D_FF);
+    CHKERR VecCopy(D_FF, nested_vectors(1));
+    
+    CHKERR VecScatterBegin(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,  INSERT_VALUES,
+                           SCATTER_FORWARD);
+    CHKERR VecScatterEnd(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
+                         SCATTER_FORWARD);
+
+    CHKERR VecScatterBegin(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
+                           SCATTER_FORWARD);
+    CHKERR VecScatterEnd(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
+                         SCATTER_FORWARD);
+    
+    CHKERR VecScatterDestroy(&scctx);
+    CHKERR VecScatterDestroy(&scctx_2);
+    CHKERR VecScatterDestroy(&scctx_3);
+    CHKERR VecScatterDestroy(&scctx_4); 
+                         
+    }
+    
+    {
+    //   auto D_VV = vectorDuplicate(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
+    
+    // CHKERR KSPSolve(ksp, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, D_VV);
+    // CHKERR VecGhostUpdateBegin(D_VV, INSERT_VALUES, SCATTER_FORWARD);
+    // CHKERR VecGhostUpdateEnd(D_VV, INSERT_VALUES, SCATTER_FORWARD);
+    // CHKERR VecAssemblyBegin(D_VV);
+    // CHKERR VecAssemblyEnd(D_VV);
+    // CHKERR VecCopy(D_VV, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
     
     }
                         
