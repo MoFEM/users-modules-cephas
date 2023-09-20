@@ -1023,12 +1023,12 @@ MoFEMErrorCode Example::solveSystem() {
     return SmartPetscObj<DM>(subdm);
   };
 
-  SmartPetscObj<Mat> M_VV;   ///< Mass matrix
-  SmartPetscObj<Mat> M_FF;   ///< Mass matrix
 
   auto dm_sub_VV = create_subdm("V");
   auto dm_sub_FF = create_subdm("F");
 
+  
+  
   auto prb_mng = mField.getInterface<ProblemsManager>();
   std::vector<std::string> field_v{"V"};          
   std::vector<std::string> field_f{"F"};
@@ -1055,13 +1055,20 @@ MoFEMErrorCode Example::solveSystem() {
   // CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_FF");
   CHKERR prb_mng->partitionGhostDofs("SUB_FF");
 
+SmartPetscObj<Mat> M_VV;   ///< Mass matrix
+  SmartPetscObj<Mat> M_FF;   ///< Mass matrix
+  CHKERR mField.getInterface<MatrixManager>()
+        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("SUB_VV", M_VV);
+
+  CHKERR mField.getInterface<MatrixManager>()
+        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("SUB_FF", M_FF);
 
   // cerr << "CREATE!\n";
   
-  CHKERR DMCreateMatrix_MoFEM(dm_sub_VV, M_VV);
+  // CHKERR DMCreateMatrix_MoFEM(dm_sub_VV, M_VV);
   CHKERR MatZeroEntries(M_VV);
 
-  CHKERR DMCreateMatrix_MoFEM(dm_sub_FF, M_FF);
+  // CHKERR DMCreateMatrix_MoFEM(dm_sub_FF, M_FF);
   CHKERR MatZeroEntries(M_FF);
   
   boost::shared_ptr<DomainEle> vol_mass_ele_VV(new DomainEle(mField));
