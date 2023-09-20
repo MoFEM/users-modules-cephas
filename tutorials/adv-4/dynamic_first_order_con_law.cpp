@@ -1151,9 +1151,9 @@ SmartPetscObj<Mat> M_VV;   ///< Mass matrix
   //                                      vol_mass_ele_FF, nullFE, nullFE);
   
   // CHKERR KSPSetUp(ksp_FF);
-
-  
-  auto ksp = pipeline_mng->createKSP(dm);
+  SmartPetscObj<KSP> ksp; ///< Linear solver
+  ksp = createKSP(mField.get_comm());
+  // auto ksp = pipeline_mng->createKSP(dm);
   // CHKERR DMMoFEMSetSquareProblem(dm_sub, PETSC_TRUE);
   CHKERR KSPSetFromOptions(ksp);
   CHKERR KSPSetOperators(ksp, M, M);
