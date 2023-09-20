@@ -1027,8 +1027,8 @@ MoFEMErrorCode Example::solveSystem() {
   };
 
 
-  // auto dm_sub_VV = create_subdm("V");
-  // auto dm_sub_FF = create_subdm("F");
+  auto dm_sub_VV = create_subdm("V");
+  auto dm_sub_FF = create_subdm("F");
 
   
   
