@@ -91,12 +91,14 @@ set(TUTORIALS_DIRS
   vec-6
   mix-0
   mix-1
+  mix-2
   max-0
   max-1
   adv-0
   adv-1
   adv-2
   adv-3
+  adv-4
   cor-0to1
   cor-2to5
   cor-6

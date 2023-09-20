@@ -351,7 +351,7 @@ int main(int argc, char *argv[]) {
     // vector.
     auto solve_for_g = [&]() {
       MoFEMFunctionBegin;
-      if (vol_ele_slow_rhs->vecAssembleSwitch) {
+      if (*(vol_ele_slow_rhs->vecAssembleSwitch)) {
         CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES,
                                    SCATTER_REVERSE);
         CHKERR VecGhostUpdateEnd(vol_ele_slow_rhs->ts_F, ADD_VALUES,

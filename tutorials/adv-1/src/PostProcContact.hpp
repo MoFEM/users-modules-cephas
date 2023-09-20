@@ -52,20 +52,17 @@ struct Monitor : public FEMethod {
       return std::make_tuple(henky_common_data_ptr, contact_stress_ptr);
     };
 
-    auto push_bdy_ops = [&](auto &pip, int space_dim) {
-      if (space_dim == 2) {
-        CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
-                              pip, {HDIV}, "GEOMETRY")),
-                          "Apply transform");
-        // evaluate traction
-        auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
-        pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
-            "SIGMA", common_data_ptr->contactTractionPtr()));
-        pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
-            "U", common_data_ptr->contactDispPtr()));
-        return common_data_ptr;
-      }
-      return boost::shared_ptr<ContactOps::CommonData>();
+    auto push_bdy_ops = [&](auto &pip) {
+      // evaluate traction
+      auto common_data_ptr = boost::make_shared<ContactOps::CommonData>();
+      pip.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
+          "U", common_data_ptr->contactDispPtr()));
+      pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+          "SIGMA", common_data_ptr->contactTractionPtr()));
+      using C = ContactIntegrators<BoundaryEleOp>;
+      pip.push_back(new typename C::template OpEvaluateSDF<SPACE_DIM, GAUSS>(
+          common_data_ptr));
+      return common_data_ptr;
     };
 
     auto get_domain_pip = [&](auto &pip)
@@ -87,7 +84,6 @@ struct Monitor : public FEMethod {
           boost::make_shared<PostProcEleDomain>(*m_field_ptr, postProcMesh);
       auto &pip = post_proc_fe->getOpPtrVector();
 
-      auto common_data_ptr = push_bdy_ops(pip, SPACE_DIM - 1);
       auto [henky_common_data_ptr, contact_stress_ptr] =
           push_domain_ops(get_domain_pip(pip));
 
@@ -104,20 +100,11 @@ struct Monitor : public FEMethod {
               post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
               {},
-
               {
 
-                  {"U", u_ptr},
-                  {"GEOMETRY", X_ptr},
-
-                  // Note: post-process tractions in 3d, i.e. when mesh is
-                  // post-process on skin
-                  {"TRACTION_CONTACT",
-                   (common_data_ptr) ? common_data_ptr->contactTractionPtr()
-                                     : nullptr}
+                  {"U", u_ptr}, {"GEOMETRY", X_ptr}
 
               },
-
               {
 
                   {"SIGMA", contact_stress_ptr},
@@ -127,12 +114,43 @@ struct Monitor : public FEMethod {
                   {"P2", henky_common_data_ptr->getMatFirstPiolaStress()}
 
               },
-
               {}
 
               )
 
       );
+
+      if (SPACE_DIM == 3) {
+
+        CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+                              pip, {HDIV}, "GEOMETRY")),
+                          "Apply transform");
+        auto common_data_ptr = push_bdy_ops(pip);
+
+        pip.push_back(
+
+            new OpPPMap(
+
+                post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
+
+                {{"SDF", common_data_ptr->sdfPtr()},
+                 {"CONSTRAINT_CONTACT", common_data_ptr->constraintPtr()}},
+
+                {
+
+                    {"TRACTION_CONTACT", common_data_ptr->contactTractionPtr()},
+                    {"GRAD_SDF", common_data_ptr->gradSdfPtr()}
+
+                },
+
+                {},
+
+                {{"HESS_SDF", common_data_ptr->hessSdfPtr()}}
+
+                )
+
+        );
+      }
 
       return post_proc_fe;
     };
@@ -142,7 +160,11 @@ struct Monitor : public FEMethod {
           boost::make_shared<PostProcEleBdy>(*m_field_ptr, postProcMesh);
       auto &pip = post_proc_fe->getOpPtrVector();
 
-      auto common_data_ptr = push_bdy_ops(pip, SPACE_DIM);
+      CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM - 1, SPACE_DIM, SPACE_DIM>::add(
+                            pip, {HDIV}, "GEOMETRY")),
+                        "Apply transform");
+      auto common_data_ptr = push_bdy_ops(pip);
+
       // create OP which run element on side
       auto op_loop_side = new OpLoopSide<SideEle>(
           *m_field_ptr, "dFE", SPACE_DIM, Sev::noisy,
@@ -152,7 +174,7 @@ struct Monitor : public FEMethod {
 
       auto [henky_common_data_ptr, contact_stress_ptr] =
           push_domain_ops(op_loop_side->getOpPtrVector());
-      
+
       auto X_ptr = boost::make_shared<MatrixDouble>();
       pip.push_back(
           new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", X_ptr));
@@ -163,15 +185,19 @@ struct Monitor : public FEMethod {
 
               post_proc_fe->getPostProcMesh(), post_proc_fe->getMapGaussPts(),
 
-              {},
+              {{"SDF", common_data_ptr->sdfPtr()},
+               {"CONSTRAINT_CONTACT", common_data_ptr->constraintPtr()}},
 
               {{"U", common_data_ptr->contactDispPtr()},
                {"GEOMETRY", X_ptr},
-               {"TRACTION_CONTACT", common_data_ptr->contactTractionPtr()}},
+               {"TRACTION_CONTACT", common_data_ptr->contactTractionPtr()},
+               {"GRAD_SDF", common_data_ptr->gradSdfPtr()}
+
+              },
 
               {},
 
-              {}
+              {{"HESS_SDF", common_data_ptr->hessSdfPtr()}}
 
               )
 
@@ -211,7 +237,7 @@ struct Monitor : public FEMethod {
 
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
-  
+
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
     MoFEM::Interface *m_field_ptr;
@@ -228,8 +254,11 @@ struct Monitor : public FEMethod {
 
       CHKERR DMoFEMPreProcessFiniteElements(dM, post_proc_begin->getFEMethod());
       if (!postProcBdyFe) {
+        postProcDomainFe->copyTs(*this); // this here is a Monitor
         CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcDomainFe);
       } else {
+        postProcDomainFe->copyTs(*this); // this here is a Monitor
+        postProcBdyFe->copyTs(*this);
         CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcDomainFe);
         CHKERR DMoFEMLoopFiniteElements(dM, "bFE", postProcBdyFe);
       }
@@ -251,7 +280,7 @@ struct Monitor : public FEMethod {
 
     auto calculate_reactions = [&]() {
       MoFEMFunctionBegin;
-      
+
       auto res = createDMVector(dM);
 
       auto assemble_domain = [&]() {
@@ -344,10 +373,14 @@ struct Monitor : public FEMethod {
       MoFEMFunctionReturn(0);
     };
 
-    MOFEM_LOG("CONTACT", Sev::inform)
-        << "Write file at time " << ts_t << " write step " << sTEP;
+    int se = 1;
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_every", &se, PETSC_NULL);
 
-    CHKERR post_proc();
+    if (!(ts_step % se)) {
+      MOFEM_LOG("CONTACT", Sev::inform)
+        << "Write file at time " << ts_t << " write step " << sTEP;
+      CHKERR post_proc();
+    }
     CHKERR calculate_traction();
     CHKERR calculate_reactions();
 

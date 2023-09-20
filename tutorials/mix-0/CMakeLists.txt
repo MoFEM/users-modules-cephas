@@ -22,6 +22,9 @@ tutorials_copy_and_install("*.geo" "${permissions_execute}")
 tutorials_build_and_install(
   mixed_poisson ${CMAKE_CURRENT_SOURCE_DIR}/mixed_poisson.cpp)
 
+tutorials_build_and_install(
+  standard_poisson ${CMAKE_CURRENT_SOURCE_DIR}/standard_poisson.cpp)
+
 add_test(
   mixed_poisson
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
