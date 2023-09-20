@@ -1165,11 +1165,11 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR VecCopy(D_VV, nested_vectors(0));
     
 
-    // CHKERR VecGhostUpdateBegin(nested_vectors(0), INSERT_VALUES,
-    //                            SCATTER_FORWARD);
-    // CHKERR VecGhostUpdateEnd(nested_vectors(0), INSERT_VALUES, SCATTER_FORWARD);
-    // CHKERR VecAssemblyBegin(nested_vectors(0));
-    // CHKERR VecAssemblyEnd(nested_vectors(0));
+    CHKERR VecGhostUpdateBegin(nested_vectors(0), INSERT_VALUES,
+                               SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(nested_vectors(0), INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecAssemblyBegin(nested_vectors(0));
+    CHKERR VecAssemblyEnd(nested_vectors(0));
 
 
     VecScatter scctx_2;
@@ -1198,11 +1198,11 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR VecAssemblyEnd(D_FF);
     CHKERR VecCopy(D_FF, nested_vectors(1));
 
-    // CHKERR VecGhostUpdateBegin(nested_vectors(1), INSERT_VALUES,
-    //                            SCATTER_FORWARD);
-    // CHKERR VecGhostUpdateEnd(nested_vectors(1), INSERT_VALUES, SCATTER_FORWARD);
-    // CHKERR VecAssemblyBegin(nested_vectors(1));
-    // CHKERR VecAssemblyEnd(nested_vectors(1));
+    CHKERR VecGhostUpdateBegin(nested_vectors(1), INSERT_VALUES,
+                               SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(nested_vectors(1), INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecAssemblyBegin(nested_vectors(1));
+    CHKERR VecAssemblyEnd(nested_vectors(1));
 
     CHKERR VecZeroEntries(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
     VecScatter scctx_3;
