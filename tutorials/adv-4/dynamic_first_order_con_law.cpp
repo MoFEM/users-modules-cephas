@@ -1230,10 +1230,6 @@ VecScatter scctx_4;
     CHKERR VecAssemblyBegin(D_FF);
     CHKERR VecAssemblyEnd(D_FF);
     CHKERR VecCopy(D_FF, nested_vectors(1));
-
-    CHKERR mField.getInterface<VecManager>()->setOtherLocalGhostVector(
-      simple->getProblemName(), "F", "F_dot", ROW, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
-      SCATTER_FORWARD);
     
     CHKERR VecScatterBegin(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,  INSERT_VALUES,
                            SCATTER_FORWARD);
@@ -1244,6 +1240,10 @@ VecScatter scctx_4;
                            SCATTER_FORWARD);
     CHKERR VecScatterEnd(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
                          SCATTER_FORWARD);
+
+    CHKERR mField.getInterface<VecManager>()->setOtherLocalGhostVector(
+      simple->getProblemName(), "F", "F_dot", ROW, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
+      SCATTER_FORWARD);                         
     
     CHKERR VecScatterDestroy(&scctx);
     CHKERR VecScatterDestroy(&scctx_2);
