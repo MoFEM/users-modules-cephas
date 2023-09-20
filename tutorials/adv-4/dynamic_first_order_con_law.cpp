@@ -896,6 +896,9 @@ MoFEMErrorCode Example::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto dm = simple->getDM();
+  MoFEM::SmartPetscObj<TS> ts;
+  ts = pipeline_mng->createTSEX(dm);
+
 
   auto calculate_stress_ops = [&](auto &pip) {
     CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1});
@@ -1283,9 +1286,7 @@ VecScatter scctx_4;
   pipeline_mng->getBoundaryExplicitRhsFE()->postProcessHook =
       solve_boundary_for_g;
 
-  MoFEM::SmartPetscObj<TS> ts;
-  ts = pipeline_mng->createTSEX(dm);
-
+  
   // Field eval
   PetscBool field_eval_flag = PETSC_TRUE;
   boost::shared_ptr<MatrixDouble> velocity_field_ptr;
