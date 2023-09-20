@@ -1028,6 +1028,31 @@ MoFEMErrorCode Example::solveSystem() {
 
   auto dm_sub_VV = create_subdm("V");
   auto dm_sub_FF = create_subdm("F");
+
+  auto prb_mng = mField.getInterface<ProblemsManager>();
+  std::vector<std::string> field_v{"V"};          
+  std::vector<std::string> field_f{"F"};
+
+  CHKERR prb_mng->buildSubProblem("SUB_VV", field_v, field_v,
+                                  simple->getProblemName(), PETSC_TRUE);
+
+  // partition problem
+  CHKERR prb_mng->partitionFiniteElements("SUB_VV", true, 0,
+                                          mField.get_comm_size());
+
+  // set ghost nodes
+  CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_VV");
+
+  CHKERR prb_mng->buildSubProblem("SUB_FF", field_f, field_f,
+                                  simple->getProblemName(), PETSC_TRUE);
+
+  // partition problem
+  CHKERR prb_mng->partitionFiniteElements("SUB_FF", true, 0,
+                                          mField.get_comm_size());
+  CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_FF");                                        
+  
+
+
   // cerr << "CREATE!\n";
   
   CHKERR DMCreateMatrix_MoFEM(dm_sub_VV, M_VV);
@@ -1074,27 +1099,6 @@ MoFEMErrorCode Example::solveSystem() {
 
   boost::shared_ptr<FEMethod> nullFE;
 
-  auto prb_mng = mField.getInterface<ProblemsManager>();
-  std::vector<std::string> field_v{"V"};          
-  std::vector<std::string> field_f{"F"};
-
-  CHKERR prb_mng->buildSubProblem("SUB_VV", field_v, field_v,
-                                  simple->getProblemName(), PETSC_TRUE);
-
-  // partition problem
-  CHKERR prb_mng->partitionFiniteElements("SUB_VV", true, 0,
-                                          mField.get_comm_size());
-
-  // set ghost nodes
-  CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_VV");
-
-  CHKERR prb_mng->buildSubProblem("SUB_FF", field_f, field_f,
-                                  simple->getProblemName(), PETSC_TRUE);
-
-  // partition problem
-  CHKERR prb_mng->partitionFiniteElements("SUB_FF", true, 0,
-                                          mField.get_comm_size());
-  CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_FF");                                        
   // set ghost nodes
 
   CHKERR DMCreateGlobalVector_MoFEM(dm_sub_VV, &nested_vectors(0));
@@ -1211,10 +1215,10 @@ MoFEMErrorCode Example::solveSystem() {
         pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
         simple->getProblemName(), ROW, &scctx_3);
 
-    // CHKERR VecScatterBegin(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,  INSERT_VALUES,
-    //                        SCATTER_FORWARD);
-    // CHKERR VecScatterEnd(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
-    //                      SCATTER_FORWARD);
+    CHKERR VecScatterBegin(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,  INSERT_VALUES,
+                           SCATTER_FORWARD);
+    CHKERR VecScatterEnd(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
+                         SCATTER_FORWARD);
 
     VecScatter scctx_4;
     CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
@@ -1222,10 +1226,10 @@ MoFEMErrorCode Example::solveSystem() {
         pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
         simple->getProblemName(), ROW, &scctx_4);
 
-    // CHKERR VecScatterBegin(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
-    //                        SCATTER_FORWARD);
-    // CHKERR VecScatterEnd(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
-    //                      SCATTER_FORWARD);
+    CHKERR VecScatterBegin(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
+                           SCATTER_FORWARD);
+    CHKERR VecScatterEnd(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
+                         SCATTER_FORWARD);
     CHKERR VecGhostUpdateBegin(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecAssemblyBegin(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
