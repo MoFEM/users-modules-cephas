@@ -1105,6 +1105,11 @@ SmartPetscObj<Mat> M_VV;   ///< Mass matrix
   CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
   CHKERR MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
 
+  auto lumpVec = createDMVector(simple->getDM());
+  CHKERR MatGetRowSum(M, lumpVec);
+  CHKERR MatZeroEntries(M);
+  CHKERR MatDiagonalSet(M, lumpVec, INSERT_VALUES);
+
   // CHKERR DMoFEMLoopFiniteElements(dm_sub_VV, simple->getDomainFEName(), vol_mass_ele_VV);
   // CHKERR MatAssemblyBegin(M_VV, MAT_FINAL_ASSEMBLY);
   // CHKERR MatAssemblyEnd(M_VV, MAT_FINAL_ASSEMBLY);
