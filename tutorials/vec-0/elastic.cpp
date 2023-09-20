@@ -15,7 +15,8 @@ using namespace MoFEM;
 constexpr int BASE_DIM = 1; //< Dimension of the base functions
 
 //! [Define dimension]
-constexpr int SPACE_DIM = EXECUTABLE_DIMENSION;   //< Space dimension of problem, mesh
+constexpr int SPACE_DIM =
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 //! [Define dimension]
 constexpr AssemblyType A = (SCHUR_ASSEMBLE)
                                ? AssemblyType::SCHUR
@@ -23,11 +24,12 @@ constexpr AssemblyType A = (SCHUR_ASSEMBLE)
 
 constexpr IntegrationType I =
     IntegrationType::GAUSS; //< selected integration type
-    
+
 //! [Define entities]
 using EntData = EntitiesFieldData::EntData;
 using DomainEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::DomainEle;
-using BoundaryEle = PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
+using BoundaryEle =
+    PipelineManager::ElementsAndOpsByDim<SPACE_DIM>::BoundaryEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 //! [Define entities]
@@ -78,7 +80,7 @@ constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
-PetscBool is_plain_strain = PETSC_FALSE;
+PetscBool is_plane_strain = PETSC_FALSE;
 
 struct Example {
 
@@ -203,7 +205,7 @@ MoFEMErrorCode Example::addMatBlockOps(
         FTensor::Index<'l', SPACE_DIM> l;
         constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
         double A = 1.;
-        if (SPACE_DIM == 2 && !is_plain_strain) {
+        if (SPACE_DIM == 2 && !is_plane_strain) {
           A = 2 * shear_modulus_G /
               (bulk_modulus_K + (4. / 3.) * shear_modulus_G);
         }
@@ -306,7 +308,7 @@ MoFEMErrorCode Example::setupProblem() {
   };
   CHKERR project_ho_geometry();
 
-  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-plane_strain", &is_plain_strain,
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-plane_strain", &is_plane_strain,
                              PETSC_NULL);
 
   int coords_dim = SPACE_DIM;
@@ -369,7 +371,7 @@ MoFEMErrorCode Example::assembleSystem() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-//! [Integration rule]
+  //! [Integration rule]
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order + 1;
   };
@@ -382,17 +384,7 @@ MoFEMErrorCode Example::assembleSystem() {
   CHKERR pip->setDomainLhsIntegrationRule(integration_rule);
   CHKERR pip->setBoundaryRhsIntegrationRule(integration_rule_bc);
   CHKERR pip->setBoundaryLhsIntegrationRule(integration_rule_bc);
-
-  MoFEMFunctionReturn(0);
-}
-//! [Boundary condition]
-
-//! [Push operators to pipeline]
-MoFEMErrorCode Example::assembleSystem() {
-  MoFEMFunctionBegin;
-  auto pip = mField.getInterface<PipelineManager>();
-  auto simple = mField.getInterface<Simple>();
-  auto bc_mng = mField.getInterface<BcManager>();
+  //! [Integration rule]
 
   CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
       pip->getOpDomainLhsPipeline(), {H1}, "GEOMETRY");
@@ -404,7 +396,7 @@ MoFEMErrorCode Example::assembleSystem() {
       pip->getOpBoundaryLhsPipeline(), {NOSPACE}, "GEOMETRY");
 
 
-//! [Push domain stiffness matrix to pipeline]
+  //! [Push domain stiffness matrix to pipeline]
   auto mat_D_ptr = boost::make_shared<MatrixDouble>();
 
   // Assemble domain stiffness matrix

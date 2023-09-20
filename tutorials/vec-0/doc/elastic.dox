@@ -142,7 +142,7 @@ Using the FTensor::Index type these formulas can be directly implemented using E
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Calculate elasticity tensor
 
-Note that depending on *SPACE_DIM* our code will appropriately sum over all the indices and set coefficient \f$ A \f$ for plane stress or 3D case.
+\note Note that depending on *SPACE_DIM* our code will appropriately sum over all the indices and set coefficient \f$ A \f$ for plane stress or 3D case.
 
 The operator `OpK` integrates the bilinear form: 
 
@@ -163,12 +163,13 @@ More info about available Form Integrators can be found in \ref user_data_operat
 
 \subsubsection tutorial_elastic_internal_force_matrix Pushing internal forces
 
-The next part of the Example::assembleSystem() function calculates the internal forces for the system which is required to enforce the boundary conditions (refer to \ref basic_tutorials_poisson_homogeneous ). For elastic problems, this requires calculating the displacement gradient \f$ \nabla \mathbf u \f$, strain \f$ \boldsymbol \varepsilon \f$ and stress \f$ \boldsymbol \sigma \f$ of the system by pushing the relevant operatiors to the RHS pipeline.
+The next part of the Example::assembleSystem() function calculates the internal forces for the system which is required to enforce the boundary conditions (defined as \f$ \mathbf K \mathbf u_e \f$ refer to \ref basic_tutorials_poisson_homogeneous for an in depth description). For elastic problems, this requires calculating the displacement gradient \f$ \nabla \mathbf u \f$, strain \f$ \boldsymbol \varepsilon \f$ and stress \f$ \boldsymbol \sigma \f$ of the system by pushing the relevant operatiors to the RHS pipeline.
 \snippet users_modules/tutorials/vec-0/elastic.cpp Push Internal forces
 This is achieved by pushing a series of operators as follows:
 - `OpCalculateVectorFieldGradient` computes the gradient of the displacement field \f$ \nabla \mathbf u^{h}=\sum_{m=0}^{N-1} \nabla \phi_m \bar{\mathbf u}_m \f$
 - `OpSymmetrizeTensor` symmetrises the previously computed gradient to compute small strain tensor \f$ \boldsymbol \varepsilon = \frac{1}{2} (\nabla \mathbf u^\text{T} + \nabla \mathbf u)  \f$
 - `OpTensorTimesSymmetricTensor` is another form integrator that computes Cauchy stress:  \f$ \boldsymbol \sigma = \mathbb D : \boldsymbol \varepsilon \f$
+- `OpInternalForce` is an alias of the FormsIntegrators `OpGradTimesSymTensor` which computes \f$ (\mathbf K \mathbf u_e)_j = \nabla \phi_i \mathbf \sigma_{ij} \f$
 
 \subsubsection tutorial_elastic_neumann Natural boundary conditions
 For natural boundary conditions we will only specify simple gravity load on the entire domain. We have to push into our Domain RHS pipeline an operator that calculates the following integral: 
