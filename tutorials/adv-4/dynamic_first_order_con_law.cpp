@@ -1050,7 +1050,6 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR prb_mng->partitionFiniteElements("SUB_FF", true, 0,
                                           mField.get_comm_size());
   CHKERR prb_mng->partitionGhostDofsOnDistributedMesh("SUB_FF");                                        
-  
 
 
   // cerr << "CREATE!\n";
@@ -1085,17 +1084,17 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR MatAssemblyBegin(M_FF, MAT_FINAL_ASSEMBLY);
   CHKERR MatAssemblyEnd(M_FF, MAT_FINAL_ASSEMBLY);
 
-  auto lumpVec_VV = createDMVector(dm_sub_VV);
-  CHKERR MatGetRowSum(M_VV, lumpVec_VV);
+  // auto lumpVec_VV = createDMVector(dm_sub_VV);
+  // CHKERR MatGetRowSum(M_VV, lumpVec_VV);
 
-  CHKERR MatZeroEntries(M_VV);
-  CHKERR MatDiagonalSet(M_VV, lumpVec_VV, INSERT_VALUES);
+  // CHKERR MatZeroEntries(M_VV);
+  // CHKERR MatDiagonalSet(M_VV, lumpVec_VV, INSERT_VALUES);
 
-  auto lumpVec_FF = createDMVector(dm_sub_FF);
-  CHKERR MatGetRowSum(M_FF, lumpVec_FF);
+  // auto lumpVec_FF = createDMVector(dm_sub_FF);
+  // CHKERR MatGetRowSum(M_FF, lumpVec_FF);
 
-  CHKERR MatZeroEntries(M_FF);
-  CHKERR MatDiagonalSet(M_FF, lumpVec_FF, INSERT_VALUES);
+  // CHKERR MatZeroEntries(M_FF);
+  // CHKERR MatDiagonalSet(M_FF, lumpVec_FF, INSERT_VALUES);
 
   boost::shared_ptr<FEMethod> nullFE;
 
