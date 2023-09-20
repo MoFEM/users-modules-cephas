@@ -1008,7 +1008,7 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR DMSetType(subdm, "DMMOFEM");
     const std::string dm_name = "SUB_" + f + f;
     CHKERR DMMoFEMCreateSubDM(subdm, dm, dm_name.c_str());
-
+    CHKERR DMSetFromOptions(subdm);
     CHKERR DMMoFEMSetSquareProblem(subdm, PETSC_TRUE);
     CHKERR DMMoFEMSetDestroyProblem(subdm, PETSC_TRUE);
 
@@ -1110,7 +1110,7 @@ MoFEMErrorCode Example::solveSystem() {
   // mField.getInterface<VecManager>()->vecCreateGhost("SUB_FF", ROW, &nested_vectors(1));
 
   auto ksp_VV = pipeline_mng->createKSP(dm_sub_VV);
-  CHKERR DMMoFEMSetSquareProblem(dm_sub_VV, PETSC_TRUE);
+  // CHKERR DMMoFEMSetSquareProblem(dm_sub_VV, PETSC_TRUE);
   CHKERR KSPSetFromOptions(ksp_VV);
   CHKERR KSPSetOperators(ksp_VV, M_VV, M_VV);
   CHKERR DMMoFEMKSPSetComputeOperators(dm_sub_VV, simple->getDomainFEName(),
@@ -1118,7 +1118,7 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR KSPSetUp(ksp_VV);
 
   auto ksp_FF = pipeline_mng->createKSP(dm_sub_FF);
-  CHKERR DMMoFEMSetSquareProblem(dm_sub_FF, PETSC_TRUE);
+  // CHKERR DMMoFEMSetSquareProblem(dm_sub_FF, PETSC_TRUE);
   CHKERR KSPSetFromOptions(ksp_FF);
   CHKERR KSPSetOperators(ksp_FF, M_FF, M_FF);
 
@@ -1127,6 +1127,7 @@ MoFEMErrorCode Example::solveSystem() {
   
   CHKERR KSPSetUp(ksp_FF);
 
+  
   auto solve_boundary_for_g = [&]() {
     MoFEMFunctionBegin;
     if (*(pipeline_mng->getBoundaryExplicitRhsFE()->vecAssembleSwitch)) {
@@ -1138,12 +1139,30 @@ MoFEMErrorCode Example::solveSystem() {
       CHKERR VecAssemblyBegin(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
       CHKERR VecAssemblyEnd(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
       
-      VecScatter scctx;
+    VecScatter scctx;
     CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
         pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
         simple->getProblemName(), ROW, nested_vectors(0), "SUB_VV", ROW,
         &scctx);
 
+VecScatter scctx_2;
+    CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
+        pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
+        simple->getProblemName(), ROW, nested_vectors(1), "SUB_FF", ROW,
+        &scctx_2);
+
+VecScatter scctx_3;
+    CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
+        nested_vectors(0), "SUB_VV", ROW,
+        pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
+        simple->getProblemName(), ROW, &scctx_3);
+VecScatter scctx_4;
+    CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
+        nested_vectors(1), "SUB_FF", ROW,
+        pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
+        simple->getProblemName(), ROW, &scctx_4);
+
+      
     CHKERR VecScatterBegin(scctx, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(0), INSERT_VALUES,
                            SCATTER_FORWARD);
     CHKERR VecScatterEnd(scctx, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(0), INSERT_VALUES,
@@ -1175,13 +1194,6 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR VecAssemblyBegin(nested_vectors(0));
     CHKERR VecAssemblyEnd(nested_vectors(0));
 
-
-    VecScatter scctx_2;
-    CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
-        pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
-        simple->getProblemName(), ROW, nested_vectors(1), "SUB_FF", ROW,
-        &scctx_2);
-
     CHKERR VecScatterBegin(scctx_2, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(1), INSERT_VALUES,
                            SCATTER_FORWARD);
     CHKERR VecScatterEnd(scctx_2, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, nested_vectors(1), INSERT_VALUES,
@@ -1194,7 +1206,7 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR VecAssemblyEnd(nested_vectors(1));
 
     auto D_FF = vectorDuplicate(nested_vectors(1));
-
+    
     CHKERR KSPSolve(ksp_FF, nested_vectors(1), D_FF);
     CHKERR VecGhostUpdateBegin(D_FF, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D_FF, INSERT_VALUES, SCATTER_FORWARD);
@@ -1208,32 +1220,34 @@ MoFEMErrorCode Example::solveSystem() {
     CHKERR VecAssemblyBegin(nested_vectors(1));
     CHKERR VecAssemblyEnd(nested_vectors(1));
 
-    // CHKERR VecZeroEntries(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
-    VecScatter scctx_3;
-    CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
-        nested_vectors(0), "SUB_VV", ROW,
-        pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
-        simple->getProblemName(), ROW, &scctx_3);
+    CHKERR VecGhostUpdateBegin(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecAssemblyBegin(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
+    CHKERR VecAssemblyEnd(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
 
+//     cerr << "\n\n\n1 ts_F\n\n\n\n";
+//     CHKERR VecView(nested_vectors(0),PETSC_VIEWER_STDOUT_WORLD);
+//     CHKERR VecView(nested_vectors(1),PETSC_VIEWER_STDOUT_WORLD);
+// cerr << "\n\n\n\n\n\n";
+    CHKERR VecZeroEntries(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
+    
     CHKERR VecScatterBegin(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,  INSERT_VALUES,
                            SCATTER_FORWARD);
     CHKERR VecScatterEnd(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
                          SCATTER_FORWARD);
 
-    VecScatter scctx_4;
-    CHKERR mField.getInterface<VecManager>()->vecScatterCreate(
-        nested_vectors(1), "SUB_FF", ROW,
-        pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,
-        simple->getProblemName(), ROW, &scctx_4);
 
     CHKERR VecScatterBegin(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
                            SCATTER_FORWARD);
     CHKERR VecScatterEnd(scctx_4, nested_vectors(1), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
                          SCATTER_FORWARD);
+                         
     CHKERR VecGhostUpdateBegin(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecAssemblyBegin(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
     CHKERR VecAssemblyEnd(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
+    // cerr << "2 ts_F\n";
+    // CHKERR VecView(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,PETSC_VIEWER_STDOUT_WORLD);
 
     // cerr << "ts_F\n";
     // CHKERR VecView(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,PETSC_VIEWER_STDOUT_WORLD);
@@ -1242,10 +1256,11 @@ MoFEMErrorCode Example::solveSystem() {
     // cerr << "after (1)\n";
     // CHKERR VecView(nested_vectors(1),PETSC_VIEWER_STDOUT_WORLD);
     // cerr << "end\n";
+    
     CHKERR VecScatterDestroy(&scctx);
     CHKERR VecScatterDestroy(&scctx_2);
     CHKERR VecScatterDestroy(&scctx_3);
-    CHKERR VecScatterDestroy(&scctx_4);                         
+    CHKERR VecScatterDestroy(&scctx_4);                        
 
       // auto D =
       //     smartVectorDuplicate(pipeline_mng->getBoundaryExplicitRhsFE()->ts_F);
