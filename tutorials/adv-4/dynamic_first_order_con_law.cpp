@@ -1232,7 +1232,7 @@ VecScatter scctx_4;
     CHKERR VecCopy(D_FF, nested_vectors(1));
 
     CHKERR mField.getInterface<VecManager>()->setOtherLocalGhostVector(
-      simple->getProblemName(), "F", "F_dot", ROW, pipeline_mng->getBoundaryExplicitRhsFE()->ts_F, INSERT_VALUES,
+      "SUB_FF", "F", "F_dot", ROW, nested_vectors(1), INSERT_VALUES,
       SCATTER_FORWARD);
     
     CHKERR VecScatterBegin(scctx_3, nested_vectors(0), pipeline_mng->getBoundaryExplicitRhsFE()->ts_F,  INSERT_VALUES,
