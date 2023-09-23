@@ -43,7 +43,7 @@ constexpr AssemblyType AT =
     (SCHUR_ASSEMBLE) ? AssemblyType::SCHUR
                      : AssemblyType::PETSC; //< selected assembly type
 constexpr IntegrationType IT =
-    IntegrationType::GAUSS;                 //< selected integration type
+    IntegrationType::GAUSS; //< selected integration type
 
 constexpr FieldSpace ElementsAndOps<2>::CONTACT_SPACE;
 constexpr FieldSpace ElementsAndOps<3>::CONTACT_SPACE;
@@ -133,7 +133,7 @@ inline double iso_hardening_dtau(double tau, double H, double Qinf,
 
 /**
  * Kinematic hardening
-*/
+ */
 template <typename T, int DIM>
 inline auto
 kinematic_hardening(FTensor::Tensor2_symmetric<T, DIM> &t_plastic_strain,
@@ -175,9 +175,9 @@ double C1_k = 0;               ///< Kinematic hardening
 double cn0 = 1;
 double cn1 = 1;
 
-int order = 2;            ///< Order displacement
+int order = 2;             ///< Order displacement
 int tau_order = order - 2; ///< Order of tau files
-int geom_order = 2; ///< Order if fixed.
+int geom_order = 2;        ///< Order if fixed.
 
 PetscBool is_quasi_static = PETSC_TRUE;
 double rho = 0.0;
@@ -304,7 +304,8 @@ MoFEMErrorCode Example::setupProblem() {
   };
 
   const auto base = get_base();
-  MOFEM_LOG("WORLD", Sev::inform) << "Base " << ApproximationBaseNames[base];
+  MOFEM_LOG("PLASTICITY", Sev::inform)
+      << "Base " << ApproximationBaseNames[base];
 
   CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
   CHKERR simple->addDomainField("EP", L2, base, size_symm);
@@ -313,10 +314,39 @@ MoFEMErrorCode Example::setupProblem() {
 
   CHKERR simple->addDataField("GEOMETRY", H1, base, SPACE_DIM);
 
-  // auto ents = get_ents_by_dim(0);
-  // ents.merge(get_ents_by_dim(1));
-  // ents.merge(get_ents_by_dim(2));
-  CHKERR simple->setFieldOrder("U", order);
+  PetscBool order_edge = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-order_edge", &order_edge,
+                             PETSC_NULL);
+  PetscBool order_face = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-order_face", &order_face,
+                             PETSC_NULL);
+  PetscBool order_volume = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-order_volume", &order_volume,
+                             PETSC_NULL);
+
+  if (order_edge || order_face || order_volume) {
+
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Order edge " << order_edge
+        ? "true"
+        : "false";
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Order face " << order_face
+        ? "true"
+        : "false";
+    MOFEM_LOG("PLASTICITY", Sev::inform) << "Order volume " << order_volume
+        ? "true"
+        : "false";
+
+    auto ents = get_ents_by_dim(0);
+    if (order_edge)
+      ents.merge(get_ents_by_dim(1));
+    if (order_face)
+      ents.merge(get_ents_by_dim(2));
+    if (order_volume)
+      ents.merge(get_ents_by_dim(3));
+    CHKERR simple->setFieldOrder("U", order, &ents);
+  } else {
+    CHKERR simple->setFieldOrder("U", order);
+  }
   CHKERR simple->setFieldOrder("EP", order - 1);
   CHKERR simple->setFieldOrder("TAU", tau_order);
 
@@ -397,7 +427,6 @@ MoFEMErrorCode Example::createCommonData() {
   auto get_command_line_parameters = [&]() {
     MoFEMFunctionBegin;
 
-
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-scale", &scale, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-young_modulus",
                                  &young_modulus, PETSC_NULL);
@@ -442,7 +471,7 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("PLASTICITY", Sev::inform) << "cn1 " << cn1;
     MOFEM_LOG("PLASTICITY", Sev::inform) << "zeta " << zeta;
 
-    if(tau_order_is_set == PETSC_FALSE)
+    if (tau_order_is_set == PETSC_FALSE)
       tau_order = order - 2;
 
     MOFEM_LOG("PLASTICITY", Sev::inform) << "Approximation order " << order;
