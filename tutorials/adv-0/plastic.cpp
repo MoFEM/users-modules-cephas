@@ -175,7 +175,8 @@ double C1_k = 0;               ///< Kinematic hardening
 double cn0 = 1;
 double cn1 = 1;
 
-int order = 2;      ///< Order if fixed.
+int order = 2;            ///< Order displacement
+int tau_order = order - 2; ///< Order of tau files
 int geom_order = 2; ///< Order if fixed.
 
 PetscBool is_quasi_static = PETSC_TRUE;
@@ -317,7 +318,7 @@ MoFEMErrorCode Example::setupProblem() {
   // ents.merge(get_ents_by_dim(2));
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("EP", order - 1);
-  CHKERR simple->setFieldOrder("TAU", order - 2);
+  CHKERR simple->setFieldOrder("TAU", tau_order);
 
   CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
 
@@ -395,6 +396,8 @@ MoFEMErrorCode Example::createCommonData() {
 
   auto get_command_line_parameters = [&]() {
     MoFEMFunctionBegin;
+
+
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-scale", &scale, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-young_modulus",
                                  &young_modulus, PETSC_NULL);
@@ -417,6 +420,9 @@ MoFEMErrorCode Example::createCommonData() {
                                PETSC_NULL);
 
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+    PetscBool tau_order_is_set; ///< true if tau order is set
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-tau_order", &tau_order,
+                              &tau_order_is_set);
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-geom_order", &geom_order,
                               PETSC_NULL);
 
@@ -436,7 +442,12 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("PLASTICITY", Sev::inform) << "cn1 " << cn1;
     MOFEM_LOG("PLASTICITY", Sev::inform) << "zeta " << zeta;
 
+    if(tau_order_is_set == PETSC_FALSE)
+      tau_order = order - 2;
+
     MOFEM_LOG("PLASTICITY", Sev::inform) << "Approximation order " << order;
+    MOFEM_LOG("PLASTICITY", Sev::inform)
+        << "Tau approximation order " << tau_order;
     MOFEM_LOG("PLASTICITY", Sev::inform)
         << "Geometry approximation order " << geom_order;
 
