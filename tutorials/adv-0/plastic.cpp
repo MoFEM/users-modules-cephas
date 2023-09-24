@@ -176,7 +176,8 @@ double cn0 = 1;
 double cn1 = 1;
 
 int order = 2;             ///< Order displacement
-int tau_order = order - 2; ///< Order of tau files
+int tau_order = order;     ///< Order of tau files
+int ep_order = order;      ///< Order of ep files
 int geom_order = 2;        ///< Order if fixed.
 
 PetscBool is_quasi_static = PETSC_TRUE;
@@ -347,8 +348,8 @@ MoFEMErrorCode Example::setupProblem() {
   } else {
     CHKERR simple->setFieldOrder("U", order);
   }
-  CHKERR simple->setFieldOrder("EP", order - 1);
-  CHKERR simple->setFieldOrder("TAU", tau_order);
+  CHKERR simple->setFieldOrder("EP", order);
+  CHKERR simple->setFieldOrder("TAU", order);
 
   CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
 
@@ -452,6 +453,9 @@ MoFEMErrorCode Example::createCommonData() {
     PetscBool tau_order_is_set; ///< true if tau order is set
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-tau_order", &tau_order,
                               &tau_order_is_set);
+    PetscBool ep_order_is_set; ///< true if tau order is set
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-ep_order", &ep_order,
+                              &ep_order_is_set);
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-geom_order", &geom_order,
                               PETSC_NULL);
 
@@ -472,9 +476,13 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("PLASTICITY", Sev::inform) << "zeta " << zeta;
 
     if (tau_order_is_set == PETSC_FALSE)
-      tau_order = order - 2;
+      tau_order = order;
+    if (ep_order_is_set == PETSC_FALSE)
+      ep_order = order;
 
     MOFEM_LOG("PLASTICITY", Sev::inform) << "Approximation order " << order;
+    MOFEM_LOG("PLASTICITY", Sev::inform)
+        << "Ep approximation order " << ep_order;
     MOFEM_LOG("PLASTICITY", Sev::inform)
         << "Tau approximation order " << tau_order;
     MOFEM_LOG("PLASTICITY", Sev::inform)
