@@ -26,12 +26,14 @@ template <int DIM> struct ElementsAndOps;
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle;
   using BoundaryEle = PipelineManager::EdgeEle;
+  using SideEle = PipelineManager::ElementsAndOpsByDim<2>::FaceSideEle;
   static constexpr FieldSpace CONTACT_SPACE = HCURL;
 };
 
 template <> struct ElementsAndOps<3> {
   using DomainEle = PipelineManager::VolEle;
   using BoundaryEle = PipelineManager::FaceEle;
+  using SideEle = PipelineManager::ElementsAndOpsByDim<3>::FaceSideEle;
   static constexpr FieldSpace CONTACT_SPACE = HDIV;
 };
 
@@ -56,6 +58,7 @@ using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using PostProcEle = PostProcBrokenMeshInMoab<DomainEle>;
 using SkinPostProcEle = PostProcBrokenMeshInMoab<BoundaryEle>;
+using SideEle = ElementsAndOps<SPACE_DIM>::SideEle;
 
 #ifdef ADD_CONTACT
 //! [Specialisation for assembly]
@@ -785,7 +788,7 @@ MoFEMErrorCode Example::tsSolve() {
     auto &pip = pp_fe->getOpPtrVector();
 
     auto push_vol_ops = [this](auto &pip) {
-      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1},
+      CHKERR AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(pip, {H1, HDIV},
                                                             "GEOMETRY");
 
       auto [common_plastic_ptr, common_henky_ptr] =
@@ -830,7 +833,7 @@ MoFEMErrorCode Example::tsSolve() {
 
                 {{"U", u_ptr}, {"GEOMETRY", x_ptr}},
 
-                {{"GRAD", common_plastic_ptr->mGradPtr},
+                {{"GRAD", common_henky_ptr->matGradPtr},
                  {"FIRST_PIOLA", common_henky_ptr->getMatFirstPiolaStress()}},
 
                 {{"PLASTIC_STRAIN", common_plastic_ptr->getPlasticStrainPtr()},
@@ -892,7 +895,7 @@ MoFEMErrorCode Example::tsSolve() {
 
       auto simple = mField.getInterface<Simple>();
       auto pp_fe = boost::make_shared<SkinPostProcEle>(mField);
-      auto op_side = new OpLoopSide<DomainEle>(
+      auto op_side = new OpLoopSide<SideEle>(
           mField, simple->getDomainFEName(), SPACE_DIM, Sev::verbose);
       pp_fe->getOpPtrVector().push_back(op_side);
       CHK_MOAB_THROW(push_vol_post_proc_ops(
