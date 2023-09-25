@@ -351,8 +351,8 @@ MoFEMErrorCode Example::setupProblem() {
   } else {
     CHKERR simple->setFieldOrder("U", order);
   }
-  CHKERR simple->setFieldOrder("EP", order);
-  CHKERR simple->setFieldOrder("TAU", order);
+  CHKERR simple->setFieldOrder("EP", ep_order);
+  CHKERR simple->setFieldOrder("TAU", tau_order);
 
   CHKERR simple->setFieldOrder("GEOMETRY", geom_order);
 
