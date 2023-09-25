@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
 
     // Set surface entities. If surface entities are from existing side set,
     // copy those entities and do other geometrical transformations, like shift
-    // scale or streach, rotate.
+    // scale or Stretch, rotate.
     if (meshset_manager->checkMeshset(surface_side_set, SIDESET))
       CHKERR cut_mesh->copySurface(surface, NULL, shift);
     else
