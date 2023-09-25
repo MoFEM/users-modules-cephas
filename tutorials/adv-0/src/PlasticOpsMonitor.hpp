@@ -106,7 +106,11 @@ struct Monitor : public FEMethod {
       MoFEMFunctionReturn(0);
     };
 
-    CHKERR make_vtk();
+    int se = 1;
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_every", &se, PETSC_NULL);
+    if (!(ts_step % se)) {
+      CHKERR make_vtk();
+    }
     if (reactionFe)
       CHKERR calculate_reaction();
     CHKERR print_max_min(uXScatter, "Ux");
