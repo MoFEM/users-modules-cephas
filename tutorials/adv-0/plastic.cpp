@@ -176,8 +176,8 @@ double cn0 = 1;
 double cn1 = 1;
 
 int order = 2;             ///< Order displacement
-int tau_order = order;     ///< Order of tau files
-int ep_order = order;      ///< Order of ep files
+int tau_order = order - 2; ///< Order of tau files
+int ep_order = order - 1;  ///< Order of ep files
 int geom_order = 2;        ///< Order if fixed.
 
 PetscBool is_quasi_static = PETSC_TRUE;
@@ -476,9 +476,9 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("PLASTICITY", Sev::inform) << "zeta " << zeta;
 
     if (tau_order_is_set == PETSC_FALSE)
-      tau_order = order;
+      tau_order = order - 2;
     if (ep_order_is_set == PETSC_FALSE)
-      ep_order = order;
+      ep_order = order - 1;
 
     MOFEM_LOG("PLASTICITY", Sev::inform) << "Approximation order " << order;
     MOFEM_LOG("PLASTICITY", Sev::inform)
