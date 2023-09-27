@@ -264,16 +264,19 @@ MoFEMErrorCode Contact::setupProblem() {
       MOFEM_LOG("CONTACT", Sev::inform)
           << "Find contact block set:  " << m->getName();
       auto meshset = m->getMeshset();
-      CHKERR mField.get_moab().get_entities_by_dimension(meshset, SPACE_DIM - 1,
-                                                         contact_range, true);
+      Range contact_meshset_range;
+      CHKERR mField.get_moab().get_entities_by_dimension(
+          meshset, SPACE_DIM - 1, contact_meshset_range, true);
 
       MOFEM_LOG("SYNC", Sev::inform)
-          << "Nb entities in contact surface: " << contact_range.size();
+          << "Nb entities in contact surface: " << contact_meshset_range.size();
       MOFEM_LOG_SYNCHRONISE(mField.get_comm());
       CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
-          contact_range);
-      skin = intersect(skin, contact_range);
+          contact_meshset_range);
+      contact_range.merge(contact_meshset_range);
     }
+    if (contact_range.size())
+      skin = intersect(skin, contact_range);
     return skin;
   };
 
