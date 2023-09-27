@@ -252,6 +252,7 @@ MoFEMErrorCode Contact::setupProblem() {
   };
 
   auto filter_blocks = [&](auto skin) {
+    bool is_contact_block = false;
     Range contact_range;
     for (auto m :
          mField.getInterface<MeshsetsManager>()->getCubitMeshsetPtr(std::regex(
@@ -261,6 +262,7 @@ MoFEMErrorCode Contact::setupProblem() {
                  ))
 
     ) {
+      is_contact_block = true;
       MOFEM_LOG("CONTACT", Sev::inform)
           << "Find contact block set:  " << m->getName();
       auto meshset = m->getMeshset();
@@ -268,15 +270,16 @@ MoFEMErrorCode Contact::setupProblem() {
       CHKERR mField.get_moab().get_entities_by_dimension(
           meshset, SPACE_DIM - 1, contact_meshset_range, true);
 
-      MOFEM_LOG("SYNC", Sev::inform)
-          << "Nb entities in contact surface: " << contact_meshset_range.size();
-      MOFEM_LOG_SYNCHRONISE(mField.get_comm());
       CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
           contact_meshset_range);
       contact_range.merge(contact_meshset_range);
     }
-    if (contact_range.size())
+    if (is_contact_block) {
+      MOFEM_LOG("SYNC", Sev::inform)
+          << "Nb entities in contact surface: " << contact_range.size();
+      MOFEM_LOG_SYNCHRONISE(mField.get_comm());
       skin = intersect(skin, contact_range);
+    }
     return skin;
   };
 
