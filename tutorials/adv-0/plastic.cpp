@@ -382,7 +382,9 @@ MoFEMErrorCode Example::setupProblem() {
                  ))
 
     ) {
-      is_contact_block = true;
+      is_contact_block =
+          true; ///< bloks interation is collectibe, so that is set irrespective
+                ///< if there are enerities in given rank or not in the block
       MOFEM_LOG("CONTACT", Sev::inform)
           << "Find contact block set:  " << m->getName();
       auto meshset = m->getMeshset();
