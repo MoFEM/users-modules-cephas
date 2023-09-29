@@ -462,7 +462,6 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(int side, EntityType type,
   hess_mat.resize((DIM * (DIM + 1)) / 2, nb_gauss_pts, false);
   constraint_vec.resize(nb_gauss_pts, false);
 
-  auto t_total_traction = CommonData::getFTensor1TotalTraction();
   auto t_traction = getFTensor1FromMat<DIM>(contactTraction_mat);
 
   auto t_sdf = getFTensor0FromVec(sdf_vec);
@@ -472,6 +471,7 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(int side, EntityType type,
 
   auto t_disp = getFTensor1FromMat<DIM>(commonDataPtr->contactDisp);
   auto t_coords = BoundaryEleOp::getFTensor1CoordsAtGaussPts();
+  auto t_normal_at_pts = BoundaryEleOp::getFTensor1NormalsAtGaussPts();
 
   FTensor::Index<'i', DIM> i;
   FTensor::Index<'j', DIM> j;
@@ -484,6 +484,7 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(int side, EntityType type,
     ++t_coords;
     ++t_traction;
     ++t_constraint;
+    ++t_normal_at_pts;
   };
 
   auto ts_time = BoundaryEleOp::getTStime();
@@ -494,15 +495,15 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(int side, EntityType type,
 
     auto sdf_v = surfaceDistanceFunction(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
-        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+        t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
 
     auto t_grad_sdf_v = gradSurfaceDistanceFunction(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
-        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+        t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
 
     auto t_hess_sdf_v = hessSurfaceDistanceFunction(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
-        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+        t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
 
     auto tn = -t_traction(i) * t_grad_sdf_v(i);
     auto c = constrain(sdf_v, tn);
@@ -542,7 +543,6 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
   auto &nf = AssemblyBoundaryEleOp::locF;
 
   auto t_normal_at_pts = AssemblyBoundaryEleOp::getFTensor1NormalsAtGaussPts();
-  auto t_total_traction = CommonData::getFTensor1TotalTraction();
 
   auto t_w = AssemblyBoundaryEleOp::getFTensor0IntegrationWeight();
   auto t_disp = getFTensor1FromMat<DIM>(commonDataPtr->contactDisp);
@@ -567,11 +567,11 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
 
     auto sdf = surfaceDistanceFunction(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
-        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+        t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
 
     auto t_grad_sdf = gradSurfaceDistanceFunction(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
-        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+        t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
     auto c = constrain(sdf, tn);
@@ -638,7 +638,6 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
   auto &locMat = AssemblyBoundaryEleOp::locMat;
 
   auto t_normal_at_pts = AssemblyBoundaryEleOp::getFTensor1NormalsAtGaussPts();
-  auto t_total_traction = CommonData::getFTensor1TotalTraction();
 
   auto t_disp = getFTensor1FromMat<DIM>(commonDataPtr->contactDisp);
   auto t_traction = getFTensor1FromMat<DIM>(commonDataPtr->contactTraction);
@@ -665,10 +664,10 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
 
     auto sdf = surfaceDistanceFunction(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
-        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+        t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
     auto t_grad_sdf = gradSurfaceDistanceFunction(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
-        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+        t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
     auto c = constrain(sdf, tn);
@@ -684,8 +683,8 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
     if (c > 0) {
       auto t_hess_sdf = hessSurfaceDistanceFunction(
           ts_time, t_spatial_coords(0), t_spatial_coords(1),
-          t_spatial_coords(2), t_total_traction(0), t_total_traction(1),
-          t_total_traction(2));
+          t_spatial_coords(2), t_normal_at_pts(0), t_normal_at_pts(1),
+          t_normal_at_pts(2));
       t_res_dU(i, j) +=
           (c * cn_contact) *
               (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
@@ -751,7 +750,6 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
   auto &locMat = AssemblyBoundaryEleOp::locMat;
 
   auto t_normal_at_pts = AssemblyBoundaryEleOp::getFTensor1NormalsAtGaussPts();
-  auto t_total_traction = CommonData::getFTensor1TotalTraction();
 
   auto t_disp = getFTensor1FromMat<DIM>(commonDataPtr->contactDisp);
   auto t_traction = getFTensor1FromMat<DIM>(commonDataPtr->contactTraction);
@@ -776,10 +774,10 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
 
     auto sdf = surfaceDistanceFunction(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
-        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+        t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
     auto t_grad_sdf = gradSurfaceDistanceFunction(
         ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
-        t_total_traction(0), t_total_traction(1), t_total_traction(2));
+        t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
     auto c = constrain(sdf, tn);
