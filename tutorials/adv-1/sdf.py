@@ -8,15 +8,15 @@ import math
 r = 1
 
 
-def sdf(deltaT,t, x, y, z, tx, ty, tz):
+def sdf(deltaT, t, x, y, z, tx, ty, tz):
   return CylinderZ.sDF(r, 0, -0.5-r, x, y)
 
 
-def grad_sdf(deltaT,t, x, y, z, tx, ty, tz):
+def grad_sdf(deltaT, t, x, y, z, tx, ty, tz):
   return CylinderZ.gradSdf(0, -0.5-r, x, y)
 
 
-def hess_sdf(deltaT,t, x, y, z, tx, ty, tz):
+def hess_sdf(deltaT, t, x, y, z, tx, ty, tz):
   return CylinderZ.hessSdf(0, -0.5-r, x, y)
 
 # Indenters
