@@ -8,15 +8,15 @@ import math
 r = 1
 
 
-def sdf(t, x, y, z, tx, ty, tz):
+def sdf(deltaT,t, x, y, z, tx, ty, tz):
 	return 1;
 
 
-def grad_sdf(t, x, y, z, tx, ty, tz):
+def grad_sdf(deltaT,t, x, y, z, tx, ty, tz):
 	return [0, 0, 0]
 
 
-def hess_sdf(t, x, y, z, tx, ty, tz):
+def hess_sdf(deltaT,t, x, y, z, tx, ty, tz):
 	return [0, 0, 0, 0, 0, 0]
 
 # Indenters
