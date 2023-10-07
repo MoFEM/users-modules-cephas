@@ -42,7 +42,7 @@ private:
   int oRder;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   double alphaPart = 0.0;
-  double ALPHA = 0.;
+  double ALPHA = 0.0;
   Range FloatingblockconstBC;
 
   SmartPetscObj<Vec> petscVec;
@@ -273,8 +273,6 @@ MoFEMErrorCode ElectrostaticHomogeneous::setIntegrationRules() {
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
 
-  // interface_rhs_fe->getRuleHook = PoissonExample::FaceRule();
-
   MoFEMFunctionReturn(0);
 }
 //! [Set integration rules]
@@ -337,8 +335,10 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
   };
 
   FloatingblockconstBC = get_entities_on_floating();
+  std::cout << FloatingblockconstBC.size() << endl;
+  std::cout << FloatingblockconstBC << endl;
   auto op_loop_side = new OpLoopSide<SideEle>(
-      mField, simpleInterface->getDomainFEName(), SPACE_DIM);
+      mField, simpleInterface->getDomainFEName(), SPACE_DIM); //// problem
 
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -373,7 +373,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
     CHKERR VecGetArrayRead(petscVec, &array);
 
     ALPHA = array[ZERO];
-    std::cout << "ALFA: " << ALPHA << std::endl;
+    std::cout << std::setprecision(8) << "ALFA: " << ALPHA << std::endl;
     // ELogTag;
     // MOFEM_LOG("WORLD", Sev::inform) << "ALFA: " << ALPHA;
 

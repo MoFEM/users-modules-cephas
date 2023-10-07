@@ -1,5 +1,5 @@
 #ifndef EXECUTABLE_DIMENSION
-#define EXECUTABLE_DIMENSION 3
+#define EXECUTABLE_DIMENSION 2
 #endif
 
 #include <MoFEM.hpp>
@@ -52,8 +52,8 @@ struct DataAtIntegrationPts {
   double blockPermittivity;
   double chrgDens;
   DataAtIntegrationPts(MoFEM::Interface &m_field) {
-    blockPermittivity = 0;
-    chrgDens = 0;
+    blockPermittivity = 0.0;
+    chrgDens = 0.0;
   }
 };
 
@@ -79,7 +79,7 @@ public:
     auto t_w = getFTensor0IntegrationWeight();
     auto t_normal = getFTensor1NormalsAtGaussPts();
     const double area = getMeasure();
-    double alphaPart = 0;
+    double alphaPart = 0.0;
 
     for (const auto &entity : *entsPtr) {
       if (entity == fe_ent) {
@@ -89,7 +89,8 @@ public:
           t_r(i) = t_normal(i);
           t_r.normalize();
           alphaPart += -(t_field_grad(i) * t_r(i)) * t_w * area;
-          // std::cout << alphaPart << std::endl;
+          std::cout << "Alphapart" < alphaPart << std::endl;
+          std::cout << "t_field_grad" < t_field_grad << std::endl;
           ++t_field_grad;
           ++t_normal;
           ++t_w;
