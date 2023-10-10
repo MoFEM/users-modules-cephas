@@ -43,10 +43,12 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   double alphaPart = 0.0;
   double ALPHA = 0.0;
+  double ALPHA2 = 0.0;
   std::vector<moab::Range> FloatingblockconstBC;
 
-  SmartPetscObj<Vec> petscVec;
-  enum VecElements { ZERO = 0, LAST_ELEMENT };
+  SmartPetscObj<Vec> petscVec1;
+  SmartPetscObj<Vec> petscVec2;
+  enum VecElements { ZERO = 0, ONE = 1, LAST_ELEMENT };
 };
 
 ElectrostaticHomogeneous::ElectrostaticHomogeneous(MoFEM::Interface &m_field)
@@ -154,8 +156,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::setupProblem() {
     // other processors (e.g. 1, 2, 3, etc.)
     local_size = 0; // local size of vector is zero on other processors
 
-  petscVec = createSmartVectorMPI(mField.get_comm(), local_size, LAST_ELEMENT);
-
+  petscVec1 = createSmartVectorMPI(mField.get_comm(), local_size, LAST_ELEMENT);
+  petscVec2 = createSmartVectorMPI(mField.get_comm(), local_size, LAST_ELEMENT);
   MoFEMFunctionReturn(0);
 }
 //! [Setup problem]
@@ -355,9 +357,10 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
         electrodeNames.push_back(entity_name);
         electrodeRanges.push_back(constBCEdges);
 
-        std::cout << "Electrode Name: " << entity_name << std::endl;
-        std::cout << "Electrode Size: " << constBCEdges.size() << std::endl;
-        std::cout << "Electrode Range: " << constBCEdges << std::endl;
+        std::cout << "Electrode: " << entity_name << std::endl;
+        std::cout << "no of ent: " << constBCEdges.size() << std::endl;
+        std::cout << "ent Range: " << constBCEdges << std::endl;
+        // std::cout << "index: " << &petscVec << std::endl;
       }
     }
 
@@ -368,13 +371,12 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
     return electrodeRanges;
   };
 
-  FloatingblockconstBC =
-      get_entities_on_floatingssssssss(); 
-      /////////
-                                          // for (const auto &electrodeRange :
-                                          // electrodeRanges) {\\noooooooooooooo
-                                          // FloatingblockconstBC =
-                                          // electrodeRange;
+  FloatingblockconstBC = get_entities_on_floatingssssssss();
+  /////////
+  // for (const auto &electrodeRange :
+  // electrodeRanges) {\\noooooooooooooo
+  // FloatingblockconstBC =
+  // electrodeRange;
 
   auto op_loop_side = new OpLoopSide<SideEle>(
       mField, simpleInterface->getDomainFEName(), SPACE_DIM);
@@ -402,24 +404,34 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
   //     new OpAlpha<SPACE_DIM>(domainField, grad_grad_ptr, petscVec,
   //                            boost::make_shared<Range>(FloatingblockconstBC)));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpAlpha<SPACE_DIM>(
-      domainField, grad_grad_ptr, petscVec,
+      domainField, grad_grad_ptr, petscVec1, petscVec2,
       boost::make_shared<std::vector<moab::Range>>(FloatingblockconstBC)));
-  CHKERR VecZeroEntries(petscVec);
+  CHKERR VecZeroEntries(petscVec1);
+    CHKERR VecZeroEntries(petscVec2);
   CHKERR pipeline_mng->loopFiniteElements();
+std::cout << "Before VecAssembly" << std::endl;
+  CHKERR VecAssemblyBegin(petscVec1);
+  CHKERR VecAssemblyEnd(petscVec1);
+  CHKERR VecAssemblyBegin(petscVec2);
+  CHKERR VecAssemblyEnd(petscVec2);
+  std::cout << "After VecAssembly" << std::endl;
+if (!mField.get_comm_rank()) {
+    const double *array1, *array2;
+    CHKERR VecGetArrayRead(petscVec1, &array1);
+    CHKERR VecGetArrayRead(petscVec2, &array2);
+ 
+    std::cout << "Array1[ZERO]: " << array1[ZERO] << std::endl;
+    std::cout << "Array2[ONE]: " << array2[ONE] << std::endl;
 
-  CHKERR VecAssemblyBegin(petscVec);
-  CHKERR VecAssemblyEnd(petscVec);
-  if (!mField.get_comm_rank()) { // if
-    const double *array;
-    CHKERR VecGetArrayRead(petscVec, &array);
+    ALPHA = array1[ZERO];
+    ALPHA2 = array2[ONE];
 
-    ALPHA = array[ZERO];
-    std::cout << std::setprecision(8) << "ALFA: " << ALPHA << std::endl;
-    // ELogTag;
-    // MOFEM_LOG("WORLD", Sev::inform) << "ALFA: " << ALPHA;
+    std::cout << std::setprecision(8) << "ALFA: " << ALPHA << ", ALFA2: " << ALPHA2 << std::endl;
 
-    CHKERR VecRestoreArrayRead(petscVec, &array);
-  }
+    CHKERR VecRestoreArrayRead(petscVec1, &array1);
+    CHKERR VecRestoreArrayRead(petscVec2, &array2);
+}
+
 
   MoFEMFunctionReturn(0);
 }
