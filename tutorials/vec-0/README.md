@@ -1,4 +1,4 @@
-# Readme for linear acoustics
+# Readme for linear elasticity
 
 # Introduction
 This directory contains the input and executable files for the tutorial [VEC-0: Linear elastic](http://mofem.eng.gla.ac.uk/mofem/html/tutorial_elastic_problem.html)
@@ -8,9 +8,13 @@ This directory contains the input and executable files for the tutorial [VEC-0: 
 - order of approximations, order = 2
 
 ## Running code
-
+# 2D Code
 ```
-./elastic_2d -file_name beam_3D.cub -order 2
+./elastic_2d -file_name beam_2D.cub -order 2
+```
+# 3D Code
+```
+./elastic_3d -file_name beam_3D.cub -order 2
 ```
 
 ## Extra input
