@@ -440,10 +440,15 @@ struct OpCalculatePiolaStressImpl<DIM, GAUSS, DomainEleOp>
     auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+#ifdef HECKY_SMALL_STRAIN
+      t_P(i, j) = t_D(i, j, k, l) * t_grad(k, l);
+#else
       FTensor::Tensor2<double, DIM, DIM> t_F;
       t_F(i, j) = t_grad(i, j) + t_kd(i, j);
       t_S(k, l) = t_T(i, j) * t_logC_dC(i, j, k, l);
       t_P(i, l) = t_F(i, k) * t_S(k, l);
+#endif
 
       ++t_grad;
       ++t_logC;
@@ -507,6 +512,10 @@ struct OpHenckyTangentImpl<DIM, GAUSS, DomainEleOp> : public DomainEleOp {
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
+#ifdef HECKY_SMALL_STRAIN
+    dP_dF(i, j, k, l) = t_D(i, j, k, l);
+#else
+
       FTensor::Tensor2<double, DIM, DIM> t_F;
       t_F(i, j) = t_grad(i, j) + t_kd(i, j);
 
@@ -535,6 +544,8 @@ struct OpHenckyTangentImpl<DIM, GAUSS, DomainEleOp> : public DomainEleOp {
       dP_dF(i, j, m, n) = t_kd(i, m) * (t_kd(k, n) * t_S(k, j));
       dP_dF(i, j, m, n) +=
           t_F(i, k) * (P_D_P_plus_TL(k, j, o, p) * dC_dF(o, p, m, n));
+
+#endif
 
       ++dP_dF;
 
