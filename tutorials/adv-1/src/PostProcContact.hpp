@@ -39,6 +39,20 @@ struct Monitor : public FEMethod {
 
     using OpPPMap = OpPostProcMapInMoab<SPACE_DIM, SPACE_DIM>;
 
+    struct OpScale : public ForcesAndSourcesCore::UserDataOperator {
+      OpScale(boost::shared_ptr<MatrixDouble> m_ptr, double s)
+          : ForcesAndSourcesCore::UserDataOperator(NOSPACE, OPSPACE),
+            mPtr(m_ptr), scale(s) {}
+      MoFEMErrorCode doWork(int, EntityType, EntitiesFieldData::EntData &) {
+        *mPtr *= 1./scale;
+        return 0;
+      }
+
+    private:
+      boost::shared_ptr<MatrixDouble> mPtr;
+      double scale;
+    };
+
     auto push_domain_ops = [&](auto &pip) {
       CHK_THROW_MESSAGE((AddHOOps<SPACE_DIM, SPACE_DIM, SPACE_DIM>::add(
                             pip, {H1, HDIV}, "GEOMETRY")),
@@ -49,6 +63,7 @@ struct Monitor : public FEMethod {
       auto contact_stress_ptr = boost::make_shared<MatrixDouble>();
       pip.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
           "SIGMA", contact_stress_ptr));
+      pip.push_back(new OpScale(contact_stress_ptr, scale));
       return std::make_tuple(henky_common_data_ptr, contact_stress_ptr);
     };
 
@@ -59,6 +74,7 @@ struct Monitor : public FEMethod {
           "U", common_data_ptr->contactDispPtr()));
       pip.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
           "SIGMA", common_data_ptr->contactTractionPtr()));
+      pip.push_back(new OpScale(common_data_ptr->contactTractionPtr(), scale));
       using C = ContactIntegrators<BoundaryEleOp>;
       pip.push_back(new typename C::template OpEvaluateSDF<SPACE_DIM, GAUSS>(
           common_data_ptr));
@@ -92,6 +108,8 @@ struct Monitor : public FEMethod {
       auto X_ptr = boost::make_shared<MatrixDouble>();
       pip.push_back(
           new OpCalculateVectorFieldValues<SPACE_DIM>("GEOMETRY", X_ptr));
+
+
 
       pip.push_back(
 
