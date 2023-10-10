@@ -43,7 +43,7 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   double alphaPart = 0.0;
   double ALPHA = 0.0;
-  Range FloatingblockconstBC;
+  std::vector<moab::Range> FloatingblockconstBC;
 
   SmartPetscObj<Vec> petscVec;
   enum VecElements { ZERO = 0, LAST_ELEMENT };
@@ -321,24 +321,63 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
 
   auto get_entities_on_floating = [&]() {
     Range constBCEdges;
+    std::list<std::string> electrodeNames;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
 
-      if (entity_name.compare(0, 9, "ELECTRODE") == 0) { // ELECTRODE
-        Skinner skin(&mField.get_moab());
-        //  CHKERR skin.find_skin(0, constBCEdges, false, constBCEdges);
+      if (entity_name.compare(0, 9, "ELECTRODE") == 0) {
+        electrodeNames.push_back(entity_name);
+        std::cout << entity_name << std::endl;
         CHKERR it->getMeshsetIdEntitiesByDimension(
             mField.get_moab(), SPACE_DIM - 1, constBCEdges, true);
       }
     }
+    for (const auto &name : electrodeNames) {
+      std::cout << "Electrode Name: " << name << std::endl;
+    }
+
+    std::cout << "Total Electrodes: " << electrodeNames.size() << std::endl;
+    std::cout << "Hll" << constBCEdges.size() << std::endl;
     return constBCEdges;
   };
+  auto get_entities_on_floatingssssssss = [&]() {
+    std::vector<moab::Range> electrodeRanges;
+    std::list<std::string> electrodeNames;
 
-  FloatingblockconstBC = get_entities_on_floating();
-  std::cout << FloatingblockconstBC.size() << endl;
-  std::cout << FloatingblockconstBC << endl;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      std::string entity_name = it->getName();
+
+      if (entity_name.compare(0, 9, "ELECTRODE") == 0) {
+        moab::Range constBCEdges;
+        CHKERR it->getMeshsetIdEntitiesByDimension(
+            mField.get_moab(), SPACE_DIM - 1, constBCEdges, true);
+
+        electrodeNames.push_back(entity_name);
+        electrodeRanges.push_back(constBCEdges);
+
+        std::cout << "Electrode Name: " << entity_name << std::endl;
+        std::cout << "Electrode Size: " << constBCEdges.size() << std::endl;
+        std::cout << "Electrode Range: " << constBCEdges << std::endl;
+      }
+    }
+
+    std::cout << "Total Electrodes: " << electrodeNames.size() << std::endl;
+
+    // Print the electrode names and ranges
+
+    return electrodeRanges;
+  };
+
+  FloatingblockconstBC =
+      get_entities_on_floatingssssssss(); 
+      /////////
+                                          // for (const auto &electrodeRange :
+                                          // electrodeRanges) {\\noooooooooooooo
+                                          // FloatingblockconstBC =
+                                          // electrodeRange;
+
   auto op_loop_side = new OpLoopSide<SideEle>(
-      mField, simpleInterface->getDomainFEName(), SPACE_DIM); //// problem
+      mField, simpleInterface->getDomainFEName(), SPACE_DIM);
 
   auto det_ptr = boost::make_shared<VectorDouble>();
   auto jac_ptr = boost::make_shared<MatrixDouble>();
@@ -359,10 +398,12 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
                                                     grad_grad_ptr));
 
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(op_loop_side);
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpAlpha<SPACE_DIM>(domainField, grad_grad_ptr, petscVec,
-                             boost::make_shared<Range>(FloatingblockconstBC)));
-
+  // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //     new OpAlpha<SPACE_DIM>(domainField, grad_grad_ptr, petscVec,
+  //                            boost::make_shared<Range>(FloatingblockconstBC)));
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpAlpha<SPACE_DIM>(
+      domainField, grad_grad_ptr, petscVec,
+      boost::make_shared<std::vector<moab::Range>>(FloatingblockconstBC)));
   CHKERR VecZeroEntries(petscVec);
   CHKERR pipeline_mng->loopFiniteElements();
 
