@@ -21,13 +21,6 @@ tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.md" "${permissions_default}")
 
-tutorials_build_and_install(
-  electrostatic_2d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatic_2d_homogeneous.cpp)
-tutorials_build_and_install(
-  electrostatic_3d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/electrostatic_3d_homogeneous.cpp)
-
-
-    # if(SLEPC_FOUND)
 
     tutorials_build_and_install(
       electrostatics_3d ${CMAKE_CURRENT_SOURCE_DIR}/electrostatics.cpp)

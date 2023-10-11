@@ -6,10 +6,6 @@
 // #define __ELECTROSTATICS_CPP__
 
 #include <electrostatics.hpp>
-// #define ELogTag                                                                \
-//   MOFEM_LOG_CHANNEL("WORLD");                                                  \
-//   MOFEM_LOG_FUNCTION();                                                        \
-//   MOFEM_LOG_TAG("WORLD", "Electrostatics");
 
 struct ElectrostaticHomogeneous {
 public:
@@ -406,32 +402,33 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpAlpha<SPACE_DIM>(
       domainField, grad_grad_ptr, petscVec1, petscVec2,
       boost::make_shared<std::vector<moab::Range>>(FloatingblockconstBC)));
+
   CHKERR VecZeroEntries(petscVec1);
-    CHKERR VecZeroEntries(petscVec2);
+  CHKERR VecZeroEntries(petscVec2);
   CHKERR pipeline_mng->loopFiniteElements();
-std::cout << "Before VecAssembly" << std::endl;
+  std::cout << "Before VecAssembly" << std::endl;
   CHKERR VecAssemblyBegin(petscVec1);
   CHKERR VecAssemblyEnd(petscVec1);
   CHKERR VecAssemblyBegin(petscVec2);
   CHKERR VecAssemblyEnd(petscVec2);
   std::cout << "After VecAssembly" << std::endl;
-if (!mField.get_comm_rank()) {
+  if (!mField.get_comm_rank()) {
     const double *array1, *array2;
     CHKERR VecGetArrayRead(petscVec1, &array1);
     CHKERR VecGetArrayRead(petscVec2, &array2);
- 
-    std::cout << "Array1[ZERO]: " << array1[ZERO] << std::endl;
-    std::cout << "Array2[ONE]: " << array2[ONE] << std::endl;
+
+    // std::cout << "Array1[ZERO]: " << array1[ZERO] << std::endl;
+    // std::cout << "Array2[ONE]: " << array2[ONE] << std::endl;
 
     ALPHA = array1[ZERO];
     ALPHA2 = array2[ONE];
 
-    std::cout << std::setprecision(8) << "ALFA: " << ALPHA << ", ALFA2: " << ALPHA2 << std::endl;
+    std::cout << std::setprecision(8) << "ALFA: " << ALPHA
+              << ", ALFA2: " << ALPHA2 << std::endl;
 
     CHKERR VecRestoreArrayRead(petscVec1, &array1);
     CHKERR VecRestoreArrayRead(petscVec2, &array2);
-}
-
+  }
 
   MoFEMFunctionReturn(0);
 }
