@@ -39,7 +39,7 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   double alphaPart = 0.0;
   double ALPHA = 0.0;
-  double ALPHA2 = 0.0;
+  double BETA = 0.0;
   std::vector<moab::Range> FloatingblockconstBC;
 
   SmartPetscObj<Vec> petscVec1;
@@ -317,28 +317,8 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
   pipeline_mng->getBoundaryLhsFE().reset();
   pipeline_mng->getBoundaryRhsFE().reset();
 
-  auto get_entities_on_floating = [&]() {
-    Range constBCEdges;
-    std::list<std::string> electrodeNames;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string entity_name = it->getName();
-
-      if (entity_name.compare(0, 9, "ELECTRODE") == 0) {
-        electrodeNames.push_back(entity_name);
-        std::cout << entity_name << std::endl;
-        CHKERR it->getMeshsetIdEntitiesByDimension(
-            mField.get_moab(), SPACE_DIM - 1, constBCEdges, true);
-      }
-    }
-    for (const auto &name : electrodeNames) {
-      std::cout << "Electrode Name: " << name << std::endl;
-    }
-
-    std::cout << "Total Electrodes: " << electrodeNames.size() << std::endl;
-    std::cout << "Hll" << constBCEdges.size() << std::endl;
-    return constBCEdges;
-  };
-  auto get_entities_on_floatingssssssss = [&]() {
+  
+  auto get_entities_on_floatings = [&]() {
     std::vector<moab::Range> electrodeRanges;
     std::list<std::string> electrodeNames;
 
@@ -360,20 +340,14 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
       }
     }
 
-    std::cout << "Total Electrodes: " << electrodeNames.size() << std::endl;
+    std::cout << "Total Elec: " << electrodeNames.size() << std::endl;
 
     // Print the electrode names and ranges
 
     return electrodeRanges;
   };
 
-  FloatingblockconstBC = get_entities_on_floatingssssssss();
-  /////////
-  // for (const auto &electrodeRange :
-  // electrodeRanges) {\\noooooooooooooo
-  // FloatingblockconstBC =
-  // electrodeRange;
-
+  FloatingblockconstBC = get_entities_on_floatings();
   auto op_loop_side = new OpLoopSide<SideEle>(
       mField, simpleInterface->getDomainFEName(), SPACE_DIM);
 
@@ -396,9 +370,7 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
                                                     grad_grad_ptr));
 
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(op_loop_side);
-  // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-  //     new OpAlpha<SPACE_DIM>(domainField, grad_grad_ptr, petscVec,
-  //                            boost::make_shared<Range>(FloatingblockconstBC)));
+
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpAlpha<SPACE_DIM>(
       domainField, grad_grad_ptr, petscVec1, petscVec2,
       boost::make_shared<std::vector<moab::Range>>(FloatingblockconstBC)));
@@ -406,25 +378,19 @@ MoFEMErrorCode ElectrostaticHomogeneous::getAlphaPart() {
   CHKERR VecZeroEntries(petscVec1);
   CHKERR VecZeroEntries(petscVec2);
   CHKERR pipeline_mng->loopFiniteElements();
-  std::cout << "Before VecAssembly" << std::endl;
   CHKERR VecAssemblyBegin(petscVec1);
   CHKERR VecAssemblyEnd(petscVec1);
   CHKERR VecAssemblyBegin(petscVec2);
   CHKERR VecAssemblyEnd(petscVec2);
-  std::cout << "After VecAssembly" << std::endl;
   if (!mField.get_comm_rank()) {
     const double *array1, *array2;
     CHKERR VecGetArrayRead(petscVec1, &array1);
     CHKERR VecGetArrayRead(petscVec2, &array2);
-
-    // std::cout << "Array1[ZERO]: " << array1[ZERO] << std::endl;
-    // std::cout << "Array2[ONE]: " << array2[ONE] << std::endl;
-
     ALPHA = array1[ZERO];
-    ALPHA2 = array2[ONE];
+    BETA = array2[ONE];
 
     std::cout << std::setprecision(8) << "ALFA: " << ALPHA
-              << ", ALFA2: " << ALPHA2 << std::endl;
+              << ", BITA: " << BETA << std::endl;
 
     CHKERR VecRestoreArrayRead(petscVec1, &array1);
     CHKERR VecRestoreArrayRead(petscVec2, &array2);

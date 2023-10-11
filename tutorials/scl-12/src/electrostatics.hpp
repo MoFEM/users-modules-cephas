@@ -57,182 +57,71 @@ struct DataAtIntegrationPts {
   }
 };
 
-// template <int SPACE_DIM> struct OpAlpha : public IntEleOp {
-// public:
-//   OpAlpha(std::string field_name, boost::shared_ptr<MatrixDouble> grad_ptr,
-//           SmartPetscObj<Vec> alpha_vec, boost::shared_ptr<Range> ents_ptr)
-//       : IntEleOp(field_name, SideEleOp::OPROW), gradPtr(grad_ptr),
-//         petscVec(alpha_vec), entsPtr(ents_ptr) {
-//     std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-//     doEntities[MBVERTEX] = true;
-//   }
-
-//   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-//     MoFEMFunctionBegin;
-
-//     // check to which range out of the list the entity belongs
-//     // say it belongs to list element 0
-
-//     FTensor::Index<'i', SPACE_DIM> i;
-
-//     const auto fe_ent = getFEEntityHandle();
-//     const auto nb_gauss_pts = getGaussPts().size2();
-
-//     auto t_field_grad = getFTensor1FromMat<SPACE_DIM>(*(gradPtr));
-//     auto t_w = getFTensor0IntegrationWeight();
-//     auto t_normal = getFTensor1NormalsAtGaussPts();
-//     const double area = getMeasure();
-//     double alphaPart = 0.0;
-
-//     for (const auto &entity : *entsPtr) {
-//       if (entity == fe_ent) {
-
-//         for (int gg = 0; gg != nb_gauss_pts; gg++) {
-//           FTensor::Tensor1<double, SPACE_DIM> t_r;
-//           t_r(i) = t_normal(i);
-//           t_r.normalize();
-//           alphaPart += -(t_field_grad(i) * t_r(i)) * t_w * area;
-//           ++t_field_grad;
-//           ++t_normal;
-//           ++t_w;
-//         }
-//       }
-//     }
-//     int index = 0; // put here the positinf in the range list
-//     CHKERR ::VecSetValues(petscVec, 1, &index, &alphaPart, ADD_VALUES);
-
-//     MoFEMFunctionReturn(0);
-//   }
-
-// private:
-//   boost::shared_ptr<MatrixDouble> gradPtr;
-//   SmartPetscObj<Vec> petscVec;
-//   boost::shared_ptr<Range> entsPtr;
-// };
-// template <int SPACE_DIM> struct OpAlpha : public IntEleOp {
-// public:
-//   OpAlpha(std::string field_name, boost::shared_ptr<MatrixDouble> grad_ptr,
-//           SmartPetscObj<Vec> alpha_vec,
-//           boost::shared_ptr<std::vector<moab::Range>> ents_list)
-//       : IntEleOp(field_name, SideEleOp::OPROW), gradPtr(grad_ptr),
-//         petscVec(alpha_vec), entsList(ents_list) {
-//     std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-//     doEntities[MBVERTEX] = true;
-//   }
-
-//   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-//     MoFEMFunctionBegin;
-
-//     FTensor::Index<'i', SPACE_DIM> i;
-
-//     const auto fe_ent = getFEEntityHandle();
-//     const auto nb_gauss_pts = getGaussPts().size2();
-
-//     auto t_field_grad = getFTensor1FromMat<SPACE_DIM>(*(gradPtr));
-//     auto t_w = getFTensor0IntegrationWeight();
-//     auto t_normal = getFTensor1NormalsAtGaussPts();
-//     const double area = getMeasure();
-
-//     for (size_t entIndex = 0; entIndex < entsList->size(); ++entIndex) {
-//       const auto &ents = (*entsList)[entIndex];
-//       for (const auto &entity : ents) {
-//         if (entity == fe_ent) {
-//           double alphaPart = 0.0;
-//           for (int gg = 0; gg != nb_gauss_pts; gg++) {
-//             FTensor::Tensor1<double, SPACE_DIM> t_r;
-//             t_r(i) = t_normal(i);
-//             t_r.normalize();
-//             alphaPart += -(t_field_grad(i) * t_r(i)) * t_w * area;
-//             ++t_field_grad;
-//             ++t_normal;
-//             ++t_w;
-//           }
-
-//           int elecNo = static_cast<int>(entIndex);
-//           // size_t index = entIndex;
-//           int index = 0; /// all
-//           CHKERR ::VecSetValues(petscVec, 1, &index, &alphaPart, ADD_VALUES);
-//           std::cout << "Electrode " << elecNo << " AlphaPart: " << alphaPart
-//                     << std::endl;
-
-//           // Print alphaPart for the current electrode
-//         }
-//       }
-//     }
-
-//     MoFEMFunctionReturn(0);
-//   }
-
-// private:
-//   boost::shared_ptr<MatrixDouble> gradPtr;
-//   SmartPetscObj<Vec> petscVec;
-//   boost::shared_ptr<std::vector<moab::Range>> entsList;
-// };
-
 template <int SPACE_DIM> struct OpAlpha : public IntEleOp {
 public:
-    OpAlpha(std::string field_name, boost::shared_ptr<MatrixDouble> grad_ptr,
-            SmartPetscObj<Vec> alpha_vec1, SmartPetscObj<Vec> alpha_vec2,
-            boost::shared_ptr<std::vector<moab::Range>> ents_list)
-        : IntEleOp(field_name, SideEleOp::OPROW), gradPtr(grad_ptr),
-          petscVec1(alpha_vec1), petscVec2(alpha_vec2), entsList(ents_list) {
-        std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-        doEntities[MBVERTEX] = true;
-    }
+  OpAlpha(std::string field_name, boost::shared_ptr<MatrixDouble> grad_ptr,
+          SmartPetscObj<Vec> alpha_vec1, SmartPetscObj<Vec> alpha_vec2,
+          boost::shared_ptr<std::vector<moab::Range>> ents_list)
+      : IntEleOp(field_name, SideEleOp::OPROW), gradPtr(grad_ptr),
+        petscVec1(alpha_vec1), petscVec2(alpha_vec2), entsList(ents_list) {
+    std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+    doEntities[MBVERTEX] = true;
+  }
 
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
-        MoFEMFunctionBegin;
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
 
-        FTensor::Index<'i', SPACE_DIM> i;
+    FTensor::Index<'i', SPACE_DIM> i;
 
-        const auto fe_ent = getFEEntityHandle();
-        const auto nb_gauss_pts = getGaussPts().size2();
+    const auto fe_ent = getFEEntityHandle();
+    const auto nb_gauss_pts = getGaussPts().size2();
 
-        auto t_field_grad = getFTensor1FromMat<SPACE_DIM>(*(gradPtr));
-        auto t_w = getFTensor0IntegrationWeight();
-        auto t_normal = getFTensor1NormalsAtGaussPts();
-        const double area = getMeasure();
+    auto t_field_grad = getFTensor1FromMat<SPACE_DIM>(*(gradPtr));
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_normal = getFTensor1NormalsAtGaussPts();
+    const double area = getMeasure();
 
-        for (size_t entIndex = 0; entIndex < entsList->size(); ++entIndex) {
-            const auto &ents = (*entsList)[entIndex];
-            for (const auto &entity : ents) {
-                if (entity == fe_ent) {
-                    double alphaPart = 0.0;
-                    for (int gg = 0; gg != nb_gauss_pts; gg++) {
-                        FTensor::Tensor1<double, SPACE_DIM> t_r;
-                        t_r(i) = t_normal(i);
-                        t_r.normalize();
-                        alphaPart += -(t_field_grad(i) * t_r(i)) * t_w * area;
-                        ++t_field_grad;
-                        ++t_normal;
-                        ++t_w;
-                    }
+    for (size_t entIndex = 0; entIndex < entsList->size(); ++entIndex) {
+      const auto &ents = (*entsList)[entIndex];
+      for (const auto &entity : ents) {
+        if (entity == fe_ent) {
+          double alphaPart = 0.0;
+          for (int gg = 0; gg != nb_gauss_pts; gg++) {
+            FTensor::Tensor1<double, SPACE_DIM> t_r;
+            t_r(i) = t_normal(i);
+            t_r.normalize();
+            alphaPart += -(t_field_grad(i) * t_r(i)) * t_w * area;
+            ++t_field_grad;
+            ++t_normal;
+            ++t_w;
+          }
 
-                    int elecNo = static_cast<int>(entIndex);
-                    int index1 = 0; /// all
-                    int index2 = 1;
-                    if (elecNo == 0) {
-                        CHKERR ::VecSetValues(petscVec1, 1, &index1, &alphaPart, ADD_VALUES);
-                    } else if (elecNo == 1) {
-                        CHKERR ::VecSetValues(petscVec2, 1, &index2, &alphaPart, ADD_VALUES);
-                    }
+          int elecNo = static_cast<int>(entIndex);
+          int index1 = 0; /// all
+          int index2 = 1;
+          if (elecNo == 0) {
+            CHKERR ::VecSetValues(petscVec1, 1, &index1, &alphaPart,
+                                  ADD_VALUES);
+          } else if (elecNo == 1) {
+            CHKERR ::VecSetValues(petscVec2, 1, &index2, &alphaPart,
+                                  ADD_VALUES);
+          }
 
-                    std::cout << "Electrode " << elecNo << " AlphaPart: " << alphaPart << std::endl;
-                }
-            }
+          std::cout << "Electrode " << elecNo << " AlphaPart: " << alphaPart
+                    << std::endl;
         }
-
-        MoFEMFunctionReturn(0);
+      }
     }
+
+    MoFEMFunctionReturn(0);
+  }
 
 private:
-    boost::shared_ptr<MatrixDouble> gradPtr;
-    SmartPetscObj<Vec> petscVec1;
-    SmartPetscObj<Vec> petscVec2;
-    boost::shared_ptr<std::vector<moab::Range>> entsList;
+  boost::shared_ptr<MatrixDouble> gradPtr;
+  SmartPetscObj<Vec> petscVec1;
+  SmartPetscObj<Vec> petscVec2;
+  boost::shared_ptr<std::vector<moab::Range>> entsList;
 };
-
-
 
 struct OpNegativeGradient : public ForcesAndSourcesCore::UserDataOperator {
   OpNegativeGradient(boost::shared_ptr<MatrixDouble> grad_u_negative,
