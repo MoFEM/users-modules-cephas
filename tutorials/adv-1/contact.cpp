@@ -20,7 +20,9 @@ to 3" */
 #ifdef PYTHON_SFD
 #include <boost/python.hpp>
 #include <boost/python/def.hpp>
+#include <boost/python/numpy.hpp>
 namespace bp = boost::python;
+namespace np = boost::python::numpy;
 #endif
 
 using namespace MoFEM;
@@ -776,6 +778,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef PYTHON_SFD
   Py_Initialize();
+  np::initialize();
 #endif
 
   // Initialisation of MoFEM/PETSc and MOAB data structures

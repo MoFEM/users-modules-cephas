@@ -473,6 +473,14 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(int side, EntityType type,
   auto t_coords = BoundaryEleOp::getFTensor1CoordsAtGaussPts();
   auto t_normal_at_pts = BoundaryEleOp::getFTensor1NormalsAtGaussPts();
 
+  bp::object test = bp::make_tuple(t_coords);
+
+  np::ndarray test_coords1 = np::array(test);
+
+      MOFEM_LOG("SYNC", Sev::inform)
+          << "coords_x " << test_coords1;
+  
+
   FTensor::Index<'i', DIM> i;
   FTensor::Index<'j', DIM> j;
 
