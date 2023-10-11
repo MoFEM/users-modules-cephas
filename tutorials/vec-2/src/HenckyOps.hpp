@@ -513,7 +513,7 @@ struct OpHenckyTangentImpl<DIM, GAUSS, DomainEleOp> : public DomainEleOp {
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
 #ifdef HECKY_SMALL_STRAIN
-    dP_dF(i, j, k, l) = t_D(i, j, k, l);
+      dP_dF(i, j, k, l) = t_D(i, j, k, l);
 #else
 
       FTensor::Tensor2<double, DIM, DIM> t_F;
