@@ -21,6 +21,8 @@ struct GenericElementInterface {
   int atomTest;
   int restartRunStep;
 
+  boost::shared_ptr<FEMethod> monitorPtr;
+
   // TODO: members to add
   // add global/common boundary marker
   // add global/common post processing
@@ -36,6 +38,13 @@ struct GenericElementInterface {
   }
 
   virtual BcMarkerPtr getGlobalBoundaryMarker() { return mBoundaryMarker; };
+
+  virtual MoFEMErrorCode setMonitorPtr(boost::shared_ptr<FEMethod> monitor_ptr) {
+    MoFEMFunctionBeginHot;
+    monitorPtr = monitor_ptr;
+    MoFEMFunctionReturnHot(0);
+    return 0;
+  }
 
   // get optional command line parameters
   virtual MoFEMErrorCode getCommandLineParameters() { return 0; };
@@ -70,6 +79,8 @@ struct GenericElementInterface {
   virtual MoFEMErrorCode updateElementVariables() { return 0; };
   // postprocessing executed in the monitor or at each SNES iteration
   virtual MoFEMErrorCode postProcessElement(int step) = 0;
+
+  virtual MoFEMErrorCode testOperators() { return 0; };
 };
 
 #endif //__GENERICELEMENTINTERFACE_HPP__
