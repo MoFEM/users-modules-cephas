@@ -27,17 +27,11 @@ using PostProcEleBdy = PostProcEleByDim<SPACE_DIM>::PostProcEleBdy;
 
 struct Monitor : public FEMethod {
 
-  Monitor(SmartPetscObj<DM> &dm,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter,
-          bool use_mfront = false,
+  Monitor(SmartPetscObj<DM> &dm, bool use_mfront = false,
           boost::shared_ptr<GenericElementInterface> mfront_interface = nullptr,
           bool is_axisymmetric = false)
-      : dM(dm), uXScatter(ux_scatter), uYScatter(uy_scatter),
-        uZScatter(uz_scatter), moabVertex(mbVertexPostproc), sTEP(0),
-        useMFront(use_mfront), mfrontInterface(mfront_interface),
-        isAxisymmetric(is_axisymmetric) {
+      : dM(dm), moabVertex(mbVertexPostproc), sTEP(0), useMFront(use_mfront),
+        mfrontInterface(mfront_interface), isAxisymmetric(is_axisymmetric) {
 
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
@@ -218,11 +212,7 @@ struct Monitor : public FEMethod {
     integrateTraction = get_integrate_traction();
   }
 
-  MoFEMErrorCode preProcess() { 
-    MoFEMFunctionBegin;
-      mfront_dt = ts_dt;
-    MoFEMFunctionReturn(0);
-  }
+  MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
 
   MoFEMErrorCode postProcess() {
@@ -315,6 +305,17 @@ struct Monitor : public FEMethod {
 
     ++sTEP;
 
+    MoFEMFunctionReturn(0);
+  }
+
+  MoFEMErrorCode setScatterVectors(
+      std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
+      std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
+      std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter) {
+    MoFEMFunctionBegin;
+    uXScatter = ux_scatter;
+    uYScatter = uy_scatter;
+    uZScatter = uz_scatter;
     MoFEMFunctionReturn(0);
   }
 

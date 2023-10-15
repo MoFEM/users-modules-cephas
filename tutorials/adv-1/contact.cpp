@@ -170,6 +170,8 @@ private:
 
   boost::shared_ptr<GenericElementInterface> mfrontInterface;
 
+  boost::shared_ptr<Monitor> monitorPtr;
+
 #ifdef PYTHON_SFD
   boost::shared_ptr<SDFPython> sdfPythonPtr;
 #endif
@@ -318,6 +320,11 @@ MoFEMErrorCode Contact::setupProblem() {
     CHKERR mfrontInterface->addElementsToDM(simple->getDM());
 
     CHKERR simple->buildProblem();
+
+    auto dm = simple->getDM();
+    monitorPtr = boost::make_shared<Monitor>(dm, use_mfront, mfrontInterface,
+                                             is_axisymmetric);
+    mfrontInterface->setMonitorPtr(monitorPtr);                                         
   }
 
   auto project_ho_geometry = [&]() {
@@ -696,12 +703,10 @@ MoFEMErrorCode Contact::tsSolve() {
 
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
-    boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, uXScatter, uYScatter, uZScatter, use_mfront,
-                    mfrontInterface, is_axisymmetric));
+    monitorPtr->setScatterVectors(uXScatter, uYScatter, uZScatter);
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
-                               monitor_ptr, null, null);
+                               monitorPtr, null, null);
     MoFEMFunctionReturn(0);
   };
 
