@@ -131,6 +131,8 @@ namespace ContactOps {
 double cn_contact = 0.1;
 }; // namespace ContactOps
 
+// #define HECKY_SMALL_STRAIN
+
 #include <HenckyOps.hpp>
 using namespace HenckyOps;
 #include <ContactOps.hpp>
