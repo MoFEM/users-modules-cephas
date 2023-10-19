@@ -195,7 +195,9 @@ double alpha_damping = 0;
 #ifdef PYTHON_SFD
 #include <boost/python.hpp>
 #include <boost/python/def.hpp>
+#include <boost/python/numpy.hpp>
 namespace bp = boost::python;
+namespace np = boost::python::numpy;
 #endif
 
 namespace ContactOps {
@@ -1190,6 +1192,7 @@ int main(int argc, char *argv[]) {
 #ifdef ADD_CONTACT
 #ifdef PYTHON_SFD
   Py_Initialize();
+  np::initialize();
 #endif
 #endif // ADD_CONTACT
 

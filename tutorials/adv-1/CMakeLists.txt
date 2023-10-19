@@ -39,11 +39,14 @@ if(Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
     contact_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2 -DPYTHON_SFD") 
   set_target_properties(
     contact_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3 -DPYTHON_SFD") 
-
+  find_library(
+  BOOST_NUMPY_LIBRARY
+  NAMES boost_numpy38
+  )
   target_link_libraries(contact_2d 
-    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
+    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE} ${BOOST_NUMPY_LIBRARY})
   target_link_libraries(contact_3d 
-    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE})
+    ${Python_LIBRARY} ${Boost_LIBRARIES} ${Boost_PYTHON_LIBRARY_RELEASE} ${BOOST_NUMPY_LIBRARY})
 
 else (Python_LIBRARY AND Boost_PYTHON_LIBRARY_RELEASE)
 
