@@ -79,8 +79,6 @@ struct GenericElementInterface {
   virtual MoFEMErrorCode updateElementVariables() { return 0; };
   // postprocessing executed in the monitor or at each SNES iteration
   virtual MoFEMErrorCode postProcessElement(int step) = 0;
-
-  virtual MoFEMErrorCode testOperators() { return 0; };
 };
 
 #endif //__GENERICELEMENTINTERFACE_HPP__
