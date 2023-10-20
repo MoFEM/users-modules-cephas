@@ -61,7 +61,7 @@ template <> struct PostProcEleByDim<2> {
 };
 
 template <> struct PostProcEleByDim<3> {
-  using PostProcEleDomain = PostProcBrokenMeshInMoabBaseCont<BoundaryEle>;
+  using PostProcEleDomain = PostProcBrokenMeshInMoabBaseCont<DomainEle>;
   using PostProcEleBdy = PostProcBrokenMeshInMoabBaseCont<BoundaryEle>;
   using SideEle = PipelineManager::ElementsAndOpsByDim<3>::FaceSideEle;
 };
@@ -627,7 +627,6 @@ MoFEMErrorCode Example::outputResults() {
     return post_proc_fe;
   };
 
-
   auto post_proc_boundary = [&](auto post_proc_mesh) {
     auto post_proc_fe =
         boost::make_shared<PostProcEleBdy>(mField, post_proc_mesh);
@@ -674,8 +673,9 @@ MoFEMErrorCode Example::outputResults() {
   }
   if (post_proc_skin_only == PETSC_FALSE) {
     pip->getDomainRhsFE() = post_proc_domain(post_proc_mesh);
+  } else {
+    pip->getBoundaryRhsFE() = post_proc_boundary(post_proc_mesh);
   }
-  pip->getBoundaryRhsFE() = post_proc_boundary(post_proc_mesh);
 
   CHKERR DMoFEMPreProcessFiniteElements(simple->getDM(),
                                         post_proc_begin->getFEMethod());
