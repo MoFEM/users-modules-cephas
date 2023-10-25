@@ -526,57 +526,41 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(int side, EntityType type,
   //std::cout <<"t_grad_sdf is "<< bp::extract<char const *>(bp::str(t_grad_sdf_array)) <<std::endl;
   //std::cout <<"t_hess_sdf is "<< bp::extract<char const *>(bp::str(t_hess_sdf_array)) <<std::endl;
 
-  int sdf_size = sdf.shape(0);
   double* sdf_ptr = reinterpret_cast<double*>(sdf.get_data());
-  std::vector<double> sdf_vector(sdf_size);
-
-  for (int idx = 0; idx < sdf_size; ++idx){
-    sdf_vector[idx] = *(sdf_ptr + idx);
-  }
-
-  int grad_size = t_grad_sdf_array.shape(0);
   double* grad_ptr = reinterpret_cast<double*>(t_grad_sdf_array.get_data());
-  std::vector<double> grad_vector(grad_size);
+  double* hess_ptr = reinterpret_cast<double*>(t_hess_sdf_array.get_data());
 
-  for (int idx = 0; idx < grad_size; ++idx){
-    grad_vector[idx] = *(grad_ptr + idx);
-  }
+  //int numRows = t_grad_sdf_array.shape(0);
+  //int numCols = t_grad_sdf_array.shape(1);
 
-  int numRows = t_grad_sdf_array.shape(0);
-  int numCols = t_grad_sdf_array.shape(1);
+   //for (int idx = 0; idx < numRows; ++idx) {
+       //for (int jdx = 0; jdx < numCols; ++jdx) {
+         //   std::cout << "array id = "<< idx * numCols + jdx << std::endl;
+       //     std::cout << "C++ Array Element (" << idx << ", " << jdx << "): " << grad_ptr[idx * numCols + jdx] << std::endl;
+     //  }
+   //}
 
-   for (int idx = 0; idx < numRows; ++idx) {
-       for (int jdx = 0; jdx < numCols; ++jdx) {
-            std::cout << "C++ Array Element (" << idx << ", " << jdx << "): " << grad_ptr[idx * numCols + jdx] << std::endl;
-       }
-   }
+  //numRows = t_hess_sdf_array.shape(0);
+  //numCols = t_hess_sdf_array.shape(1);
+
+    //for (int idx = 0; idx < numRows; ++idx) {
+   //    for (int jdx = 0; jdx < numCols; ++jdx) {
+   //         std::cout << "array id = "<< idx * numCols + jdx << std::endl;
+   //         std::cout << "C++ Array Element (" << idx << ", " << jdx << "): " << hess_ptr[idx * numCols + jdx] << std::endl;
+   //    }
+   //}
 
 
   for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
-    auto sdf_v = sdf_vector[gg];
+    
+    int id = gg*3;
+    int id2 = gg*6;
+    FTensor::Tensor1<double,3> t_grad_sdf_ten {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
+    FTensor::Tensor2_symmetric<double,3> t_hess_sdf_ten {hess_ptr[id2],hess_ptr[id2+1],hess_ptr[id2+2],hess_ptr[id2+3],hess_ptr[id2+4],hess_ptr[id2+5]};
 
-    //std::cout <<"t_grad_sdf at gg "<< bp::extract<char const *>(bp::str(t_grad_sdf_array[gg])) <<std::endl;
-
-    //auto grad_sdf_vector = bp::extract<np::ndarray>(t_grad_sdf_array[gg]);
-    //int grad_sdf_vector_size = grad_sdf_vector.size(0);
-    //double* grad_sdf_vector_ptr = reinterpret_cast<double*>(grad_sdf_vector.get_data());
-    //std::vector<double> grad_sdf_vector2(grad_sdf_vector_size);
-
-    //for (int idx = 0; idx < grad_sdf_vector_size; ++idx){
-      //grad_sdf_vector2[idx] = *(grad_sdf_vector_ptr + idx);
-    //}
-
-
-
-    // FIX
-    FTensor::Tensor1<double,3> t_grad_sdf {0.,0.,0.};
-
-    auto t_grad_sdf_v = t_grad_sdf;
-
-    std::vector<double> hessSdf = bp::extract<std::vector<double>>(t_hess_sdf_array[gg]);
-        // FIX
-    FTensor::Tensor2_symmetric<double,3> t_hess_sdf {0.,0.,0.,0.,0.,0.};
-    auto t_hess_sdf_v = t_hess_sdf;
+    auto sdf_v = sdf_ptr[gg];
+    auto t_grad_sdf_v = t_grad_sdf_ten;
+    auto t_hess_sdf_v = t_hess_sdf_ten;
 
     auto tn = -t_traction(i) * t_grad_sdf_v(i);
     auto c = constrain(sdf_v, tn);
@@ -648,18 +632,12 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
         ts_time_step, ts_time, t_spatial_coords_mat_x_np, t_spatial_coords_mat_y_np, t_spatial_coords_mat_z_np,
         0.0, 0.0, 0.0);
   
-  std::cout <<"t_grad_sdf is "<< bp::extract<char const *>(bp::str(t_grad_sdf_array)) <<std::endl;
-
-  int sdf_size = sdf.shape(0);
   double* sdf_ptr = reinterpret_cast<double*>(sdf.get_data());
-  std::vector<double> sdf_vector(sdf_size);
-
-  for (int idx = 0; idx < sdf_size; ++idx){
-    sdf_vector[idx] = *(sdf_ptr + idx);
-  }
+  double* grad_ptr = reinterpret_cast<double*>(t_grad_sdf_array.get_data());
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
+    int id = gg*3;
     FTensor::Tensor1<double, DIM> t_normal;
     t_normal(i) =
         t_normal_at_pts(i) / std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
@@ -667,13 +645,10 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
     auto t_nf = getFTensor1FromPtr<DIM>(&nf[0]);
     const double alpha = t_w * AssemblyBoundaryEleOp::getMeasure();
 
-    std::vector<double> gradSdf = bp::extract<std::vector<double>>(t_grad_sdf_array[gg]);
-
-    // FIX
-    FTensor::Tensor1<double, 3> t_grad_sdf {0.,0.,0.};
+    FTensor::Tensor1<double, 3> t_grad_sdf {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
-    auto c = constrain(sdf_vector[gg], tn);
+    auto c = constrain(sdf_ptr[gg], tn);
 
     FTensor::Tensor2<double, DIM, DIM> t_cP;
     t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
@@ -688,7 +663,7 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
         +
 
         t_cP(i, j) * t_disp(j) +
-        c * (sdf_vector[gg] * t_grad_sdf(i)); // add gap0 displacements
+        c * (sdf_ptr[gg] * t_grad_sdf(i)); // add gap0 displacements
 
     size_t bb = 0;
     for (; bb != AssemblyBoundaryEleOp::nbRows / DIM; ++bb) {
@@ -774,39 +749,29 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
   auto t_hess_sdf_array = hessSurfaceDistanceFunction(
         ts_time_step, ts_time, t_spatial_coords_mat_x_np, t_spatial_coords_mat_y_np, t_spatial_coords_mat_z_np,
         0.0, 0.0, 0.0);
+  //std::cout <<"t_grad_sdf is "<< bp::extract<char const *>(bp::str(t_grad_sdf_array)) <<std::endl;
+  //std::cout <<"t_hess_sdf is "<< bp::extract<char const *>(bp::str(t_hess_sdf_array)) <<std::endl;
   
-  std::cout <<"t_grad_sdf is "<< bp::extract<char const *>(bp::str(t_grad_sdf_array)) <<std::endl;
-  std::cout <<"t_hess_sdf is "<< bp::extract<char const *>(bp::str(t_hess_sdf_array)) <<std::endl;
-
-  int sdf_size = sdf.shape(0);
   double* sdf_ptr = reinterpret_cast<double*>(sdf.get_data());
-  std::vector<double> sdf_vector(sdf_size);
-
-  for (int idx = 0; idx < sdf_size; ++idx){
-    sdf_vector[idx] = *(sdf_ptr + idx);
-  }
+  double* grad_ptr = reinterpret_cast<double*>(t_grad_sdf_array.get_data());
+  double* hess_ptr = reinterpret_cast<double*>(t_hess_sdf_array.get_data());
 
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
+    int id = gg * 3;
+    int id2 = gg * 6;
     FTensor::Tensor1<double, DIM> t_normal;
     t_normal(i) =
         t_normal_at_pts(i) / std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
     const double alpha = t_w * AssemblyBoundaryEleOp::getMeasure();
 
-    std::vector<double> gradSdf = bp::extract<std::vector<double>>(t_grad_sdf_array[gg]);
-
-    // FIX
-    FTensor::Tensor1<double,3> t_grad_sdf {0.,0.,0.};
-
-    std::vector<double> hessSdf = bp::extract<std::vector<double>>(t_hess_sdf_array[gg]);
-
-    // FIX
-    FTensor::Tensor2_symmetric<double,3> t_hess_sdf {0.,0.,0.,0.,0.,0.};
+    FTensor::Tensor1<double,3> t_grad_sdf {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
+    FTensor::Tensor2_symmetric<double,3> t_hess_sdf {hess_ptr[id2],hess_ptr[id2+1],hess_ptr[id2+2],hess_ptr[id2+3],hess_ptr[id2+4],hess_ptr[id2+5]};
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
-    auto c = constrain(sdf_vector[gg], tn);
+    auto c = constrain(sdf_ptr[gg], tn);
 
     FTensor::Tensor2<double, DIM, DIM> t_cP;
     t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
@@ -816,13 +781,12 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
     FTensor::Tensor2<double, DIM, DIM> t_res_dU;
     t_res_dU(i, j) = kronecker_delta(i, j) + t_cP(i, j);
 
-    // FIX
     if (c > 0) {
-    //  t_res_dU(i, j) +=
-    //      (c * cn_contact) *
-    //          (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
-    //           t_grad_sdf(i) * t_hess_sdf(k, j) * t_traction(k)) +
-    //      c * sdf * t_hess_sdf(i, j);
+      t_res_dU(i, j) +=
+          (c * cn_contact) *
+              (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
+               t_grad_sdf(i) * t_hess_sdf(k, j) * t_traction(k)) +
+          c * sdf_ptr[gg] * t_hess_sdf(i, j);
     }
 
     size_t rr = 0;
@@ -915,32 +879,26 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
         ts_time_step, ts_time, t_spatial_coords_mat_x_np, t_spatial_coords_mat_y_np, t_spatial_coords_mat_z_np,
         0.0, 0.0, 0.0);
   
-  std::cout <<"t_grad_sdf is "<< bp::extract<char const *>(bp::str(t_grad_sdf_array)) <<std::endl;
+  //std::cout <<"t_grad_sdf is "<< bp::extract<char const *>(bp::str(t_grad_sdf_array)) <<std::endl;
+  
 
-  int sdf_size = sdf.shape(0);
   double* sdf_ptr = reinterpret_cast<double*>(sdf.get_data());
-  std::vector<double> sdf_vector(sdf_size);
-
-  for (int idx = 0; idx < sdf_size; ++idx){
-    sdf_vector[idx] = *(sdf_ptr + idx);
-  }
+  double* grad_ptr = reinterpret_cast<double*>(t_grad_sdf_array.get_data());
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
+    int id = gg*3;
     FTensor::Tensor1<double, DIM> t_normal;
     t_normal(i) =
         t_normal_at_pts(i) / std::sqrt(t_normal_at_pts(i) * t_normal_at_pts(i));
 
     const double alpha = t_w * AssemblyBoundaryEleOp::getMeasure();
 
-    std::vector<double> gradSdf = bp::extract<std::vector<double>>(t_grad_sdf_array[gg]);
-
-    // FIX
-    FTensor::Tensor1<double,3> t_grad_sdf {0.,0.,0.};
+    FTensor::Tensor1<double,3> t_grad_sdf {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
 
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
-    auto c = constrain(sdf_vector[gg], tn);
+    auto c = constrain(sdf_ptr[gg], tn);
 
     FTensor::Tensor2<double, DIM, DIM> t_cP;
     t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
