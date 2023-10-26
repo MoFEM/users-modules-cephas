@@ -500,18 +500,21 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(int side, EntityType type,
   auto ts_time = BoundaryEleOp::getTStime();
   auto ts_time_step = BoundaryEleOp::getTStimeStep();
 
-  VectorDouble t_disp_mat = commonDataPtr->contactDisp.data();
   auto t_traction_mat = commonDataPtr->contactTraction.data();
-  VectorDouble t_coords_mat = BoundaryEleOp::getCoordsAtGaussPts().data();
 
-  VectorDouble t_spatial_coords_mat = t_coords_mat + t_disp_mat;
+  MatrixDouble &disp = commonDataPtr->contactDisp;
+  MatrixDouble &coords = BoundaryEleOp::getCoordsAtGaussPts();
+
+  MatrixDouble spatial_coords;
+  spatial_coords = coords + trans(disp);
+  VectorDouble t_spatial_coords_mat = spatial_coords.data();
 
   np::ndarray t_traction_mat_np = np::from_data(&t_traction_mat[0], np::dtype::get_builtin<double>(), bp::make_tuple(t_traction_mat.size()), bp::make_tuple(sizeof(double)), bp::object());
   np::ndarray t_spatial_coords_mat_x_np = np::from_data(&t_spatial_coords_mat[0], np::dtype::get_builtin<double>(), bp::make_tuple(nb_gauss_pts), bp::make_tuple(3*sizeof(double)), bp::object());
   np::ndarray t_spatial_coords_mat_y_np = np::from_data(&t_spatial_coords_mat[1], np::dtype::get_builtin<double>(), bp::make_tuple(nb_gauss_pts), bp::make_tuple(3*sizeof(double)), bp::object());
   np::ndarray t_spatial_coords_mat_z_np = np::from_data(&t_spatial_coords_mat[2], np::dtype::get_builtin<double>(), bp::make_tuple(nb_gauss_pts), bp::make_tuple(3*sizeof(double)), bp::object());
 
-  auto sdf = surfaceDistanceFunction(
+  auto sdf_array = surfaceDistanceFunction(
         ts_time_step, ts_time, t_spatial_coords_mat_x_np, t_spatial_coords_mat_y_np, t_spatial_coords_mat_z_np,
         0.0, 0.0, 0.0);
   
@@ -522,43 +525,46 @@ OpEvaluateSDFImpl<DIM, GAUSS, BoundaryEleOp>::doWork(int side, EntityType type,
   auto t_hess_sdf_array = hessSurfaceDistanceFunction(
         ts_time_step, ts_time, t_spatial_coords_mat_x_np, t_spatial_coords_mat_y_np, t_spatial_coords_mat_z_np,
         0.0, 0.0, 0.0);
-  
-  //std::cout <<"t_grad_sdf is "<< bp::extract<char const *>(bp::str(t_grad_sdf_array)) <<std::endl;
+  //std::cout <<"spatial coords mat is "<< t_spatial_coords_mat <<std::endl;
+  //std::cout <<"spatial coords x is "<< bp::extract<char const *>(bp::str(t_spatial_coords_mat_x_np)) <<std::endl;
+  //std::cout <<"spatial coords y is "<< bp::extract<char const *>(bp::str(t_spatial_coords_mat_y_np)) <<std::endl;
+  //std::cout <<"spatial coords z is "<< bp::extract<char const *>(bp::str(t_spatial_coords_mat_z_np)) <<std::endl;
   //std::cout <<"t_hess_sdf is "<< bp::extract<char const *>(bp::str(t_hess_sdf_array)) <<std::endl;
 
-  double* sdf_ptr = reinterpret_cast<double*>(sdf.get_data());
+  double* sdf_ptr = reinterpret_cast<double*>(sdf_array.get_data());
   double* grad_ptr = reinterpret_cast<double*>(t_grad_sdf_array.get_data());
   double* hess_ptr = reinterpret_cast<double*>(t_hess_sdf_array.get_data());
 
-  //int numRows = t_grad_sdf_array.shape(0);
-  //int numCols = t_grad_sdf_array.shape(1);
-
-   //for (int idx = 0; idx < numRows; ++idx) {
-       //for (int jdx = 0; jdx < numCols; ++jdx) {
-         //   std::cout << "array id = "<< idx * numCols + jdx << std::endl;
-       //     std::cout << "C++ Array Element (" << idx << ", " << jdx << "): " << grad_ptr[idx * numCols + jdx] << std::endl;
-     //  }
-   //}
-
-  //numRows = t_hess_sdf_array.shape(0);
-  //numCols = t_hess_sdf_array.shape(1);
-
-    //for (int idx = 0; idx < numRows; ++idx) {
-   //    for (int jdx = 0; jdx < numCols; ++jdx) {
-   //         std::cout << "array id = "<< idx * numCols + jdx << std::endl;
-   //         std::cout << "C++ Array Element (" << idx << ", " << jdx << "): " << hess_ptr[idx * numCols + jdx] << std::endl;
-   //    }
-   //}
-
-
   for (auto gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
+    t_spatial_coords(i) = t_coords(i) + t_disp(i);
+    //std::cout <<"spatial coords at gg is "<< t_spatial_coords <<std::endl;
+    //std::cout <<"disp at gg is "<< t_disp <<std::endl;
+
     
+
     int id = gg*3;
     int id2 = gg*6;
     FTensor::Tensor1<double,3> t_grad_sdf_ten {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
     FTensor::Tensor2_symmetric<double,3> t_hess_sdf_ten {hess_ptr[id2],hess_ptr[id2+1],hess_ptr[id2+2],hess_ptr[id2+3],hess_ptr[id2+4],hess_ptr[id2+5]};
 
+    //auto sdf_v = sdf_ptr[gg];
+    //auto t_grad_sdf_v = t_grad_sdf_ten;
+    //auto t_hess_sdf_v = t_hess_sdf_ten;
     auto sdf_v = sdf_ptr[gg];
+
+    //auto sdf_v = surfaceDistanceFunction(ts_time_step,
+    //    ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+    //    t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
+    //std::cout<<"SDF difference = " << sdf_v - sdf_ptr[gg]<<std::endl;
+
+    //auto t_grad_sdf_v = gradSurfaceDistanceFunction(ts_time_step,
+    //    ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+    //    t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
+
+    //auto t_hess_sdf_v = hessSurfaceDistanceFunction(ts_time_step,
+    //    ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+    //    t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
     auto t_grad_sdf_v = t_grad_sdf_ten;
     auto t_hess_sdf_v = t_hess_sdf_ten;
 
@@ -609,11 +615,13 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
   size_t nb_base_functions = data.getN().size2() / 3;
   auto t_base = data.getFTensor1N<3>();
 
-  VectorDouble t_disp_mat = commonDataPtr->contactDisp.data();
   auto t_traction_mat = commonDataPtr->contactTraction.data();
-  VectorDouble t_coords_mat = AssemblyBoundaryEleOp::getCoordsAtGaussPts().data();
+  MatrixDouble &disp = commonDataPtr->contactDisp;
+  MatrixDouble &coords = BoundaryEleOp::getCoordsAtGaussPts();
 
-  VectorDouble t_spatial_coords_mat = t_coords_mat + t_disp_mat;
+  MatrixDouble spatial_coords;
+  spatial_coords = coords + trans(disp);
+  VectorDouble t_spatial_coords_mat = spatial_coords.data();
 
   np::ndarray t_traction_mat_np = np::from_data(&t_traction_mat[0], np::dtype::get_builtin<double>(), bp::make_tuple(t_traction_mat.size()), bp::make_tuple(sizeof(double)), bp::object());
   np::ndarray t_spatial_coords_mat_x_np = np::from_data(&t_spatial_coords_mat[0], np::dtype::get_builtin<double>(), bp::make_tuple(nb_gauss_pts), bp::make_tuple(3*sizeof(double)), bp::object());
@@ -624,7 +632,7 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
   auto ts_time = AssemblyBoundaryEleOp::getTStime();
   auto ts_time_step = AssemblyBoundaryEleOp::getTStimeStep();
 
-  auto sdf = surfaceDistanceFunction(
+  auto sdf_array = surfaceDistanceFunction(
         ts_time_step, ts_time, t_spatial_coords_mat_x_np, t_spatial_coords_mat_y_np, t_spatial_coords_mat_z_np,
         0.0, 0.0, 0.0);
   
@@ -632,7 +640,7 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
         ts_time_step, ts_time, t_spatial_coords_mat_x_np, t_spatial_coords_mat_y_np, t_spatial_coords_mat_z_np,
         0.0, 0.0, 0.0);
   
-  double* sdf_ptr = reinterpret_cast<double*>(sdf.get_data());
+  double* sdf_ptr = reinterpret_cast<double*>(sdf_array.get_data());
   double* grad_ptr = reinterpret_cast<double*>(t_grad_sdf_array.get_data());
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
@@ -645,10 +653,27 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
     auto t_nf = getFTensor1FromPtr<DIM>(&nf[0]);
     const double alpha = t_w * AssemblyBoundaryEleOp::getMeasure();
 
-    FTensor::Tensor1<double, 3> t_grad_sdf {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
+    FTensor::Tensor1<double, 3> t_grad_sdf_ten {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
+
+    FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
+    t_spatial_coords(i) = t_coords(i) + t_disp(i);
+
+    auto ts_time = AssemblyBoundaryEleOp::getTStime();
+
+    //auto sdf = surfaceDistanceFunction(ts_time_step,
+    //    ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+    //    t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
+
+    auto sdf = sdf_ptr[gg];
+
+    //auto t_grad_sdf = gradSurfaceDistanceFunction(ts_time_step,
+    //    ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+    //    t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
+
+    auto t_grad_sdf = t_grad_sdf_ten;
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
-    auto c = constrain(sdf_ptr[gg], tn);
+    auto c = constrain(sdf, tn);
 
     FTensor::Tensor2<double, DIM, DIM> t_cP;
     t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
@@ -663,7 +688,7 @@ OpConstrainBoundaryRhsImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
         +
 
         t_cP(i, j) * t_disp(j) +
-        c * (sdf_ptr[gg] * t_grad_sdf(i)); // add gap0 displacements
+        c * (sdf * t_grad_sdf(i)); // add gap0 displacements
 
     size_t bb = 0;
     for (; bb != AssemblyBoundaryEleOp::nbRows / DIM; ++bb) {
@@ -723,22 +748,27 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
 
   constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
 
-  VectorDouble t_disp_mat = commonDataPtr->contactDisp.data();
   auto t_traction_mat = commonDataPtr->contactTraction.data();
-  VectorDouble t_coords_mat = AssemblyBoundaryEleOp::getCoordsAtGaussPts().data();
+  MatrixDouble &disp = commonDataPtr->contactDisp;
+  MatrixDouble &coords = BoundaryEleOp::getCoordsAtGaussPts();
 
-  VectorDouble t_spatial_coords_mat = t_coords_mat + t_disp_mat;
+  MatrixDouble spatial_coords;
+  spatial_coords = coords + trans(disp);
+  VectorDouble t_spatial_coords_mat = spatial_coords.data();
 
   np::ndarray t_traction_mat_np = np::from_data(&t_traction_mat[0], np::dtype::get_builtin<double>(), bp::make_tuple(t_traction_mat.size()), bp::make_tuple(sizeof(double)), bp::object());
   np::ndarray t_spatial_coords_mat_x_np = np::from_data(&t_spatial_coords_mat[0], np::dtype::get_builtin<double>(), bp::make_tuple(nb_gauss_pts), bp::make_tuple(3*sizeof(double)), bp::object());
   np::ndarray t_spatial_coords_mat_y_np = np::from_data(&t_spatial_coords_mat[1], np::dtype::get_builtin<double>(), bp::make_tuple(nb_gauss_pts), bp::make_tuple(3*sizeof(double)), bp::object());
   np::ndarray t_spatial_coords_mat_z_np = np::from_data(&t_spatial_coords_mat[2], np::dtype::get_builtin<double>(), bp::make_tuple(nb_gauss_pts), bp::make_tuple(3*sizeof(double)), bp::object());
 
+  //std::cout <<"x "<< bp::extract<char const *>(bp::str(t_spatial_coords_mat_x_np)) <<std::endl;      
+  //std::cout <<"y "<< bp::extract<char const *>(bp::str(t_spatial_coords_mat_y_np)) <<std::endl;
+  //std::cout <<"z "<< bp::extract<char const *>(bp::str(t_spatial_coords_mat_z_np)) <<std::endl;
 
   auto ts_time = AssemblyBoundaryEleOp::getTStime();
   auto ts_time_step = AssemblyBoundaryEleOp::getTStimeStep();
 
-  auto sdf = surfaceDistanceFunction(
+  auto sdf_array = surfaceDistanceFunction(
         ts_time_step, ts_time, t_spatial_coords_mat_x_np, t_spatial_coords_mat_y_np, t_spatial_coords_mat_z_np,
         0.0, 0.0, 0.0);
   
@@ -749,10 +779,12 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
   auto t_hess_sdf_array = hessSurfaceDistanceFunction(
         ts_time_step, ts_time, t_spatial_coords_mat_x_np, t_spatial_coords_mat_y_np, t_spatial_coords_mat_z_np,
         0.0, 0.0, 0.0);
+
+  //std::cout <<"sdf is "<< bp::extract<char const *>(bp::str(sdf)) <<std::endl;      
   //std::cout <<"t_grad_sdf is "<< bp::extract<char const *>(bp::str(t_grad_sdf_array)) <<std::endl;
   //std::cout <<"t_hess_sdf is "<< bp::extract<char const *>(bp::str(t_hess_sdf_array)) <<std::endl;
   
-  double* sdf_ptr = reinterpret_cast<double*>(sdf.get_data());
+  double* sdf_ptr = reinterpret_cast<double*>(sdf_array.get_data());
   double* grad_ptr = reinterpret_cast<double*>(t_grad_sdf_array.get_data());
   double* hess_ptr = reinterpret_cast<double*>(t_hess_sdf_array.get_data());
 
@@ -767,11 +799,27 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
 
     const double alpha = t_w * AssemblyBoundaryEleOp::getMeasure();
 
-    FTensor::Tensor1<double,3> t_grad_sdf {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
-    FTensor::Tensor2_symmetric<double,3> t_hess_sdf {hess_ptr[id2],hess_ptr[id2+1],hess_ptr[id2+2],hess_ptr[id2+3],hess_ptr[id2+4],hess_ptr[id2+5]};
+    FTensor::Tensor1<double,3> t_grad_sdf_ten {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
+    FTensor::Tensor2_symmetric<double,3> t_hess_sdf_ten {hess_ptr[id2],hess_ptr[id2+1],hess_ptr[id2+2],hess_ptr[id2+3],hess_ptr[id2+4],hess_ptr[id2+5]};
 
+    FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
+    t_spatial_coords(i) = t_coords(i) + t_disp(i);
+
+    auto ts_time = AssemblyBoundaryEleOp::getTStime();
+
+    //auto sdf = surfaceDistanceFunction(ts_time_step,
+    //    ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+    //    t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
+
+    auto sdf = sdf_ptr[gg];
+
+    //auto t_grad_sdf = gradSurfaceDistanceFunction(ts_time_step,
+    //    ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+    //    t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
+    auto t_grad_sdf = t_grad_sdf_ten;
+    auto t_hess_sdf = t_hess_sdf_ten;
     auto tn = -t_traction(i) * t_grad_sdf(i);
-    auto c = constrain(sdf_ptr[gg], tn);
+    auto c = constrain(sdf, tn);
 
     FTensor::Tensor2<double, DIM, DIM> t_cP;
     t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
@@ -782,11 +830,15 @@ OpConstrainBoundaryLhs_dUImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::iNtegrate(
     t_res_dU(i, j) = kronecker_delta(i, j) + t_cP(i, j);
 
     if (c > 0) {
+      //auto t_hess_sdf = hessSurfaceDistanceFunction(ts_time_step,
+      //    ts_time, t_spatial_coords(0), t_spatial_coords(1),
+      //    t_spatial_coords(2), t_normal_at_pts(0), t_normal_at_pts(1),
+      //    t_normal_at_pts(2));
       t_res_dU(i, j) +=
           (c * cn_contact) *
               (t_hess_sdf(i, j) * (t_grad_sdf(k) * t_traction(k)) +
                t_grad_sdf(i) * t_hess_sdf(k, j) * t_traction(k)) +
-          c * sdf_ptr[gg] * t_hess_sdf(i, j);
+          c * sdf * t_hess_sdf(i, j);
     }
 
     size_t rr = 0;
@@ -856,11 +908,13 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
   auto t_row_base = row_data.getFTensor1N<3>();
   size_t nb_face_functions = row_data.getN().size2() / 3;
 
-  VectorDouble t_disp_mat = commonDataPtr->contactDisp.data();
   auto t_traction_mat = commonDataPtr->contactTraction.data();
-  VectorDouble t_coords_mat = AssemblyBoundaryEleOp::getCoordsAtGaussPts().data();
+  MatrixDouble &disp = commonDataPtr->contactDisp;
+  MatrixDouble &coords = BoundaryEleOp::getCoordsAtGaussPts();
 
-  VectorDouble t_spatial_coords_mat = t_coords_mat + t_disp_mat;
+  MatrixDouble spatial_coords;
+  spatial_coords = coords + trans(disp);
+  VectorDouble t_spatial_coords_mat = spatial_coords.data();
 
   np::ndarray t_traction_mat_np = np::from_data(&t_traction_mat[0], np::dtype::get_builtin<double>(), bp::make_tuple(t_traction_mat.size()), bp::make_tuple(sizeof(double)), bp::object());
   np::ndarray t_spatial_coords_mat_x_np = np::from_data(&t_spatial_coords_mat[0], np::dtype::get_builtin<double>(), bp::make_tuple(nb_gauss_pts), bp::make_tuple(3*sizeof(double)), bp::object());
@@ -871,7 +925,7 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
   auto ts_time = AssemblyBoundaryEleOp::getTStime();
   auto ts_time_step = AssemblyBoundaryEleOp::getTStimeStep();
 
-  auto sdf = surfaceDistanceFunction(
+  auto sdf_array = surfaceDistanceFunction(
         ts_time_step, ts_time, t_spatial_coords_mat_x_np, t_spatial_coords_mat_y_np, t_spatial_coords_mat_z_np,
         0.0, 0.0, 0.0);
   
@@ -882,7 +936,7 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
   //std::cout <<"t_grad_sdf is "<< bp::extract<char const *>(bp::str(t_grad_sdf_array)) <<std::endl;
   
 
-  double* sdf_ptr = reinterpret_cast<double*>(sdf.get_data());
+  double* sdf_ptr = reinterpret_cast<double*>(sdf_array.get_data());
   double* grad_ptr = reinterpret_cast<double*>(t_grad_sdf_array.get_data());
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
@@ -894,11 +948,26 @@ OpConstrainBoundaryLhs_dTractionImpl<DIM, GAUSS, AssemblyBoundaryEleOp>::
 
     const double alpha = t_w * AssemblyBoundaryEleOp::getMeasure();
 
-    FTensor::Tensor1<double,3> t_grad_sdf {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
+    FTensor::Tensor1<double,3> t_grad_sdf_ten {grad_ptr[id],grad_ptr[id+1],grad_ptr[id+2]};
 
+    FTensor::Tensor1<double, 3> t_spatial_coords{0., 0., 0.};
+    t_spatial_coords(i) = t_coords(i) + t_disp(i);
+
+    auto ts_time = AssemblyBoundaryEleOp::getTStime();
+
+    //auto sdf = surfaceDistanceFunction(ts_time_step,
+    //    ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+    //    t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
+
+    auto sdf = sdf_ptr[gg];
+
+    //auto t_grad_sdf = gradSurfaceDistanceFunction(ts_time_step,
+    //    ts_time, t_spatial_coords(0), t_spatial_coords(1), t_spatial_coords(2),
+    //    t_normal_at_pts(0), t_normal_at_pts(1), t_normal_at_pts(2));
+    auto t_grad_sdf = t_grad_sdf_ten;
 
     auto tn = -t_traction(i) * t_grad_sdf(i);
-    auto c = constrain(sdf_ptr[gg], tn);
+    auto c = constrain(sdf, tn);
 
     FTensor::Tensor2<double, DIM, DIM> t_cP;
     t_cP(i, j) = (c * t_grad_sdf(i)) * t_grad_sdf(j);
